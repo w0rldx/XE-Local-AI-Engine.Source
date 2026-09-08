@@ -28,6 +28,9 @@ public sealed class OrchestrationAgentFactoryTests
     private const string SpecialistInstructions =
         "You are the SPECIALIST agent. Answer the user's question directly.";
 
+    private const string AuditorInstructions =
+        "You are the AUDITOR agent. Review completed specialist work.";
+
     private const string SpecialistAnswer = "SPECIALIST_ANSWER: the migration completed successfully.";
 
     [Test]
@@ -63,6 +66,76 @@ public sealed class OrchestrationAgentFactoryTests
         AssertEx.True(fake.SpecialistSawUserQuestion, "conversation history must carry across the handoff hop");
         AssertEx.Contains(text.ToString(), "SPECIALIST_ANSWER", message: "the specialist's answer must reach the normalized stream");
         AssertEx.True(sawTerminal, "the run must surface a terminal output update");
+    }
+
+    [Test]
+    public async Task CreateAsync_ExplicitEdges_OffersOnlyDeclaredTargets()
+    {
+        using var fake = new HandoffScriptedChatClient(SpecialistAnswer);
+        var factory = CreateFactory(fake);
+        var auditor = new OrchestrationParticipant
+        {
+            Key = "auditor",
+            Name = "Auditor",
+            Description = "Audit agent.",
+            Instructions = AuditorInstructions,
+            ModelId = "qwen3:8b",
+            Tools = []
+        };
+        var triage = Triage();
+        var specialist = Specialist();
+        var definition = new OrchestrationAgentDefinition
+        {
+            Triage = triage,
+            Participants = [triage, specialist, auditor],
+            Edges =
+            [
+                new OrchestrationEdge
+                {
+                    FromKey = "triage",
+                    ToKey = "specialist",
+                    Reason = "Route domain questions to the specialist."
+                },
+                new OrchestrationEdge
+                {
+                    FromKey = "specialist",
+                    ToKey = "auditor",
+                    Reason = "Route completed work to the auditor."
+                }
+            ],
+            MaxTurnsPerAgent = 2
+        };
+        var seed = new List<ChatMessage>
+        {
+            new(ChatRole.User, "Did the database migration complete?")
+        };
+
+        await using var session = await factory.CreateAsync(definition, seed);
+        var sawTerminal = false;
+        await foreach (var update in session.WatchAsync())
+        {
+            sawTerminal |= update.Kind == OrchestrationUpdateKind.TerminalOutput;
+        }
+
+        var triageDeclarations = fake.OfferedHandoffDeclarations[TriageInstructions];
+        var specialistDeclarations = fake.OfferedHandoffDeclarations[SpecialistInstructions];
+        var auditorDeclarations = fake.OfferedHandoffDeclarations[AuditorInstructions];
+        var declarations = string.Join(", ", triageDeclarations.Select(tool => $"{tool.Name}: {tool.Description}"));
+        AssertEx.Equal(expected: 1,
+            triageDeclarations.Count,
+            $"the triage participant must receive exactly its one declared outgoing handoff; captured [{declarations}]");
+        AssertEx.True(triageDeclarations[0].Name.StartsWith("handoff_to_", StringComparison.Ordinal),
+            $"the specialist target must be exposed as a handoff declaration; captured [{declarations}]");
+        AssertEx.Equal("Route domain questions to the specialist.",
+            triageDeclarations[0].Description,
+            $"the triage declaration must describe its specialist edge; captured [{declarations}]");
+        AssertEx.Equal(expected: 1, specialistDeclarations.Count, "the specialist must receive exactly its auditor edge");
+        AssertEx.True(specialistDeclarations[0].Name.StartsWith("handoff_to_", StringComparison.Ordinal),
+            "the auditor target must be exposed as a handoff declaration");
+        AssertEx.Equal("Route completed work to the auditor.", specialistDeclarations[0].Description, "the specialist declaration must describe its auditor edge");
+        AssertEx.Empty(auditorDeclarations, "the terminal auditor has no declared outgoing handoff");
+        AssertEx.True(fake.AuditorInvocations > 0, "the scripted specialist handoff must route to the auditor");
+        AssertEx.True(sawTerminal, "the scripted triage-to-specialist-to-auditor run must terminate");
     }
 
     [Test]
@@ -571,9 +644,8 @@ public sealed class OrchestrationAgentFactoryTests
     }
 
     /// <summary>
-    ///     Scripted model for handoff routing. Discriminates triage vs specialist by the presence of a
-    ///     <c>handoff_to_*</c> tool in <c>options.Tools</c> (the handoff builder injects it only into agents with
-    ///     outgoing handoffs). Triage emits the framework handoff call by its real injected name; specialist answers.
+    ///     Scripted model for handoff routing. Identifies participants from their instruction markers, records their
+    ///     first <c>handoff_to_*</c> declarations, follows any offered handoff, and answers at the terminal participant.
     /// </summary>
     private sealed class HandoffScriptedChatClient : IChatClient
     {
@@ -587,6 +659,10 @@ public sealed class OrchestrationAgentFactoryTests
         public int SpecialistInvocations { get; private set; }
 
         public bool SpecialistSawUserQuestion { get; private set; }
+
+        public int AuditorInvocations { get; private set; }
+
+        public Dictionary<string, IReadOnlyList<AITool>> OfferedHandoffDeclarations { get; } = new(StringComparer.Ordinal);
 
         public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages, ChatOptions? options = null, CancellationToken cancellationToken = default)
         {
@@ -610,18 +686,51 @@ public sealed class OrchestrationAgentFactoryTests
 
         private ChatResponse Build(List<ChatMessage> list, ChatOptions? options)
         {
-            // Discriminate by the participant's system instructions: the SPECIALIST answers; the triage hands off.
-            // Keying on the instructions (not on tool presence) is robust because the handoff builder injects a
-            // handoff_to_* tool into any agent with an outgoing edge.
-            var isSpecialist = list.Any(message =>
-                message.Role == ChatRole.System
-                && (message.Text?.Contains("SPECIALIST agent", StringComparison.Ordinal) ?? false));
+            // Discriminate by participant instructions; participants with an outgoing declaration hand off, while
+            // the terminal participant answers. Keying on instructions remains robust because the builder injects a
+            // handoff_to_* tool into every participant with an outgoing edge.
+            var isTriage = (options?.Instructions?.Contains("TRIAGE agent", StringComparison.Ordinal) ?? false)
+                           || list.Any(message => message.Role == ChatRole.System
+                                                  && (message.Text?.Contains("TRIAGE agent", StringComparison.Ordinal) ?? false));
+            var isSpecialist = (options?.Instructions?.Contains("SPECIALIST agent", StringComparison.Ordinal) ?? false)
+                               || list.Any(message => message.Role == ChatRole.System
+                                                      && (message.Text?.Contains("SPECIALIST agent", StringComparison.Ordinal) ?? false));
+            var isAuditor = (options?.Instructions?.Contains("AUDITOR agent", StringComparison.Ordinal) ?? false)
+                            || list.Any(message => message.Role == ChatRole.System
+                                                   && (message.Text?.Contains("AUDITOR agent", StringComparison.Ordinal) ?? false));
             var handoffTool = options?.Tools?.FirstOrDefault(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal));
+            var handoffDeclarations = options?.Tools?
+                                                     .Where(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal))
+                                                     .ToList()
+                                      ?? [];
 
-            if (isSpecialist || handoffTool is null)
+            if (isTriage)
+            {
+                OfferedHandoffDeclarations.TryAdd(TriageInstructions, handoffDeclarations);
+            }
+            else if (isSpecialist)
+            {
+                OfferedHandoffDeclarations.TryAdd(SpecialistInstructions, handoffDeclarations);
+            }
+            else if (isAuditor)
+            {
+                OfferedHandoffDeclarations.TryAdd(AuditorInstructions, handoffDeclarations);
+            }
+
+            if (isSpecialist)
             {
                 SpecialistInvocations++;
                 SpecialistSawUserQuestion = list.Any(message => message.Text?.Contains("database migration", StringComparison.Ordinal) ?? false);
+            }
+
+            if (isAuditor)
+            {
+                AuditorInvocations++;
+                return new ChatResponse(new ChatMessage(ChatRole.Assistant, "AUDITOR_ANSWER: specialist work approved."));
+            }
+
+            if (handoffTool is null)
+            {
                 return new ChatResponse(new ChatMessage(ChatRole.Assistant, _specialistAnswer));
             }
 

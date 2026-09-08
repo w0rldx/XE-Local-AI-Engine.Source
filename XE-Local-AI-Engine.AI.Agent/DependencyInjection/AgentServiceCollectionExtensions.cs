@@ -162,7 +162,15 @@ public static class AgentServiceCollectionExtensions
             return inner.AsBuilder()
                         .Use(chatClient => new ToolInvocationObservabilityChatClient(chatClient, serviceProvider.GetRequiredService<ILogger<ToolInvocationObservabilityChatClient>>()))
                         .UseFunctionInvocation(serviceProvider.GetRequiredService<ILoggerFactory>(),
-                            functionInvokingChatClient => functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest)
+                            functionInvokingChatClient =>
+                            {
+                                functionInvokingChatClient.MaximumIterationsPerRequest = pipelineOptions.MaximumToolIterationsPerRequest;
+                                // Keep these shared recovery/privacy/concurrency policies fixed rather than operator-tunable, and pin them against upgrade drift.
+                                functionInvokingChatClient.MaximumConsecutiveErrorsPerRequest = 3;
+                                functionInvokingChatClient.IncludeDetailedErrors = false;
+                                functionInvokingChatClient.AllowConcurrentInvocation = false;
+                                functionInvokingChatClient.TerminateOnUnknownCalls = false;
+                            })
                         // Below UseFunctionInvocation so the layer above keeps the WHOLE executable list (a revealed
                         // tool is immediately callable), and ABOVE the budgeter so its EstimateTools measures the array
                         // actually sent. Gated on an ambient ToolRelevanceScope the invocation runner seeds; without
