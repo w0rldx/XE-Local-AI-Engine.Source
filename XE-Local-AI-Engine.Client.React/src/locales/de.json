@@ -1867,7 +1867,8 @@
 				},
 				"ollamaEndpoint": {
 					"label": "Ollama-Endpunkt",
-					"description": "Die Basis-URL der Ollama-API."
+					"description": "Die Basis-URL der Ollama-API.",
+					"disabled": "Die Ollama-Laufzeit ist auf diesem Node deaktiviert."
 				},
 				"huggingFace": {
 					"title": "Hugging Face"
@@ -3421,7 +3422,8 @@
 				"error": "Das Modell konnte nicht ausgeworfen werden."
 			},
 			"ollama": {
-				"title": "Ollama (im Arbeitsspeicher)"
+				"title": "Ollama (im Arbeitsspeicher)",
+				"disabled": "Die Ollama-Laufzeit ist auf diesem Node deaktiviert (XE_OLLAMA_RUNTIME_ENABLED=false), daher kann hier nichts geladen werden. llama.cpp-Modelle erscheinen weiterhin unten."
 			},
 			"llamaCpp": {
 				"title": "llama.cpp-Laufzeit",
