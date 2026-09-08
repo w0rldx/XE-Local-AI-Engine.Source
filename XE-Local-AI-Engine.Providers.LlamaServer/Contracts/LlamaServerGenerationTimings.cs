@@ -21,7 +21,7 @@ using OpenAI.Chat;
 ///         <c>timings</c> (any cloud provider, Ollama) yields <see langword="null" /> rather than an exception.
 ///     </para>
 /// </summary>
-/// <param name="PromptTokens">Prompt tokens the server evaluated (<c>prompt_n</c>), cached ones included.</param>
+/// <param name="PromptTokens">Prompt tokens the server evaluated (<c>prompt_n</c>), excluding cached tokens.</param>
 /// <param name="PromptMs">Milliseconds spent on prompt processing (<c>prompt_ms</c>).</param>
 /// <param name="GenerationTokens">Tokens the server decoded (<c>predicted_n</c>).</param>
 /// <param name="GenerationMs">Milliseconds spent decoding (<c>predicted_ms</c>).</param>

@@ -923,6 +923,14 @@ Provider unload calls `EvictAllRolesAsync` over `Enum.GetValues<ModelRole>()`; i
 
 The four context values must stay separately named through APIs and DTOs: launched allocation (`-c`), request budget/limit, train-context maximum, and frozen replay override. A request can reduce but cannot enlarge an existing process. Frozen/deterministic allocation never silently mutates after failure; only automatic hardware selection may OOM down-tier, and only for classified startup OOM, at most twice per allocation identity.
 
+### Benchmark cache evidence comes from response timings
+
+**Rule:** llama-server `prompt_n` is evaluated-only and `cache_n` is reused; derive cache reuse as `cache_n / (cache_n + prompt_n)`, never from cold/warm `prompt_tokens_total` deltas.
+
+**Failure prevented:** comparing evaluated-token counts from different prompts falsely reporting no cache reuse when the warm request reused prompt tokens.
+
+**Authority:** pinned llama.cpp commit `8f4646a63ee29f2e0ab971b0290b141938769762` [server-context.cpp](https://github.com/ggml-org/llama.cpp/blob/8f4646a63ee29f2e0ab971b0290b141938769762/tools/server/server-context.cpp) and [server-schema.cpp](https://github.com/ggml-org/llama.cpp/blob/8f4646a63ee29f2e0ab971b0290b141938769762/tools/server/server-schema.cpp); local `LlamaServerGenerationTimings.TryRead`, `InferenceBenchmarkHarness.StreamStageAsync`, and `InferenceBenchmarkHarness.DeriveCacheHitRate`.
+
 ### llama-server node settings are captured once per boot — a `PUT` after that changes nothing until a restart
 
 **Rule:** the node settings that feed `llama-server` — `speculativeMode`, `chatCacheReuse`, `kvCacheType` — are captured

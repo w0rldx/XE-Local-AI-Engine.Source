@@ -28,9 +28,6 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     private const string RequestsDeferredMetric = "llamacpp:requests_deferred";
     private const string ContextTokensHighWatermarkMetric = "llamacpp:n_tokens_max";
     private const string BusySlotsPerDecodeMetric = "llamacpp:n_busy_slots_per_decode";
-    private const string SpeculativeDraftTokensMetric = "llamacpp:spec_decode_num_draft_tokens_total";
-    private const string SpeculativeAcceptedTokensMetric = "llamacpp:spec_decode_num_accepted_tokens_total";
-    private const string SpeculativeDraftsMetric = "llamacpp:spec_decode_num_drafts_total";
 
     private const string IncrementalPressureFailureReason =
         "Benchmark invalid: VRAM divergence grew materially during measurement. Close other GPU workloads and retry.";
@@ -218,10 +215,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             RequestsDeferredAtLastScrape: passes[^1].RequestsDeferredAtLastScrape,
             ContextTokensHighWatermark: MaxNullableDouble(passes.Select(static pass => pass.ContextTokensHighWatermark)),
             AverageBusySlotsPerDecode: MedianNullable(passes.Select(static pass => pass.AverageBusySlotsPerDecode)),
-            SpeculativeDraftTokens: MedianNullable(passes.Select(static pass => pass.SpeculativeDraftTokens)),
-            SpeculativeAcceptedTokens: MedianNullable(passes.Select(static pass => pass.SpeculativeAcceptedTokens)),
-            SpeculativeVerificationSteps: MedianNullable(passes.Select(static pass => pass.SpeculativeVerificationSteps)),
-            SpeculativeAcceptanceRate: MedianNullable(passes.Select(static pass => pass.SpeculativeAcceptanceRate)));
+            WarmPromptTimings: passes.Select(static pass => pass.WarmPromptTimings).ToArray());
     }
 
     private async Task<ChatPassMetrics> RunChatPassAsync(LlamaServerEndpoint endpoint,
@@ -240,16 +234,14 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
             new(ChatRole.System, spec.SystemPersona),
             new(ChatRole.User, spec.ColdUserTurn)
         };
-        var (ttftMs, coldText) = await StreamStageAsync(chatClient, coldMessages, chatOptions, ct).ConfigureAwait(false);
-        var afterCold = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var coldStage = await StreamStageAsync(chatClient, coldMessages, chatOptions, ct).ConfigureAwait(false);
 
         var warmMessages = new List<ChatMessage>(coldMessages)
         {
-            new(ChatRole.Assistant, coldText),
+            new(ChatRole.Assistant, coldStage.Text),
             new(ChatRole.User, spec.WarmFollowUpTurn)
         };
-        _ = await StreamStageAsync(chatClient, warmMessages, chatOptions, ct).ConfigureAwait(false);
-        var afterWarm = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
+        var warmStage = await StreamStageAsync(chatClient, warmMessages, chatOptions, ct).ConfigureAwait(false);
 
         var toolInvocations = 0;
         var toolFunction = AIFunctionFactory.Create(() =>
@@ -285,27 +277,18 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var afterAll = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
         totalStopwatch.Stop();
 
-        var speculativeDraftTokens = Delta(baseline, afterAll, SpeculativeDraftTokensMetric);
-        var speculativeAcceptedTokens = Delta(baseline, afterAll, SpeculativeAcceptedTokensMetric);
-        double? speculativeAcceptanceRate = speculativeDraftTokens is > 0 && speculativeAcceptedTokens is not null
-            ? Math.Clamp(speculativeAcceptedTokens.Value / speculativeDraftTokens.Value, min: 0d, max: 1d)
-            : null;
-
         return new ChatPassMetrics(DeriveRate(baseline, afterAll, PredictedTokensMetric, PredictedSecondsMetric),
             DeriveRate(baseline, afterAll, PromptTokensMetric, PromptSecondsMetric),
-            ttftMs,
+            coldStage.TtftMs,
             totalStopwatch.Elapsed.TotalMilliseconds,
-            DeriveCacheHitRate(baseline, afterCold, afterWarm),
+            DeriveCacheHitRate(warmStage.Timings),
             toolLoopMs,
             afterAll,
             TryParsePromMetric(afterAll, RequestsProcessingMetric),
             TryParsePromMetric(afterAll, RequestsDeferredMetric),
             TryParsePromMetric(afterAll, ContextTokensHighWatermarkMetric),
             TryParsePromMetric(afterAll, BusySlotsPerDecodeMetric),
-            speculativeDraftTokens,
-            speculativeAcceptedTokens,
-            Delta(baseline, afterAll, SpeculativeDraftsMetric),
-            speculativeAcceptanceRate);
+            warmStage.Timings);
     }
 
     private async Task<InferenceBenchmarkMetrics> RunEmbeddingAsync(LlamaServerEndpoint endpoint,
@@ -513,9 +496,27 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                 : IncrementalPressureFailureReason;
         }
 
+        var warmPromptTimings = metrics.WarmPromptTimings;
+        var cacheEvidence = warmPromptTimings is null
+            ? null
+            : new
+            {
+                method = "warm-timings-v1",
+                samples = warmPromptTimings.Select(static timings => timings is null
+                    ? null
+                    : new
+                    {
+                        cachedPromptTokens = timings.CachedPromptTokens,
+                        evaluatedPromptTokens = timings.PromptTokens
+                    }).ToArray(),
+                validSamples = warmPromptTimings.Count(static timings => DeriveCacheHitRate(timings) is not null),
+                totalSamples = warmPromptTimings.Count
+            };
+
         var diagnostics = JsonSerializer.Serialize(new
             {
                 role = role.ToString(),
+                cacheEvidence,
                 workload = new
                 {
                     metrics.ItemsPerSecond,
@@ -532,11 +533,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
                     metrics.RequestsProcessingAtLastScrape,
                     metrics.RequestsDeferredAtLastScrape,
                     metrics.ContextTokensHighWatermark,
-                    metrics.AverageBusySlotsPerDecode,
-                    metrics.SpeculativeDraftTokens,
-                    metrics.SpeculativeAcceptedTokens,
-                    metrics.SpeculativeVerificationSteps,
-                    metrics.SpeculativeAcceptanceRate
+                    metrics.AverageBusySlotsPerDecode
                 },
                 vram = new
                 {
@@ -701,14 +698,16 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         var stopwatch = Stopwatch.StartNew();
         double? firstTokenMs = null;
         var builder = new StringBuilder();
+        LlamaServerGenerationTimings? timings = null;
 
         await foreach (var update in chatClient.GetStreamingResponseAsync(messages, options, ct).ConfigureAwait(false))
         {
             firstTokenMs ??= stopwatch.Elapsed.TotalMilliseconds;
             builder.Append(update.Text);
+            timings = LlamaServerGenerationTimings.TryRead(update.RawRepresentation) ?? timings;
         }
 
-        return new StreamStageResult(firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, builder.ToString());
+        return new StreamStageResult(firstTokenMs ?? stopwatch.Elapsed.TotalMilliseconds, builder.ToString(), timings);
     }
 
     private async Task<string?> ScrapeMetricsAsync(Uri metricsUri, CancellationToken ct)
@@ -731,25 +730,27 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
     }
 
     /// <summary>
-    ///     pp/tg tokens per second from two Prometheus scrapes. The harness never sees llama-server's per-request
-    ///     <c>timings</c> object — it drives the chat client and reads the server's <c>/metrics</c> counters around the
-    ///     call — so only the ARITHMETIC is shared with the benchmark executor's path, through
-    ///     <see cref="TokenThroughput" />; there is no common input to share above it. The counters publish seconds,
-    ///     not milliseconds, which is the one thing that differs between the two derivations.
+    ///     Aggregate pp/tg tokens per second from two Prometheus scrapes. Cache evidence uses per-request timings, while
+    ///     throughput continues to span the whole benchmark pass through cumulative counters. Only the arithmetic is
+    ///     shared with the benchmark executor's path through <see cref="TokenThroughput" />; these counters publish
+    ///     seconds rather than milliseconds.
     /// </summary>
     private static double? DeriveRate(string? before, string? after, string tokensMetric, string secondsMetric) =>
         TokenThroughput.FromSeconds(Delta(before, after, tokensMetric), Delta(before, after, secondsMetric));
 
-    private static double? DeriveCacheHitRate(string? baseline, string? afterCold, string? afterWarm)
+    private static double? DeriveCacheHitRate(LlamaServerGenerationTimings? timings)
     {
-        var coldPromptDelta = Delta(baseline, afterCold, PromptTokensMetric);
-        var warmPromptDelta = Delta(afterCold, afterWarm, PromptTokensMetric);
-        if (coldPromptDelta is null || warmPromptDelta is null || coldPromptDelta <= 0)
+        // Defence in depth if the timing reader's nonnegative validation changes.
+        if (timings?.CachedPromptTokens is not { } cached
+            || timings.PromptTokens is not { } evaluated
+            || cached < 0
+            || evaluated < 0)
         {
             return null;
         }
 
-        return Math.Clamp(1.0 - (warmPromptDelta.Value / coldPromptDelta.Value), min: 0.0, max: 1.0);
+        var total = (double)cached + evaluated;
+        return total > 0d ? cached / total : null;
     }
 
     private static double? Delta(string? before, string? after, string metric)
@@ -777,11 +778,8 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         double? RequestsDeferredAtLastScrape,
         double? ContextTokensHighWatermark,
         double? AverageBusySlotsPerDecode,
-        double? SpeculativeDraftTokens,
-        double? SpeculativeAcceptedTokens,
-        double? SpeculativeVerificationSteps,
-        double? SpeculativeAcceptanceRate);
+        LlamaServerGenerationTimings? WarmPromptTimings);
 
-    // One streamed stage of the benchmark: the time to the first update, and the full text the stage produced.
-    private sealed record StreamStageResult(double TtftMs, string Text);
+    // One streamed stage of the benchmark: the time to the first update, full text, and latest timing snapshot.
+    private sealed record StreamStageResult(double TtftMs, string Text, LlamaServerGenerationTimings? Timings);
 }

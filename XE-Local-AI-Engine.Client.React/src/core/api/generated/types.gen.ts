@@ -1556,10 +1556,6 @@ export type XeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsDto
 	minimumProcessBudgetVramBytes?: number | null;
 	peakProcessRamBytes?: number | null;
 	contextTokensHighWatermark?: number | null;
-	speculativeDraftTokens?: number | null;
-	speculativeAcceptedTokens?: number | null;
-	speculativeVerificationSteps?: number | null;
-	speculativeAcceptanceRate?: number | null;
 	externalPressureDetected: boolean;
 	runs: number;
 };

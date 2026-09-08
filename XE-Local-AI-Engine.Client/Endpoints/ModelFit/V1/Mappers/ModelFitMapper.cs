@@ -522,10 +522,6 @@ internal static class ModelFitMapper
             MinimumProcessBudgetVramBytes = metrics.MinimumProcessBudgetVramBytes,
             PeakProcessRamBytes = metrics.PeakProcessRamBytes,
             ContextTokensHighWatermark = metrics.ContextTokensHighWatermark,
-            SpeculativeDraftTokens = metrics.SpeculativeDraftTokens,
-            SpeculativeAcceptedTokens = metrics.SpeculativeAcceptedTokens,
-            SpeculativeVerificationSteps = metrics.SpeculativeVerificationSteps,
-            SpeculativeAcceptanceRate = metrics.SpeculativeAcceptanceRate,
             ExternalPressureDetected = metrics.ExternalPressureDetected,
             Runs = metrics.Runs
         };

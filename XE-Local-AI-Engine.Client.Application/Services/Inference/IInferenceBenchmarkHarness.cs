@@ -193,7 +193,7 @@ public sealed record InferenceBenchmarkSpec(
 /// <param name="PpTokensPerSecond">Prompt-processing throughput (PP tok/s) from <c>/metrics</c>.</param>
 /// <param name="TtftMs">Wall-clock time-to-first-token of the cold stage, in milliseconds.</param>
 /// <param name="TotalLatencyMs">Total wall-clock of the whole transcript, in milliseconds.</param>
-/// <param name="CacheHitRate">Prompt-token reuse ratio (cold vs warm), 0..1.</param>
+/// <param name="CacheHitRate">Warm-request reused prompt fraction, 0..1.</param>
 /// <param name="ToolLoopMs">Wall-clock of the tool-call round, in milliseconds.</param>
 /// <param name="VramLoadBytes">Effective free VRAM observed at load (global-free when available, otherwise process budget).</param>
 /// <param name="VramAfterBytes">Effective free VRAM observed after the loop (global-free when available, otherwise process budget).</param>
@@ -203,10 +203,7 @@ public sealed record InferenceBenchmarkSpec(
 /// <param name="RequestsDeferredAtLastScrape">Requests deferred at the last scrape.</param>
 /// <param name="ContextTokensHighWatermark">Largest server-reported context-token watermark.</param>
 /// <param name="AverageBusySlotsPerDecode">Server-reported average busy slots per decode.</param>
-/// <param name="SpeculativeDraftTokens">Draft tokens proposed during the measured pass.</param>
-/// <param name="SpeculativeAcceptedTokens">Draft tokens accepted during the measured pass.</param>
-/// <param name="SpeculativeVerificationSteps">Speculative verification steps during the measured pass.</param>
-/// <param name="SpeculativeAcceptanceRate">Accepted/drafted token ratio, or null when no tokens were drafted.</param>
+/// <param name="WarmPromptTimings">Ordered per-measured-pass warm-request timings; null for non-chat benchmarks.</param>
 public sealed record InferenceBenchmarkMetrics(
     bool Success,
     string? FailureReason,
@@ -242,10 +239,7 @@ public sealed record InferenceBenchmarkMetrics(
     double? RequestsDeferredAtLastScrape = null,
     double? ContextTokensHighWatermark = null,
     double? AverageBusySlotsPerDecode = null,
-    double? SpeculativeDraftTokens = null,
-    double? SpeculativeAcceptedTokens = null,
-    double? SpeculativeVerificationSteps = null,
-    double? SpeculativeAcceptanceRate = null)
+    IReadOnlyList<LlamaServerGenerationTimings?>? WarmPromptTimings = null)
 {
     /// <summary>A failed run carrying only the sanitized <paramref name="reason" />.</summary>
     public static InferenceBenchmarkMetrics Failed(string reason)

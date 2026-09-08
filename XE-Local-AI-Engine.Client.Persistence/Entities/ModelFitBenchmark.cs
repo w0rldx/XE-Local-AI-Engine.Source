@@ -51,7 +51,10 @@ internal sealed record class ModelFitBenchmark
     /// <summary>Prompt-processing throughput (tokens/s), or null. Plaintext.</summary>
     public double? PpTokensPerSecond { get; set; }
 
-    /// <summary>Prompt-cache hit rate derived from <c>/metrics</c> prompt-token reuse, or null. Plaintext.</summary>
+    /// <summary>
+    ///     Warm-request reused prompt fraction, or null. Legacy rows whose <see cref="DiagnosticsJson" /> lacks the
+    ///     <c>warm-timings-v1</c> method marker are not comparable. Plaintext.
+    /// </summary>
     public double? CacheHitRate { get; set; }
 
     /// <summary>Agent tool-call round latency in milliseconds, or null. Plaintext.</summary>

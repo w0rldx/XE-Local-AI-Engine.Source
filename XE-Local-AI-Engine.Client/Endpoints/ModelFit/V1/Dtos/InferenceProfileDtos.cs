@@ -201,7 +201,7 @@ public sealed class InferenceBenchmarkMetricsDto
     /// <summary>Total wall-clock of the whole transcript in milliseconds; null when not measured.</summary>
     public double? TotalLatencyMs { get; init; }
 
-    /// <summary>Prompt-token reuse ratio (cold vs warm), 0..1; null when not measured.</summary>
+    /// <summary>Warm-request reused prompt fraction, 0..1; null when not measured.</summary>
     public double? CacheHitRate { get; init; }
 
     /// <summary>Wall-clock of the tool-call round in milliseconds; null when not measured.</summary>
@@ -263,23 +263,6 @@ public sealed class InferenceBenchmarkMetricsDto
     ///     tracks the transcript the window created, so a larger number is not an improvement.
     /// </summary>
     public double? ContextTokensHighWatermark { get; init; }
-
-    /// <summary>Draft tokens proposed by speculative decoding during the measured pass; null when not measured.</summary>
-    public double? SpeculativeDraftTokens { get; init; }
-
-    /// <summary>Draft tokens accepted during the measured pass; null when not measured.</summary>
-    public double? SpeculativeAcceptedTokens { get; init; }
-
-    /// <summary>Speculative verification steps during the measured pass; null when not measured.</summary>
-    public double? SpeculativeVerificationSteps { get; init; }
-
-    /// <summary>
-    ///     Accepted/drafted token ratio. Null means the rate could not be computed, never a measured zero: the harness
-    ///     returns null when the drafted-token delta is zero or missing, or when the accepted-token counter is
-    ///     unavailable. Read <see cref="SpeculativeDraftTokens" /> and <see cref="SpeculativeAcceptedTokens" /> to tell
-    ///     "nothing was drafted" apart from "the counters never arrived".
-    /// </summary>
-    public double? SpeculativeAcceptanceRate { get; init; }
 
     /// <summary>Whether material process-budget/global-free divergence invalidated the benchmark as external pressure.</summary>
     public required bool ExternalPressureDetected { get; init; }

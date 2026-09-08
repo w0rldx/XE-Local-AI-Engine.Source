@@ -1950,10 +1950,6 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1InferenceBenchmarkMetricsD
 	minimumProcessBudgetVramBytes: z.int().nullish(),
 	peakProcessRamBytes: z.int().nullish(),
 	contextTokensHighWatermark: z.number().nullish(),
-	speculativeDraftTokens: z.number().nullish(),
-	speculativeAcceptedTokens: z.number().nullish(),
-	speculativeVerificationSteps: z.number().nullish(),
-	speculativeAcceptanceRate: z.number().nullish(),
 	externalPressureDetected: z.boolean(),
 	runs: z
 		.int()

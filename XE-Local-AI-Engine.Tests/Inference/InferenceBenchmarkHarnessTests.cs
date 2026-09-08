@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Inference;
 
+using System.ClientModel.Primitives;
 using System.Globalization;
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -14,6 +15,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
+using StreamingChatCompletionUpdate = OpenAI.Chat.StreamingChatCompletionUpdate;
 
 public sealed class InferenceBenchmarkHarnessTests
 {
@@ -290,9 +292,92 @@ public sealed class InferenceBenchmarkHarnessTests
     }
 
     [Test]
+    public async Task RunAsync_ChatCacheEvidence_UsesWarmTimingFractionWhenColdAndWarmEvaluatedCountsMatch()
+    {
+        const int coldEvaluated = 6;
+        const int warmCached = 4;
+        const int warmEvaluated = 6;
+        using var handler = new BenchmarkMetricsHandler();
+        using var chatClient = new TimedBenchmarkChatClient([
+                [TimingUpdate(cached: 2, evaluated: 8, text: "warm"), TimingUpdate(warmCached, warmEvaluated, string.Empty)]
+            ],
+            TimingUpdate(cached: 0, evaluated: coldEvaluated, text: "cold"));
+        var harness = BuildHarness(modelCallsTool: false,
+            handler,
+            chatFactory: ChatFactory(chatClient));
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 0,
+                MeasuredRuns = 1
+            },
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.True(coldEvaluated <= warmEvaluated);
+        AssertEx.True(warmCached > 0);
+        AssertEx.True(metrics.CacheHitRate > 0d);
+        AssertEx.Equal<double?>(0.4d, metrics.CacheHitRate);
+        var sample = AssertEx.NotNull(AssertEx.NotNull(metrics.WarmPromptTimings).Single());
+        AssertEx.Equal<int?>(4, sample.CachedPromptTokens);
+        AssertEx.Equal<int?>(6, sample.PromptTokens);
+    }
+
+    [Test]
+    public async Task RunAsync_ChatCacheEvidence_PreservesNullAndZeroSamplesAndExcludesWarmup()
+    {
+        using var chatClient = new TimedBenchmarkChatClient([
+            [TimingUpdate(cached: 99, evaluated: 1, text: string.Empty)],
+            [TimingUpdate(cached: 0, evaluated: 10, text: string.Empty)],
+            [PlainUpdate(string.Empty)],
+            [RawUpdate("""
+                       {"id":"chunk","object":"chat.completion.chunk","created":1,"model":"m",
+                        "choices":[{"index":0,"finish_reason":"stop","delta":{}}],
+                        "timings":{"cache_n":2,"prompt_n":"bad","predicted_n":1}}
+                       """, string.Empty)],
+            [TimingUpdate(cached: -1, evaluated: -1, text: string.Empty)],
+            [TimingUpdate(cached: 0, evaluated: 0, text: string.Empty)],
+            [TimingUpdate(cached: int.MaxValue, evaluated: int.MaxValue, text: string.Empty)]
+        ]);
+        var harness = BuildHarness(modelCallsTool: false, chatFactory: ChatFactory(chatClient));
+
+        var metrics = await harness.RunAsync(ProfilingContext(ModelRole.Chat),
+            InferenceBenchmarkSpec.Golden("cuda", ctxSize: 256) with
+            {
+                WarmupRuns = 1,
+                MeasuredRuns = 6
+            },
+            CancellationToken.None);
+
+        AssertEx.True(metrics.Success, metrics.FailureReason);
+        AssertEx.Equal(6, metrics.Runs);
+        AssertEx.Equal<double?>(0d, metrics.CacheHitRate);
+        var samples = AssertEx.NotNull(metrics.WarmPromptTimings);
+        AssertEx.Equal(6, samples.Count);
+        AssertEx.Equal<int?>(0, AssertEx.NotNull(samples[0]).CachedPromptTokens);
+        AssertEx.Null(samples[1]);
+        AssertEx.Null(AssertEx.NotNull(samples[2]).PromptTokens);
+        AssertEx.Null(AssertEx.NotNull(samples[3]).PromptTokens);
+        AssertEx.Equal<int?>(0, AssertEx.NotNull(samples[4]).PromptTokens);
+        AssertEx.Equal<int?>(int.MaxValue, AssertEx.NotNull(samples[5]).PromptTokens);
+
+        using var diagnostics = JsonDocument.Parse(AssertEx.NotNull(metrics.DiagnosticsJson));
+        var evidence = diagnostics.RootElement.GetProperty("cacheEvidence");
+        AssertEx.Equal("warm-timings-v1", evidence.GetProperty("method").GetString());
+        AssertEx.Equal(2, evidence.GetProperty("validSamples").GetInt32());
+        AssertEx.Equal(6, evidence.GetProperty("totalSamples").GetInt32());
+        var diagnosticSamples = evidence.GetProperty("samples");
+        AssertEx.Equal(6, diagnosticSamples.GetArrayLength());
+        AssertEx.Equal(0, diagnosticSamples[0].GetProperty("cachedPromptTokens").GetInt32());
+        AssertEx.Equal(10, diagnosticSamples[0].GetProperty("evaluatedPromptTokens").GetInt32());
+        AssertEx.Equal(JsonValueKind.Null, diagnosticSamples[1].ValueKind);
+    }
+
+    [Test]
     public async Task RunAsync_PersistsSanitizedRuntimeLoadCorrelationInDiagnostics()
     {
-        using var handler = new SpeculationMetricsHandler();
+        using var handler = new BenchmarkMetricsHandler();
         var harness = BuildHarness(modelCallsTool: true, handler: handler);
         var context = ProfilingContext(ModelRole.Chat) with
         {
@@ -325,11 +410,13 @@ public sealed class InferenceBenchmarkHarnessTests
         AssertEx.Equal("MainModelHeads", runtime.GetProperty("speculationClass").GetString());
         AssertEx.False(runtime.GetRawText().Contains("/private/models", StringComparison.Ordinal));
         AssertEx.Equal(expected: 64, runtime.GetProperty("launchArgumentsSha256").GetString()!.Length);
-        AssertEx.Equal<double?>(30d, metrics.SpeculativeDraftTokens);
-        AssertEx.Equal<double?>(15d, metrics.SpeculativeAcceptedTokens);
-        AssertEx.Equal<double?>(0.5d, metrics.SpeculativeAcceptanceRate);
-        AssertEx.Equal<double?>(6d, metrics.SpeculativeVerificationSteps);
-        AssertEx.Equal<double?>(104d, metrics.ContextTokensHighWatermark);
+        var serialized = diagnostics.RootElement.GetRawText();
+        AssertEx.False(serialized.Contains("speculativeDraftTokens", StringComparison.Ordinal));
+        AssertEx.False(serialized.Contains("speculativeAcceptedTokens", StringComparison.Ordinal));
+        AssertEx.False(serialized.Contains("speculativeVerificationSteps", StringComparison.Ordinal));
+        AssertEx.False(serialized.Contains("speculativeAcceptanceRate", StringComparison.Ordinal));
+        AssertEx.Equal(2, handler.ScrapeCount);
+        AssertEx.Equal<double?>(102d, metrics.ContextTokensHighWatermark);
         AssertEx.Equal<double?>(1d, metrics.AverageBusySlotsPerDecode);
         AssertEx.Equal<double?>(0d, metrics.RequestsProcessingAtLastScrape);
         AssertEx.Equal<double?>(0d, metrics.RequestsDeferredAtLastScrape);
@@ -357,9 +444,12 @@ public sealed class InferenceBenchmarkHarnessTests
         IInferenceChatClientFactory? chatFactory = null,
         IReadOnlyList<long?>? globalFreeVramSamples = null)
     {
-        chatFactory ??= Substitute.For<IInferenceChatClientFactory>();
-        chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
-                   .Returns(_ => new FakeBenchmarkChatClient(modelCallsTool));
+        if (chatFactory is null)
+        {
+            chatFactory = Substitute.For<IInferenceChatClientFactory>();
+            chatFactory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>())
+                       .Returns(_ => new FakeBenchmarkChatClient(modelCallsTool));
+        }
 
         handler ??= SharedEmptyMetricsHandler;
         var httpClientFactory = Substitute.For<IHttpClientFactory>();
@@ -389,6 +479,31 @@ public sealed class InferenceBenchmarkHarnessTests
             hardwareProfiler,
             processBudgetProbe,
             NullLogger<InferenceBenchmarkHarness>.Instance);
+    }
+
+    private static IInferenceChatClientFactory ChatFactory(IChatClient client)
+    {
+        var factory = Substitute.For<IInferenceChatClientFactory>();
+        factory.CreateChatClient(Arg.Any<Uri>(), Arg.Any<string>()).Returns(client);
+        return factory;
+    }
+
+    private static ChatResponseUpdate TimingUpdate(int cached, int evaluated, string text)
+    {
+        var json = string.Create(CultureInfo.InvariantCulture,
+            $"{{\"id\":\"chunk\",\"object\":\"chat.completion.chunk\",\"created\":1,\"model\":\"m\","
+            + $"\"choices\":[{{\"index\":0,\"finish_reason\":\"stop\",\"delta\":{{}}}}],"
+            + $"\"timings\":{{\"cache_n\":{cached},\"prompt_n\":{evaluated},\"predicted_n\":1}}}}");
+        return RawUpdate(json, text);
+    }
+
+    private static ChatResponseUpdate PlainUpdate(string text) => new(ChatRole.Assistant, text);
+
+    private static ChatResponseUpdate RawUpdate(string json, string text)
+    {
+        var chunk = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(json))
+                    ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
+        return new ChatResponseUpdate(ChatRole.Assistant, text) { RawRepresentation = chunk };
     }
 
     private static HardwareProfile NvidiaProfile(long? availableVramBytes)
@@ -448,6 +563,43 @@ public sealed class InferenceBenchmarkHarnessTests
         }
     }
 
+    private sealed class TimedBenchmarkChatClient(IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> warmStreams,
+        ChatResponseUpdate? coldUpdate = null) : IChatClient
+    {
+        private int _streamCall;
+
+        public Task<ChatResponse> GetResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            CancellationToken cancellationToken = default) =>
+            Task.FromResult(new ChatResponse(new ChatMessage(ChatRole.Assistant, "done")));
+
+        public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
+            ChatOptions? options = null,
+            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+        {
+            var call = Interlocked.Increment(ref _streamCall);
+            if (call % 2 == 1)
+            {
+                yield return coldUpdate ?? PlainUpdate("cold");
+                yield break;
+            }
+
+            foreach (var update in warmStreams[(call / 2) - 1])
+            {
+                yield return update;
+            }
+
+            await Task.CompletedTask.ConfigureAwait(false);
+        }
+
+        public object? GetService(Type serviceType, object? serviceKey = null) =>
+            serviceType.IsInstanceOfType(this) && serviceKey is null ? this : null;
+
+        public void Dispose()
+        {
+        }
+    }
+
     private sealed class EmptyMetricsHandler : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -456,9 +608,11 @@ public sealed class InferenceBenchmarkHarnessTests
         }
     }
 
-    private sealed class SpeculationMetricsHandler : HttpMessageHandler
+    private sealed class BenchmarkMetricsHandler : HttpMessageHandler
     {
         private int _scrapes;
+
+        public int ScrapeCount => Volatile.Read(ref _scrapes);
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
@@ -472,9 +626,6 @@ public sealed class InferenceBenchmarkHarnessTests
                            llamacpp:requests_deferred 0
                            llamacpp:n_tokens_max {100 + scrape}
                            llamacpp:n_busy_slots_per_decode 1
-                           llamacpp:spec_decode_num_draft_tokens_total {scrape * 10}
-                           llamacpp:spec_decode_num_accepted_tokens_total {scrape * 5}
-                           llamacpp:spec_decode_num_drafts_total {scrape * 2}
                            """;
             return Task.FromResult(JsonOrText(HttpStatusCode.OK, metrics, "text/plain"));
         }
