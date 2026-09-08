@@ -763,7 +763,8 @@ internal static class DevWorkflowGraphs
         // The approval on the gate's own out-edge is half the rule rather than decoration: every answer succeeds a
         // gate, so an unconditional edge into an apply would carry a rejection through as well.
         var edges = keys.Zip(keys.Skip(1),
-            static (from, to) => $$"""{ "from": "{{from}}", "to": "{{to}}"{{(string.Equals(to, "apply", StringComparison.Ordinal) ? """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""" : "")}} }""");
+            static (from, to) =>
+                $$"""{ "from": "{{from}}", "to": "{{to}}"{{(string.Equals(to, "apply", StringComparison.Ordinal) ? """, "condition": { "path": "decision", "op": "eq", "value": "Approve" }""" : "")}} }""");
 
         if (gatedApply)
         {

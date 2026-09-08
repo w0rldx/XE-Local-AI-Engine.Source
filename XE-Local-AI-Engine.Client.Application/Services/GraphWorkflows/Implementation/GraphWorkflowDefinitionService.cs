@@ -10,7 +10,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 ///     Validation and the store, in that order. The parse it runs is the RUNTIME's own, so a definition accepted here
 ///     is one that will start, and a rule added to the parser cannot be forgotten on the save path.
 /// </summary>
-internal sealed class GraphWorkflowDefinitionService(IGraphWorkflowStore store,
+internal sealed class GraphWorkflowDefinitionService(
+    IGraphWorkflowStore store,
     IToolInvocationService tools,
     ILocalModelProviderResolver providers,
     IOptions<GraphWorkflowOptions> options)

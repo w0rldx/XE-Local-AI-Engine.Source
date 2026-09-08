@@ -8,9 +8,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
+using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Endpoints.DevelopmentWorkflows.V1;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -1111,10 +1111,10 @@ public sealed class DevWorkflowEndpointTests
         new()
         {
             AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
-            {
-                ["DevWorkflows:Enabled"] = "true"
-            }.Concat(configuration.Select(static entry => new KeyValuePair<string, string?>(entry.Key, entry.Value)))
-             .ToDictionary(StringComparer.Ordinal),
+                {
+                    ["DevWorkflows:Enabled"] = "true"
+                }.Concat(configuration.Select(static entry => new KeyValuePair<string, string?>(entry.Key, entry.Value)))
+                 .ToDictionary(StringComparer.Ordinal),
             ConfigureAdditionalTestServices = services =>
             {
                 services.RemoveAll<IDevWorkflowStore>();

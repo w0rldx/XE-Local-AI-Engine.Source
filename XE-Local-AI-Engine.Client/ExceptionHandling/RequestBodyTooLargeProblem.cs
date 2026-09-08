@@ -55,7 +55,8 @@ public static class RequestBodyTooLargeProblem
     ///     The same answer as an <see cref="IResult" />, for an endpoint that refuses the request itself before the
     ///     host ever reads the body. Sent with <c>Send.ResultAsync(...)</c>.
     /// </summary>
-    public static IResult Result(string detail) => new RequestBodyTooLargeResult(detail);
+    public static IResult Result(string detail) =>
+        new RequestBodyTooLargeResult(detail);
 
     /// <summary>
     ///     Deliberately not <c>Results.Problem</c>: that writes the bare <c>application/problem+json</c> media type

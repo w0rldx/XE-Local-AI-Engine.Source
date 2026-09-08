@@ -23,9 +23,11 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 /// </remarks>
 internal sealed class UnavailableModelCapabilityClient : IModelCapabilityClient
 {
-    public Task<bool> IsRuntimeReachableAsync(CancellationToken ct) => Task.FromResult(false);
+    public Task<bool> IsRuntimeReachableAsync(CancellationToken ct) =>
+        Task.FromResult(false);
 
-    public Task<string?> GetRuntimeVersionAsync(CancellationToken ct) => Task.FromResult<string?>(null);
+    public Task<string?> GetRuntimeVersionAsync(CancellationToken ct) =>
+        Task.FromResult<string?>(null);
 
     public Task<IReadOnlyList<InstalledModelEntry>> ListInstalledModelsAsync(CancellationToken ct) =>
         Task.FromResult<IReadOnlyList<InstalledModelEntry>>([]);

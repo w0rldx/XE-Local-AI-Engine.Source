@@ -41,14 +41,17 @@ internal sealed class UnavailableOllamaModelService : IOllamaModelService
     public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default) =>
         throw Unavailable();
 
-    public Task DeleteModelAsync(string modelName, CancellationToken ct = default) => Task.FromException(Unavailable());
+    public Task DeleteModelAsync(string modelName, CancellationToken ct = default) =>
+        Task.FromException(Unavailable());
 
     public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningModelsAsync(CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<RunningModelSnapshot>>([]);
 
-    public Task UnloadModelAsync(string modelName, CancellationToken ct = default) => Task.FromException(Unavailable());
+    public Task UnloadModelAsync(string modelName, CancellationToken ct = default) =>
+        Task.FromException(Unavailable());
 
-    public Task<bool> IsAvailableAsync(CancellationToken ct = default) => Task.FromResult(false);
+    public Task<bool> IsAvailableAsync(CancellationToken ct = default) =>
+        Task.FromResult(false);
 
     private static HttpRequestException Unavailable() =>
         new($"The Ollama runtime is disabled on this node ({OllamaRuntimeGate.RuntimeEnabledConfigurationKey}=false).");

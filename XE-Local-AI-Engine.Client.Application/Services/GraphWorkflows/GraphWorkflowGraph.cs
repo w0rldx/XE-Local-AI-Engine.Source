@@ -241,8 +241,7 @@ internal sealed class GraphWorkflowGraph
     ///     lane now sends the schema as authored. The parser cannot make that call itself — it has no way to reach
     ///     the model-to-provider map — so <c>GraphWorkflowDefinitionService</c> filters these per node instead.
     /// </summary>
-    internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings =>
-        _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
+    internal IReadOnlyList<GraphWorkflowValidationError> ResponseSchemaWarnings => _responseSchemaWarnings ??= BuildResponseSchemaWarnings();
 
     public IReadOnlyList<GraphWorkflowGraphEdge> InboundEdges(string nodeKey) =>
         _inbound.TryGetValue(nodeKey, out var edges) ? edges : [];

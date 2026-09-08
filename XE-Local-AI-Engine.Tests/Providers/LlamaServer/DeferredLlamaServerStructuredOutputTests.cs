@@ -249,11 +249,8 @@ public sealed class DeferredLlamaServerStructuredOutputTests
     // The exact options pipeline DeferredLlamaServerChatClient runs before handing options to its inner adapter. Every
     // transform that acts clones the options, so running the whole chain here is what proves they compose.
     private static ChatOptions? ApplyClientTransforms(ChatOptions? options) =>
-        DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(
-            DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough(
-                DeferredLlamaServerChatClient.ApplySamplingPassthrough(
-                    DeferredLlamaServerChatClient.ApplyReasoningBudget(
-                        DeferredLlamaServerChatClient.ApplyThinkingSwitch(options)))));
+        DeferredLlamaServerChatClient.ApplyToolSchemaCompatibility(DeferredLlamaServerChatClient.ApplyResponseSchemaPassthrough(
+            DeferredLlamaServerChatClient.ApplySamplingPassthrough(DeferredLlamaServerChatClient.ApplyReasoningBudget(DeferredLlamaServerChatClient.ApplyThinkingSwitch(options)))));
 
     private static bool ContainsKeyword(JsonElement element, string keyword)
     {
