@@ -19,6 +19,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { useOllamaRuntimeConfigured } from "@/core/runtime/hooks/useOllamaRuntimeConfigured";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -265,6 +266,10 @@ export function NodeSettings() {
 
 	const recommendedDownloads = useRecommendedModelDownloads();
 
+	// Whether the optional Ollama runtime is gated off on this node (XE_OLLAMA_RUNTIME_ENABLED=false). FAIL OPEN: only
+	// a definite `false` disables the endpoint field, so a still-loading or failed probe leaves the field in place.
+	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
+
 	useEffect(() => {
 		if (settings?.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(settings.maxMessageRequestTimeoutSeconds);
@@ -458,6 +463,7 @@ export function NodeSettings() {
 				onDownloadRecommendedEmbedding={recommendedDownloads.embedding.start}
 				isDownloadRecommendedEmbeddingPending={recommendedDownloads.embedding.isPending}
 				isRecommendedEmbeddingInFlight={recommendedDownloads.embedding.isInFlight}
+				ollamaRuntimeDisabled={ollamaRuntimeDisabled}
 			/>
 
 			<DownloadProgressPanel

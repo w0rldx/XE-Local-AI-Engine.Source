@@ -35,11 +35,15 @@ vi.mock("react-i18next", () => ({
 	}),
 }));
 
-// The runtime card asks the node whether the optional Ollama runtime is configured at all. That probe reaches the
-// generated SDK, and its axios interceptors pull in the app router - neither of which this file is about. `undefined`
-// is the fail-open answer, so the Ollama endpoint field renders exactly as it did before the probe existed.
+// The page asks the node whether the optional Ollama runtime is configured at all and threads the answer down to the
+// runtime card. That probe reaches the generated SDK, and its axios interceptors pull in the app router - neither of
+// which this file mounts (the SDK's react-query module is mocked wholesale below, so MSW never sees the call). This is
+// the one seam left for the hook, and it doubles as the switch for the gate-off test: `undefined` is the fail-open
+// answer every other test runs with, so the Ollama endpoint field renders exactly as it did before the probe existed.
+const { ollamaProbe } = vi.hoisted(() => ({ ollamaProbe: { data: undefined as boolean | undefined } }));
+
 vi.mock("@/core/runtime/hooks/useOllamaRuntimeConfigured", () => ({
-	useOllamaRuntimeConfigured: () => ({ data: undefined }),
+	useOllamaRuntimeConfigured: () => ollamaProbe,
 }));
 
 const { generatedMock } = vi.hoisted(() => ({
@@ -255,6 +259,26 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		useDeveloperModeStore.setState({ developerMode: false });
 		// The GGUF in-flight set is a shared session store; reset it so a reranker-download test starts with none.
 		useGgufBrowseStore.setState({ inFlightDownloads: [] });
+		// The probe holder is module state shared by the whole file; reset it to the fail-open answer.
+		ollamaProbe.data = undefined;
+	});
+
+	it("hides the Ollama endpoint field when the node reports the runtime gated off", () => {
+		ollamaProbe.data = false;
+
+		renderPage();
+
+		// Through the real page -> NodeSettingsFieldsCard -> NodeSettingsRuntimeCard path, so the prop is proven wired.
+		expect(screen.queryByTestId("node-settings-ollama-endpoint")).toBeNull();
+		expect(screen.getByTestId("node-settings-ollama-disabled")).toBeTruthy();
+	});
+
+	it("keeps the Ollama endpoint field while the runtime probe has not answered", () => {
+		renderPage();
+
+		// FAIL OPEN: `undefined` is a loading or failed probe, and must never take the setting away.
+		expect(screen.getByTestId("node-settings-ollama-endpoint")).toBeTruthy();
+		expect(screen.queryByTestId("node-settings-ollama-disabled")).toBeNull();
 	});
 
 	it("mounts workspace access directly below the inbound MCP key panel", () => {
