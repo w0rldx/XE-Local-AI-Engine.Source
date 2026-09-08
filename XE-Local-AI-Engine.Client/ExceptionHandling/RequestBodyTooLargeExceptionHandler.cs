@@ -1,8 +1,6 @@
 namespace XE_Local_AI_Engine.Client.ExceptionHandling;
 
 using Microsoft.AspNetCore.Diagnostics;
-using Microsoft.AspNetCore.Mvc;
-using XE_Local_AI_Engine.Client.Common.Extensions;
 
 /// <summary>
 ///     Answers the 413 a capped route DECLARES when the host is the one that refuses the body.
@@ -21,9 +19,6 @@ using XE_Local_AI_Engine.Client.Common.Extensions;
 /// </summary>
 public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLargeExceptionHandler> logger) : IExceptionHandler
 {
-    /// <summary>Same string every other problem body on this surface is written with.</summary>
-    private const string ProblemContentType = "application/problem+json; charset=utf-8";
-
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(httpContext);
@@ -46,17 +41,12 @@ public sealed class RequestBodyTooLargeExceptionHandler(ILogger<RequestBodyTooLa
 
         httpContext.Response.StatusCode = StatusCodes.Status413PayloadTooLarge;
 
-        var problemDetails = new ProblemDetails
-        {
-            Status = StatusCodes.Status413PayloadTooLarge,
-            Type = "https://tools.ietf.org/html/rfc7231#section-6.5.11",
-            Title = "Request body too large",
-            Detail = "The request body is larger than this route accepts."
-        }.WithTraceId(httpContext);
+        // Shared with the endpoints' own Content-Length exit so the two emitters of this status cannot drift apart.
+        var problemDetails = RequestBodyTooLargeProblem.Create(httpContext, "The request body is larger than this route accepts.");
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demotes the problem body (the trap every sibling carries).
-        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, ProblemContentType, cancellationToken).ConfigureAwait(false);
+        await httpContext.Response.WriteAsJsonAsync(problemDetails, options: null, RequestBodyTooLargeProblem.ContentType, cancellationToken).ConfigureAwait(false);
 
         return true;
     }

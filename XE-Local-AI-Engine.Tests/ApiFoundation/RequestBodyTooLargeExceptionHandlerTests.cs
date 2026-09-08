@@ -33,6 +33,10 @@ public sealed class RequestBodyTooLargeExceptionHandlerTests
         using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
         AssertEx.Equal(expected: 413, document.RootElement.GetProperty("status").GetInt32());
         AssertEx.Equal("Request body too large", document.RootElement.GetProperty("title").GetString());
+
+        // The same two literals the ENDPOINTS' own Content-Length exit answers with (see RequestBodyTooLargeAssert):
+        // both halves build from RequestBodyTooLargeProblem, and pinning them on both sides is what keeps that true.
+        AssertEx.Equal("https://tools.ietf.org/html/rfc7231#section-6.5.11", document.RootElement.GetProperty("type").GetString());
         AssertEx.NotEmpty(AssertEx.NotNull(document.RootElement.GetProperty("detail").GetString()));
         AssertEx.True(document.RootElement.TryGetProperty("traceId", out _), "every problem body on this surface carries a traceId.");
     }
