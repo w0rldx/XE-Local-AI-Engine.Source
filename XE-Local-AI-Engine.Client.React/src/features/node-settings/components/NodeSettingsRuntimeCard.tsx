@@ -3,6 +3,7 @@ import { IconCpu } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { useOllamaRuntimeConfigured } from "@/core/runtime/hooks/useOllamaRuntimeConfigured";
 import {
 	nodeSettingsFieldError,
 	nodeSettingsRestartHint,
@@ -72,6 +73,11 @@ export function NodeSettingsRuntimeCard({
 			})),
 		[t],
 	);
+	// Nothing reads the Ollama endpoint when the runtime is gated off (XE_OLLAMA_RUNTIME_ENABLED=false), so
+	// offering the field invites an operator to configure a runtime this node will never start. FAIL OPEN: only a
+	// definite `false` hides it, so a still-loading or failed probe leaves the field exactly as it is today. The
+	// stored value stays in the form model either way, so hiding the input never changes what a save round-trips.
+	const ollamaRuntimeDisabled = useOllamaRuntimeConfigured().data === false;
 	const needsDraftModel = requiresExternalDraftModel(form.speculativeMode);
 	const showsDraftTokensPerStep = usesDraftTokensPerStep(form.speculativeMode);
 	return (
@@ -165,20 +171,26 @@ export function NodeSettingsRuntimeCard({
 						{ maxLoadedProcesses: form.llamaMaxLoadedProcesses },
 					)}
 				</Text>
-				<TextInput
-					label={t("pages.nodeSettings.fields.ollamaEndpoint.label", "Ollama endpoint")}
-					description={
-						<>
-							{t("pages.nodeSettings.fields.ollamaEndpoint.description", "The Ollama API base URL.")}
-							{nodeSettingsRestartHint(t, "ollamaEndpoint")}
-						</>
-					}
-					placeholder="http://127.0.0.1:11434"
-					value={form.ollamaEndpoint}
-					onChange={(event) => onChange("ollamaEndpoint", event.currentTarget.value)}
-					error={nodeSettingsFieldError(t, errors, "ollamaEndpoint")}
-					data-testid="node-settings-ollama-endpoint"
-				/>
+				{ollamaRuntimeDisabled ? (
+					<Text size="xs" c="dimmed" data-testid="node-settings-ollama-disabled">
+						{t("pages.nodeSettings.fields.ollamaEndpoint.disabled", "Ollama runtime is disabled on this node.")}
+					</Text>
+				) : (
+					<TextInput
+						label={t("pages.nodeSettings.fields.ollamaEndpoint.label", "Ollama endpoint")}
+						description={
+							<>
+								{t("pages.nodeSettings.fields.ollamaEndpoint.description", "The Ollama API base URL.")}
+								{nodeSettingsRestartHint(t, "ollamaEndpoint")}
+							</>
+						}
+						placeholder="http://127.0.0.1:11434"
+						value={form.ollamaEndpoint}
+						onChange={(event) => onChange("ollamaEndpoint", event.currentTarget.value)}
+						error={nodeSettingsFieldError(t, errors, "ollamaEndpoint")}
+						data-testid="node-settings-ollama-endpoint"
+					/>
+				)}
 				<Text size="xs" c="dimmed">
 					{t(
 						"pages.nodeSettings.fields.runtime.tagHint",
