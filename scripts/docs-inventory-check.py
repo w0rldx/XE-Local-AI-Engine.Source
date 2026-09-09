@@ -135,8 +135,8 @@ def check_react_features(root: Path) -> CheckResult:
     if not features_dir.is_dir():
         raise InventoryError(f"{REACT_FEATURES_DIR.as_posix()} does not exist under {root}")
 
-    # Hidden directories are tooling state (`.omc/`, `.cache/`), never a feature; skip them so a local,
-    # git-ignored artefact does not fail the guard on a developer box.
+    # Hidden directories are per-user tool or cache state (`.cache/`, editor and agent scratch), never a
+    # feature; skip them so a local, git-ignored artefact does not fail the guard on a developer box.
     names = (entry.name for entry in features_dir.iterdir() if entry.is_dir() and not entry.name.startswith("."))
     inventory = require_non_empty(check, REACT_FEATURES_DIR.as_posix(), names)
     return build_result(check, REACT_CLIENT_PAGE, read_text(root, REACT_CLIENT_PAGE), inventory)

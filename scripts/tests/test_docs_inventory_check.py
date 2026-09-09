@@ -211,11 +211,11 @@ class DocsInventoryCheckTests(unittest.TestCase):
 
     def test_react_features_skip_hidden_tooling_directories(self) -> None:
         root = self.make_repo()
-        (root / "XE-Local-AI-Engine.Client.React" / "src" / "features" / ".omc").mkdir()
+        (root / "XE-Local-AI-Engine.Client.React" / "src" / "features" / ".cache").mkdir()
 
         result = MODULE.check_react_features(root)
 
-        self.assertNotIn(".omc", result.inventory)
+        self.assertNotIn(".cache", result.inventory)
         self.assertEqual((), result.missing)
 
     def test_solution_projects_use_the_project_file_stem_as_identity(self) -> None:
