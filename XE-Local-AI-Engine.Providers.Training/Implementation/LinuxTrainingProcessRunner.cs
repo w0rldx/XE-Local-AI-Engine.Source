@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Training.Implementation;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Training.Contracts;
 
 /// <summary>
 ///     The production <see cref="ITrainingProcessRunner" />. Spawns a tool by argv (no shell) under <c>setsid -w</c> so

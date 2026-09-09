@@ -5,7 +5,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Text.RegularExpressions;
-using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Operator bring-your-own llama-server override branch of <see cref="LlamaCppBinaryManager" />. When the override is

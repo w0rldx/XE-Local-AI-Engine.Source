@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence;
 
 /// <summary>
-///     Options for the pre-migration node database snapshot (BE-06). Bound from the <c>NodeDbBackup</c> configuration
+///     Options for the pre-migration node database snapshot. Bound from the <c>NodeDbBackup</c> configuration
 ///     section and validated on start.
 /// </summary>
 public sealed class NodeDbBackupOptions

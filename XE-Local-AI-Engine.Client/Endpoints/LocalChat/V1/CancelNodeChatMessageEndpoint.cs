@@ -49,8 +49,11 @@ public sealed class CancelNodeChatMessageEndpoint(
                 Cancelled = result.Cancelled
             }, ct).ConfigureAwait(false);
         }
-        catch (InvalidOperationException)
+        catch (NodeChatMessageCorrelationNotFoundException)
         {
+            // The TYPED correlation failure only. Catching its base InvalidOperationException here reported any
+            // unrelated fault raised under CancelMessageAsync as "not found", hiding it from the 500 that says
+            // something is actually broken.
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
         }
     }

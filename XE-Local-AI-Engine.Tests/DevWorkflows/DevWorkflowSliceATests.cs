@@ -17,7 +17,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.WorkSessions;
 
 /// <summary>
-///     The Slice A ship gate: the seeded workflow runs end to end on the REAL work-session machinery, survives the
+///     The ship gate for the seeded <c>research-plan-approval</c> workflow: it runs end to end on the REAL
+///     work-session machinery, survives the
 ///     engine restarting under it, and is replayable from its own event log afterwards.
 ///     <para>
 ///         Everything else in this namespace scripts the agent seam so the graph can be exercised without a model.

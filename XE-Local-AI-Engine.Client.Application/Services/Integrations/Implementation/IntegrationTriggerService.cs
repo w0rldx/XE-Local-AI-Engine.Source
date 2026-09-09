@@ -132,7 +132,7 @@ internal sealed class IntegrationTriggerService : IIntegrationTriggerService
             return new IntegrationTriggerResult(IntegrationTriggerOutcome.AgentMissing, Trigger: null, AgentMissingMessage);
         }
 
-        // Ruling D2 scopes V1 to a saved SINGLE agent. The coordinator builds no OrchestrationSpec — it is byte-for-byte
+        // V1 is scoped to a saved SINGLE agent. The coordinator builds no OrchestrationSpec — it is byte-for-byte
         // the scheduler's run-agent shape — so an orchestrator saved here would report Completed having run none of its
         // participants. Refused at save AND re-checked in the coordinator, because a definition's Kind can change after
         // the trigger was written.

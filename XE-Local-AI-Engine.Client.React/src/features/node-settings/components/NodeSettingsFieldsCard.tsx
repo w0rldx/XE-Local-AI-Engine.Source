@@ -10,13 +10,11 @@ import {
 import { NodeSettingsKnowledgeModelsCard } from "@/features/node-settings/components/NodeSettingsKnowledgeModelsCard";
 import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
-import type { NodeSettingsFieldBounds, NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
-
-// A chat-capable installed model offered as a draft-model choice (value = model name, resolved server-side to a path).
-export interface DraftModelOption {
-	readonly value: string;
-	readonly label: string;
-}
+import type {
+	NodeSettingsFieldBounds,
+	NodeSettingsFieldsForm,
+	NodeSettingsModelOption,
+} from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 // Presentational card group for the migrated appsettings knobs. The page owns the form state, bounds, errors and the
 // change handlers; this component only renders the controls. Always-shown fields live in the first three cards; the
@@ -30,13 +28,13 @@ export interface NodeSettingsFieldsCardProps {
 	// When true, the developer-only advanced card is rendered. Driven by the page's developer-mode flag.
 	readonly showDeveloperFields: boolean;
 	// Installed chat-capable models offered as the draft model for draft-* speculative modes.
-	readonly draftModelOptions: readonly DraftModelOption[];
+	readonly draftModelOptions: readonly NodeSettingsModelOption[];
 	// Installed llama.cpp chat models eligible for the supervised keep-warm loop.
-	readonly keepWarmModelOptions: readonly DraftModelOption[];
-	readonly autoEffortFastModelOptions: readonly DraftModelOption[];
+	readonly keepWarmModelOptions: readonly NodeSettingsModelOption[];
+	readonly autoEffortFastModelOptions: readonly NodeSettingsModelOption[];
 	// All installed models offered as the knowledge-base reranker (reranker GGUFs are not a chat kind, so this list is
 	// not filtered to chat-capable models).
-	readonly rerankerModelOptions: readonly DraftModelOption[];
+	readonly rerankerModelOptions: readonly NodeSettingsModelOption[];
 	// One-click download of the node's recommended reranker GGUF. The page owns the mutation + progress feed; this
 	// component only renders the button and reflects its pending / in-flight state.
 	readonly onDownloadRecommendedReranker: () => void;

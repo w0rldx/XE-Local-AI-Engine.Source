@@ -18,20 +18,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
-
-function statusColor(status: string): "blue" | "green" | "orange" | "red" {
-	const normalized = status.toLowerCase();
-	if (normalized === "approved") {
-		return "green";
-	}
-	if (["expired", "denied", "consumed", "cancelled"].includes(normalized)) {
-		return "orange";
-	}
-	if (normalized === "failed") {
-		return "red";
-	}
-	return "blue";
-}
+import { statusColor } from "@/features/binding/models/NodeBindingStatusModel";
 
 // Module-scoped `t` (the app's i18next instance) so the fallback is localized without threading the hook's `t`
 // through every mutation callback — the same pattern ApiErrorMessage and Toast already use.

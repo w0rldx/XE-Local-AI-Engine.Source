@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.CodexOAuth;
+﻿namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
 using System.Net;
 using System.Net.Sockets;
@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 

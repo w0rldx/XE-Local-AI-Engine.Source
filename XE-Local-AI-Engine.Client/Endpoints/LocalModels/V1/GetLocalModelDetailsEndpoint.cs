@@ -4,28 +4,21 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat;
-using XE_Local_AI_Engine.Client.Services.CloudProviders;
-using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
-using XE_Local_AI_Engine.Providers.Abstractions.External;
-using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
 
+/// <summary>
+///     Reports one model's details. The provider routing behind "which model is this and what are its details" lives in
+///     <see cref="ILocalModelDetailsResolver" />; this endpoint binds, delegates, and maps the one resolution it gets
+///     back — a <see cref="LocalModelDetailsResolution.NoLocalDetails" /> is the single 404 for every branch that has
+///     no local details to report.
+/// </summary>
 public sealed class GetLocalModelDetailsEndpoint(
-    IOllamaModelService modelService,
-    ILocalModelProviderResolver providerResolver,
-    IGgufModelStore ggufModelStore,
-    ICloudModelResolver cloudModelResolver,
-    IModelTrustResolver modelTrustResolver,
+    ILocalModelDetailsResolver detailsResolver,
     ModelNameValidator modelNameValidator) : Endpoint<GetLocalModelDetailsRequest, LocalModelDetailsResponse>
 {
-    private readonly ICloudModelResolver _cloudModelResolver = cloudModelResolver ?? throw new ArgumentNullException(nameof(cloudModelResolver));
-    private readonly IGgufModelStore _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
-    private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
+    private readonly ILocalModelDetailsResolver _detailsResolver = detailsResolver ?? throw new ArgumentNullException(nameof(detailsResolver));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
-    private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
 
     public override void Configure()
     {
@@ -44,134 +37,22 @@ public sealed class GetLocalModelDetailsEndpoint(
         }
 
         var modelName = decodedModelName!.Trim();
+        var resolution = await _detailsResolver.ResolveAsync(modelName, ct).ConfigureAwait(false);
 
-        // A Codex cloud model id (e.g. gpt-5.5) is NOT a local Ollama model: probing the local runtime's /api/show
-        // for it 500s (Ollama has no such model). Model details (context window, template, license) are a
-        // local-runtime concept, so a cloud id has no local details — return a clean 404 instead of a 500. The chat
-        // UI should not request local details for a cloud model at all.
-        if (CodexModelCatalog.IsCodexModel(modelName))
+        switch (resolution)
         {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-            return;
-        }
-
-        // An external OpenAI-compatible model has no local runtime to probe either, but unlike the cloud ids above it
-        // does have ONE detail the chat context meter needs: the context window its operator declared. Everything else
-        // (template, system prompt, license) is an Ollama Modelfile concept the remote endpoint has no equivalent of,
-        // so those stay null. An id whose registration is gone is a clean 404, exactly like a stale GGUF map row.
-        if (ExternalModelId.HasExternalScheme(modelName))
-        {
-            await SendExternalModelDetailsAsync(modelName, ct).ConfigureAwait(false);
-            return;
-        }
-
-        // An Azure Foundry deployment id is likewise NOT a local Ollama model: model details (context window, template,
-        // license) are local-runtime concepts an Azure deployment has no equivalent of, and probing /api/show for it
-        // would 500. Return a clean 404 instead, matching the Codex branch above.
-        if (await _cloudModelResolver.IsAzureFoundryDeploymentAsync(modelName, ct).ConfigureAwait(false))
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-            return;
-        }
-
-        // Route by the model's provider BEFORE probing: a GGUF (llama.cpp) model has no Ollama /api/show entry, so its
-        // details come from the GGUF store, not the Ollama daemon. This also means a GGUF selection never touches Ollama
-        // — in desktop mode (no Ollama daemon) that avoids both the connect stall and the 404 the old Ollama-only path
-        // returned. Provider resolution runs on the DECODED name so "validated/resolved name == probed name".
-        var providerName = await _providerResolver.ResolveProviderNameForModelAsync(modelName, ct).ConfigureAwait(false);
-        if (string.Equals(providerName, LocalModelProviders.LlamaCpp, StringComparison.OrdinalIgnoreCase))
-        {
-            await SendGgufModelDetailsAsync(modelName, ct).ConfigureAwait(false);
-            return;
-        }
-
-        try
-        {
-            var details = await _modelService.ShowModelDetailsAsync(modelName, ct).ConfigureAwait(false);
-            await Send.OkAsync(details.ToResponse(modelName), ct).ConfigureAwait(false);
-        }
-        catch (HttpRequestException exception)
-        {
-            // Details come from the Ollama daemon's /api/show. In desktop mode the Ollama endpoint isn't running at all,
-            // so the probe throws a connection error. That is an absence of local details, not a server fault: degrade
-            // to a clean 404 instead of bubbling a 500. Debug, not Warning: the chat UI polls this per selected model —
-            // logging a Warning + stack trace here would flood the console. The 404 is the intended graceful degradation.
-            Logger.LogDebug(exception, "Model details unavailable for '{ModelName}': the local Ollama runtime is unreachable.", modelName);
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-    }
-
-    // Details for an external model come entirely from the operator's declarations — there is no probe, because only
-    // POST /v1/chat/completions is universal across OpenAI-compatible servers and none of them reports a window in a
-    // shape that can be trusted across all of them. The declared window is reported as BOTH the advertised ceiling and
-    // the effective window: for an endpoint the node does not launch, those are the same number, and the context meter
-    // reads the effective one.
-    private async Task SendExternalModelDetailsAsync(string modelName, CancellationToken ct)
-    {
-        var registration = await _modelTrustResolver.TryResolveExternalAsync(modelName, ct).ConfigureAwait(false);
-        if (registration is null)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-            return;
-        }
-
-        await Send.OkAsync(new LocalModelDetailsResponse
-        {
-            ModelName = registration.ModelId,
-            MaxContextTokens = registration.Model.ContextLength,
-            EffectiveContextTokens = registration.Model.ContextLength,
-
-            // The same four connection facts the list entry carries. A details view reached directly — a deep link, a
-            // reload — has no list entry to read them from, and the egress cue must not depend on which route the
-            // client happened to arrive by.
-            DisplayLabel = registration.Model.DisplayName,
-            ExternalConnectionId = registration.Connection.Id,
-            ExternalConnectionName = registration.Connection.DisplayName,
-            DeclaredLocality = registration.Connection.Locality == ExternalProviderLocality.Local
-                ? LocalModelDeclaredLocalities.Local
-                : LocalModelDeclaredLocalities.Cloud,
-            IsReasoningEffortCapable = registration.Model.SupportsReasoningEffort
-        }, ct).ConfigureAwait(false);
-    }
-
-    // Builds the details response for a llama.cpp-served GGUF from the installed-model registry — no Ollama probe.
-    // Maps onto the SAME LocalModelDetailsResponse shape the Ollama branch returns: MaxContextTokens (advertised train
-    // ceiling) is read from the descriptor, and EffectiveContextTokens (the RUNNING process's launched -c) from
-    // the provider's runtime info when a chat process is warm. Template/System/License are Ollama Modelfile concepts a
-    // GGUF has no equivalent of, so they stay null. A model that resolves to llamacpp but isn't in the installed
-    // registry (a stale map row, or one removed on disk) has no details — a clean 404, matching Ollama's "no entry".
-    private async Task SendGgufModelDetailsAsync(string modelName, CancellationToken ct)
-    {
-        var installed = await _ggufModelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
-        var descriptor = installed.FirstOrDefault(model => string.Equals(model.ModelName, modelName, StringComparison.OrdinalIgnoreCase));
-        if (descriptor is null)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-            return;
-        }
-
-        var effectiveContextTokens = await TryResolveEffectiveContextAsync(modelName, ct).ConfigureAwait(false);
-        await Send.OkAsync(descriptor.ToDetailsResponse(modelName, effectiveContextTokens), ct).ConfigureAwait(false);
-    }
-
-    // Best-effort: the effective context window the running llama.cpp chat process loaded (null when none is warm or the
-    // runtime does not report it). Never fails the details response — the meter simply falls back to MaxContextTokens.
-    private async Task<int?> TryResolveEffectiveContextAsync(string modelName, CancellationToken ct)
-    {
-        try
-        {
-            var provider = _providerResolver.ResolveProvider(LocalModelProviders.LlamaCpp);
-            var runtimeInfo = await provider.GetRuntimeInfoAsync(modelName, ct).ConfigureAwait(false);
-            return runtimeInfo is { EffectiveContextTokens: > 0 } info ? info.EffectiveContextTokens : null;
-        }
-        catch (OperationCanceledException) when (ct.IsCancellationRequested)
-        {
-            throw;
-        }
-        catch (Exception exception)
-        {
-            Logger.LogDebug(exception, "Effective context window could not be resolved for '{ModelName}'.", modelName);
-            return null;
+            case LocalModelDetailsResolution.External external:
+                await Send.OkAsync(external.Registration.ToDetailsResponse(), ct).ConfigureAwait(false);
+                return;
+            case LocalModelDetailsResolution.Gguf gguf:
+                await Send.OkAsync(gguf.Descriptor.ToDetailsResponse(modelName, gguf.EffectiveContextTokens), ct).ConfigureAwait(false);
+                return;
+            case LocalModelDetailsResolution.Ollama ollama:
+                await Send.OkAsync(ollama.Details.ToResponse(modelName), ct).ConfigureAwait(false);
+                return;
+            default:
+                await Send.NotFoundAsync(ct).ConfigureAwait(false);
+                return;
         }
     }
 

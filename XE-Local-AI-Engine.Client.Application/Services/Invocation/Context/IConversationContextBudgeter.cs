@@ -30,12 +30,12 @@ public interface IConversationContextBudgeter
     /// <param name="contextTokenCapacity">The model's effective context window in tokens.</param>
     /// <param name="reservedOutputTokens">Tokens to hold back for the model's response.</param>
     /// <param name="systemPrompt">
-    ///     ORC-02: the resolved system prompt that is prepended to the request AFTER this history but still counts against
+    ///     The resolved system prompt that is prepended to the request AFTER this history but still counts against
     ///     the window. Estimated (as a System message) and folded into the effective budget so the outer budget/hard-stop
     ///     is measured against the true round, not history alone. <see langword="null" /> counts as no system prompt.
     /// </param>
     /// <param name="toolDefinitions">
-    ///     ORC-02: the model-facing definition text (name + description + parameter schema) of each tool advertised on the
+    ///     The model-facing definition text (name + description + parameter schema) of each tool advertised on the
     ///     request. Tool JSON schemas never appear in <paramref name="messages" /> yet count against the window, so each
     ///     entry is estimated as one framed unit and folded into the effective budget — mirroring how the inner
     ///     <c>ProviderCallBudgetChatClient</c> folds its Instructions + Tools overhead so the two approximately agree

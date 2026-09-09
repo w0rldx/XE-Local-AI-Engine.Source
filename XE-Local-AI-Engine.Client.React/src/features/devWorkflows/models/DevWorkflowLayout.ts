@@ -1,4 +1,4 @@
-// A layered left-to-right DAG layout, hand-rolled (P4 §2.3.2). Pure: no React, no React Flow, no dependency — dagre
+// A layered left-to-right DAG layout, hand-rolled. Pure: no React, no React Flow, no dependency — dagre
 // and elkjs are both correct and both a new production dependency for ~70 lines of arithmetic.
 //
 // rank(n)     = 0 with no inbound edge, else 1 + max(rank(pred))   — longest path, taken in Kahn order
@@ -40,7 +40,7 @@ export interface DevWorkflowLayoutPosition {
 
 export interface DevWorkflowLayout {
 	readonly positions: ReadonlyMap<string, DevWorkflowLayoutPosition>;
-	/** `${from}>${to}` for every edge that does not move forward a rank. Empty for the acyclic graphs X9 guarantees. */
+	/** `${from}>${to}` for every edge that does not move forward a rank. Empty for the acyclic graphs the server guarantees. */
 	readonly backEdgeKeys: ReadonlySet<string>;
 	readonly rankCount: number;
 }
@@ -67,7 +67,7 @@ function compareTieBreak(left: DevWorkflowLayoutNode, right: DevWorkflowLayoutNo
 
 /**
  * Longest-path ranks in Kahn order. A graph that cannot drain is cyclic: whatever is left is parked one rank past
- * everything that did drain, in id order, so the layout terminates and every node is placed exactly once. X9 makes v1
+ * everything that did drain, in id order, so the layout terminates and every node is placed exactly once. The server makes v1
  * definitions acyclic; this guard is four lines of defence in depth, because a UI that hangs is a worse failure than a
  * UI that draws a strange graph.
  */
@@ -144,7 +144,7 @@ export function layoutDevWorkflowGraph(
 		);
 		const ordered = inRank.toSorted((left, right) => {
 			// Materialized clones sort behind the definition's own nodes, AHEAD of the barycenter rather than only as a
-			// tie-break. Slice C grows a rank that already holds a node, and letting a clone's barycenter push a
+			// tie-break. Materialization grows a rank that already holds a node, and letting a clone's barycenter push a
 			// pre-existing node down the rank would move it — the exact jump top-alignment exists to prevent. Within the
 			// clones the barycenter still orders the groups.
 			const materialized =
@@ -164,8 +164,8 @@ export function layoutDevWorkflowGraph(
 			orderById.set(node.id, indexInRank);
 			positions.set(node.id, {
 				x: rank * RANK_SPACING_X,
-				// TOP-ALIGNED, not centred (R-C5). A y that divides by the rank's population moves every node in that rank
-				// the moment a decomposition lands in it, and Slice C's canonical shape is exactly that: clones arriving
+				// TOP-ALIGNED, not centred. A y that divides by the rank's population moves every node in that rank
+				// the moment a decomposition lands in it, and that is the canonical materialization shape: clones arriving
 				// beside a node that has held a row since run start. Here a node's y depends only on its own index, and the
 				// sort above keeps the clones behind the nodes that were already there — so their indices, and their
 				// positions, do not change. The graph hangs from the top instead of straddling a centre line; that is the

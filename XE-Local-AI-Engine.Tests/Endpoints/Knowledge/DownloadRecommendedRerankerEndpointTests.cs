@@ -74,6 +74,29 @@ public sealed class DownloadRecommendedRerankerEndpointTests
     }
 
     [Test]
+    public async Task DownloadRecommended_WhenADifferentRerankerIsInstalled_StillStartsTheDownload()
+    {
+        // The half of the rule that deliberately differs from the embedding endpoint: only THIS repo counts as already
+        // installed. Reranking is optional and picking a reranker is an explicit operator act, so another reranker on
+        // disk is not the one the operator just asked for.
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
+
+        await using var factory = CreateFactory(coordinator, installed: [Gguf("mixedbread-ai/mxbai-rerank-large-v1-GGUF:Q4_K_M")]);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedRerankerResponse>().ConfigureAwait(false);
+        AssertEx.NotNull(body);
+
+        AssertEx.Equal(1, coordinator.StartCalls.Count);
+        AssertEx.False(body!.AlreadyInstalled);
+    }
+
+    [Test]
     public async Task DownloadRecommended_WhenDownloadInFlight_RejoinsWithoutDuplicate()
     {
         var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: true);

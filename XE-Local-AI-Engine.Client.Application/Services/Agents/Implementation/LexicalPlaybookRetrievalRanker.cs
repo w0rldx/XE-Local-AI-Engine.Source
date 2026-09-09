@@ -12,7 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     every candidate scores zero — break by Priority ascending then CreatedAtUtc ascending, so the result is a stable,
 ///     reproducible ordering with no dependence on a model or external state.
 ///     <para>
-///         Two rules inherited from that shared scorer, both forced by the C3 live round (2026-09-03): function words
+///         Two rules inherited from that shared scorer, both forced by a live round (2026-09-03): function words
 ///         ("the", "und", "der") are dropped from both sides, so a playbook cannot win a slot for containing them; and
 ///         the overlap is divided by the square root of the candidate's token count, so a wordy trigger cannot beat a
 ///         short exact match by sheer volume. The divisor is what makes the score a <see langword="double" /> rather

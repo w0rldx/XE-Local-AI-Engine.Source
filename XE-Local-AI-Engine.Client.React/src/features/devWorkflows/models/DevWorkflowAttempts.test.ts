@@ -1,4 +1,4 @@
-// The attempt walk, which is the only reconstruction of history the single-row node-run schema allows (X2).
+// The attempt walk, which is the only reconstruction of history the single-row node-run schema allows.
 
 import { describe, expect, it } from "vitest";
 

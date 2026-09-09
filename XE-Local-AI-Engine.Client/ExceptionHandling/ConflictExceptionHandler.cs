@@ -19,6 +19,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Image;
 ///     discriminates on <c>conflictType</c> (see <c>NodeChatConflict.ts</c>). Conflict payload beyond the message is a
 ///     typed, null-omitted member of that same envelope (declared on endpoints via <c>ProducesConflictProblemDetails()</c>),
 ///     so the envelope itself stays one shape and the OpenAPI schema names every member.
+///     <para>
+///         That rule governs domain conflicts. An <b>operational block</b> — a runtime, child process, build or
+///         prerequisite standing in the way, which the service reports as a returned outcome rather than by throwing —
+///         keeps its own typed <c>*BlockedResponse</c> body and never reaches this handler; see ADR 0009.
+///     </para>
 /// </summary>
 public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) : IExceptionHandler
 {

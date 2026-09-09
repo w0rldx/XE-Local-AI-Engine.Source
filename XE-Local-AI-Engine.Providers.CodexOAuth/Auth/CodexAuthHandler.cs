@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+﻿namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 using System.Net;
 using System.Net.Http.Headers;
@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>

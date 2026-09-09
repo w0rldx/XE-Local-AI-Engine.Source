@@ -591,7 +591,7 @@ public sealed class DevWorkflowNodeRunTests
     }
 
     /// <summary>
-    ///     Gate 2's <c>DevTask</c> round-trip, at the layer P1 owns. X8 gives the node run two loose refs instead of a
+    ///     Gate 2's <c>DevTask</c> round-trip, at the persistence layer. The node run carries two loose refs instead of a
     ///     workspace string, so what has to hold is that they resolve: the project comes from the work item, the task id
     ///     the attempt writes reads back against a REAL <c>DevelopmentTask</c> the existing Dev Mode chain drove to
     ///     <c>AwaitingApply</c>, and a re-attempt leaves the previous attempt's task where it is — that task keeps its

@@ -64,7 +64,7 @@ export function DevWorkflowValidationReportPanel({
 							},
 						)}
 					</Text>
-					{/* Server prose, verbatim (§2.11): it is the sentence that says what was applied to what. */}
+					{/* Server prose, verbatim: it is the sentence that says what was applied to what. */}
 					{report.basedOn.detail ? (
 						<Text size="xs" c="dimmed" data-testid="dev-workflow-validation-based-on-detail">
 							{report.basedOn.detail}
@@ -97,7 +97,7 @@ export function DevWorkflowValidationReportPanel({
 				</Alert>
 			) : null}
 
-			{/* Server prose, displayed verbatim (§2.11): the verdict's detail already names the command and the reason,
+			{/* Server prose, displayed verbatim: the verdict's detail already names the command and the reason,
 			    and the raw code is shown beside it so an unrecognised one is never silently dropped. */}
 			{report.failureCode && !partial ? (
 				<InlineErrorAlert variant="light" message={report.failureDetail} data-testid="dev-workflow-validation-failure">
@@ -166,7 +166,7 @@ function ValidationTestParseFailure({ outcome }: { readonly outcome: DevWorkflow
 			data-testid="dev-workflow-validation-tests-unparsed"
 		>
 			<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
-			{/* Server prose, verbatim (§2.11). */}
+			{/* Server prose, verbatim. */}
 			{outcome.parseFailureDetail ? (
 				<Text size="xs" c="dimmed">
 					{outcome.parseFailureDetail}

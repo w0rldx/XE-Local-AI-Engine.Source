@@ -171,7 +171,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     The C1 ruling, and the shape the live finding took: an operator skipped one clone's implementation because
+    ///     The join rule, and the shape the live finding took: an operator skipped one clone's implementation because
     ///     that slice could never succeed, and the <c>All</c> join skipped over its succeeding siblings, taking the
     ///     fourteen nodes behind it and the run's own status with it. A skip a person chose is excused; the join goes
     ///     on as long as a sibling actually arrived.
@@ -470,13 +470,13 @@ public sealed class DevWorkflowStateMachineTests
     {
         AssertEx.Equal(DevWorkflowRunStatus.Completed, Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Succeeded));
 
-        // RE-PINNED, ruling 1 (Slice D): over the helper's chain the LAST row is the graph's terminal node, so this is
+        // RE-PINNED: over the helper's chain the LAST row is the graph's terminal node, so this is
         // a run whose end was cancelled after its first node succeeded — an abandoned tail, not a completion.
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Cancelled),
             "skipped and cancelled node runs do not block completion, but neither do they reach an end.");
 
-        // RE-PINNED, ruling 1 (Slice D): every branch condition being false is still a real outcome, and it is not
+        // RE-PINNED: every branch condition being false is still a real outcome, and it is not
         // success — no terminal node succeeded, so the run reads Cancelled rather than Completed.
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled,
             Recompute(DevWorkflowRunStatus.Running, DevWorkflowNodeRunStatus.Skipped, DevWorkflowNodeRunStatus.Skipped),
@@ -491,7 +491,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     Ruling 1 (Slice D): a run whose every node run is terminal with no terminal-node success and nothing failed
+    ///     The completion rule: a run whose every node run is terminal with no terminal-node success and nothing failed
     ///     ends <c>Cancelled</c>, and says which ends it never reached. The reason is the whole point — an abandoned
     ///     tail has no failing node run to read a cause off, because nothing failed.
     /// </summary>
@@ -512,7 +512,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     The other shape ruling 1 names, and the one X10's drain does NOT cover: the rejection HAD an out-edge that
+    ///     The other shape that rule names, and the one the gate-reject drain does NOT cover: the rejection HAD an out-edge that
     ///     accepted it, took it, and the automatic gate below then matched none of its own branches — so everything
     ///     past it skipped and no end was reached. Nothing failed, so the gate's own answer is the only account of it,
     ///     which is why this one carries <c>GateRejected</c> where an operator Skip carries nothing.
@@ -560,7 +560,7 @@ public sealed class DevWorkflowStateMachineTests
     }
 
     /// <summary>
-    ///     The C1 semantic, unchanged by ruling 1 and the reason the rule is about TERMINAL nodes rather than about
+    ///     The join semantic, unchanged by the completion rule and the reason that rule is about TERMINAL nodes rather than about
     ///     skips: the dead branch skipped, the survivor carried the <c>Any</c> join, and the join is the graph's end.
     /// </summary>
     [Test]
@@ -676,7 +676,7 @@ public sealed class DevWorkflowStateMachineTests
     ///     a run nothing advances again, and their executors' slots leak for the process lifetime — so a run with work
     ///     still in flight reaches the terminal only through the drain.
     ///     <para>
-    ///         RE-PINNED, ruling 1 (Slice D): <c>Running</c> and <c>WaitingForApproval</c> gained the direct edge,
+    ///         RE-PINNED: <c>Running</c> and <c>WaitingForApproval</c> gained the direct edge,
     ///         because the recomputation that writes it is reachable only once every node run is already terminal.
     ///         There is nothing left to strand there, and draining would cost a whole tick to settle what is known.
     ///     </para>
@@ -756,7 +756,7 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Skipped),
                      (DevWorkflowNodeRunStatus.Blocked, DevWorkflowNodeRunStatus.Failed),
 
-                     // The fix loop's reset (X9), and the only way out of a terminal status: a node run downstream of a
+                     // The fix loop's reset, and the only way out of a terminal status: a node run downstream of a
                      // node being re-attempted holds an answer about work that is being replaced.
                      (DevWorkflowNodeRunStatus.Succeeded, DevWorkflowNodeRunStatus.Pending),
                      (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Pending),
@@ -764,7 +764,7 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Pending),
 
                      // An open gate is reset too: it is being asked to approve work that is being replaced, so it is
-                     // re-asked rather than answered about the old round. That is the opposite of X3's walk-past.
+                     // re-asked rather than answered about the old round. That is the opposite of walking past a gate.
                      (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Pending)
                  })
         {
@@ -784,7 +784,7 @@ public sealed class DevWorkflowStateMachineTests
                      (DevWorkflowNodeRunStatus.Cancelled, DevWorkflowNodeRunStatus.Succeeded),
                      (DevWorkflowNodeRunStatus.Failed, DevWorkflowNodeRunStatus.Blocked),
 
-                     // X3: Skip is an intervention on a Blocked row, never a way past an open gate.
+                     // Skip is an intervention on a Blocked row, never a way past an open gate.
                      (DevWorkflowNodeRunStatus.WaitingForApproval, DevWorkflowNodeRunStatus.Skipped)
                  })
         {
@@ -806,7 +806,7 @@ public sealed class DevWorkflowStateMachineTests
 
     /// <summary>
     ///     One recomputation over a chain <c>node-0 -> node-1 -> ...</c> as long as the statuses named, so the LAST of
-    ///     them is the graph's one terminal node. Ruling 1 (Slice D) reads completion off a terminal node, so a graph
+    ///     them is the graph's one terminal node. The completion rule reads completion off a terminal node, so a graph
     ///     is no longer optional here: a helper that invented anonymous rows with no edges cannot ask the question.
     /// </summary>
     private static DevWorkflowRunStatus Recompute(DevWorkflowRunStatus current, params DevWorkflowNodeRunStatus[] nodeRuns) =>

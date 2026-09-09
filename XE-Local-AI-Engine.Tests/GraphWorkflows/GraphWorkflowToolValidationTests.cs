@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Ruling D6's gate where a definition meets it: a <c>Tool</c> node may name only a tool
+///     The tool gate where a definition meets it: a <c>Tool</c> node may name only a tool
 ///     <c>IToolInvocationService</c> would actually invoke, checked at SAVE and again at RUN START.
 ///     <para>
 ///         The catalog is the real one — the envelope is the thing under test, so faking it here would prove only that

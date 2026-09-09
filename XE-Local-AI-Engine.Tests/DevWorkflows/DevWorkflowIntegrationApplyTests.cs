@@ -11,8 +11,8 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     C4: the integration stage. A fan-out's patches reach the repository through Dev Mode's own apply gate, one after
-///     another, and ONLY after an operator answered the workflow's own human gate (Y3).
+///     The integration stage. A fan-out's patches reach the repository through Dev Mode's own apply gate, one after
+///     another, and ONLY after an operator answered the workflow's own human gate.
 ///     <para>
 ///         What is real here is everything the workflow owns: the parse rule that puts the gate in front, the decision
 ///         row, the enumeration of which tasks this run implemented, the sequencing, the failure classes and the report.
@@ -99,7 +99,7 @@ public sealed class DevWorkflowIntegrationApplyTests
                                               """;
 
     /// <summary>
-    ///     The named C4 gate: two task patches apply sequentially, and only after the gate approves.
+    ///     The integration gate: two task patches apply sequentially, and only after the gate approves.
     ///     <para>
     ///         The "only after" half is asserted BEFORE the decision as well as after it, because it is the half that
     ///         cannot be inferred from the end state: a run that applied at the join and then approached the gate would
@@ -127,7 +127,7 @@ public sealed class DevWorkflowIntegrationApplyTests
             "both patches, one after the other, in the order the decomposition put the slices in.");
 
         // Every apply named THIS run. The real service refuses an apply that names no run for a task a live run drives
-        // (Y3, server-side), so a lane that stopped threading its run id would refuse its own patches in production
+        // (server-side), so a lane that stopped threading its run id would refuse its own patches in production
         // while this scripted chain applied them happily.
         AssertEx.Equal($"{runId:D}, {runId:D}", string.Join(", ", harness.Chain.OnBehalfOf.Select(static id => id?.ToString("D") ?? "<none>")));
 
@@ -163,7 +163,7 @@ public sealed class DevWorkflowIntegrationApplyTests
     }
 
     /// <summary>
-    ///     The other half of Y3: a refused gate applies NOTHING. The run ends where it was refused rather than
+    ///     The other half of the apply gate: a refused gate applies NOTHING. The run ends where it was refused rather than
     ///     completing through a skipped apply, and the implemented tasks are left exactly as they were — waiting to be
     ///     applied by somebody who decides to.
     /// </summary>
@@ -191,7 +191,7 @@ public sealed class DevWorkflowIntegrationApplyTests
     /// <summary>
     ///     The v2 boundary, pinned because it is the shape a real two-slice run meets today. The apply gate takes the
     ///     FIRST patch and refuses the second: an approved subject names the base commit it was reviewed against, and
-    ///     the first apply is sitting in that tree. §5.6.3 names concurrent-patch merge as v2, and this is what that
+    ///     the first apply is sitting in that tree. Concurrent-patch merge is deferred to v2, and this is what that
     ///     costs at runtime — one patch in, the node standing down for a human with both facts on the record, rather
     ///     than a second patch applied onto a tree nobody judged.
     /// </summary>
@@ -268,7 +268,7 @@ public sealed class DevWorkflowIntegrationApplyTests
             message: "and the answer is the ledger's own, read now: a task Dev Mode already stood down cannot complete, which is a "
                      + "different sentence from the one attempt 1 recorded.");
 
-        // N3: Dev Mode's sentence is about a PRECONDITION — true, and about neither the cause nor the operator's move.
+        // Dev Mode's sentence is about a PRECONDITION — true, and about neither the cause nor the operator's move.
         // On its own it reads to someone who has just pressed Retry as a smaller, different problem than the one they
         // were retrying, so the lane says what happened first and keeps Dev Mode's answer behind it.
         AssertEx.Contains(AssertEx.NotNull(retried.TerminalReason),
@@ -450,7 +450,7 @@ public sealed class DevWorkflowIntegrationApplyTests
         // The gate in front of the apply carries the approval and nothing else, asked the way the tick asks it. Parsing
         // at all already proves this — the rule is a parse rule — but the shipped template is the one definition an
         // operator does not author, so what it routes on is pinned here rather than left implied by the absence of a throw.
-        // N1: the verification's second inbound edge is what reaches PAST the decomposition to the approved plan — the
+        // The verification's second inbound edge is what reaches PAST the decomposition to the approved plan — the
         // walk stops at the first producer on each path, and on the join's path that is `decompose` with its task
         // package. Pinned on the SHIPPED seed rather than on a test graph, because deleting the line is otherwise a
         // change no test notices and the verification goes blind again.
@@ -472,7 +472,7 @@ public sealed class DevWorkflowIntegrationApplyTests
     ///     <para>
     ///         With two gated apply lanes in one run, a run-wide enumeration hands each gate every succeeded DevTask
     ///         task there is — so approving alpha lands beta's patch, which alpha's gate never displayed and nobody
-    ///         approved. The gate the graph puts in front of an apply node (Y3) covers the branch that REACHES that
+    ///         approved. The gate the graph puts in front of an apply node covers the branch that REACHES that
     ///         node, so the enumeration is the node's graph ancestry.
     ///     </para>
     ///     <para>

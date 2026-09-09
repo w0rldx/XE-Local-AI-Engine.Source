@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Dynamic materialization (§5.9): a decomposition reads its own task package and grows the run into it, cloning the
+///     Dynamic materialization: a decomposition reads its own task package and grows the run into it, cloning the
 ///     template subtree once per task in the same transaction that rewrites the run's pinned graph.
 ///     <para>
 ///         Every test takes a host of its own. The graph cache's parse count, the scripted sandbox and the scripted
@@ -276,7 +276,7 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     R6, the staleness rule: the tick that materializes STOPS there. Everything below it in a tick judges node runs
+    ///     The staleness rule: the tick that materializes STOPS there. Everything below it in a tick judges node runs
     ///     against a parsed graph, and this one has just been replaced — so the assertion is that the next tick re-parses
     ///     and that nothing was admitted against the graph that no longer describes the run.
     /// </summary>
@@ -366,7 +366,7 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     "There is no follow-up work" is a legitimate answer, not malformed output (review F4). The join keeps the edge
+    ///     "There is no follow-up work" is a legitimate answer, not malformed output. The join keeps the edge
     ///     it already had, fires on the decomposition itself, and the run completes — where the alternative reading
     ///     leaves it Pending for ever.
     /// </summary>
@@ -427,7 +427,7 @@ public sealed class DevWorkflowMaterializationTests
     ///         The route is computed when a node settles, and a decomposition settles a whole tick before the clone-root
     ///         edges exist. Left at that, the persisted document names the authored join edge and omits every root the
     ///         next tick actually admits — a recorded route disagreeing with the routing that happened, which is the one
-    ///         thing §4.2 says it may never do. So the producer's route is re-taken inside the materialization
+    ///         thing a recorded route may never do. So the producer's route is re-taken inside the materialization
     ///         transaction, against the rewritten graph.
     ///     </para>
     ///     <para>
@@ -573,7 +573,7 @@ public sealed class DevWorkflowMaterializationTests
 
     /// <summary>
     ///     A package the runtime cannot use is handed back to the node that wrote it, with the complaint in the next
-    ///     attempt's objective — §7.1's named exception to <c>Configuration</c> being non-retryable, and the cheapest
+    ///     attempt's objective — the named exception to <c>Configuration</c> being non-retryable, and the cheapest
     ///     correction loop available, since the thing that produced the document is the thing that can fix it.
     /// </summary>
     [Test]
@@ -619,7 +619,7 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     The rest of §5.9's rejections, each with the sentence a model and a human are both given. They are refusals of
+    ///     The rest of the task-package rejections, each with the sentence a model and a human are both given. They are refusals of
     ///     a WELL-FORMED package, so the reason has to say what about it cannot be used — "invalid" would send the next
     ///     attempt back with nothing to change.
     /// </summary>
@@ -796,7 +796,7 @@ public sealed class DevWorkflowMaterializationTests
     /// <summary>
     ///     The seam that makes any of this reachable: a work session has no word for a task package, so the NODE declares
     ///     the kind it produces and the promotion writes it. Without it every decomposition's own output lands as an
-    ///     ordinary report and §5.9 step 1 finds nothing to read.
+    ///     ordinary report and the materializer's first step finds nothing to read.
     /// </summary>
     [Test]
     public async Task ADecomposingNodesOwnOutputIsPromotedAsTheKindItDeclares()
@@ -811,7 +811,7 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     N1: what the node behind the join gets to READ. The materializer used to delete the decomposition's own edge
+    ///     What the node behind the join gets to READ. The materializer used to delete the decomposition's own edge
     ///     into the join, which took the decomposition off every path back from it — so the verification agent inherited
     ///     the clones' validation reports and nothing else, and said so itself in the live run before returning "not
     ///     yet". Kept, that edge carries the task package; the seed's <c>planapproval → verify</c> edge carries the plan
@@ -841,11 +841,11 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>
-    ///     N4: skipping one slice's validation must not settle the run's tail over a sibling that is still working.
+    ///     Skipping one slice's validation must not settle the run's tail over a sibling that is still working.
     ///     <para>
     ///         Settling the join the moment one branch was skipped took the integration stage over a slice the run had
     ///         not finished. What the state machine rules is asserted in both halves here: the sibling is untouched and
-    ///         the join WAITS for it, and once it lands the join SUCCEEDS — per C1 an operator's skip over healthy
+    ///         the join WAITS for it, and once it lands the join SUCCEEDS — an operator's skip over healthy
     ///         ancestors is Waived rather than Dead, and an <c>All</c> join fires on the branch that did land.
     ///     </para>
     /// </summary>

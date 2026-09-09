@@ -345,7 +345,7 @@ public interface IDevelopmentStore
     ///         orphaning it and creating another.
     ///     </para>
     /// </summary>
-    /// <exception cref="KeyNotFoundException">The project does not exist.</exception>
+    /// <exception cref="DevelopmentNotFoundException">The project does not exist.</exception>
     Task<DevelopmentOperationResult> CreateTaskAsync(DevelopmentCreateTaskCommand command, CancellationToken cancellationToken = default);
 
     Task<DevelopmentOperationResult> StartAttemptAsync(DevelopmentStartAttemptCommand command, CancellationToken cancellationToken = default);

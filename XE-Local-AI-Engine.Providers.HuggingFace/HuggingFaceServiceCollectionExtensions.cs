@@ -8,7 +8,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
-using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 
 /// <summary>
 ///     DI wiring for the Hugging Face GGUF discovery + store stack. Registers <see cref="IGgufModelStore" />,

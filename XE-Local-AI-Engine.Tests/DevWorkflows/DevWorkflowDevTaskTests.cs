@@ -21,7 +21,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DevWorkflowDevTaskTests
 {
     /// <summary>
-    ///     The Slice B shape end to end: plan it, implement it, validate the result, and put it in front of a human.
+    ///     The <c>DevTask</c> shape end to end: plan it, implement it, validate the result, and put it in front of a human.
     ///     <para>
     ///         The implementation node's success is the task reaching <c>AwaitingApply</c> — apply itself is a later act
     ///         behind the gate this graph ends on, which is the whole point of routing it through the workflow.
@@ -56,7 +56,7 @@ public sealed class DevWorkflowDevTaskTests
                                             """;
 
     /// <summary>
-    ///     The X9 shape on an implementation node: the check routes its failure back at the node that produced what it
+    ///     The cross-node fix-loop shape on an implementation node: the check routes its failure back at the node that produced what it
     ///     was judging, which is a real Development task rather than a work session.
     /// </summary>
     private const string DevTaskFixLoop = """
@@ -88,7 +88,7 @@ public sealed class DevWorkflowDevTaskTests
                                          """;
 
     /// <summary>
-    ///     The same X9 shape with an extra attempt on the implementation node, so a transient failure can be retried
+    ///     The same fix-loop shape with an extra attempt on the implementation node, so a transient failure can be retried
     ///     WITHOUT ending the fix loop the route started.
     /// </summary>
     private const string PatientDevTaskFixLoop = """
@@ -163,7 +163,7 @@ public sealed class DevWorkflowDevTaskTests
     ///     <para>
     ///         The pointer names the task this node implements for the life of the run: clearing it would take away the
     ///         operator's link to the work while it is being retried, and — now that a project can carry several tasks —
-    ///         would let the re-attempt bind to a sibling's. The plan's own §7.2 text says the pointer is cleared and a
+    ///         would let the re-attempt bind to a sibling's. An earlier specification had the pointer cleared and a
     ///         new task created; the evidence on the task it already drove is the stronger fact.
     ///     </para>
     /// </summary>
@@ -238,7 +238,7 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     N2: a task inside its own deterministic-validation window is WORKING, not misconfigured.
+    ///     A task inside its own deterministic-validation window is WORKING, not misconfigured.
     ///     <para>
     ///         Dev Mode drives that phase from its own supervisor and holds no attempt row while it does, so a tick that
     ///         lands inside it is told the task has no executable next action — which is true, and which the lane read
@@ -913,7 +913,7 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     Y3 is enforced by the SERVER, not by a hidden button: while the run driving a task is live, Dev Mode's own
+    ///     The apply gate is enforced by the SERVER, not by a hidden button: while the run driving a task is live, Dev Mode's own
     ///     apply refuses — for the endpoint, for a script, for anything that is not that run's apply lane.
     ///     <para>
     ///         The three answers in one test because they are one rule: no run named ⇒ refused; the OWNING run named ⇒
@@ -1229,7 +1229,7 @@ public sealed class DevWorkflowDevTaskTests
     }
 
     /// <summary>
-    ///     P1, live 2026-09-05. A Retry on a node whose task is Blocked at its ROUND cap buys the task a round, not
+    ///     Live 2026-09-05. A Retry on a node whose task is Blocked at its ROUND cap buys the task a round, not
     ///     just the node an attempt. Observed as the opposite: two Retries on a node blocked at "all 3 rounds used"
     ///     re-dispatched it, re-read a task still at 3 of 3, and stood the node down again about two seconds later
     ///     each time — spending one of the node's own attempts per Retry and never building a coder prompt, so the

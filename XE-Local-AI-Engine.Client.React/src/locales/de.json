@@ -3233,6 +3233,11 @@
 			}
 		},
 		"modelFit": {
+			"panel": {
+				"loading": "Modell-Eignungsdaten werden geladen…",
+				"cached": "Zwischengespeichert {{timestamp}}",
+				"noCache": "Für den Anwendungsfall {{useCase}} sind keine zwischengespeicherten llmfit-Empfehlungen vorhanden. Aktualisieren Sie sie auf der Seite Modellempfehlungen, um sie zu befüllen."
+			},
 			"recommendations": {
 				"title": "Lokaler Modell-Advisor",
 				"subtitle": "Hardware-bewusste lokale Modellempfehlungen für diesen Node. Hardware erkennen und Anwendungsfall auswählen, um bewertete, auf Eignung geprüfte Modellempfehlungen zu sehen.",

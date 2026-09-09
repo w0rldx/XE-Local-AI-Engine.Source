@@ -150,6 +150,31 @@ public sealed class SkillImportArchiveGuardTests
         AssertEx.Equal("references/FAQ.md", innocent.Resources.Single().Name);
     }
 
+    // The upload cap moved out of PreviewSkillImportEndpoint and into the service, which now takes the upload as a
+    // Stream and counts the bytes it actually READS rather than trusting IFormFile.Length. Both sides of the boundary,
+    // with the cap tightened to the fixture's own size so no 50 MiB archive has to be built.
+    [Test]
+    public async Task PreviewStream_AdmitsExactlyTheCapAndRefusesTheFirstByteOverIt()
+    {
+        var archive = SkillImportFixtures.Zip(zip => zip.AddText("skill/SKILL.md", SkillImportFixtures.SkillMarkdown("skill")));
+        using var harness = new SkillImportHarness(handler: null,
+            new SkillImportOptions
+            {
+                MaxArchiveBytes = archive.Length
+            });
+
+        using var atCap = new MemoryStream(archive, writable: false);
+        var preview = await harness.Service.PreviewArchiveAsync(atCap).ConfigureAwait(false);
+        AssertEx.Equal("skill", preview.Skills.Single().Name);
+
+        using var overCap = new MemoryStream([.. archive, (byte)0], writable: false);
+        var exception = await AssertEx.ThrowsAsync<SkillImportException>(() =>
+            harness.Service.PreviewArchiveAsync(overCap)).ConfigureAwait(false);
+
+        AssertEx.Contains(exception.Message, "exceeds the maximum import size",
+            message: "An oversized upload must be refused with the same operator-facing message the endpoint used to write.");
+    }
+
     // The tuned limits are the operator-visible contract, and the cap tests above deliberately tighten them to keep
     // fixtures small — so the shipped defaults need their own assertion or a typo in one would go unnoticed.
     [Test]

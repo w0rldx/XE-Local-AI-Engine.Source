@@ -54,7 +54,8 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     private readonly TrackingAsyncDisposable _lease;
 
     /// <summary>
-    ///     The node's single invocation permit, modelled for real rather than faked away: F1 is entirely about who
+    ///     The node's single invocation permit, modelled for real rather than faked away: the queueing behaviour is
+    ///     entirely about who
     ///     waits on it and when, and a lease every caller gets instantly cannot show that.
     /// </summary>
     private readonly SemaphoreSlim _leaseSlot = new(initialCount: 1, maxCount: 1);
@@ -325,7 +326,7 @@ internal sealed class IntegrationCoordinatorHarness : IDisposable
     public IReadOnlyList<AllowedToolDto> OfferedTools { get; set; } = [];
 
     /// <summary>
-    ///     The target definition's execution shape. Settable because ruling D2 limits an integration trigger to a
+    ///     The target definition's execution shape. Settable because an integration trigger is limited to a
     ///     SINGLE agent, and the coordinator has to refuse an orchestrator that was repointed after the trigger was
     ///     saved.
     /// </summary>

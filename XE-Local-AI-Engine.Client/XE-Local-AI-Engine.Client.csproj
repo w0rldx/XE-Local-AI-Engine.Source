@@ -74,7 +74,6 @@
     <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
-    <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Scalar.AspNetCore"/>
     <PackageReference Include="System.Security.Cryptography.ProtectedData"/>

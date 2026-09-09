@@ -19,7 +19,7 @@ export interface DevWorkflowDevTaskNodePanelProps {
  * panel re-implements none of it: re-hosting the hash-locked evidence chain would fork the one place it is rendered.
  * The workflow's contribution is the pointer and the node's own status.
  *
- * **Per Y3 the approval that authorises an apply is a workflow HumanGate upstream of the integration node, not the
+ * **The approval that authorises an apply is a workflow HumanGate upstream of the integration node, not the
  * Dev Mode panel** — which is why this links out to evidence rather than to a second approve button.
  */
 export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodePanelProps) {
@@ -69,7 +69,7 @@ export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodeP
 						size="xs"
 						variant="subtle"
 						leftSection={<IconExternalLink size={14} />}
-						// X8: the deep link carries the project so Dev Mode opens on the right one instead of on whichever
+						// The deep link carries the project so Dev Mode opens on the right one instead of on whichever
 						// project happens to be first. Without a project there is nothing to seed — the task belongs to one
 						// this node cannot name — so the plain link is the honest one.
 						onClick={() =>

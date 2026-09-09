@@ -100,7 +100,9 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 				/>
 				{latest?.lastRefreshedAtUtc ? (
 					<Text size="xs" c="dimmed">
-						Cached {formatTimestamp(latest.lastRefreshedAtUtc)}
+						{t("pages.modelFit.panel.cached", "Cached {{timestamp}}", {
+							timestamp: formatTimestamp(latest.lastRefreshedAtUtc),
+						})}
 					</Text>
 				) : null}
 			</Group>
@@ -108,7 +110,7 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 			{recommendationsQuery.isFetching ? (
 				<Group gap="sm">
 					<Loader size="sm" />
-					<Text c="dimmed">Loading model-fit data…</Text>
+					<Text c="dimmed">{t("pages.modelFit.panel.loading", "Loading model-fit data…")}</Text>
 				</Group>
 			) : null}
 
@@ -116,8 +118,11 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 
 			{!recommendationsQuery.isFetching && !recommendationsQuery.error && latest && !latest.hasCache ? (
 				<Text c="dimmed" data-testid="model-fit-no-cache">
-					No cached llmfit recommendations for the {labelForUseCase(t, useCase)} use case. Refresh from the Model recommendations
-					page to populate them.
+					{t(
+						"pages.modelFit.panel.noCache",
+						"No cached llmfit recommendations for the {{useCase}} use case. Refresh from the Model recommendations page to populate them.",
+						{ useCase: labelForUseCase(t, useCase) },
+					)}
 				</Text>
 			) : null}
 

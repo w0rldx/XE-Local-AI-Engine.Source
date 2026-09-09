@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 // The run header's counts, and the one row that must not be in them: a zero-task decomposition seeds its template's
-// checks as `Succeeded` (D12) so the join behind them lets the apply through, but those rows stand for work that did
+// checks as `Succeeded` so the join behind them lets the apply through, but those rows stand for work that did
 // not happen. Counting them as done reports a run that decomposed into nothing as having completed a validation.
 
 import { cleanup, screen } from "@testing-library/react";

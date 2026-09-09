@@ -15,7 +15,7 @@ public static class NodeDataProtectionKeyRingFailClosed
 {
     /// <summary>
     ///     The decorator appropriate to the at-rest scheme that host uses: DPAPI on Windows, the operator-secret AES-GCM
-    ///     wrapper (BE-02) everywhere else. They differ only in which failure counts as a ring failure and in what the
+    ///     wrapper everywhere else. They differ only in which failure counts as a ring failure and in what the
     ///     operator can do about it — never in whether the ring is allowed to regenerate itself silently.
     /// </summary>
     public static Func<IDefaultKeyResolver, IDefaultKeyResolver> ResolverFactoryFor(bool isWindows)

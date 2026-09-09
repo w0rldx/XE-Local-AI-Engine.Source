@@ -1,13 +1,13 @@
 // The client half of the definition editor's save gate: the graph rules the FORM can actually break, checked before
 // the PUT so the operator is told which node is wrong instead of reading a 400 that names none.
 //
-// This mirrors a deliberate SUBSET of `DevWorkflowGraph.ValidateAndCountNodes` (P4 §2.9, D row) — the rules that
+// This mirrors a deliberate SUBSET of `DevWorkflowGraph.ValidateAndCountNodes` — the rules that
 // govern the fields the form edits. `toolMode` and `materialization` are round-tripped untouched and never authored
 // here, so their own server rules (apply-gating, template nesting, positive `maxChildren`) are deliberately NOT
 // mirrored: a check over a field the form cannot change could only ever fail on a graph the server already accepted.
 // There is no linearity validator either — that is Preview's invariant, not this one's.
 //
-// The four C4 invariant rules ARE mirrored, because the form now authors both fields they read: `requiredCapabilities`
+// The four `GRAPH-C4-*` invariant rules ARE mirrored, because the form now authors both fields they read: `requiredCapabilities`
 // on an Agent node and the graph's own `allowUngatedWrites`. Editing an edge condition or deleting a node breaks the
 // other two. Each is the same question `DevWorkflowGraph` asks, phrased over the wire graph — including the shared
 // `assured` fixpoint, which is keyed on `joinPolicy` and never on node type: keying it on `Join` rejects the shipped
@@ -194,7 +194,7 @@ function augmentedEdges(
 
 /**
  * "Has EVERY run that reaches this node already passed a node with this property?" — the mirror of
- * `DevWorkflowGraph.Assured`, and the one dataflow both C4-2 and C4-3 ask.
+ * `DevWorkflowGraph.Assured`, and the one dataflow both `GRAPH-C4-2` and `GRAPH-C4-3` ask.
  *
  * `Assured(v) = P(v) || Combine(inbound of v)` with `Combine(∅) = false`, so an entry node evaluates to `P(entry)` and
  * is NOT initialised false — a definition whose entry IS the gate, or IS the validation, is a valid shape. `Combine` is
@@ -466,7 +466,7 @@ export function validateDevWorkflowGraph(graph: DevWorkflowGraph | undefined): r
 }
 
 /**
- * The four C4 invariants, over the same augmented edge set the server uses. Skipped wholesale on a cyclic graph: the
+ * The four `GRAPH-C4-*` invariants, over the same augmented edge set the server uses. Skipped wholesale on a cyclic graph: the
  * fixpoint below assumes a topological order, and the `cycle` issue already refuses the save.
  */
 function capabilityInvariants(

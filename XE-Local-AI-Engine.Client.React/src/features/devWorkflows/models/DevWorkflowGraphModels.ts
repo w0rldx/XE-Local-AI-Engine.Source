@@ -1,5 +1,5 @@
-// Wire ↔ canvas mapping for the run graph (P4 §2.3.1). The analogue of the Graph Workflows editor's canvas models,
-// and deliberately not a reuse of them (O3): an editor canvas carries authoring fields and client-generated ids,
+// Wire ↔ canvas mapping for the run graph. The analogue of the Graph Workflows editor's canvas models,
+// and deliberately not a reuse of them: an editor canvas carries authoring fields and client-generated ids,
 // while this one is a read-only render of a run whose node identity is the server's node-run id.
 //
 // Two id spaces meet here. The pinned graph's edges carry NODE KEYS (`from`/`to` name definition nodes); the node-run
@@ -25,15 +25,15 @@ import {
 } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /**
- * Matches P2's `MaxNodeRunsPerRun` exactly, so the guard fires only if the server bound is raised without the client
- * following — which is precisely when a guard earns its keep (C41; a 300 cap over a 200 bound was dead code).
+ * Matches the server's `MaxNodeRunsPerRun` bound exactly, so the guard fires only if that bound is raised without the
+ * client following — which is precisely when a guard earns its keep (a 300 cap over a 200 bound was dead code).
  * ponytail: flat render past the cap is refused outright rather than collapsed — grouping a materialized sibling group
  * into one expandable node is the v2 seam, and it needs a server-side group id.
  */
 export const DEV_WORKFLOW_MAX_RENDERED_NODES = 200;
 
 export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
-	// Y6: seven members — Start/End are IMPLICIT (entry = no inbound edges, terminal = no outbound).
+	// Seven members — Start/End are IMPLICIT (entry = no inbound edges, terminal = no outbound).
 	readonly nodeType: DevWorkflowNodeType;
 	readonly label: string;
 	/**
@@ -51,8 +51,8 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly agentDisplayName?: string;
 	readonly modelLabel?: string;
 	/**
-	 * A Tool node that LANDS the approved patches rather than judging a checkout (R-C3). Read off the pinned graph's
-	 * `toolMode`, which is on the definitions wire since FX-B L2 — before that an apply node was indistinguishable from
+	 * A Tool node that LANDS the approved patches rather than judging a checkout. Read off the pinned graph's
+	 * `toolMode`, which the definitions wire carries — before it did, an apply node was indistinguishable from
 	 * a validation node until it had already written its report.
 	 */
 	readonly isApplyTool: boolean;
@@ -61,7 +61,7 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly materializationIndex?: number;
 	/**
 	 * How many CHILDREN this materialization produced — the denominator beside `materializationIndex`, which is the
-	 * SERVER's index of the child this card belongs to and is already 1-based (C2). Read off the node-run row (Slice D):
+	 * SERVER's index of the child this card belongs to and is already 1-based. Read off the node-run row:
 	 * the runtime computes it per materialization GROUP, which is the number this card is asking for and the number a
 	 * client count could not reach — a template subtree is cloned whole, so counting rows made every denominator N·k,
 	 * and counting distinct indices still could not tell two decompositions of the same template apart.
@@ -75,7 +75,7 @@ export interface DevWorkflowCanvasNodeData extends Record<string, unknown> {
 	readonly developmentTaskId?: string;
 }
 
-/** Y6: a pure client visual with no server id and no status — it exists because a DAG with no visible entry point
+/** A pure client visual with no server id and no status — it exists because a DAG with no visible entry point
  * reads as truncated. Never selectable, so it can never become a drill-down target. */
 export interface DevWorkflowAnchorNodeData extends Record<string, unknown> {
 	readonly anchor: "start" | "end";
@@ -133,7 +133,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 		return { nodes: [], edges: [], structuralKey, nodeRunCount: nodeRuns.length, isOverCap: true };
 	}
 
-	// The node-run row carries no `toolMode` — it is authoring config, and P3 projects it on the GRAPH node only. The
+	// The node-run row carries no `toolMode` — it is authoring config, and the server projects it on the GRAPH node only. The
 	// pinned graph travels with the run, so the join is the node key, the same one the edges are drawn through.
 	const applyToolKeys = new Set(
 		(run?.graph?.nodes ?? []).filter((node) => isDevWorkflowApplyToolMode(node.toolMode)).map((node) => node.nodeKey ?? ""),
@@ -172,7 +172,7 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
 }
 
 /**
- * The same canvas over a DEFINITION (P4 §4, slice B: one component, two data sources). A definition's nodes ARE its
+ * The same canvas over a DEFINITION — one component, two data sources. A definition's nodes ARE its
  * key space, so identity is the node key and there is no row to join against — and no status, because nothing has run.
  */
 export function toDevWorkflowDefinitionCanvasGraph(graph: DevWorkflowGraph | undefined): DevWorkflowCanvasGraph {
@@ -211,8 +211,8 @@ function buildCanvasGraph(
 	structuralKey: string,
 ): DevWorkflowCanvasGraph {
 	const nodeRunIdByKey = new Map(entries.map((entry) => [entry.nodeKey, entry.id]));
-	// A1 is linear-only, so the only endpoint that can be missing today is a materialization TEMPLATE — it has no
-	// node-run row until its children are materialized (Slice C). Dropping the edge is the honest render: there is no
+	// The only endpoint that can be missing today is a materialization TEMPLATE — it has no node-run row until the
+	// runtime materializes its children. Dropping the edge is the honest render: there is no
 	// node to draw it to.
 	const joined = graphEdges.flatMap((edge) => {
 		const from = nodeRunIdByKey.get(edge.from ?? "");
@@ -222,7 +222,7 @@ function buildCanvasGraph(
 
 	// Degree is asked of the DEFINITION's edges, not of the joined ones: a node whose successor is a materialization
 	// template has an outbound edge the canvas cannot draw yet, and capping it with an "End" anchor would claim the run
-	// finishes there. It dangles instead, which is the truth until Slice C materializes the children.
+	// finishes there. It dangles instead, which is the truth until the runtime materializes the children.
 	const hasInboundKey = new Set(graphEdges.map((edge) => edge.to ?? ""));
 	const hasOutboundKey = new Set(graphEdges.map((edge) => edge.from ?? ""));
 	const anchors: { anchor: "start" | "end"; nodeRunId: string; nodeKey: string }[] = entries.flatMap((node) => {
@@ -234,7 +234,7 @@ function buildCanvasGraph(
 		];
 	});
 
-	// The anchors are ranked WITH the real nodes (Y6) rather than offset from them, so they cannot land on top of
+	// The anchors are ranked WITH the real nodes rather than offset from them, so they cannot land on top of
 	// anything: a start anchor is simply the only thing left with no inbound edge.
 	const layoutNodes: DevWorkflowLayoutNode[] = [
 		...entries.map((node) => ({
@@ -293,7 +293,7 @@ function buildCanvasGraph(
 			selectable: false,
 			focusable: false,
 			animated: false,
-			// X9 makes v1 definitions acyclic, so this styling is only ever seen if a server stops enforcing that.
+			// The server makes v1 definitions acyclic, so this styling is only ever seen if a server stops enforcing that.
 			style: isBackEdge ? { strokeDasharray: "4 4" } : undefined,
 			markerEnd: { type: MarkerType.ArrowClosed },
 		};

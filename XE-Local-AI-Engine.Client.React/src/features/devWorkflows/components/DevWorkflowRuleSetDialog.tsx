@@ -5,7 +5,12 @@ import { useTranslation } from "react-i18next";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { type DevWorkflowRuleSetResponse, devWorkflowNodeTypes } from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
+	type DevelopmentProjectOption,
+	type DevWorkflowRuleSetResponse,
+	type DevWorkflowRuleSetValues,
+	devWorkflowNodeTypes,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /**
  * Server-side limits (`DevWorkflowRequestLimits`), mirrored so the operator is stopped by the input rather than by a
@@ -16,26 +21,12 @@ const NAME_MAX = 255;
 const DESCRIPTION_MAX = 1024;
 const BODY_MAX = 4096;
 
-export interface DevWorkflowRuleSetValues {
-	readonly name: string;
-	readonly description: string;
-	readonly body: string;
-	readonly projectIds: readonly string[];
-	readonly nodeTypes: readonly string[];
-	readonly enabled: boolean;
-}
-
-export interface DevWorkflowProjectOption {
-	readonly id: string;
-	readonly label: string;
-}
-
 export interface DevWorkflowRuleSetDialogProps {
 	readonly opened: boolean;
 	/** The rule set being edited, or undefined for a new one. Absent while its body is still loading. */
 	readonly ruleSet?: DevWorkflowRuleSetResponse;
 	readonly isLoading?: boolean;
-	readonly projects: readonly DevWorkflowProjectOption[];
+	readonly projects: readonly DevelopmentProjectOption[];
 	readonly isSubmitting: boolean;
 	/** Rendered inline (this feature has no toast pattern). A 409 arrives here as "changed elsewhere — reload". */
 	readonly errorMessage?: string;
@@ -67,7 +58,7 @@ function toValues(ruleSet: DevWorkflowRuleSetResponse | undefined): DevWorkflowR
 }
 
 /**
- * Create / edit one rule set. The body is markdown injected verbatim into a matching node's objective (Y2), so it is
+ * Create / edit one rule set. The body is markdown injected verbatim into a matching node's objective, so it is
  * edited in the same `CodeEditor` the artifact viewer reads with, not in a textarea that would reflow it.
  *
  * Both scope axes are ANDed by the resolver and an EMPTY axis means "every value" — a rule set with no scope at all

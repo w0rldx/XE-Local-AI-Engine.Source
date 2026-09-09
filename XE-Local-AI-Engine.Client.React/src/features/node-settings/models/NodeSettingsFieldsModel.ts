@@ -18,6 +18,13 @@ export interface NumericBounds {
 	readonly max: number;
 }
 
+// An installed model offered in one of the settings-form model pickers (draft, keep-warm, auto-effort fast, reranker).
+// `value` is the model name; the backend resolves it to a path at save.
+export interface NodeSettingsModelOption {
+	readonly value: string;
+	readonly label: string;
+}
+
 // Hardcoded fallback bounds matching the backend Normalize ranges (used when the response omits a bound on an old
 // server). Mirrors the node-settings server contract.
 const nodeSettingsFieldBounds = {
@@ -146,12 +153,14 @@ const toolCapableModelNameSchema = z
 	.refine((value) => !controlCharPattern.test(value), { message: "control-char" });
 
 export { newUsageRateRow, toUsageRateRows, validateUsageRates } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
+
+import type { UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 import {
 	canonicalRateMap,
 	toUsageRateRows,
 	validateUsageRates,
 } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
-import type { UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
+
 export type { UsageRateRow } from "@/features/node-settings/models/NodeSettingsUsageRateModel";
 
 export function validateToolCapableModels(values: readonly string[]): { value: string[]; hasInvalid: boolean } {

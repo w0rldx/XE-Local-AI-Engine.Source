@@ -216,7 +216,7 @@ describe("DevWorkflowDetailPage", () => {
 
 		await waitFor(() => expect(bodies).toHaveLength(1));
 		const body = bodies[0] as { decision: string; kind?: string; operationId: string };
-		// Y17 renamed the field from `kind`; sending the old name would be accepted as an empty decision.
+		// The field was renamed from `kind`; sending the old name would be accepted as an empty decision.
 		expect(body.decision).toBe("Approve");
 		expect(body.kind).toBeUndefined();
 		expect(body.operationId).toMatch(/^[0-9a-f-]{36}$/i);
@@ -298,7 +298,7 @@ describe("DevWorkflowDetailPage", () => {
 
 		expect(await screen.findByTestId(`dev-workflow-run-${runId}`)).toBeDefined();
 		await waitFor(() => expect(definitionReads).toBeGreaterThan(0));
-		// X14 allows one live run per work item: offering the control here would earn a 409 on every click.
+		// The server allows one live run per work item: offering the control here would earn a 409 on every click.
 		expect(screen.queryByTestId("dev-workflow-start-run")).toBeNull();
 	});
 

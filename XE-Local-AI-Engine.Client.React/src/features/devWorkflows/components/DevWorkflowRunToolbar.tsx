@@ -9,7 +9,7 @@ import { type DevWorkflowRunStatus, isTerminalDevWorkflowRunStatus } from "@/fea
 export interface DevWorkflowRunToolbarProps {
 	readonly status: DevWorkflowRunStatus;
 	readonly definitionName?: string;
-	/** Y20: gates AND needs-intervention nodes. This is the only number that may say "decisions needed". */
+	/** Gates AND needs-intervention nodes. This is the only number that may say "decisions needed". */
 	readonly pendingDecisionCount: number;
 	readonly blockingGateNodeRunId?: string;
 	readonly liveUpdatesUnavailable: boolean;

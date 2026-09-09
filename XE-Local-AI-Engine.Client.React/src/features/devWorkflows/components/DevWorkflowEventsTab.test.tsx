@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The events tab is anchored on the NEWEST end of the log (R-C4), which makes "there is nothing on screen" and "there
+// The events tab is anchored on the NEWEST end of the log, which makes "there is nothing on screen" and "there
 // is nothing in this run" two different states. Conflating them strands the operator: the anchored window is a range of
 // SEQUENCE numbers, the run's counter is shared with node-runs and artifacts, and a wide fan-out can therefore leave a
 // tail window holding no events while the log behind it is full.

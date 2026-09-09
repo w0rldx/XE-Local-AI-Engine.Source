@@ -172,3 +172,10 @@ export type CustomToolFormSchema = z.infer<typeof customToolFormSchema>;
 export function toSlug(name: string): string {
 	return name.startsWith(CUSTOM_TOOL_NAME_PREFIX) ? name.slice(CUSTOM_TOOL_NAME_PREFIX.length) : name;
 }
+
+/** One name/value/isSecret row in the HTTP-header and command-env editors. */
+export interface SecretRow {
+	readonly name: string;
+	readonly value: string;
+	readonly isSecret: boolean;
+}

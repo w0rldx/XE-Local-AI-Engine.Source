@@ -279,7 +279,7 @@ public sealed class InvocationRunnerTests
     [NotInParallel]
     public async Task RunAsync_WhenUsageFinalized_EmitsModelTokenUsageCounterByDirection()
     {
-        // BE-01: the terminal usage-finalize must publish the cumulative model-token counter once per direction on the
+        // The terminal usage-finalize must publish the cumulative model-token counter once per direction on the
         // shared "XE.Node" meter, tagged provider/model/direction only (content-free). Capture through a real
         // MeterListener — the same surface the exporter attaches — so a wrong meter, dropped tag, or double-count is
         // caught. [NotInParallel] keeps a sibling turn's emission out of the capture window.
@@ -2270,7 +2270,7 @@ public sealed class InvocationRunnerTests
     [Test]
     public async Task RunAsync_WhenParkedOnAToolApprovalWhileDetached_FallsBackToThePlainInvocationTimeout()
     {
-        // The §2-correction-1 fix. A browser that disconnected while the approval card was on screen used to buy the run
+        // The detached-park fix. A browser that disconnected while the approval card was on screen used to buy the run
         // MaxPendingToolCallAge + InvocationTimeout (~15 min) PER PARK, holding the llama-server lease the whole time,
         // waiting for an answer that can no longer arrive. Detached, the park now gets only the turn budget.
         var sender = new MockHubMessageSender();

@@ -7,8 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed record DatasetDefinitionDraft(string Name, DatasetDefinitionBodyV1 Body);
-
 public interface IDatasetDefinitionService
 {
     Task<TrainingDefinitionRecord> CreateAsync(DatasetDefinitionDraft draft, CancellationToken cancellationToken = default);

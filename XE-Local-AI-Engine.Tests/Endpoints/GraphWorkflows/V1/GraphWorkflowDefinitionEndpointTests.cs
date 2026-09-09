@@ -160,7 +160,7 @@ public sealed class GraphWorkflowDefinitionEndpointTests
     }
 
     /// <summary>
-    ///     The D6 tool gate over the wire. Nothing structural refuses <c>run_python</c> — it is a well-formed tool
+    ///     The tool gate over the wire. Nothing structural refuses <c>run_python</c> — it is a well-formed tool
     ///     name — so a 201 here would mean a definition the runtime can never start was stored anyway.
     /// </summary>
     [Test]

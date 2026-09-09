@@ -12,11 +12,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
-import {
-	type DevWorkflowDecisionSubmission,
-	DevWorkflowHumanGatePanel,
-} from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
-import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
+import { DevWorkflowHumanGatePanel } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
+import type {
+	DevWorkflowDecisionSubmission,
+	DevWorkflowNodeRunDetailResponse,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 import { devWorkflowNodeRunDetail } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 

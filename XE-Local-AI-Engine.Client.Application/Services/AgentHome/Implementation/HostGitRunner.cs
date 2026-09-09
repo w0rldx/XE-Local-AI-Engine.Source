@@ -6,11 +6,6 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Common;
 
 /// <summary>
-///     Outcome of a host <c>git</c> invocation: exit code plus captured stdout/stderr.
-/// </summary>
-internal sealed record HostGitResult(int ExitCode, string StandardOutput, string StandardError);
-
-/// <summary>
 ///     Runs host-side <c>git</c> commands for the host patch apply flow. Mirrors the only existing
 ///     <see cref="Process" /> use in this assembly (<c>CapabilityReportComposer</c>): a CA2000-clean <c>using var</c> process
 ///     with redirected stdout/stderr, <see cref="ProcessStartInfo.ArgumentList" /> (never a joined string, so paths with

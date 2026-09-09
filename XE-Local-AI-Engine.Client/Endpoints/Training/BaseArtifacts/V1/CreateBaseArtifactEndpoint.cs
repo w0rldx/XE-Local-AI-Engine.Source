@@ -29,11 +29,7 @@ public sealed class CreateBaseArtifactEndpoint(IBaseArtifactService baseArtifact
         catch (BaseArtifactRejectedException exception)
         {
             // Rejection messages are operator-facing by construction (not trainable, or not enough disk).
-            await Send.ResultAsync(Results.Conflict(new BaseArtifactBlockedResponse
-            {
-                Reason = "rejected",
-                Message = exception.Message
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("rejected", exception.Message)).ConfigureAwait(false);
         }
     }
 }

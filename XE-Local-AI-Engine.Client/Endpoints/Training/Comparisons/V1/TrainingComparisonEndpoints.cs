@@ -24,23 +24,15 @@ public sealed class CreateComparisonEndpoint(IComparisonReportService comparison
 
     public override async Task HandleAsync(CreateComparisonRequest req, CancellationToken ct)
     {
-        try
-        {
-            var created = await _comparisons.CreateAsync(new CreateComparisonCommand(req.Name,
-                                                    req.BaseEvaluationRunId,
-                                                    req.TunedEvaluationRunId,
-                                                    req.BaseBenchmarkRunId,
-                                                    req.TunedBenchmarkRunId,
-                                                    req.TrainingRunId),
-                                                ct)
-                                            .ConfigureAwait(false);
-            await Send.OkAsync(created.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (EvaluationRejectedException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var created = await _comparisons.CreateAsync(new CreateComparisonCommand(req.Name,
+                                                req.BaseEvaluationRunId,
+                                                req.TunedEvaluationRunId,
+                                                req.BaseBenchmarkRunId,
+                                                req.TunedBenchmarkRunId,
+                                                req.TrainingRunId),
+                                            ct)
+                                        .ConfigureAwait(false);
+        await Send.OkAsync(created.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -127,15 +119,7 @@ public sealed class SuggestComparisonEndpoint(IComparisonReportService compariso
 
     public override async Task HandleAsync(SuggestComparisonRequest req, CancellationToken ct)
     {
-        try
-        {
-            var suggestion = await _comparisons.SuggestAsync(req.TrainingRunId, ct).ConfigureAwait(false);
-            await Send.OkAsync(suggestion.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (EvaluationRejectedException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var suggestion = await _comparisons.SuggestAsync(req.TrainingRunId, ct).ConfigureAwait(false);
+        await Send.OkAsync(suggestion.ToResponse(), ct).ConfigureAwait(false);
     }
 }

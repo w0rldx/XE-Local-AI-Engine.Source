@@ -17,7 +17,7 @@ public static class ConversationFootprintPurge
 {
     /// <summary>
     ///     Every table keyed by <c>conversation_id</c> (or <c>message_id</c>) that <see cref="DeleteAsync" /> deletes
-    ///     from, excluding the root <c>conversations</c> table itself. Exists so a test (BE-08, in
+    ///     from, excluding the root <c>conversations</c> table itself. Exists so a test (in
     ///     XE_Local_AI_Engine.Client.Persistence.Tests) can enumerate every conversation/message-keyed table in the EF
     ///     model and assert it appears here — catching the exact drift this class's remarks warn about. Whenever a
     ///     <c>DELETE FROM</c> statement below is added, remove, or changed, update this list to match.
@@ -59,7 +59,7 @@ public static class ConversationFootprintPurge
         // and leaving them keyed to a purged conversation is the privacy gap this class exists to close. Only
         // agent_work_sessions carries conversation_id, so the five child tables resolve through a subselect on it and
         // must go FIRST — once the session row is gone the subselect no longer finds them. They are deliberately absent
-        // from CoveredChildTables, which mirrors what BE-08 discovers: conversation/message-keyed tables only.
+        // from CoveredChildTables, which mirrors what that test discovers: conversation/message-keyed tables only.
         //
         // A session's artifact bytes live encrypted on disk under work-sessions/artifacts/{sessionId:N}/. This row purge
         // does not remove those files or upload blobs; the caller owns both teardown paths.
@@ -91,7 +91,7 @@ public static class ConversationFootprintPurge
         // session, its executions and their events with it. Only integration_sessions carries conversation_id, so
         // the two descendant tables resolve through a subselect on it and must go FIRST — once the session row is
         // gone the subselect no longer finds them. They are deliberately absent from CoveredChildTables, which
-        // mirrors what BE-08 discovers: conversation/message-keyed tables only. integration_triggers and
+        // mirrors what that test discovers: conversation/message-keyed tables only. integration_triggers and
         // integration_api_keys are node-scoped and are correctly untouched by a conversation purge.
         await dbContext.Database
                        .ExecuteSqlRawAsync(

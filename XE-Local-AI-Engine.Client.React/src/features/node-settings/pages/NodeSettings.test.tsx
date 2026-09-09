@@ -323,7 +323,7 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		});
 	}
 
-	// P5 regression: the editable draft used to be re-seeded by an effect on every `settings` identity, so any
+	// Regression: the editable draft used to be re-seeded by an effect on every `settings` identity, so any
 	// background refetch (window focus, the post-save invalidation) silently replaced whatever the operator had typed
 	// with the server's values.
 	it("keeps in-progress edits when a background refetch returns different server values", async () => {

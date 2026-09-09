@@ -43,12 +43,6 @@ public interface IBenchmarkProjectService
     Task<BenchmarkJudgePolicyChange> RejudgeProjectAsync(Guid projectId, long expectedProjectVersion, CancellationToken cancellationToken = default);
 }
 
-/// <param name="EnqueuedRunIds">The runs a judging was queued for, in the order they were enqueued. Empty on a no-op.</param>
-public sealed record BenchmarkJudgePolicyChange(
-    BenchmarkProjectRecord Project,
-    IReadOnlyList<Guid> EnqueuedRunIds,
-    int? CohortGeneration);
-
 public sealed class BenchmarkProjectService(
     IBenchmarkStore benchmarkStore,
     IAgentDefinitionStore agentDefinitionStore,

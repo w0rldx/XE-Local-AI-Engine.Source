@@ -465,7 +465,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     What the rule is deliberately NOT: answer coverage. Both seeded gates carry an <c>Approve</c> edge and
-    ///     nothing else, so a rejection ends the run — X10 working as designed. Reading C4-1 as "every answer has
+    ///     nothing else, so a rejection ends the run, working as designed. Reading C4-1 as "every answer has
     ///     somewhere to go" would refuse the product's own templates.
     /// </summary>
     [Test]
@@ -496,7 +496,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     <c>GRAPH-C4-2</c>. An author who declares a write is declaring a real one, so a run must not be able to
-    ///     reach the node without an operator having been asked. Y3 does not catch this: the node is an Agent, not an
+    ///     reach the node without an operator having been asked. The apply-gate rule does not catch this: the node is an Agent, not an
     ///     apply.
     /// </summary>
     [Test]
@@ -514,7 +514,7 @@ public sealed class DevWorkflowGraphTests
 
     /// <summary>
     ///     The escape hatch is the TEMPLATE's, written once and in the open, rather than each node quietly opting
-    ///     itself out. It waives C4-2 and nothing else — Y3 still requires a gate in front of an apply node, because
+    ///     itself out. It waives C4-2 and nothing else — a gate is still required in front of an apply node, because
     ///     approval policy here is tighten-only.
     /// </summary>
     [Test]
@@ -830,7 +830,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The width bound (R5) is checked where a definition asks for it, not where a run tries to commit it: the
+    ///     The width bound is checked where a definition asks for it, not where a run tries to commit it: the
     ///     expansion rewrites the run's whole encrypted graph blob, so the fan-out a template allows is the size of that
     ///     write.
     /// </summary>
@@ -1086,7 +1086,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     The apply variant is a Tool node with a config field, not an eighth node type (Y6): the seven stay closed and
+    ///     The apply variant is a Tool node with a config field, not an eighth node type: the seven stay closed and
     ///     what a Tool node does with the repository is a property of the node.
     /// </summary>
     [Test]
@@ -1127,7 +1127,7 @@ public sealed class DevWorkflowGraphTests
     }
 
     /// <summary>
-    ///     Y3 made structural. The rule is that no AI-authored patch reaches a real repository without an operator
+    ///     The apply gate made structural. The rule is that no AI-authored patch reaches a real repository without an operator
     ///     decision in the run's own audit trail, and a definition is the only place that can be checked before the fact:
     ///     by the time an ungated apply runs, the approval it should have waited for does not exist to be missed.
     /// </summary>

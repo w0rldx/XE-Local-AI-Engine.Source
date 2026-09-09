@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
-using XE_Local_AI_Engine.Providers.HuggingFace.Telemetry;
 
 /// <summary>
 ///     The ranged, resumable, retryable HTTP download against <c>/{repo}/resolve/{rev}/{file}</c>: enforces the hard
@@ -1225,6 +1224,3 @@ internal sealed class HfDownloadClient
         }
     }
 }
-
-/// <summary>Outcome of a completed download: the final path, verified size, sha256 (when an OID was exposed), and revision.</summary>
-internal sealed record HfDownloadResult(string LocalPath, long SizeBytes, string? Sha256, string ResolvedRevision);

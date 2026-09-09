@@ -81,3 +81,35 @@ public sealed record TrainingComparisonDeltasV1
 
     public ComparisonBenchmarkDeltaV1? Benchmark { get; init; }
 }
+
+/// <summary>
+///     What the operator asked to benchmark. The <paramref name="CoreTask" /> is REQUIRED and comes from the operator:
+///     a comparison's evaluation prompt is a scoring-harness input, not a benchmark task, and silently reusing it would
+///     produce a benchmark of the wrong thing.
+/// </summary>
+public sealed record CreateBenchmarkFromComparisonCommand(
+    Guid ComparisonId,
+    string CoreTask,
+    int ContextTokens,
+    Guid AgentDefinitionId,
+    string? Name = null,
+    string? KvCacheType = null,
+    int RepeatCount = 1,
+    bool Warmup = false);
+
+/// <param name="BaseRunIds">The base model's runs, in the order they were enqueued. The tuned group follows them.</param>
+public sealed record ComparisonBenchmarkHandoff(
+    Guid ProjectId,
+    string BaseModelName,
+    string TunedModelName,
+    IReadOnlyList<Guid> BaseRunIds,
+    IReadOnlyList<Guid> TunedRunIds);
+
+/// <summary>What the operator asked to compare. The benchmark ids are optional and validated to exist before binding.</summary>
+public sealed record CreateComparisonCommand(
+    string Name,
+    Guid BaseEvaluationRunId,
+    Guid TunedEvaluationRunId,
+    Guid? BaseBenchmarkRunId = null,
+    Guid? TunedBenchmarkRunId = null,
+    Guid? TrainingRunId = null);

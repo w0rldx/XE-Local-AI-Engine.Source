@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-// The O9 honesty rules the node-run table already guards, asserted a second time on the canvas — a card is a second
+// The status-honesty rules the node-run table already guards, asserted a second time on the canvas — a card is a second
 // place a `Queued` node could be made to look like a running one.
 //
 // React Flow renders into a measured container and jsdom reports 0×0, which suppresses the viewport entirely (see the
@@ -207,7 +207,7 @@ describe("DevWorkflowGraphView", () => {
 			/>,
 		);
 
-		// Both numbers are the SERVER's: the index is already 1-based (C2) and the count is the group size the runtime
+		// Both numbers are the SERVER's: the index is already 1-based and the count is the group size the runtime
 		// computed. Adding one to the index is what made a decomposition of one read "generated · 2 of 2" on live
 		// hardware; counting rows client-side is what made a two-child clone read "of 4".
 		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe("generated · 1 of 2");

@@ -37,7 +37,7 @@ vi.mock("@/features/chat/pages/Chat", () => ({
 	},
 }));
 
-// The agent panel subscribes to the work-session hub for its resume nonce (R-C6). A unit test needs the subscription
+// The agent panel subscribes to the work-session hub for its resume nonce. A unit test needs the subscription
 // not to reach the network, not a real one.
 const hubMock = vi.hoisted(() => {
 	// `invoke` answers a promise because the hook's own cleanup unsubscribes through it and chains off the result.
@@ -128,7 +128,7 @@ describe("DevWorkflowNodePanel", () => {
 		);
 
 		expect(screen.getByTestId("dev-workflow-node-transcript")).toBeDefined();
-		// N2: a follow-up typed here would be a second writer of invocations on the node's conversation.
+		// A follow-up typed here would be a second writer of invocations on the node's conversation.
 		expect(lastScope.current).toMatchObject({
 			conversationId,
 			pinnedAgentId: agentDefinitionId,
@@ -370,7 +370,7 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("does not blame an unrelated fix loop for a node's own retry", () => {
 		// A same-node retry emits `node.retry.scheduled` with NO routed event of its own, so the newest routed event
-		// anywhere in the run sits at-or-before it — under C2's N subtrees that is the ordinary case, not a corner.
+		// anywhere in the run sits at-or-before it — under a decomposition's N subtrees that is the ordinary case, not a corner.
 		// Reading it would name a node that has nothing to do with this reset.
 		const nodeRunId = devWorkflowNodeRunDetail().id;
 		renderPanel(devWorkflowNodeRunDetail({ nodeKey: "implement", attempt: 2 }), {
@@ -505,12 +505,12 @@ describe("DevWorkflowNodePanel", () => {
 	});
 
 	it("badges a DEAD inbound branch dead rather than satisfied, which is what the join will do with it", () => {
-		// LIVE-3 P2: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
+		// Regression: the verdict came off `waitingOnNodeKeys`, which the runtime sends only while the join is Pending and
 		// which drops every SETTLED source — so a Skipped branch arrived as "not waited on" and read SATISFIED. Under
 		// `DevWorkflowStateMachine.EdgeState` a Failed or Cancelled source makes the edge DEAD, and that dead edge is
 		// precisely why an `All` join skips. The panel said the opposite of what was about to happen.
 		//
-		// C1 then split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
+		// A later ruling split the third case back out: a Skipped source is WAIVED, because a skip a person chose is not a
 		// reason to throw away what its siblings carried. WHICH skip that is comes off the row as `skipWaived`, which
 		// the server computes: the ancestor that decides it need not be in this list at all.
 		renderPanel(devWorkflowNodeRunDetail({ nodeType: "Join", nodeKey: "join", label: "Join" }), {

@@ -1,7 +1,5 @@
-namespace XE_Local_AI_Engine.Client.Endpoints.Training.Evaluations.V1;
+﻿namespace XE_Local_AI_Engine.Client.Endpoints.Training.Evaluations.V1;
 
-using FastEndpoints;
-using FluentValidation;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
 public sealed class CreateEvaluationRequest
@@ -16,17 +14,6 @@ public sealed class CreateEvaluationRequest
 
     /// <summary>Required for a tuned evaluation; the staged GGUF is scored before registry activation.</summary>
     public Guid? ArtifactId { get; init; }
-}
-
-public sealed class CreateEvaluationRequestValidator : Validator<CreateEvaluationRequest>
-{
-    public CreateEvaluationRequestValidator()
-    {
-        RuleFor(static request => request.TrainingRunId).NotEmpty().WithMessage("A training run id is required.");
-        RuleFor(static request => request.Target)
-            .Must(static target => target is EvaluationTarget.Base or EvaluationTarget.Tuned)
-            .WithMessage("An evaluation target is required.");
-    }
 }
 
 public sealed class EvaluationByIdRequest

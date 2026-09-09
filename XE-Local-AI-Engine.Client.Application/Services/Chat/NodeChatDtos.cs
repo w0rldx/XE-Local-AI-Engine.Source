@@ -449,6 +449,20 @@ public sealed record NodeChatBranchResultDto(
     int CopiedMessageCount);
 
 /// <summary>
+///     Thrown when a message-correlated write names no persisted message: the conversation/message pair does not
+///     exist, or the request id does not match the row it addresses. Endpoints that answer "not found" for a bad
+///     correlation catch THIS rather than <see cref="InvalidOperationException" />, so an unrelated fault raised
+///     anywhere under the same call cannot present itself as a 404.
+///     <para>
+///         It still derives from <see cref="InvalidOperationException" /> because that is the type the streaming pump
+///         and the other correlated writers already treat as "this write cannot proceed". It is distinct from
+///         <c>NodeChatMessageNotFoundException</c>, which the regeneration service raises and <c>LocalChatHub</c>
+///         translates for the client — this one is about the correlation, not about a message a person named.
+///     </para>
+/// </summary>
+public sealed class NodeChatMessageCorrelationNotFoundException(string message) : InvalidOperationException(message);
+
+/// <summary>
 ///     Thrown when a branch request carries a selected-revision entry that fails integrity validation — the
 ///     referenced message is not part of the conversation, or it is keyed under a variant group it does not belong
 ///     to. The branch endpoint maps this to HTTP 400. Fail-closed: the branch is rejected rather than silently

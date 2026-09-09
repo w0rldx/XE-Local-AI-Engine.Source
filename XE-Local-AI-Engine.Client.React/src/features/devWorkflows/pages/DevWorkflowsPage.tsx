@@ -10,14 +10,18 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
-import { CreateWorkItemDialog, type CreateWorkItemValues } from "@/features/devWorkflows/components/CreateWorkItemDialog";
+import { CreateWorkItemDialog } from "@/features/devWorkflows/components/CreateWorkItemDialog";
 import { DevWorkflowDefinitionFormPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionFormPanel";
 import { DevWorkflowRuleSetsPanel } from "@/features/devWorkflows/components/DevWorkflowRuleSetsPanel";
 import {
 	DevWorkflowRunStatusBadge,
 	DevWorkflowWorkItemStatusBadge,
 } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
-import { toDevWorkflowRunStatus, toDevWorkflowWorkItemStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
+import {
+	type CreateWorkItemValues,
+	toDevWorkflowRunStatus,
+	toDevWorkflowWorkItemStatus,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	useCreateDevWorkflowWorkItem,
 	useDevelopmentProjectOptions,
@@ -44,7 +48,7 @@ export function DevWorkflowsPage() {
 	// Which template the editor is open on. Local: it is an editing position, not a view of a run worth sharing.
 	const [editedDefinitionId, setEditedDefinitionId] = useState<string | null>(null);
 
-	// The list polls itself at 5s while any listed run is live (X16 Q7) — the rule lives in the query hook.
+	// The list polls itself at 5s while any listed run is live — the rule lives in the query hook.
 	const listQuery = useDevWorkflowWorkItems();
 	const definitionsQuery = useDevWorkflowDefinitions();
 	const projectsQuery = useDevelopmentProjectOptions();
@@ -194,7 +198,7 @@ export function DevWorkflowsPage() {
 													</Badge>
 												) : null}
 											</Group>
-											{/* Queued and running are counted separately on purpose (O9). "4 in progress" would imply four
+											{/* Queued and running are counted separately on purpose. "4 in progress" would imply four
 									    agents on one GPU; the node has one agent slot, so most of them are waiting for it. */}
 											<Text size="xs" c="dimmed" data-testid={`dev-workflow-card-counts-${item.id}`}>
 												{t(
@@ -227,7 +231,7 @@ export function DevWorkflowsPage() {
 								label={t("pages.devWorkflows.definition.pickLabel", "Template")}
 								placeholder={t("pages.devWorkflows.definition.pickPlaceholder", "Pick a template to edit")}
 								data={definitions.map((definition) => ({ value: definition.id ?? "", label: definition.name ?? "" }))}
-								// An archived template leaves the picker (Y14), so a selection that survived an archive would
+								// An archived template leaves the picker, so a selection that survived an archive would
 								// hold the editor open on a row nothing can start any more.
 								value={definitions.some((definition) => definition.id === editedDefinitionId) ? editedDefinitionId : null}
 								onChange={setEditedDefinitionId}

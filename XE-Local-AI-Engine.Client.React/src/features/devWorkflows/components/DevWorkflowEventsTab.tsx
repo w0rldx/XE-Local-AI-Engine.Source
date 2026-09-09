@@ -9,12 +9,12 @@ import type { DevWorkflowEventsAnchor } from "@/features/devWorkflows/queries/us
 
 export interface DevWorkflowEventsTabProps {
 	readonly events: readonly DevWorkflowRunEventResponse[];
-	/** `nodeRunId` → node label. The event row carries no node key (P1 has no such column), so it is joined here. */
+	/** `nodeRunId` → node label. The persisted event row has no node-key column, so the label is joined here. */
 	readonly labelByNodeRunId: ReadonlyMap<string, string>;
 	/** Whether the run has events past the pages already loaded. Every one of them is reachable — the feed is cursor-paged. */
 	readonly hasMore: boolean;
 	readonly isLoadingMore: boolean;
-	/** Which end the feed is anchored on (R-C4). Decides which direction "load more" walks, and what it is called. */
+	/** Which end the feed is anchored on. Decides which direction "load more" walks, and what it is called. */
 	readonly anchor: DevWorkflowEventsAnchor;
 	/**
 	 * The cursor the newest-first feed is currently opened on. It moves once per 200 sequences on a live run, and when

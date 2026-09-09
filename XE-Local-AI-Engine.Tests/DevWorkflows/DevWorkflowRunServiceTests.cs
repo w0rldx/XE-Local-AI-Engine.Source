@@ -313,7 +313,7 @@ public sealed class DevWorkflowRunServiceTests
     }
 
     /// <summary>
-    ///     X3: a gate takes its three answers, and the interventions belong to a blocked node run. Skipping an OPEN
+    ///     A gate takes its three answers, and the interventions belong to a blocked node run. Skipping an OPEN
     ///     gate would be an operator walking past an approval instead of giving one — the one thing a gate exists to
     ///     make impossible, and the property every later slice that puts an apply behind one depends on.
     /// </summary>
@@ -349,7 +349,7 @@ public sealed class DevWorkflowRunServiceTests
     /// <summary>
     ///     An intervention answers a blocked node run, and the run settles around it.
     ///     <para>
-    ///         RE-PINNED, ruling 1 (Slice D): <c>GateOnly</c>'s single gate IS the graph's terminal node, so skipping
+    ///         RE-PINNED: <c>GateOnly</c>'s single gate IS the graph's terminal node, so skipping
     ///         it walks away from the only thing the run had to do. That ends <c>Cancelled</c>, not <c>Completed</c>.
     ///     </para>
     /// </summary>
@@ -497,7 +497,7 @@ public sealed class DevWorkflowRunServiceTests
             "the node run is left exactly where it was.");
 
         // And the other interventions still work, which is the whole reason the refusal comes before the record.
-        // RE-PINNED, ruling 1 (Slice D): skipping the gate settles the run Cancelled — it is this graph's only end.
+        // RE-PINNED: skipping the gate settles the run Cancelled — it is this graph's only end.
         _ = await harness.WithRunServiceAsync(service => service.DecideAsync(runId,
                              nodeRunId,
                              Guid.NewGuid(),

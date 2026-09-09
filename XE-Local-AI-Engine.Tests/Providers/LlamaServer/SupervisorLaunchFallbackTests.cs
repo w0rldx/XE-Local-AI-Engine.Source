@@ -226,7 +226,7 @@ public sealed class SupervisorLaunchFallbackTests
     [Test]
     public async Task ExpertOffloadSafeRetry_RecordsNothing()
     {
-        // R1: an expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success without KV
+        // An expert-offload spawn is the most VRAM-marginal launch on the box, so a one-shot success without KV
         // quantization proves nothing about KV. Recording it would disable the optimized config for EVERY model on
         // this backend from one model's placement or transient failure.
         var fallbackStore = new FakeLaunchFallbackStore();

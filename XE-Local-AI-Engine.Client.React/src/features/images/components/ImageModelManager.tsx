@@ -4,7 +4,7 @@ import { useTranslation } from "react-i18next";
 import { ApiError } from "@/core/api/errors/ApiError";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
-import type { BrowseInstallRequest } from "@/features/images/components/ImageModelBrowsePanel";
+import type { BrowseInstallRequest } from "@/features/images/models/ImageModels";
 import { ImageModelManagerPresentation } from "@/features/images/components/ImageModelManagerPresentation";
 import { useActiveImageModelDownloads } from "@/features/images/hooks/useActiveImageModelDownloads";
 import type {

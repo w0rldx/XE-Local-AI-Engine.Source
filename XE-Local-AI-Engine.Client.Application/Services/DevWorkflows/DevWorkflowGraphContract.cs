@@ -175,7 +175,7 @@ public static class DevWorkflowGraphContract
     }
 
     /// <summary>
-    ///     Whether a <c>Reject</c> at <paramref name="nodeKey" /> has somewhere to go. False means X10: the rejection
+    ///     Whether a <c>Reject</c> at <paramref name="nodeKey" /> has somewhere to go. False means the rejection
     ///     ends the run, and the confirm dialog can only say so because the server answered this before the click.
     ///     <para>
     ///         Answered by evaluating the gate's real out-edge conditions against the document the gate would actually

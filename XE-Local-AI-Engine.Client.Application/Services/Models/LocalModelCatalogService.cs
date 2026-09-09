@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Client.Services.Models;
+﻿namespace XE_Local_AI_Engine.Client.Services.Models;
 
 using Microsoft.Extensions.Options;
 using OllamaSharp.Models;
@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 using XE_Local_AI_Engine.Providers.Ollama;
 

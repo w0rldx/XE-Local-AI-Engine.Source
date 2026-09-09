@@ -6,11 +6,9 @@ public sealed class EndpointExceptionMappingSourceGuardTests
 {
     private static readonly IReadOnlyDictionary<string, int> TrainingCatchAllowlist = new Dictionary<string, int>(StringComparer.Ordinal)
     {
+        // The rejection families (EvaluationRejected / TrainingExportRejected / TrainingRunRejected) are no longer
+        // here: they are in DomainValidationExceptionHandler's switch, so their endpoints catch nothing at all.
         ["BaseArtifacts/V1/CreateBaseArtifactEndpoint.cs"] = 1,
-        ["Comparisons/V1/TrainingComparisonEndpoints.cs"] = 2,
-        ["Evaluations/V1/TrainingEvaluationEndpoints.cs"] = 2,
-        ["Exports/V1/TrainingExportEndpoints.cs"] = 5,
-        ["Runs/V1/TrainingRunEndpoints.cs"] = 2,
         ["Runtime/V1/RemoveTrainingRuntimeEndpoint.cs"] = 1,
         ["Runtime/V1/StartTrainingRuntimeInstallEndpoint.cs"] = 1,
         ["V1/TrainingEndpointSupport.cs"] = 1
@@ -108,6 +106,70 @@ public sealed class EndpointExceptionMappingSourceGuardTests
         AssertEx.Empty(offenders,
             "Development-workflow endpoints must throw the typed persistence and runtime families and let the global handlers map them. "
             + "An endpoint-local catch turns unrelated defects into 404s and 400s, and duplicates a mapping that already exists in one place.");
+    }
+
+    [Test]
+    public void GlobalHandlers_RegisterTheDevelopmentHandlersBeforeTheDefaultHandler()
+    {
+        var root = FindRepositoryRoot();
+        var composition = File.ReadAllText(Path.Combine(root, "XE-Local-AI-Engine.Client", "ConfigureServices.cs"));
+        var defaultHandler = composition.IndexOf(".AddExceptionHandler<DefaultExceptionHandler>()", StringComparison.Ordinal);
+
+        AssertEx.True(defaultHandler >= 0, "The default exception handler registration must remain present.");
+
+        foreach (var handler in new[]
+                 {
+                     "DevelopmentNotFoundExceptionHandler",
+                     "DevelopmentConflictExceptionHandler"
+                 })
+        {
+            var index = composition.IndexOf($".AddExceptionHandler<{handler}>()", StringComparison.Ordinal);
+            AssertEx.True(index >= 0, $"{handler} must be registered in the global exception chain.");
+            AssertEx.True(index < defaultHandler, $"{handler} must run before the default 500 handler.");
+        }
+    }
+
+    /// <summary>
+    ///     The Development folder's own sweep, mirroring the development-workflow one above. A raw
+    ///     <c>KeyNotFoundException</c> catch here turned any unrelated dictionary miss in the pipeline into a 404; the
+    ///     store now throws <c>DevelopmentNotFoundException</c> and the global handler answers it.
+    /// </summary>
+    [Test]
+    public void DevelopmentEndpoints_TranslateNoRawKeyNotFoundExceptions()
+    {
+        var root = FindRepositoryRoot();
+        var endpoints = Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Development");
+        AssertEx.True(Directory.Exists(endpoints), "The Development endpoint folder must exist for this guard to mean anything.");
+
+        var offenders = Directory.EnumerateFiles(endpoints, "*.cs", SearchOption.AllDirectories)
+                                 .Where(path => File.ReadAllText(path).Contains("catch (KeyNotFoundException", StringComparison.Ordinal))
+                                 .Select(path => Path.GetRelativePath(endpoints, path).Replace('\\', '/'))
+                                 .OrderBy(static path => path, StringComparer.Ordinal)
+                                 .ToArray();
+
+        AssertEx.Empty(offenders,
+            "Development endpoints must let DevelopmentNotFoundException reach its global handler instead of catching the bare CLR type.");
+    }
+
+    /// <summary>
+    ///     The Development catches that remain, each because no single global status is correct for what it maps:
+    ///     the workspace-security family (409 on patch/next-action, 400 on register/create/reconnect) and the
+    ///     framework types (an <c>ArgumentException</c> filter that would otherwise claim every
+    ///     <c>ArgumentNullException</c> in the node, plus the file-system ones). Adding a row needs the same argument.
+    /// </summary>
+    [Test]
+    public void DevelopmentEndpointCatches_AreLimitedToTheTypesWithNoSingleGlobalStatus()
+    {
+        var root = FindRepositoryRoot();
+        AssertCatchAllowlist(Path.Combine(root, "XE-Local-AI-Engine.Client", "Endpoints", "Development"),
+            new Dictionary<string, int>(StringComparer.Ordinal)
+            {
+                ["V1/PatchDevelopmentEndpoints.cs"] = 2,
+                ["V1/ProjectDevelopmentEndpoints.cs"] = 1,
+                ["V1/RepositoryDevelopmentEndpoints.cs"] = 4,
+                ["V1/TaskDevelopmentEndpoints.cs"] = 1,
+                ["V1/TemplateDevelopmentEndpoints.cs"] = 2
+            });
     }
 
     private static void AssertCatchAllowlist(string familyRoot, IReadOnlyDictionary<string, int> expected)

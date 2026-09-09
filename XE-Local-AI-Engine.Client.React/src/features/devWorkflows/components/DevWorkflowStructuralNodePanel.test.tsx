@@ -39,7 +39,7 @@ describe("DevWorkflowStructuralNodePanel", () => {
 	});
 
 	it("names a row-less dependency a template when the pinned graph says it is one", () => {
-		// `isTemplate` is the SERVER's own TemplateSubtree verdict (Slice D). The client used to mirror that walk, and
+		// `isTemplate` is the SERVER's own TemplateSubtree verdict. The client used to mirror that walk, and
 		// two implementations of one rule are one drift away from disagreeing about a graph shape neither was tried on.
 		renderWithProviders(
 			<DevWorkflowStructuralNodePanel
@@ -75,7 +75,7 @@ describe("DevWorkflowStructuralNodePanel", () => {
 	});
 
 	it("reads a skipped dependency under an All join by the SERVER's waived verdict, and a failed one as dead", () => {
-		// C1: the state machine waives a skip a person chose, so the join carries on if a sibling arrived. Badging it
+		// The state machine waives a skip a person chose, so the join carries on if a sibling arrived. Badging it
 		// dead beside the branch that failed told an operator the two would do the same thing to the join, and only
 		// one of them does. The verdict itself is `skipWaived` on the row — see the next case for why.
 		renderWithProviders(

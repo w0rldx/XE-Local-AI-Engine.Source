@@ -39,7 +39,7 @@ public sealed partial class InvocationRunner
                     participant.Key).ConfigureAwait(false);
             }
 
-            // ORC-07: resolve THIS participant's launched effective context window so its inner provider-round budgeter
+            // Resolve THIS participant's launched effective context window so its inner provider-round budgeter
             // sizes against it, not the shared configured default.
             var participantContextTokens = await ResolveParticipantContextTokensAsync(participantResolution.Model,
                 resolvedModel,
@@ -93,7 +93,7 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     ORC-07: resolves the launched effective context window (in tokens) for one orchestration participant so its
+    ///     Resolves the launched effective context window (in tokens) for one orchestration participant so its
     ///     inner provider-round budgeter sizes against it. Precedence:
     ///     <list type="number">
     ///         <item>
@@ -341,7 +341,7 @@ public sealed partial class InvocationRunner
         StreamTransport transport,
         ContextBudgetNoticeGate gate)
     {
-        // ORC-02: the resolved system prompt is prepended to the request AFTER this history (BuildInvocationDefinition),
+        // The resolved system prompt is prepended to the request AFTER this history (BuildInvocationDefinition),
         // and tool JSON schemas are never in the message list — so feed both to the budgeter as fixed overhead. It folds
         // them into the effective budget, mirroring the inner ProviderCallBudgetChatClient, so the outer budget and its
         // hard-stop measure the true round rather than history alone.
@@ -577,7 +577,7 @@ public sealed partial class InvocationRunner
     }
 
     /// <summary>
-    ///     ORC-02: renders each offered tool's model-facing definition (name + description + parameter schema) as one
+    ///     Renders each offered tool's model-facing definition (name + description + parameter schema) as one
     ///     text unit for the outer context budgeter's fixed-overhead estimate. Reads the raw <see cref="AllowedToolDto" />
     ///     schema string — present for BOTH Api-side and client-local tools — rather than the built bridge, whose
     ///     client-local offer placeholders carry no schema until the factory swaps them, so the schema footprint is

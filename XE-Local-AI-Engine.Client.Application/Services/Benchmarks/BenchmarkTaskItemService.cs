@@ -32,23 +32,6 @@ public interface IBenchmarkTaskItemService
     Task<IReadOnlyList<BenchmarkTaskItemRecord>> ReorderAsync(Guid projectId, IReadOnlyList<Guid> orderedItemIds, CancellationToken cancellationToken = default);
 }
 
-/// <summary>
-///     One task item as an operator writes it. The index, revision and input hash are absent on purpose: a caller that
-///     could name them could present an answer to an old question as an answer to the current one.
-/// </summary>
-/// <param name="VerifierConfig">
-///     Per-criterion overrides of the judge policy's verifier config, keyed by criterion id. Carried opaquely here —
-///     it can hold expected answers, which is why it is stored encrypted.
-/// </param>
-/// <param name="GeneratorConfig">The parameters a generator item expands into child cases. Null for a plain prompt.</param>
-public sealed record BenchmarkTaskItemDraft(
-    string Prompt,
-    string? Kind = null,
-    string? ReferenceAnswer = null,
-    JsonElement? VerifierConfig = null,
-    JsonElement? GeneratorConfig = null,
-    bool CountsTowardScore = true);
-
 public sealed class BenchmarkTaskItemService(IBenchmarkStore benchmarkStore) : IBenchmarkTaskItemService
 {
     /// <summary>

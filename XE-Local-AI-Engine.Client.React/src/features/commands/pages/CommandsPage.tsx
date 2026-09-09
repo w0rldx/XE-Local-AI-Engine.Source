@@ -15,10 +15,13 @@ import { toast } from "@/core/ui/notifications/Toast";
 import { CommandForm, type CommandFormHandle } from "@/features/commands/components/CommandForm";
 import { CommandList } from "@/features/commands/components/CommandList";
 import { toSaveCommandRequest } from "@/features/commands/models/CommandMappers";
-import { type CommandFormValues, CUSTOM_COMMAND_CAPACITY, type SlashCommand } from "@/features/commands/models/CommandModels";
+import {
+	type CommandEditorTarget,
+	type CommandFormValues,
+	CUSTOM_COMMAND_CAPACITY,
+	type SlashCommand,
+} from "@/features/commands/models/CommandModels";
 import { useCommands, useCreateCommand, useDeleteCommand, useUpdateCommand } from "@/features/commands/queries/useCommands";
-
-type CommandEditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
 
 const emptyFormValues: CommandFormValues = { name: "", description: "", actionType: "SendPrompt", prompt: "" };
 

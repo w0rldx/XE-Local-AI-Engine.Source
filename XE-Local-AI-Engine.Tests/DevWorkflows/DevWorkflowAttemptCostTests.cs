@@ -30,7 +30,7 @@ public sealed class DevWorkflowAttemptCostTests
                                          }
                                          """;
 
-    /// <summary>The ten members of §4.1 (plus model_readiness_ms) that ADD UP across attempts, as their JSON names.</summary>
+    /// <summary>The ten cost-telemetry members (plus model_readiness_ms) that ADD UP across attempts, as their JSON names.</summary>
     private static readonly string[] AdditiveMembers =
     [
         "inputTokens",
@@ -233,7 +233,7 @@ public sealed class DevWorkflowAttemptCostTests
 
     /// <summary>
     ///     The merged member list is the telemetry record minus its five non-additive members — asserted by
-    ///     reflection, so a column added to §4.1 later is carried here too or it is not additive.
+    ///     reflection, so a cost-telemetry column added later is carried here too or it is not additive.
     /// </summary>
     private static void AssertMergedMembersMatchTheTelemetryRecord(JsonObject detail)
     {

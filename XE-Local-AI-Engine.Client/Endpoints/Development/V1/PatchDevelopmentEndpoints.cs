@@ -33,15 +33,7 @@ public sealed class PreviewDevelopmentPatchEndpoint(IDevelopmentManagementServic
                     preview.ChangedFiles),
                 ct).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is DevelopmentInvalidTransitionException or DevelopmentWorkspaceSecurityException)
+        catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
@@ -78,17 +70,7 @@ public sealed class ApplyDevelopmentPatchEndpoint(IDevelopmentManagementService 
                     result.Sequence),
                 ct).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
-                                              or DevelopmentConcurrencyException
-                                              or DevelopmentWorkspaceSecurityException)
+        catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);

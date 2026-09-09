@@ -16,7 +16,7 @@ using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     BE-02 coverage: the non-Windows Data Protection key-ring encryptor/decryptor and its KEK derivation. Proves the
+///     Coverage for the non-Windows Data Protection key-ring encryptor/decryptor and its KEK derivation. Proves the
 ///     round-trip, fail-closed-on-wrong-KEK, an end-to-end Protect/Unprotect over an on-disk ring that is genuinely
 ///     encrypted at rest, and backward-compatibility with a legacy plaintext key-ring.
 /// </summary>
@@ -238,7 +238,7 @@ public sealed class NodeDataProtectionKeyRingEncryptionTests
             AssertEx.True(legacyKeyXml.Contains("<masterKey", StringComparison.Ordinal),
                 "The legacy ring must genuinely contain a plaintext masterKey element for this test to be meaningful.");
 
-            // Now bring up a provider WITH the BE-02 encryptor over the same ring. The pre-existing plaintext key must
+            // Now bring up a provider WITH the AES-GCM encryptor over the same ring. The pre-existing plaintext key must
             // still be read directly (the encryptor is write-side only) and the legacy payload must still unprotect.
             using var upgradedServices = BuildDataProtectionServices(ringDirectory, SampleKek);
             var reader = upgradedServices.GetRequiredService<IDataProtectionProvider>().CreateProtector("be02-tests");

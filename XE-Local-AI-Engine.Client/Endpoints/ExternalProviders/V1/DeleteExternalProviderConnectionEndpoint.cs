@@ -35,19 +35,9 @@ public sealed class DeleteExternalProviderConnectionEndpoint(IExternalProviderAd
 
     public override async Task HandleAsync(DeleteExternalProviderConnectionRequest req, CancellationToken ct)
     {
-        ExternalProviderWriteResult result;
-        try
-        {
-            result = await _administrationService
+        var result = await _administrationService
                            .DeleteConnectionAsync(req.ConnectionId ?? string.Empty, req.ExpectedRevision, ct)
                            .ConfigureAwait(false);
-        }
-        catch (ExternalProviderValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
 
         switch (result)
         {

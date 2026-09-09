@@ -3,13 +3,7 @@ import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
-import { CUSTOM_TOOL_SECRET_SENTINEL } from "@/features/customTools/models/CustomToolModels";
-
-interface SecretRow {
-	readonly name: string;
-	readonly value: string;
-	readonly isSecret: boolean;
-}
+import { CUSTOM_TOOL_SECRET_SENTINEL, type SecretRow } from "@/features/customTools/models/CustomToolModels";
 
 interface SecretRowsProps {
 	title: string;

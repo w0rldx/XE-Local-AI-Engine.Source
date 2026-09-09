@@ -41,7 +41,7 @@ export interface DevWorkflowValidationCommand {
 
 /**
  * What the commands were actually run against, when the base commit alone would not say it: the sibling implementation
- * task whose hash-verified Dev Mode patch was overlaid onto the sandbox clone before they ran (FX-B L3).
+ * task whose hash-verified Dev Mode patch was overlaid onto the sandbox clone before they ran.
  *
  * Mirrors the server record `DevWorkflowValidationBasedOn(Guid DevelopmentTaskId, string PatchHash, string Detail)`
  * field for field — camelCase on the wire, the Guid as a string. PRESENT ONLY when a patch really was overlaid: every

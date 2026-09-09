@@ -27,25 +27,18 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
 
     public override async Task HandleAsync(CreateTrainingRunRequest req, CancellationToken ct)
     {
-        try
-        {
-            var run = await _runs.CreateAsync(new CreateTrainingRunCommand(req.DatasetId,
-                                         req.ExpectedDatasetVersion,
-                                         req.BaseArtifactId,
-                                         req.LicenseConfirmed,
-                                         req.Options?.ToDomain(),
-                                         req.LinkedModelName),
-                                     ct)
-                                 .ConfigureAwait(false);
-            await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (TrainingRunRejectedException exception)
-        {
-            // Rejections are operator-facing by construction: an unconfirmed license, a checkpoint that does not fit,
-            // or a dataset that is not ready.
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        // TrainingRunRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
+        // rejections are operator-facing by construction — an unconfirmed license, a checkpoint that does not fit,
+        // or a dataset that is not ready.
+        var run = await _runs.CreateAsync(new CreateTrainingRunCommand(req.DatasetId,
+                                     req.ExpectedDatasetVersion,
+                                     req.BaseArtifactId,
+                                     req.LicenseConfirmed,
+                                     req.Options?.ToDomain(),
+                                     req.LinkedModelName),
+                                 ct)
+                             .ConfigureAwait(false);
+        await Send.OkAsync(run.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -142,19 +135,11 @@ public sealed class GetTrainingRunDefaultsEndpoint(ITrainingOptionDefaultsCalcul
 
     public override async Task HandleAsync(TrainingRunDefaultsRequest req, CancellationToken ct)
     {
-        try
-        {
-            var computed = await _defaults.ComputeAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
-            var license = await _licenseGate.GetAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
-            var suggestions = license is null
-                ? []
-                : await _linker.SuggestAsync(license.RepoId, ct).ConfigureAwait(false);
-            await Send.OkAsync(computed.ToResponse(license, suggestions), ct).ConfigureAwait(false);
-        }
-        catch (TrainingRunRejectedException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var computed = await _defaults.ComputeAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
+        var license = await _licenseGate.GetAsync(req.BaseArtifactId, ct).ConfigureAwait(false);
+        var suggestions = license is null
+            ? []
+            : await _linker.SuggestAsync(license.RepoId, ct).ConfigureAwait(false);
+        await Send.OkAsync(computed.ToResponse(license, suggestions), ct).ConfigureAwait(false);
     }
 }

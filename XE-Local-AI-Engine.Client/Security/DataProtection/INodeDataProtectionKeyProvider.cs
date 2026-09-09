@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Security.DataProtection;
 
 /// <summary>
 ///     Holds the 32-byte key-encryption-key (KEK) used to wrap the ASP.NET Core Data Protection key-ring at rest on
-///     non-Windows hosts (BE-02). The KEK is derived from the node operator secret via HKDF-SHA256 with a Data
+///     non-Windows hosts. The KEK is derived from the node operator secret via HKDF-SHA256 with a Data
 ///     Protection-specific info string, so it is distinct from — but shares the same operator-secret root as — the
 ///     SQLite database key (<c>INodeSqliteKeyHolder</c>) and the JWT signing key (<c>INodeJwtKeyProvider</c>).
 /// </summary>

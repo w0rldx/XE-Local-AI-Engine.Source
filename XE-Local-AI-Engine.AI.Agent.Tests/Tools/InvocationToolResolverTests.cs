@@ -172,7 +172,7 @@ public sealed class InvocationToolResolverTests
     [Test]
     public async Task ResolveAsync_WithSeveralDistinctCustomNames_QueriesTheCatalogOnce()
     {
-        // O1: k distinct custom__ names cost ONE catalog round trip, not k. The catalog reads the whole library once
+        // k distinct custom__ names cost ONE catalog round trip, not k. The catalog reads the whole library once
         // behind this seam, so batching here is what collapses a turn's store reads from k + 1 down to 2.
         var catalog = new FakeCustomToolCatalog(("custom__weather", Wrapped("custom__weather")),
             ("custom__stocks", Wrapped("custom__stocks")),

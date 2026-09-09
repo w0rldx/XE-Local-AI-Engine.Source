@@ -36,7 +36,7 @@ internal sealed class DevWorkflowMaterializer
     /// </summary>
     private const int MaterializationAttempt = 0;
 
-    /// <summary>Separates a template node's key from the task it was cloned for. Matches the layout §5.9 names.</summary>
+    /// <summary>Separates a template node's key from the task it was cloned for. Matches the clone-key layout the task package defines.</summary>
     private const char CloneSeparator = '#';
 
     /// <summary>camelCase, matching every other document this product puts on a wire.</summary>
@@ -208,8 +208,8 @@ internal sealed class DevWorkflowMaterializer
     ///         run-scoped, so a re-attempt that saved nothing leaves attempt 1's package the newest — and judging
     ///         attempt 2 on it is the correct answer here, because the package IS the node's output: an attempt that
     ///         produced no new one has not corrected anything, and the second refusal is what stands the node down for
-    ///         a human. Do not "fix" this by keying on the attempt. It is the shape F5's HIGH-1 got wrong for a node
-    ///         PANEL — where showing a previous attempt's evidence as current is a lie — reaching the opposite verdict
+    ///         a human. Do not "fix" this by keying on the attempt. It is the shape a node
+    ///         PANEL must NOT take — where showing a previous attempt's evidence as current is a lie — reaching the opposite verdict
     ///         here for the same reason: there, the question is "what did this attempt do"; here, it is "is there a
     ///         usable package on this run yet".
     ///     </para>
@@ -240,7 +240,7 @@ internal sealed class DevWorkflowMaterializer
     }
 
     /// <summary>
-    ///     The fixed §5.9 schema: an array of <c>{ id, title, goal, allowedPaths[], dependsOn[], acceptanceCriteria[] }</c>,
+    ///     The fixed task-package schema: an array of <c>{ id, title, goal, allowedPaths[], dependsOn[], acceptanceCriteria[] }</c>,
     ///     at the root or under a <c>tasks</c> property — a model writing an object around its list is the commonest
     ///     shape of the same answer, and refusing it would spend a whole re-attempt on punctuation.
     /// </summary>
@@ -372,7 +372,7 @@ internal sealed class DevWorkflowMaterializer
             }
 
             // Not enforced anywhere yet: the child brief carries the title, the requirements and the acceptance
-            // criteria, and Dev Mode's workspace policy has no per-task path restriction to hand this to (Slice D). A
+            // criteria, and Dev Mode's workspace policy has no per-task path restriction to hand this to. A
             // decomposition that leans on it for parallel-child isolation would get none, silently, so it is refused
             // loudly instead. The field stays in the schema and on the stored artifact — this refuses a package that
             // DEPENDS on it, not one that mentions it.
@@ -670,7 +670,7 @@ internal sealed class DevWorkflowMaterializer
     private static string? Criteria(IReadOnlyList<string>? acceptanceCriteria) =>
         acceptanceCriteria is { Count: > 0 } criteria ? JsonSerializer.Serialize(criteria, JsonOptions) : null;
 
-    /// <summary>One task of the §5.9 package. Every member is optional at the parser; <see cref="Reject" /> says which are not.</summary>
+    /// <summary>One task of the task package. Every member is optional at the parser; <see cref="Reject" /> says which are not.</summary>
     private sealed record TaskPackageItem(
         string? Id,
         string? Title,

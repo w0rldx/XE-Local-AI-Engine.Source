@@ -4,9 +4,9 @@ import { Fragment, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { ListRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
 import { ChatMessageRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
 import { useStickToBottomScroll } from "@/features/chat/hooks/useStickToBottomScroll";
+import type { ListRow } from "@/features/chat/models/ChatMessageListRow";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,

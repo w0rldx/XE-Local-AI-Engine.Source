@@ -48,7 +48,7 @@ public sealed class LlamaGrammarLiveSmokeTests
     private const string ReadyTimeoutVariable = "XE_TOOL_GRAMMAR_SMOKE_READY_SECONDS";
 
     /// <summary>
-    ///     The exact llama.cpp surface of the P1: <c>{"error":{"code":400,"message":"Failed to initialize samplers:
+    ///     The exact llama.cpp surface of the failure: <c>{"error":{"code":400,"message":"Failed to initialize samplers:
     ///     failed to parse grammar",...}}</c>. Matched case-insensitively on the distinctive tail so a rewording of the
     ///     "Failed to initialize samplers" prefix does not turn a real detection into a false negative.
     /// </summary>

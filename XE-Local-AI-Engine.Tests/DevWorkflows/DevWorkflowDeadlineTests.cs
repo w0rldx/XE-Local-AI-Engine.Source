@@ -146,7 +146,7 @@ public sealed class DevWorkflowDeadlineTests
     }
 
     /// <summary>
-    ///     A node that declares no timeout has none. The defaults §8.2 names for sandbox work are the DEVELOPMENT
+    ///     A node that declares no timeout has none. The defaults for sandbox work are the DEVELOPMENT
     ///     attempt budget, which the lane below applies to the work it can see; deriving a second number up here could
     ///     only ever disagree with it.
     /// </summary>

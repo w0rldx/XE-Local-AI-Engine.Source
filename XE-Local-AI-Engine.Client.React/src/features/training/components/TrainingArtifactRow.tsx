@@ -1,6 +1,7 @@
 import { Badge, Button, Group, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import type { TrainingArtifactRowActions } from "@/features/training/models/TrainingArtifactModels";
 import type { TrainingArtifactView } from "@/features/training/models/TrainingModels";
 import {
 	canDiscardArtifactQuality,
@@ -14,16 +15,6 @@ import {
 
 const smokeColors: Record<string, string> = { Pending: "gray", Passed: "green", Failed: "red", Skipped: "yellow" };
 const qualityColors: Record<string, string> = { Pending: "gray", Passed: "green", Failed: "red", Overridden: "yellow" };
-
-interface TrainingArtifactRowActions {
-	readonly smoke: (artifact: TrainingArtifactView) => void;
-	readonly validate: (artifact: TrainingArtifactView) => void;
-	readonly override: (artifact: TrainingArtifactView) => void;
-	readonly discard: (artifact: TrainingArtifactView) => void;
-	readonly retryCleanup: (artifact: TrainingArtifactView) => void;
-	readonly promote: (artifact: TrainingArtifactView) => void;
-	readonly remove: (artifact: TrainingArtifactView) => void;
-}
 interface Props {
 	readonly artifact: TrainingArtifactView;
 	readonly actions: TrainingArtifactRowActions;

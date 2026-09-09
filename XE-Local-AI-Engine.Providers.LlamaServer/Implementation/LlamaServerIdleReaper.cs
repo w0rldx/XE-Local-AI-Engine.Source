@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using ProcessKey = LlamaServerProcessSupervisor.ProcessKey;
 using RunningProcess = LlamaServerProcessSupervisor.RunningProcess;

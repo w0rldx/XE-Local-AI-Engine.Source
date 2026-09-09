@@ -30,41 +30,34 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
         Description(builder => builder.Accepts<SkillImportPreviewRequest>("multipart/form-data"));
         // Kestrel's default body cap (30 MB) sits BELOW the configured archive cap, so without this the server would
         // refuse an archive the import pipeline is configured to accept — and refuse it with a bare 413 from the host,
-        // nowhere near a message an operator can act on. The handler still checks the length itself: this metadata is
-        // only honoured where a body-size feature exists.
+        // nowhere near a message an operator can act on. The import service still caps the bytes it reads: this
+        // metadata is only honoured where a body-size feature exists.
         Options(builder => builder.WithMetadata(new SkillImportRequestSizeLimit(_maxArchiveBytes)));
         Policies(NodeAuthorizationPolicies.Operator);
     }
 
     public override async Task HandleAsync(SkillImportPreviewRequest req, CancellationToken ct)
     {
-        try
+        // Every guard in the pipeline fails closed through SkillImportException, which the global
+        // DomainValidationExceptionHandler answers with the same 400: its message is written to be shown — it names
+        // the rule that was broken and never echoes an entry path, a resource name or any imported text.
+        var preview = req.Source switch
         {
-            var preview = req.Source switch
-            {
-                SkillImportSourceKind.Upload => await PreviewUploadAsync(req, ct).ConfigureAwait(false),
-                SkillImportSourceKind.Paste => await PreviewPasteAsync(req, ct).ConfigureAwait(false),
-                SkillImportSourceKind.GitHub => await PreviewGitHubAsync(req, ct).ConfigureAwait(false),
-                _ => UnknownSource()
-            };
+            SkillImportSourceKind.Upload => await PreviewUploadAsync(req, ct).ConfigureAwait(false),
+            SkillImportSourceKind.Paste => await PreviewPasteAsync(req, ct).ConfigureAwait(false),
+            SkillImportSourceKind.GitHub => await PreviewGitHubAsync(req, ct).ConfigureAwait(false),
+            _ => UnknownSource()
+        };
 
-            if (preview is null)
-            {
-                // A null return means the request did not carry the payload its source names; each branch has already
-                // put the specific error on the response.
-                await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-                return;
-            }
-
-            await Send.OkAsync(preview.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (SkillImportException exception)
+        if (preview is null)
         {
-            // Every guard in the pipeline fails closed through this exception and its message is written to be shown:
-            // it names the rule that was broken and never echoes an entry path, a resource name or any imported text.
-            AddError(exception.Message);
+            // A null return means the request did not carry the payload its source names; each branch has already
+            // put the specific error on the response.
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
+            return;
         }
+
+        await Send.OkAsync(preview.ToResponse(), ct).ConfigureAwait(false);
     }
 
     private SkillImportPreview? UnknownSource()
@@ -82,17 +75,10 @@ public sealed class PreviewSkillImportEndpoint(ISkillImportService importService
             return null;
         }
 
-        if (file.Length > _maxArchiveBytes)
-        {
-            AddError($"The archive exceeds the maximum import size of {_maxArchiveBytes / (1024 * 1024)} MB.");
-            return null;
-        }
-
+        // Buffering and the size cap belong to the import service, which enforces the cap on the bytes it actually
+        // reads and refuses an oversized upload through the same SkillImportException every other guard uses.
         await using var upload = file.OpenReadStream();
-        using var buffer = new MemoryStream(capacity: (int)file.Length);
-        await upload.CopyToAsync(buffer, ct).ConfigureAwait(false);
-
-        return await _importService.PreviewArchiveAsync(buffer.ToArray(), ct).ConfigureAwait(false);
+        return await _importService.PreviewArchiveAsync(upload, ct).ConfigureAwait(false);
     }
 
     private async Task<SkillImportPreview?> PreviewPasteAsync(SkillImportPreviewRequest req, CancellationToken ct)

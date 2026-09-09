@@ -7,8 +7,7 @@ import {
 	nodeSettingsFieldError,
 	nodeSettingsRestartHint,
 } from "@/features/node-settings/components/NodeSettingsFieldPresentation";
-import type { NodeSettingsModelOption } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
-import type { NodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import type { NodeSettingsFieldsForm, NodeSettingsModelOption } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
 interface Props {
 	readonly form: NodeSettingsFieldsForm;

@@ -26,11 +26,9 @@ public sealed class DeleteBaseArtifactEndpoint(IBaseArtifactService baseArtifact
                 await Send.NotFoundAsync(ct).ConfigureAwait(false);
                 return;
             case BaseArtifactDeleteOutcome.Downloading:
-                await Send.ResultAsync(Results.Conflict(new BaseArtifactBlockedResponse
-                {
-                    Reason = "downloading",
-                    Message = "The base checkpoint is still downloading. Cancel the download before deleting it."
-                })).ConfigureAwait(false);
+                await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("downloading",
+                              "The base checkpoint is still downloading. Cancel the download before deleting it."))
+                          .ConfigureAwait(false);
                 return;
             case BaseArtifactDeleteOutcome.Deleted:
                 await Send.NoContentAsync(ct).ConfigureAwait(false);

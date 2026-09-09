@@ -64,14 +64,6 @@ public sealed record GgufAcquisitionState(
     string? ConflictingProvider = null,
     Guid? ActiveOperationId = null);
 
-public interface IGgufAcquisitionStateProbe
-{
-    Task<GgufAcquisitionState> ProbeAsync(GgufAcquisitionIntent intent,
-        ResolvedGgufAcquisitionIdentity identity,
-        InstalledModelMutationLease lease,
-        CancellationToken cancellationToken);
-}
-
 public interface IGgufAcquisitionPreflight
 {
     Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
@@ -228,11 +220,11 @@ public sealed class GgufAcquisitionConflictException : Exception
 public sealed class GgufAcquisitionPreflight(
     GgufAcquisitionIdentityResolver identityResolver,
     IInstalledModelSnapshotCoordinator snapshotCoordinator,
-    IGgufAcquisitionStateProbe stateProbe) : IGgufAcquisitionPreflight
+    GgufAcquisitionStateProbe stateProbe) : IGgufAcquisitionPreflight
 {
     private readonly GgufAcquisitionIdentityResolver _identityResolver = identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
     private readonly IInstalledModelSnapshotCoordinator _snapshotCoordinator = snapshotCoordinator ?? throw new ArgumentNullException(nameof(snapshotCoordinator));
-    private readonly IGgufAcquisitionStateProbe _stateProbe = stateProbe ?? throw new ArgumentNullException(nameof(stateProbe));
+    private readonly GgufAcquisitionStateProbe _stateProbe = stateProbe ?? throw new ArgumentNullException(nameof(stateProbe));
 
     public async Task<PreparedGgufAcquisition> ResolveAndReserveAsync(GgufAcquisitionIntent intent,
         CancellationToken cancellationToken = default)

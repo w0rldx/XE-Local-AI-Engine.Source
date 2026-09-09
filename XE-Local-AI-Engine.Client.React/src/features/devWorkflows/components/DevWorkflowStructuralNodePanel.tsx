@@ -21,14 +21,14 @@ export interface DevWorkflowStructuralNodePanelProps {
 }
 
 /**
- * ONE panel for Gate, Parallel and Join (P4 §2.6 — no bespoke component per kind), and for a SETTLED HumanGate, which
+ * ONE panel for Gate, Parallel and Join — no bespoke component per kind — and for a SETTLED HumanGate, which
  * is a gate whose condition a person answered. All of them are nodes with no work of their own: what an operator needs
  * from them is the shape of the graph around them, which lives in the run's OTHER rows and the pinned graph's edges,
  * never on the node-run detail response.
  *
- * - **Gate / settled HumanGate** — the condition off the EDGES (Y24: conditions live on edges only, and P3 exposes no
- *   `conditionExpression` on the node), and which successor the run actually entered. There is no `conditionResult`
- *   field to read (P3 §4.2 deleted it); the branch NOT taken is the one the runtime left in an untaken state, which
+ * - **Gate / settled HumanGate** — the condition off the EDGES (conditions live on edges only, and the node-run
+ *   response exposes no `conditionExpression`), and which successor the run actually entered. There is no
+ *   `conditionResult` field to read either; the branch NOT taken is the one the runtime left in an untaken state, which
  *   `untakenBranchStatuses` names.
  * - **Join** — every inbound dependency with the verdict `Admission` will read off it: satisfied, still waiting, or
  *   DEAD. See `DependencyRow`; the verdict is the state machine's own edge rule, not a paraphrase of it.
@@ -49,14 +49,14 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 	const inbound = edges.filter((edge) => (edge.to ?? "") === nodeKey);
 	// A template key never gets a node run — its children get the rows — so it is not a dependency at all, and reading
 	// its row-less-ness as anything but "template" claimed a node that had not run and could not run had satisfied one.
-	// `isTemplate` is the SERVER's own `TemplateSubtree` verdict on the pinned graph (Slice D), which replaced a client
+	// `isTemplate` is the SERVER's own `TemplateSubtree` verdict on the pinned graph, which replaced a client
 	// mirror of that walk: one walk, one answer, and no way for the two to drift apart on a graph shape neither side
 	// had been tried against.
 	const templates = new Set(
 		(run?.graph?.nodes ?? []).filter((node) => node.isTemplate === true).map((node) => node.nodeKey ?? ""),
 	);
 	// The ONE thing a dead edge's wording turns on. `All` is the parser's own default for an absent policy
-	// (`DevWorkflowGraph.cs:257`): under `All` a single dead edge is why the join SKIPS, under `Any` it is ignored for
+	// (`DevWorkflowGraph.ParseNode`): under `All` a single dead edge is why the join SKIPS, under `Any` it is ignored for
 	// as long as a sibling is satisfied.
 	const joinSkipsOnDead =
 		((run?.graph?.nodes ?? []).find((node) => (node.nodeKey ?? "") === nodeKey)?.joinPolicy ?? "All").toLowerCase() !== "any";
@@ -133,7 +133,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
  * `Succeeded` source satisfies it; a `Failed` or `Cancelled` one kills it (DEAD), and under an `All` join one dead
  * edge is precisely why the join will SKIP rather than succeed.
  *
- * A `Skipped` source is the third answer (C1), and the ONE this row does not judge for itself. The state machine
+ * A `Skipped` source is the third answer, and the ONE this row does not judge for itself. The state machine
  * waives a skip — the join carries on — only when nothing upstream of it was dead, which is a recursion over every
  * ancestor's row and the whole pinned graph. The ancestor that decides it need not be among the dependencies drawn
  * here: in `failed → skipped → join` beside a succeeded sibling the runtime SKIPS the join, and a row reading its own
@@ -143,7 +143,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
  *
  * It is deliberately NOT `waitingOnNodeKeys` any more. The runtime sends that list only while the join itself is
  * Pending and drops every SETTLED source from it — so a Skipped branch arrived as "not waited on" and this row badged
- * it SATISFIED, telling an operator the opposite of what the join was about to do with it (LIVE-3 P2).
+ * it SATISFIED, telling an operator the opposite of what the join was about to do with it.
  *
  * The one edge state the panel cannot see is a `Succeeded` source whose edge CONDITION did not fire: judging that
  * needs the source's output document, and the summary row does not carry one. Join dependencies are unconditional in

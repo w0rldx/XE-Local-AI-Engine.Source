@@ -38,6 +38,9 @@ internal sealed partial class SkillImportService : ISkillImportService
     private const int MaxOptionalFieldLength = 512;
     private const string UploadSourceUri = "upload";
 
+    /// <summary>Copy buffer for the upload read. Matches Stream.CopyTo's own default.</summary>
+    private const int UploadChunkSize = 81920;
+
     /// <summary>
     ///     How long a preview stays redeemable. Short because the cached payload holds the decrypted content of every
     ///     discovered skill, and because an approval the operator has forgotten about is not an approval.
@@ -66,6 +69,13 @@ internal sealed partial class SkillImportService : ISkillImportService
     public Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default)
     {
         return BuildPreviewAsync(SkillArchiveReader.Read(archive, _options), UploadSourceUri, cancellationToken);
+    }
+
+    public async Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(archive);
+
+        return await PreviewArchiveAsync(await ReadCappedAsync(archive, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
     }
 
     public Task<SkillImportPreview> PreviewMarkdownAsync(string skillMarkdown, CancellationToken cancellationToken = default)
@@ -388,6 +398,31 @@ internal sealed partial class SkillImportService : ISkillImportService
         }
 
         return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(builder.ToString())));
+    }
+
+    /// <summary>
+    ///     Buffers the upload, refusing it the moment more than <see cref="SkillImportOptions.MaxArchiveBytes" /> has
+    ///     arrived. The loop condition is <c>&lt;=</c> so an archive of exactly the cap is admitted and only the first
+    ///     byte past it is refused. Counting what was READ rather than trusting a declared length keeps a lying
+    ///     Content-Length from buffering more than the guard allows.
+    /// </summary>
+    private async Task<ReadOnlyMemory<byte>> ReadCappedAsync(Stream archive, CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[UploadChunkSize];
+
+        while (buffer.Length <= _options.MaxArchiveBytes)
+        {
+            var read = await archive.ReadAsync(chunk, cancellationToken).ConfigureAwait(false);
+            if (read == 0)
+            {
+                return buffer.ToArray();
+            }
+
+            await buffer.WriteAsync(chunk.AsMemory(start: 0, read), cancellationToken).ConfigureAwait(false);
+        }
+
+        throw new SkillImportException($"The archive exceeds the maximum import size of {_options.MaxArchiveBytes / (1024 * 1024)} MB.");
     }
 
     private static string CacheKey(Guid token)

@@ -1,4 +1,4 @@
-import type { BenchmarkOutputPart } from "@/features/benchmarks/models/BenchmarkRunModels";
+import type { BenchmarkOutputPart, BenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkRunModels";
 import type { ChatMessagePart, ToolCallState } from "@/features/chat/models/ChatModels";
 
 export * from "@/features/benchmarks/models/BenchmarkFidelityModels";
@@ -6,6 +6,16 @@ export * from "@/features/benchmarks/models/BenchmarkLiveStreamModels";
 export * from "@/features/benchmarks/models/BenchmarkProjectModels";
 export * from "@/features/benchmarks/models/BenchmarkRankingModels";
 export * from "@/features/benchmarks/models/BenchmarkRunModels";
+
+/** One launch-matrix submission: every model x KV-cache combination the operator picked, plus the shared run knobs. */
+export interface BenchmarkMatrixSelection {
+	items: { modelName: string; kvCacheType?: string }[];
+	repeatCount: number;
+	warmup: boolean;
+	repeatMode: BenchmarkRepeatMode;
+	/** Null = the node's own default; omitted entirely in throughput mode, which is deterministic by definition. */
+	answerVarianceTemperature: number | null;
+}
 
 function toolState(isError: boolean | null | undefined): ToolCallState {
 	return isError ? "failed" : "received";

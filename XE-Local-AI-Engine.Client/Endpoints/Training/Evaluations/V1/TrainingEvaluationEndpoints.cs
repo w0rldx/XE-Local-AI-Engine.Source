@@ -26,19 +26,12 @@ public sealed class CreateEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(CreateEvaluationRequest req, CancellationToken ct)
     {
-        try
-        {
-            var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName, req.ArtifactId), ct)
-                                            .ConfigureAwait(false);
-            await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse())).ConfigureAwait(false);
-        }
-        catch (EvaluationRejectedException exception)
-        {
-            // Rejections are operator-facing by construction: no installed base model, no completed staged artifact, or a run
-            // that held nothing back.
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        // EvaluationRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
+        // rejections are operator-facing by construction — no installed base model, no completed staged artifact,
+        // or a run that held nothing back.
+        var created = await _evaluations.CreateAsync(new CreateEvaluationCommand(req.TrainingRunId, req.Target, req.ModelName, req.ArtifactId), ct)
+                                        .ConfigureAwait(false);
+        await Send.ResultAsync(TypedResults.Accepted((string?)null, created.ToResponse())).ConfigureAwait(false);
     }
 }
 
@@ -101,16 +94,8 @@ public sealed class ResumeEvaluationEndpoint(IEvaluationRunService evaluations) 
 
     public override async Task HandleAsync(EvaluationByIdRequest req, CancellationToken ct)
     {
-        try
-        {
-            var resumed = await _evaluations.ResumeAsync(req.EvaluationId, ct).ConfigureAwait(false);
-            await Send.OkAsync(resumed.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (EvaluationRejectedException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var resumed = await _evaluations.ResumeAsync(req.EvaluationId, ct).ConfigureAwait(false);
+        await Send.OkAsync(resumed.ToResponse(), ct).ConfigureAwait(false);
     }
 }
 

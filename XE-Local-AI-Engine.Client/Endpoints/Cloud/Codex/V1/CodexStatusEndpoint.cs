@@ -1,10 +1,11 @@
-namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
+﻿namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
 
 using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 
 /// <summary>

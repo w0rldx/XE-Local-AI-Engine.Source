@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     C3: two materialized tasks get isolated workspaces, and nothing serializes them for being siblings.
+///     Two materialized tasks get isolated workspaces, and nothing serializes them for being siblings.
 ///     <para>
 ///         The isolation itself is not this module's code. <c>DevelopmentWorkspaceProvider</c> partitions its worktree,
 ///         its runtime directory and its sandbox attach key by <c>(ProjectId, TaskId)</c>, so what has to be proven here
@@ -39,7 +39,7 @@ public sealed class DevWorkflowMaterializedIsolationTests
                                                """;
 
     /// <summary>
-    ///     The named C3 gate. Two materialized tasks implement two Development tasks of their own in the one project,
+    ///     The isolation gate. Two materialized tasks implement two Development tasks of their own in the one project,
     ///     and each task id is the key the workspace provider partitions on — so the two children cannot land in one
     ///     worktree, one runtime directory or one sandbox.
     ///     <para>

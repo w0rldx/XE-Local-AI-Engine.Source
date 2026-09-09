@@ -30,11 +30,9 @@ public sealed class CancelBaseArtifactEndpoint(IBaseArtifactService baseArtifact
 
         if (!baseArtifactService.Cancel(request.ArtifactId))
         {
-            await Send.ResultAsync(Results.Conflict(new BaseArtifactBlockedResponse
-            {
-                Reason = "not-downloading",
-                Message = "The base checkpoint download is not running."
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(BaseArtifactBlockedEndpointSupport.Blocked("not-downloading",
+                          "The base checkpoint download is not running."))
+                      .ConfigureAwait(false);
             return;
         }
 

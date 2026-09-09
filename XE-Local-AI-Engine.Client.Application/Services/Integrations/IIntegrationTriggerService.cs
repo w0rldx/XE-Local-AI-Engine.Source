@@ -44,7 +44,7 @@ public enum IntegrationTriggerOutcome
     /// <summary>The target agent definition does not exist. 400.</summary>
     AgentMissing,
 
-    /// <summary>The target agent is an orchestrator, and ruling D2 scopes V1 to a saved single agent. 400.</summary>
+    /// <summary>The target agent is an orchestrator, and V1 is scoped to a saved single agent. 400.</summary>
     TargetKindRejected,
 
     /// <summary>No row with that id. 404.</summary>
@@ -59,7 +59,7 @@ public sealed record IntegrationTriggerResult(IntegrationTriggerOutcome Outcome,
 
 /// <summary>
 ///     Trigger CRUD with the two checks a validator cannot make because they need the store: the target agent must
-///     exist, and ruling D2 scopes V1 to a single agent, so an orchestrator is refused.
+///     exist, and V1 is scoped to a single agent, so an orchestrator is refused.
 /// </summary>
 public interface IIntegrationTriggerService
 {

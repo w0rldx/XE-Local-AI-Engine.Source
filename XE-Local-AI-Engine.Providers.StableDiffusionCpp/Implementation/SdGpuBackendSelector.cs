@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Configuration;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     Applies the OS-aware backend-selection rule over the GPU vendor reported by the shared, provider-neutral

@@ -31,7 +31,7 @@ function report(overrides: Partial<DevWorkflowValidationReportBody> = {}): DevWo
 	};
 }
 
-/** The other document a Tool node can leave behind: an apply node's `<nodeKey>-apply.json` (R-C3). */
+/** The other document a Tool node can leave behind: an apply node's `<nodeKey>-apply.json`. */
 function applyReport(overrides: Partial<DevWorkflowApplyReportBody> = {}): DevWorkflowApplyReportBody {
 	return {
 		passed: true,

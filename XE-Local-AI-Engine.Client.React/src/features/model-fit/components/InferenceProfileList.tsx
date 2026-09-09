@@ -8,15 +8,9 @@ import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetri
 import {
 	formatProfileOutcomeSummary,
 	type InferenceBenchmarkResult,
-	type InferenceProfileStatus,
 	type InferenceProfileView,
 } from "@/features/model-fit/models/InferenceProfileModels";
-
-const statusColor: Record<InferenceProfileStatus, string> = {
-	explored: "blue",
-	frozen: "green",
-	stale: "gray",
-};
+import { statusColor } from "@/features/model-fit/models/InferenceProfileStatusModel";
 
 interface InferenceProfileListProps {
 	readonly profiles: readonly InferenceProfileView[];

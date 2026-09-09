@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.Development;
 ///         <see cref="IDevelopmentManagementService.ApplyAsync" /> onto <c>DevelopmentApplyService</c> and the
 ///         coordinator's revalidated apply — so the evidence chain (independently approved subject, exact patch and
 ///         manifest digests, host state inspected before and after) is the one that was already there. What is new is
-///         only WHEN it runs: downstream of a human gate the graph is required to place in front of it (Y3), never on
+///         only WHEN it runs: downstream of a human gate the graph is required to place in front of it, never on
 ///         the implementation node's own success.
 ///     </para>
 ///     <para>
@@ -129,7 +129,7 @@ internal sealed class DevWorkflowApplyCommands
     ///         A <c>ApplyBlocked</c> result is the gate declining on evidence rather than an error: the host repository
     ///         is not at the exact approved base — which is what the SECOND patch of one fan-out finds, because the
     ///         first one's applied change is sitting in the tree it was approved against. Concurrent-patch merge is
-    ///         named as v2 in the plan (§5.6.3), and this is where that boundary shows up at runtime, legibly, instead
+    ///         deferred to v2, and this is where that boundary shows up at runtime, legibly, instead
     ///         of as a patch applied onto a tree nobody judged.
     ///     </para>
     /// </summary>
@@ -292,7 +292,7 @@ internal sealed class DevWorkflowApplyCommands
     ///     </para>
     ///     <para>
     ///         And bound to this node's own ANCESTRY rather than to the run, because a run may carry more than one
-    ///         gated apply lane: the gate the graph is required to place in front of this node (Y3) displayed the work
+    ///         gated apply lane: the gate the graph is required to place in front of this node displayed the work
     ///         on the branch that reaches it, and applying a succeeded task from a PARALLEL branch would be this node
     ///         landing a patch its approval never showed anyone. Resolved over the run's pinned graph — the same
     ///         revision the tick routed on, so a materialization's clones are in it — where "upstream" is exactly the

@@ -28,7 +28,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///         different numbers.
 ///     </para>
 ///     <para>
-///         The whole invocation envelope (D6: <c>ReadLocal</c> AND a composed approval of <see langword="false" />)
+///         The whole invocation envelope (<c>ReadLocal</c> AND a composed approval of <see langword="false" />)
 ///         lives inside <see cref="IToolInvocationService" />, so this class enforces none of it and cannot skip any
 ///         of it. Every refusal arrives as an outcome and becomes a row.
 ///     </para>

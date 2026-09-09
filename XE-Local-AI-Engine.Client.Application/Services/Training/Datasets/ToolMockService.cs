@@ -5,10 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-public sealed record ToolMockDraft(string ToolName, ToolMockBodyV1 Body, bool Enabled);
-
-public sealed record ToolMockVerifyResult(ToolMockRecord Mock, ToolMockVerificationV1 Verification);
-
 public interface IToolMockService
 {
     Task<ToolMockRecord> CreateAsync(ToolMockDraft draft, CancellationToken cancellationToken = default);

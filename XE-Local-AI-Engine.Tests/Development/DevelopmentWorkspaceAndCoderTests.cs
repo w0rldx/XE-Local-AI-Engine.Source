@@ -783,7 +783,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
     ///     The other half of the reuse rule above: the same task gets the same worktree, and two TASKS of one project
     ///     get two — the provider partitions on <c>(ProjectId, TaskId)</c>, never on the project alone.
     ///     <para>
-    ///         This is what makes a decomposed feature safe to implement in parallel (C3): several materialized children
+    ///         This is what makes a decomposed feature safe to implement in parallel: several materialized children
     ///         live in one Development project by design, so a project-keyed workspace would have them editing one
     ///         checkout and overwriting each other's patches, with the apply gate hashing whichever subject won. The
     ///         assertion is therefore not that the two paths differ as strings but that a file written in one is absent

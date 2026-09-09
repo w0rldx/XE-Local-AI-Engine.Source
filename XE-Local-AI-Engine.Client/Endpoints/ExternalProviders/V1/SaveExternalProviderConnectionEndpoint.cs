@@ -38,19 +38,10 @@ public sealed class SaveExternalProviderConnectionEndpoint(IExternalProviderAdmi
 
     public override async Task HandleAsync(SaveExternalProviderConnectionRequest req, CancellationToken ct)
     {
-        ExternalProviderWriteResult result;
-        try
-        {
-            result = await _administrationService.SaveConnectionAsync(req.ToSaveRequest(), ct).ConfigureAwait(false);
-        }
-        catch (ExternalProviderValidationException exception)
-        {
-            // The store owns every storable-shape rule, so its message IS the operator-facing explanation. Surfacing
-            // it verbatim keeps one statement of each bound instead of a second, drifting copy in a validator.
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
+        // The store owns every storable-shape rule, so its ExternalProviderValidationException message IS the
+        // operator-facing explanation, and the global DomainValidationExceptionHandler surfaces it verbatim as the
+        // 400. That keeps one statement of each bound instead of a second, drifting copy in a validator.
+        var result = await _administrationService.SaveConnectionAsync(req.ToSaveRequest(), ct).ConfigureAwait(false);
 
         await SendWriteResultAsync(result, ct).ConfigureAwait(false);
     }

@@ -195,7 +195,7 @@ internal sealed class ToolInvocationService(
     {
         executable = null!;
 
-        // Gate 1. Risk class. ReadLocal is the only class a node may run unattended (D6).
+        // Gate 1. Risk class. ReadLocal is the only class a node may run unattended.
         if (entry.Category != ToolCategory.ReadLocal)
         {
             return "not-read-local";

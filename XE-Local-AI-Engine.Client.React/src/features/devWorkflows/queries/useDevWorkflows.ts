@@ -1,6 +1,6 @@
 // Server state for the Development Workflows surface. Every call goes through the generated hey-api `*Options()` /
 // `*Mutation()` wrapped in withResponseValidation, exactly as `useWorkSessions.ts` does — no hand-wired axios, no
-// hand-written request types (O11 / G8). The one exception is the paged event feed, which calls the generated SDK fn
+// hand-written request types. The one exception is the paged event feed, which calls the generated SDK fn
 // through `callWithResponseValidation` because hey-api generates no `*InfiniteOptions` for its cursor; see below.
 //
 // The generated query keys are single-element arrays `[{ _id: "<operationId>", path, query, … }]`, and TanStack
@@ -76,11 +76,11 @@ const FULL_FEED = { sinceSeq: 0 } as const;
 export const devWorkflowEventsPageSize = 200;
 /**
  * The tail page asks for two windows' worth so it always reaches the run's true last sequence — see
- * `devWorkflowEventsAnchorParam`. Comfortably under R7's 500-row server clamp.
+ * `devWorkflowEventsAnchorParam`. Comfortably under the endpoint's 500-row server clamp.
  */
 const devWorkflowEventsTailPageSize = devWorkflowEventsPageSize * 2;
 
-/** Which end of the log the feed opens on. The operator switches ends; nothing else does (R-C4). */
+/** Which end of the log the feed opens on. The operator switches ends; nothing else does. */
 export type DevWorkflowEventsAnchor = "newest" | "oldest";
 
 /**
@@ -105,7 +105,7 @@ export function devWorkflowEventsAnchorParam(lastSequence: number | undefined, a
 	return Math.max(0, window - devWorkflowEventsPageSize);
 }
 
-/** Work-item list cadence while any listed run is still live (X16 Q7). A run-scoped hub cannot feed a list. */
+/** Work-item list cadence while any listed run is still live. A run-scoped hub cannot feed a list. */
 const devWorkflowListPollIntervalMs = 5_000;
 
 interface FeedOptions {
@@ -122,7 +122,7 @@ function feedQuerySettings(id: string | undefined, options: FeedOptions) {
 }
 
 /**
- * The work-item list. A run-scoped hub cannot feed a list, so this polls at 5s (X16 Q7) — but only while a listed run
+ * The work-item list. A run-scoped hub cannot feed a list, so this polls at 5s — but only while a listed run
  * is actually live. `latestRunStatus` is null for a work item that has never run, which is exactly a row that cannot
  * change on its own; polling it would be a timer burning for nothing.
  */
@@ -145,7 +145,7 @@ export function useDevWorkflowWorkItem(workItemId: string | undefined, options: 
 	});
 }
 
-/** The picker's definition list. Archived templates are hidden (Y14) — they are not startable. */
+/** The picker's definition list. Archived templates are hidden — they are not startable. */
 export function useDevWorkflowDefinitions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listDevWorkflowDefinitionsOptions({ query: { includeArchived: false } })),
@@ -164,7 +164,7 @@ export function useDevWorkflowDefinition(definitionId: string | undefined) {
 	});
 }
 
-/** Dev Mode projects, for the create dialog's OPTIONAL project binding (X17). Read through the generated client. */
+/** Dev Mode projects, for the create dialog's OPTIONAL project binding. Read through the generated client. */
 export function useDevelopmentProjectOptions(options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(listDevelopmentProjectsOptions()),
@@ -172,7 +172,7 @@ export function useDevelopmentProjectOptions(options: FeedOptions = {}) {
 	});
 }
 
-/** R6 — the run payload: status, node-runs and the pinned graph in one call. Backs the whole centre pane. */
+/** The run payload: status, node-runs and the pinned graph in one call. Backs the whole centre pane. */
 export function useDevWorkflowRun(runId: string | undefined, options: FeedOptions = {}) {
 	return useQuery({
 		...withResponseValidation(getDevWorkflowRunOptions({ path: { runId: runId ?? "" } })),
@@ -192,9 +192,9 @@ export function useDevWorkflowNodeRun(runId: string | undefined, nodeRunId: stri
  * lower bound and the rows come back ascending. Growing `limit` instead stops at the server's 500-row clamp, which
  * made every event past the 500th unreachable for the rest of the run's life.
  *
- * **The feed opens on the NEWEST events (R-C4), not the oldest.** A fan-out run — Slice C's whole point — writes
+ * **The feed opens on the NEWEST events, not the oldest.** A fan-out run — a materialization's whole point — writes
  * hundreds of events, and a feed that opened at sequence 1 pinned the operator to the run's first minute and made
- * "what is happening now" a dozen clicks away. There is no wire change behind this: R7 takes `sinceSeq` and nothing
+ * "what is happening now" a dozen clicks away. There is no wire change behind this: the events endpoint takes `sinceSeq` and nothing
  * else, so the tail is reached by COMPUTING the cursor from `lastSequence`, which the run payload already carries, and
  * then walking BACKWARD a page at a time.
  *
@@ -324,8 +324,8 @@ export function useDevWorkflowModelOptions(options: FeedOptions = {}) {
 /**
  * Edit a definition, or archive it. Both invalidate the picker's list and the edited definition itself.
  *
- * The update carries the `Version` the edit was made from (X5: an int on the row, no version-history table), so a
- * second editor's save is refused with a 409 rather than silently overwriting the first. Delete is an ARCHIVE (Y14) —
+ * The update carries the `Version` the edit was made from (an int on the row, no version-history table), so a
+ * second editor's save is refused with a 409 rather than silently overwriting the first. Delete is an ARCHIVE —
  * a template a past run pinned a snapshot of must not stop existing, so the row is flagged and hidden from the picker.
  */
 export function useDevWorkflowDefinitionMutations() {
@@ -352,7 +352,7 @@ export function useDevWorkflowDefinitionMutations() {
 }
 
 /**
- * The rule-set catalogue. A global resource scoped by `{ projectIds, nodeTypes }` (Y2/M4) rather than owned by any one
+ * The rule-set catalogue. A global resource scoped by `{ projectIds, nodeTypes }` rather than owned by any one
  * run, which is why it is managed from the LIST page and not from a work item. Summaries only — the body is up to
  * 4096 characters of policy prose and is read one rule set at a time.
  */
@@ -469,7 +469,7 @@ export function useDevWorkflowRunLifecycle(runId: string | undefined, workItemId
 }
 
 /**
- * The ONE decision surface (X3/Y7): a gate answer and a stuck node's Retry/Skip/Abandon travel the same route with the
+ * The ONE decision surface: a gate answer and a stuck node's Retry/Skip/Abandon travel the same route with the
  * same client-minted `operationId`. Invalidation is deliberate rather than optimistic — what follows a decision is the
  * dispatcher's work on its own clock, so the panel re-reads rather than predicting the next state.
  */

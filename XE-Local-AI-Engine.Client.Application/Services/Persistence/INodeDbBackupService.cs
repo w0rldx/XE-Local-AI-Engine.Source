@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Persistence;
 
 /// <summary>
-///     Snapshots the node database before pending schema migrations are applied (BE-06). A bad Velopack-shipped migration
+///     Snapshots the node database before pending schema migrations are applied. A bad Velopack-shipped migration
 ///     or on-disk corruption would otherwise be an unrecoverable loss of all chat history, agents, and golden
 ///     conversations.
 /// </summary>

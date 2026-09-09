@@ -507,7 +507,7 @@ public sealed class DevWorkflowDispatcherTests
         AssertEx.Equal("first: Skipped, gate: Succeeded, second: Skipped, third: Skipped",
             string.Join(", ", nodeRuns.OrderBy(static nodeRun => nodeRun.NodeKey, StringComparer.Ordinal).Select(static nodeRun => $"{nodeRun.NodeKey}: {nodeRun.Status}")));
 
-        // RE-PINNED, ruling 1 (Slice D): 'third' is the graph's only terminal node and it was skipped, so the run
+        // RE-PINNED: 'third' is the graph's only terminal node and it was skipped, so the run
         // routed around everything it was asked to do and reached none of it. Completed would read as having done it.
         var run = await harness.ReadRunAsync(runId).ConfigureAwait(false);
         AssertEx.Equal(DevWorkflowRunStatus.Cancelled, run.Status, "a run whose every branch condition was false never reached an end.");
@@ -573,7 +573,7 @@ public sealed class DevWorkflowDispatcherTests
     ///     The intervention answers, on a node run this build cannot execute. <c>Skip</c> routes around it, and
     ///     everything below it skips with it.
     ///     <para>
-    ///         RE-PINNED, ruling 1 (Slice D): the run then reads <c>Cancelled</c> rather than <c>Completed</c>. A
+    ///         RE-PINNED: the run then reads <c>Cancelled</c> rather than <c>Completed</c>. A
     ///         skipped node run is terminal and does not block completion, but neither is it an END — this run reached
     ///         none of them, and the work item says the same. Nothing failed, so there is no class to carry either:
     ///         the reason names the end that was abandoned, because a human decision is the whole of the account.
@@ -793,8 +793,8 @@ public sealed class DevWorkflowDispatcherTests
     ///     skips. That is a real outcome rather than a stranding — the gate itself succeeded, and the log says which way
     ///     it did not go.
     ///     <para>
-    ///         RE-PINNED, ruling 1 (Slice D): the run reads <c>Cancelled</c>, and this is the second shape the ruling
-    ///         names. The rejection was not stranded — the human gate's own out-edge accepted it, so X10's drain never
+    ///         RE-PINNED: the run reads <c>Cancelled</c>, and this is the second shape the rule
+    ///         names. The rejection was not stranded — the human gate's own out-edge accepted it, so the gate-reject drain never
     ///         fired — and it still reached no end, because the automatic gate below took neither branch. The gate
     ///         answer is the only account of that, so the run carries <c>GateRejected</c>.
     ///     </para>
@@ -825,7 +825,7 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The X10 case as it actually occurs: one branch is mid-build when the other's approval is refused. The run goes
+    ///     The gate-reject drain as it actually occurs: one branch is mid-build when the other's approval is refused. The run goes
     ///     through the drain, so the sibling settles and gives its lane slot back BEFORE the run reaches its terminal.
     ///     <para>
     ///         Writing the terminal directly would trip the "if terminal, return" guard at the top of every tick, and
@@ -871,7 +871,7 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     The C1 gate: an <c>Any</c> join with one dead branch. Two things, and the first is the subtle one.
+    ///     The join gate: an <c>Any</c> join with one dead branch. Two things, and the first is the subtle one.
     ///     <para>
     ///         <c>Any</c> does NOT fire on whichever branch landed first — it waits until no inbound edge is still
     ///         pending, because a sibling that has not settled could still satisfy one, and a join that routed on
@@ -917,7 +917,7 @@ public sealed class DevWorkflowDispatcherTests
     }
 
     /// <summary>
-    ///     C1, end to end: an <c>All</c> join whose one blocked branch an operator Skips carries the branch that
+    ///     End to end: an <c>All</c> join whose one blocked branch an operator Skips carries the branch that
     ///     succeeded, and the tail behind it runs. Live, this shape ended <c>Cancelled</c> with fourteen Skipped rows
     ///     behind a join whose siblings had all done their work — the skip read as indistinguishable from a failure.
     ///     <para>

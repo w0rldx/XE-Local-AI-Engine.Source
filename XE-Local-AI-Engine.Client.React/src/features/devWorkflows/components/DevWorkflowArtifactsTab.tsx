@@ -21,7 +21,7 @@ export interface DevWorkflowArtifactsTabProps {
 }
 
 /**
- * The run's artifacts, ONE ROW PER LINEAGE (P4 §2.8). Every version of a document used to own a permanent row, so a
+ * The run's artifacts, ONE ROW PER LINEAGE. Every version of a document used to own a permanent row, so a
  * node that re-attempted three times buried the rest of the run under its own history; the row now shows the lineage's
  * latest version and the body header offers the older ones.
  *
@@ -139,7 +139,7 @@ function ArtifactBody({
 	artifact: DevWorkflowArtifactResponse;
 	/** This lineage's versions, newest first. A single-version lineage renders no picker at all. */
 	versions: readonly DevWorkflowArtifactResponse[];
-	/** The artifact that superseded this one's input (X6), when it is in this run's feed. */
+	/** The artifact that superseded this one's input, when it is in this run's feed. */
 	supersededBy?: DevWorkflowArtifactResponse;
 	contentQuery: ReturnType<typeof useDevWorkflowArtifactContent>;
 	onSelectArtifact: (artifactId: string) => void;
@@ -182,8 +182,8 @@ function ArtifactBody({
 						{t("pages.devWorkflows.artifacts.stale", "Stale")}
 					</Badge>
 				) : null}
-				{/* Mark-only (O8): the link names WHAT superseded this document's input and nothing offers to redo the work,
-				    because the runtime does not model that. Staleness is run-scoped in v1 (X6), so the target is in this
+				{/* Mark-only: the link names WHAT superseded this document's input and nothing offers to redo the work,
+				    because the runtime does not model that. Staleness is run-scoped in v1, so the target is in this
 				    same feed — and when it is not, no link is rendered rather than one that resolves to nothing. */}
 				{supersededBy ? (
 					<Anchor

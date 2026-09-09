@@ -114,9 +114,13 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         builder.Services.AddScoped<ILocalModelDeletionJournalReconciler>(static services =>
             services.GetRequiredService<LocalModelDeletionCoordinator>());
         builder.Services.AddScoped<ILocalModelAdministrationService, LocalModelAdministrationService>();
+        // Two-runtime unload fan-out for the eject route: every llama-server role, then the gated Ollama eviction.
+        // Singleton like the other lifecycle coordinators — everything it consumes (the process supervisor, the Ollama
+        // model service, IConfiguration) is a singleton too.
+        builder.Services.AddSingleton<IModelUnloadCoordinator, ModelUnloadCoordinator>();
         builder.Services.AddSingleton<DefaultModelSelectionPolicy>();
         builder.Services.AddHostedService<LocalModelDeletionStartupReconciler>();
-        builder.Services.AddScoped<IGgufAcquisitionStateProbe, GgufAcquisitionStateProbe>();
+        builder.Services.AddScoped<GgufAcquisitionStateProbe>();
         builder.Services.AddSingleton<GgufAcquisitionIdentityResolver>();
         builder.Services.AddScoped<IGgufAcquisitionPreflight, GgufAcquisitionPreflight>();
         builder.Services.AddScoped<IOllamaProviderMapBackfillCoordinator, OllamaProviderMapBackfillCoordinator>();

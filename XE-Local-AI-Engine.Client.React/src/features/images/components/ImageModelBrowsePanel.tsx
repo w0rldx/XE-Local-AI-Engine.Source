@@ -21,6 +21,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
+	type BrowseInstallRequest,
 	type ImageModelFamily,
 	type ImageModelPartRole,
 	type ImageRepositoryFileView,
@@ -30,18 +31,6 @@ import {
 } from "@/features/images/models/ImageModels";
 import { useBrowseImageRepositories, useInspectImageRepository } from "@/features/images/queries/useImageQueries";
 import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
-
-/** The file-set an operator assembled in this panel, ready for the install mutation. */
-export interface BrowseInstallRequest {
-	modelName: string;
-	repoId: string;
-	family: ImageModelFamily;
-	parts: readonly {
-		role: ImageModelPartRole;
-		fileName: string;
-		sizeBytes: number;
-	}[];
-}
 
 interface ImageModelBrowsePanelProps {
 	// The model names already installed, so a name collision is caught before the download starts rather than by

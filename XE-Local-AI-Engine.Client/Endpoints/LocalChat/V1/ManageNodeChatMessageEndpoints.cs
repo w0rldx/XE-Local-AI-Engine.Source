@@ -34,20 +34,11 @@ public sealed class BranchNodeChatConversationEndpoint(
         await _mutationGuard.EnsureMutableAsync(req.ConversationId, ct).ConfigureAwait(false);
 
         var createdAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
-        NodeChatBranchResultDto? branched;
-        try
-        {
-            branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
-                ct).ConfigureAwait(false);
-        }
-        catch (NodeChatInvalidBranchSelectionException exception)
-        {
-            // A selected-revision entry failed integrity validation (not a conversation member / wrong group).
-            // Fail closed with 400 rather than branching a path the caller did not actually specify.
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-            return;
-        }
+        // A selected-revision entry that fails integrity validation (not a conversation member / wrong group) throws
+        // NodeChatInvalidBranchSelectionException, which the global DomainValidationExceptionHandler answers with a
+        // 400 — fail closed rather than branching a path the caller did not actually specify.
+        var branched = await _chatPersistence.BranchConversationAsync(new NodeChatBranchConversationRequest(req.ConversationId, req.MessageId, createdAtUtc, req.SelectedRevisions),
+            ct).ConfigureAwait(false);
 
         if (branched is null)
         {

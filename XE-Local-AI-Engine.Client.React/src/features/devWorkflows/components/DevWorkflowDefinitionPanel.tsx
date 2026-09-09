@@ -16,12 +16,12 @@ export interface DevWorkflowDefinitionPanelProps {
 }
 
 /**
- * A template's shape, before anything has run it. Same canvas as the run view (P4 §4: one component, two data
- * sources) — the cards carry no status, because a definition has none and a `Pending` badge on every node would
+ * A template's shape, before anything has run it. Same canvas as the run view — one component, two data sources —
+ * and the cards carry no status, because a definition has none and a `Pending` badge on every node would
  * claim the template is a run waiting on its dependencies.
  *
- * Read-only in slices A–C by ruling (N1): the definition EDITOR is a form in slice D, not a canvas, so nothing here
- * offers a control that would imply otherwise.
+ * Read-only by design: the definition EDITOR is a separate form panel, not a canvas, so nothing here offers a
+ * control that would imply otherwise.
  */
 export function DevWorkflowDefinitionPanel({ definitionId, definitionName }: DevWorkflowDefinitionPanelProps) {
 	const { t } = useTranslation();

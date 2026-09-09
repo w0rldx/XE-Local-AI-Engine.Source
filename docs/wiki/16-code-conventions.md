@@ -132,6 +132,29 @@ The provider layering rule is in [02-project-layout.md](02-project-layout.md). A
 collaborator (its own interface + result + class) that has accreted at the tail of a large provider
 service belongs in its own file (same folder/namespace).
 
+### Placement is pinned by architecture tests, not by review
+
+IDE0130 checks that a file's namespace matches the folder the file **already** sits in; it cannot tell you the
+file is in the wrong folder. Three rules in `XE-Local-AI-Engine.Tests/Architecture/` close that gap and fail the
+build's test gate, not the reviewer's memory:
+
+| Convention | Enforced by |
+| --- | --- |
+| A public **interface** in a `Providers.*` project lives in `…Providers.<Name>.Contracts`. `Providers.Abstractions` is out of scope — it *is* the contracts layer. | `PlacementConventionTests.ProviderPublicInterfaces_ResideInTheProviderContractsNamespace` |
+| A public **`*Options`** class in a `Providers.*` project lives in `…Providers.<Name>.Options`. | `PlacementConventionTests.ProviderOptionsClasses_ResideInTheProviderOptionsNamespace` |
+| In the host: a FastEndpoints endpoint lives in a `.V1` namespace, a `*Mapper` in `.V1.Mappers`, an `IValidator` in `.V1.Validators`. | `PlacementConventionTests.ClientEndpointsMappersAndValidators_ResideInTheirVersionedNamespaces` |
+| A service implementation file under `Client.Application/Services/{AgentHome,Benchmarks,Development,Integrations,Training,WorkSessions}/` declares the service and nothing else — its records and enums go in a sibling `*Models` / `*ServiceModels` / `*Contracts` / `*Dtos` file. | `ServiceModelColocationTests.ServiceImplementationFiles_DoNotAlsoDeclareContractTypes` |
+
+The first three are **ArchUnitNET** (`TngTech.ArchUnitNET`, test-project only) over compiled IL; it sits
+alongside NetArchTest, which pins dependency *direction* between assemblies rather than placement inside one.
+The fourth is a source-text scan, because IL records no source file and file co-location is the whole point of
+that rule; the `Services/` folders outside that list still hold pre-existing co-located declarations and are
+deliberately out of scope.
+
+Concrete implementations are **not** required to sit under `Implementation/`: providers legitimately keep
+root-level DTOs, enums, exceptions and value records (`LlamaBinary`, `GpuVariant`, `LlamaRuntimeException`, …),
+and no rule forces those to move.
+
 ### Tests: TUnit, not xUnit
 
 Backend tests are **TUnit** (`[Test]`) on Microsoft.Testing.Platform, with a project **`AssertEx`** helper

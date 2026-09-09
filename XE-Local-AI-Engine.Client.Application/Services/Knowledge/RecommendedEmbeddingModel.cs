@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
@@ -62,6 +64,34 @@ public static class RecommendedEmbeddingModel
             Quant = Quant,
             Role = GgufRole.Embedding
         };
+    }
+
+    /// <summary>
+    ///     The installed model that already makes this node able to embed, or <see langword="null" /> when none does.
+    ///     Reads the LOCAL registry only — no network resolve.
+    ///     <para>
+    ///         Two steps, and the order is the point. The recommended repo wins when present so the reported identity is
+    ///         stable; failing that, ANY installed embedding-named model counts, because that is exactly what
+    ///         <c>EmbeddingModelResolver</c> would pick, so downloading a second embedder would change nothing but the
+    ///         bandwidth bill. The fallback is ordered by name so a node with several embedders reports the same one on
+    ///         every call rather than whatever the registry happened to list first.
+    ///     </para>
+    ///     <para>
+    ///         Deliberately broader than <see cref="RecommendedRerankerModel.ResolveExistingAsync" />: selecting a
+    ///         reranker is an explicit operator act, whereas the question here is only "can this node embed at all".
+    ///     </para>
+    /// </summary>
+    public static async Task<LocalModelDescriptor?> ResolveExistingAsync(IGgufModelStore modelStore, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(modelStore);
+
+        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        return installed.FirstOrDefault(model => Matches(model.ModelName))
+               ?? installed
+                  .Where(model => !string.IsNullOrWhiteSpace(model.ModelName)
+                                  && ModelKindDetector.IsEmbeddingName(model.ModelName))
+                  .OrderBy(model => model.ModelName, StringComparer.OrdinalIgnoreCase)
+                  .FirstOrDefault();
     }
 
     /// <summary>

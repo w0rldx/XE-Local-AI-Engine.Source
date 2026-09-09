@@ -705,7 +705,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     [Test]
     public async Task ExecuteAsync_WhileAnotherHolderOwnsTheLease_MovesEveryQueuedExecutionToQueued()
     {
-        // Live F1: the reader awaited ProcessOneAsync, so the second id sat in the channel for the whole of the first
+        // A live finding: the reader awaited ProcessOneAsync, so the second id sat in the channel for the whole of the first
         // run. It never reached Queued and never started measuring its queue age.
         using var harness = new Harness();
         harness.HoldLeaseSlot();
@@ -905,7 +905,7 @@ public sealed class IntegrationExecutionCoordinatorTests
     [Test]
     public async Task Run_WhenTheTargetAgentIsAnOrchestrator_RefusesItAsTriggerUnavailable()
     {
-        // Ruling D2 scopes V1 to a saved single agent, and this package carries no orchestration spec: an orchestrator
+        // V1 is scoped to a saved single agent, and this package carries no orchestration spec: an orchestrator
         // would report Completed having run none of its participants. Checked at run time as well as at save, because
         // a definition's Kind can change after the trigger was written.
         using var harness = new Harness

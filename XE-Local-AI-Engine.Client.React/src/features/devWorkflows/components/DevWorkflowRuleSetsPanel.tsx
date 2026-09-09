@@ -8,12 +8,12 @@ import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
-import {
-	type DevWorkflowProjectOption,
-	DevWorkflowRuleSetDialog,
-	type DevWorkflowRuleSetValues,
-} from "@/features/devWorkflows/components/DevWorkflowRuleSetDialog";
-import type { DevWorkflowRuleSetSummaryResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
+import { DevWorkflowRuleSetDialog } from "@/features/devWorkflows/components/DevWorkflowRuleSetDialog";
+import type {
+	DevelopmentProjectOption,
+	DevWorkflowRuleSetSummaryResponse,
+	DevWorkflowRuleSetValues,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	useDevWorkflowRuleSet,
 	useDevWorkflowRuleSetMutations,
@@ -22,12 +22,12 @@ import {
 
 export interface DevWorkflowRuleSetsPanelProps {
 	/** Dev Mode projects, for the `projectIds` scope axis. Read once by the page and handed down. */
-	readonly projects: readonly DevWorkflowProjectOption[];
+	readonly projects: readonly DevelopmentProjectOption[];
 }
 
 /**
  * The rule-set catalogue: the policy documents the resolver injects into a matching node's objective at
- * materialization time (Y2/M4).
+ * materialization time.
  *
  * It lives on the LIST page rather than on a work item because a rule set is scoped by `{ projectIds, nodeTypes }` and
  * by nothing else — it belongs to no run, and an operator writes one BEFORE the workflow that will pick it up exists.
@@ -245,7 +245,7 @@ export function DevWorkflowRuleSetsPanel({ projects }: DevWorkflowRuleSetsPanelP
  */
 function scopeSummary(
 	ruleSet: DevWorkflowRuleSetSummaryResponse,
-	projects: readonly DevWorkflowProjectOption[],
+	projects: readonly DevelopmentProjectOption[],
 	t: (key: string, fallback: string, options?: Record<string, unknown>) => string,
 ): string {
 	const projectIds = ruleSet.scope?.projectIds ?? [];

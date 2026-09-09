@@ -5,8 +5,9 @@
 - **Scope:** How an external caller invokes a saved agent on this node, and where that surface lives. It changes no
   existing execution path: chat, the platform hub, benchmarks, the scheduler and inbound MCP keep the runners, the
   lease and the approval rules they have today.
-- **Authority:** Decided by the maintainer on 2026-09-03, from the external-integrations assessment
-  (`Plans/external-integrations-2026-09-03/REPORT.md`) and its five read-only research lanes.
+- **Authority:** Decided by the maintainer on 2026-09-03, from the external-integrations assessment and its five
+  read-only research lanes. The rulings that assessment produced are reproduced in full under **Ruling record**
+  below, so this record stands on its own.
 
 ## Context
 
@@ -179,10 +180,30 @@ way for a run to end.
 
 ## Ruling record
 
-Round-1 rulings (R1-1 … R1-15) stay in `Plans/external-integrations-2026-09-03/10-reconciliation.md` and are named
-here by reference. The later rounds are reproduced because a slice landing months from now needs to know why the accept
-path, the identity column, the sequence authority, the event set and the store's record-shaped surface look the way
-they do.
+All rounds are reproduced here, because a slice landing months from now needs to know why the accept path, the
+identity column, the sequence authority, the event set and the store's record-shaped surface look the way they do.
+Round 1 is condensed to one line per ruling; where a later round amended or superseded one, that round's row is the
+current rule.
+
+### Round 1
+
+| # | Rule | Owner |
+|---|---|---|
+| R1-1 | Admin execution endpoints belong to S1 (`ListIntegrationExecutionsEndpoint`, `GetIntegrationExecutionEndpoint`, `CancelIntegrationExecutionEndpoint`); S2 keeps only `GetIntegrationExecutionEventsEndpoint` (`?sinceSeq=`); S3 owns the session endpoints. | S1, S2, S4 |
+| R1-2 | Endpoint class names are the public contract — operationId is the camelCase class name minus `Endpoint`. The locked set is the fifteen `*IntegrationTrigger*`, `*IntegrationApiKey*`, `*IntegrationSession*` and `*IntegrationExecution*` endpoint classes in the host; the SDK derives its names from exactly those. | S1–S4 |
+| R1-3 | Dedup is key-scoped and byte-exact: `RequestFingerprint = SHA-256(keyPrefix ‖ triggerName ‖ sessionId-or-empty ‖ raw UTF-8 body)`. Same `RequestId` + same fingerprint returns the existing 202 body; same `RequestId` + a different fingerprint or key prefix is a 409 with no details. Retries must resend an identical body; no JSON canonicalisation. **Separators amended by R2-4; the global `RequestId` index is superseded by R4-6.** | S0, S1 |
+| R1-4 | Unauthorised = not found: a key whose allowlist excludes the trigger, or a session/execution belonging to another key prefix, gets 404 with the same body as "unknown", never 403, on every external route. **Amended by R2-6 — 403 appears nowhere; a revoked key is 401.** | S1, S2, S3 |
+| R1-5 | Admission is one EF transaction, best-effort under SQLite's writer serialisation, with no compensating delete and the two-accepts-read-the-same-count race accepted for V1. **Superseded by R2-2 (one `AcceptAsync` store method) and then by R4-1 (raw `BEGIN IMMEDIATE`, "best-effort" withdrawn).** | S0, S1 |
+| R1-6 | `IntegrationOptions` is the complete knob list: `MaxQueuedExecutions` 8 · `MaxRequestBodyBytes` 1 MiB (read at composition time from configuration, not from the options instance) · `MaxSeedBytes` 256 KiB · `EventBufferCapacity` 2048 events · `EventBufferMaxBytes` 4 MiB per execution · `MaxTrackedExecutions` 64 buffers (LRU-evict terminal first, then reject new attach with 503) · `EventBufferTtlAfterTerminal` 10 min · `MaxOutputBytes` 256 KiB per `emit_output` · `MaxOutputBytesPerExecution` 1 MiB · `RateLimitPerMinute` 600 · `ContextBudgetTokens` 12,000 (the R1-9 compaction bound; integration turns must never read `WorkSessionOptions`). **Extended by R4-11.** | S0–S3 |
+| R1-7 | Sequence authority is the event buffer: `emit_output` calls `buffer.Append(...)`, which mints the event, and the row is persisted with that `Sequence`. Nothing else mints sequences; `IntegrationExecution.LastSequence` is updated from the buffer's value at persistence time. | S2, S3 |
+| R1-8 | SSE frame field order is `event`, `data`, `id` — what `SseFormatter` emits. Irrelevant to the SSE spec, asserted by tests. | S2 |
+| R1-9 | Integration-session compaction reuses `WorkSessionStepContextBound.ApplyAsync` with one optional `keepVerbatimExchanges` parameter (default 2, so the work-session call site is byte-identical); integration turns pass the chat window, 8. | S3 |
+| R1-10 | The rate-limit 429 test lives in the existing `RateLimitPolicyTests`; the earlier "no test possible" claim is withdrawn. | S1, S2 |
+| R1-11 | The approval warning is fail-closed: `requiresApproval = catalog.effectiveRequiresApproval \|\| agent.toolApprovals[name] === true`, and a tool missing from the catalog counts as requiring approval. The executions page polls unconditionally at the scheduler's cadence; `/integrations` gets an index route redirecting to triggers. | S4 |
+| R1-12 | S0 owns the doc and test updates it invalidates: `docs/wiki/08-data-and-persistence.md` (encrypted-column table, entity inventory, migration timeline, `record_kind` sentence), the verbatim SQL copies in `AddConversationListIndexMigrationTests`, and `KeyHash` registered as a **required** encrypted property. | S0 |
+| R1-13 | S1's handoff to S3 must not mention a package marker; the coordinator unions `GetIntegrationOutputOffer()` instead. | S1 |
+| R1-14 | S2 fixes in-slice: capture the wakeup task inside the snapshot lock (`RunContinuationsAsynchronously`); a gap detected mid-stream ends the stream with a clean close — the writer emits nothing further and completes the response, and the caller re-attaches with `Last-Event-ID` to receive 410 and fall back to polling. No new event type; 410 only on attach. | S2 |
+| R1-15 | Accept ordering: `INodeChatPersistenceService` is a singleton with its own scope per operation, so the seed cannot join the execution transaction — hence (1) create the owned conversation, (2) persist the seed, (3) one `SaveChanges` for session + execution + `execution.accepted`. A failure between them may orphan a `kind=integration` conversation, accepted for V1. **Superseded by R4-1, which commits first and mints the conversation after, so no orphan can exist.** | S0, S1 |
 
 ### Round 2
 

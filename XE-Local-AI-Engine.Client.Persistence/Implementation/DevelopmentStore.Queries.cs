@@ -52,7 +52,7 @@ public sealed partial class DevelopmentStore
                                  })
                              .SingleOrDefaultAsync(cancellationToken)
                              .ConfigureAwait(false)
-                       ?? throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found.");
+                       ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found.");
 
         return new DevelopmentExecutionSnapshot(snapshot.Project.Id,
             snapshot.Task.Id,
@@ -265,7 +265,7 @@ public sealed partial class DevelopmentStore
         var project = await _dbContext.DevelopmentProjects.AsNoTracking()
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
                                       .ConfigureAwait(false)
-                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+                      ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
         return ProjectSnapshot(project);
     }
 
@@ -277,7 +277,7 @@ public sealed partial class DevelopmentStore
         var project = await _dbContext.DevelopmentProjects
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
                                       .ConfigureAwait(false)
-                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+                      ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
         if (project.SelectedFolderId == selectedFolderId)
         {
             return ProjectSnapshot(project);
@@ -312,7 +312,7 @@ public sealed partial class DevelopmentStore
         var project = await _dbContext.DevelopmentProjects
                                       .SingleOrDefaultAsync(entity => entity.Id == projectId, cancellationToken)
                                       .ConfigureAwait(false)
-                      ?? throw new KeyNotFoundException($"Development project '{projectId}' was not found.");
+                      ?? throw new DevelopmentNotFoundException($"Development project '{projectId}' was not found.");
 
         // Fill-only. An existing profile is the operator-confirmed agreement for the life of the project, so a backfill
         // pass must return it untouched rather than replace it — this is what makes a second pass, or two racing
@@ -343,7 +343,7 @@ public sealed partial class DevelopmentStore
         var task = await _dbContext.DevelopmentTasks.AsNoTracking()
                                    .SingleOrDefaultAsync(entity => entity.Id == taskId, cancellationToken)
                                    .ConfigureAwait(false)
-                   ?? throw new KeyNotFoundException($"Development task '{taskId}' was not found.");
+                   ?? throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found.");
         return TaskSnapshot(task);
     }
 
@@ -397,7 +397,7 @@ public sealed partial class DevelopmentStore
         var artifact = await _dbContext.DevelopmentArtifacts.AsNoTracking()
                                        .SingleOrDefaultAsync(entity => entity.Id == artifactId, cancellationToken)
                                        .ConfigureAwait(false)
-                       ?? throw new KeyNotFoundException($"Development artifact '{artifactId}' was not found.");
+                       ?? throw new DevelopmentNotFoundException($"Development artifact '{artifactId}' was not found.");
         return ArtifactSnapshot(artifact);
     }
 }

@@ -9,19 +9,9 @@ import { DatasetDriftAlert } from "@/features/training/components/DatasetDriftAl
 import { TrainingArtifactPanel } from "@/features/training/components/TrainingArtifactPanel";
 import { useTrainingRunHub } from "@/features/training/hooks/useTrainingRunHub";
 import { isExportRunning, isRunActive, runPercent } from "@/features/training/models/TrainingModels";
+import { statusColors } from "@/features/training/models/TrainingRunStatusModel";
 import { useRefreshTrainingArtifacts } from "@/features/training/queries/useTrainingArtifacts";
 import { useCancelTrainingRun, useRefreshTrainingRuns, useTrainingRuns } from "@/features/training/queries/useTrainingRuns";
-
-const statusColors: Record<string, string> = {
-	Queued: "gray",
-	Preparing: "blue",
-	Training: "blue",
-	Exporting: "blue",
-	Smoke: "blue",
-	Succeeded: "green",
-	Failed: "red",
-	Cancelled: "yellow",
-};
 
 /**
  * The run list. Exactly one run can be active at a time (a run holds the whole GPU), so only that one subscribes to

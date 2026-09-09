@@ -340,7 +340,7 @@ public sealed class GraphWorkflowRunServiceTests
     }
 
     /// <summary>
-    ///     The run-start tool gate, from its passing side: both tools this graph names are inside the D6 envelope, so
+    ///     The run-start tool gate, from its passing side: both tools this graph names are inside the invocation envelope, so
     ///     the start is not the thing that refuses it. The refusals live in <c>GraphWorkflowToolValidationTests</c>.
     /// </summary>
     [Test]

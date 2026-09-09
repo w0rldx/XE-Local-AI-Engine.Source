@@ -3,7 +3,7 @@
 **Date:** 2026-06-29
 **Last validated against the repository:** 2026-08-08 (`9405df91`)
 **Audience:** operator running the engine on a Linux + NVIDIA host who wants the **CUDA** inference path (not the default Vulkan fallback).
-**Authoritative sources:** the [environment contract](../../XE-Local-AI-Engine.Providers.LlamaServer/Configuration/LlamaServerRuntimeOverrideOptions.cs), [binary validation path](../../XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.Override.cs), [current llama.cpp pin](../../XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs), and [live GPU smoke](../../scripts/run-gpu-smoke-local.sh).
+**Authoritative sources:** the [environment contract](../../XE-Local-AI-Engine.Providers.LlamaServer/Options/LlamaServerRuntimeOverrideOptions.cs), [binary validation path](../../XE-Local-AI-Engine.Providers.LlamaServer/Implementation/LlamaCppBinaryManager.Override.cs), [current llama.cpp pin](../../XE-Local-AI-Engine.Providers.LlamaServer/LlamaCppReleasePins.cs), and [live GPU smoke](../../scripts/run-gpu-smoke-local.sh).
 
 ---
 

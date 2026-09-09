@@ -33,8 +33,9 @@ export interface DevelopmentWorkflowTaskBannerProps {
  * behind a banner with no next step.
  *
  * The link is built from the run rather than guessed: the Dev Mode task carries only a run id, and the workflow detail
- * route is keyed by WORK ITEM. R6 already answers both — `GET runs/{runId}` returns the run's `workItemId` — so the
- * controller reads that one existing endpoint rather than asking P3 for a new field. No link is offered until it
+ * route is keyed by WORK ITEM. The run-detail endpoint already answers both — `GET runs/{runId}` returns the run's
+ * `workItemId` — so the controller reads that one existing endpoint rather than asking the workflow API for a new
+ * field. No link is offered until it
  * resolves, and none at all where the capability is off: a route that redirects home is worse than prose.
  */
 export function DevelopmentWorkflowTaskBanner({

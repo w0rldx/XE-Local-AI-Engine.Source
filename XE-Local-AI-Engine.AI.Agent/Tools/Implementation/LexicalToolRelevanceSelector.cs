@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Configuration;
 ///     the candidate's INDEX in the input list, so the outcome is reproducible with no dependence on a model or on
 ///     external state, and CI stays deterministic without an embedding process.
 ///     <para>
-///         Two corrections to that raw shape, both forced by the C3 live round (2026-09-03), where "Convert 100 euros
+///         Two corrections to that raw shape, both forced by a live round (2026-09-03), where "Convert 100 euros
 ///         to dollars, then give me a stock quote" hid the ONE tool that could answer and offered four that could not:
 ///         function words are dropped from both sides, so a description cannot win a slot for containing "a", "to" or
 ///         "then"; and the overlap is divided by the square root of the candidate's token count, so a long description

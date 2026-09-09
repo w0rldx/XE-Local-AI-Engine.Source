@@ -212,7 +212,7 @@ internal sealed class ToolRelevanceChatClient : DelegatingChatClient
 
         // Written from INSIDE the single-flight factory, so a racing second caller on the same array awaits the same
         // task and writes nothing: the counts are per ARRAY, not per round. EXCHANGED rather than added, so the turn's
-        // notice reports the counts of one real decision. A turn that rebinds mid-turn (a changed array shape, §3.4a)
+        // notice reports the counts of one real decision. A turn that rebinds mid-turn (a changed array shape)
         // therefore reports the array the model ended on rather than a sum that double-counts the tools both arrays
         // held — a sum would overstate the "of M" the notice claims.
         _ = Interlocked.Exchange(ref scope.PendingNoticeHiddenCount, selection.HiddenNames.Count);

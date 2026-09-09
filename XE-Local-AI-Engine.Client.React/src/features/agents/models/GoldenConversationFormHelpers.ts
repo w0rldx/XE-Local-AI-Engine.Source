@@ -23,3 +23,18 @@ export function parseTurnLine(line: string): GoldenTurn {
 export function truncate(value: string, max: number): string {
 	return value.length > max ? `${value.slice(0, max)}…` : value;
 }
+
+// Consolidated form state for the golden-case add form. The text fields plus the on-submit validation message live in
+// one object so a logical update never fans out into separate renders (was 6 useState calls).
+export interface GoldenFormState {
+	title: string;
+	turnsText: string;
+	requiredText: string;
+	forbiddenText: string;
+	rubric: string;
+	validationError: string | null;
+}
+
+export type GoldenFormAction =
+	| { type: "setField"; field: "title" | "turnsText" | "requiredText" | "forbiddenText" | "rubric"; value: string }
+	| { type: "setValidationError"; value: string | null };

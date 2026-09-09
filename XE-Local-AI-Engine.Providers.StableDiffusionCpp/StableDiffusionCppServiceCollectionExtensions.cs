@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Configuration;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;

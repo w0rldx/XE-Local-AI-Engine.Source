@@ -78,6 +78,7 @@ internal static class AddNodeModelRuntimeExtensions
         });
         builder.Services.AddSingleton<IWorkerHubConnection>(sp => sp.GetRequiredService<WorkerHubConnection>());
         builder.Services.AddSingleton<IHubMessageSender>(sp => sp.GetRequiredService<WorkerHubConnection>());
+        // Pre-positioned by decision: complete and tested, with no production consumer. See ICertPinStore's remarks.
         builder.Services.AddSingleton<ICertPinStore, CertPinStore>();
         builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();

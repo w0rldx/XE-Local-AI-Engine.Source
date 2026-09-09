@@ -3,7 +3,7 @@ import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { McpConnectionStatus } from "@/features/mcp/models/McpServerToolsModels";
+import { statusColor } from "@/features/mcp/models/McpStatusModel";
 import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
 import { toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 
@@ -11,22 +11,6 @@ interface McpServerToolsPanelProps {
 	// The server whose live discovered tools + connection status to show. Null collapses the panel and disables
 	// the query so the page does not poke every server on list load.
 	serverId: string | null;
-}
-
-function statusColor(status: McpConnectionStatus): string {
-	if (status === "connected") {
-		return "teal";
-	}
-	if (status === "error") {
-		return "red";
-	}
-	if (status === "connecting") {
-		// Amber for the transient in-progress state (enabled, refresh in flight) — distinct from the red
-		// "error" and gray "disabled".
-		return "yellow";
-	}
-	// "disabled" and any unknown status fall back to a neutral gray badge.
-	return "gray";
 }
 
 // Live discovered-tools + connection-status view for one MCP server (dynamic tool-catalog GetServerTools). Fetches on demand

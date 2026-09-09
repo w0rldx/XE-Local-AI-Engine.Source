@@ -212,7 +212,7 @@ public sealed class BenchmarkJudgeExecutorTests
     [Test]
     public async Task Execute_ForAnAttemptFrozenUnderAnOlderIdentityScheme_FailsWithTheSupersededReason()
     {
-        // D14: the attempt froze its intended identity at enqueue and would write its effective identity now, so a
+        // The attempt froze its intended identity at enqueue and would write its effective identity now, so a
         // scheme change between the two leaves hashes that cannot be compared. Fail before anything launches.
         var installed = Installed();
         var snapshot = Snapshot(installed);

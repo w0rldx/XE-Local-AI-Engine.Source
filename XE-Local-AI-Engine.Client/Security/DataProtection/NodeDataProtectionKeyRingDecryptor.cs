@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.DataProtection.XmlEncryption;
 using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 /// <summary>
-///     Unwraps key-ring elements written by <see cref="NodeDataProtectionKeyRingEncryptor" /> (BE-02). Data Protection
+///     Unwraps key-ring elements written by <see cref="NodeDataProtectionKeyRingEncryptor" />. Data Protection
 ///     records this type by name on each encrypted element and activates it at key-ring read time through its
 ///     internal activator, which supplies the application <see cref="IServiceProvider" /> to the single-argument
 ///     constructor — the same contract the framework's own <c>DpapiXmlDecryptor</c> uses. The KEK and AEAD primitive

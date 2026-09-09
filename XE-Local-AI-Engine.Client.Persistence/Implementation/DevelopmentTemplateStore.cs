@@ -24,7 +24,7 @@ public sealed class DevelopmentTemplateStore(NodeChatDbContext dbContext, TimePr
         var template = await _dbContext.DevelopmentTemplates.AsNoTracking()
                                        .SingleOrDefaultAsync(entity => entity.Id == templateId, cancellationToken)
                                        .ConfigureAwait(false)
-                       ?? throw new KeyNotFoundException($"Development template '{templateId}' was not found.");
+                       ?? throw new DevelopmentNotFoundException($"Development template '{templateId}' was not found.");
         return Snapshot(template);
     }
 

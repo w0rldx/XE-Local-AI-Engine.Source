@@ -278,3 +278,20 @@ export interface IntegrationSessionFilters {
 	readonly triggerId?: string;
 	readonly status?: IntegrationSessionStatus;
 }
+
+// The payloads the nine persisted event types carry, per the backend's own writers. Everything is optional because a
+// detail line must degrade to nothing rather than throw on a shape this client has not seen.
+export interface EventDetail {
+	readonly name?: string;
+	readonly ok?: boolean;
+	readonly category?: string | null;
+	readonly summary?: string | null;
+	// The pre-unification `execution.failed` spelling. Rows written before the writer moved to `{category, summary}`
+	// are still in the store and must keep rendering, so both spellings are read.
+	readonly failureCategory?: string | null;
+	readonly failureSummary?: string | null;
+	readonly tokens?: number;
+	readonly durationMs?: number;
+	readonly contentType?: string;
+	readonly payload?: unknown;
+}

@@ -23,22 +23,11 @@ public sealed class DeleteWorkspaceEndpoint(IWorkspaceRevocationService revocati
 
     public override async Task HandleAsync(DeleteWorkspaceRequest req, CancellationToken ct)
     {
-        try
-        {
-            await _revocationService.RevokeAsync(req.WorkspaceId, ct).ConfigureAwait(false);
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (SelectedFolderNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        // No SelectedFolderConflictException arm: only registration can collide on an alias. A busy revocation lease
-        // throws WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared
-        // 409 ConflictProblemDetails (conflictType = WorkspaceRevocationBusy) — never hand-built here.
-        catch (SelectedFolderValidationException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        // No catch: the selected-folder family (unknown id -> 404, rejection -> 400) is answered by the global
+        // SelectedFolderExceptionHandler, which is where that mapping is stated once. A busy revocation lease throws
+        // WorkspaceRevocationBusyException, which the global ConflictExceptionHandler answers with the shared 409
+        // ConflictProblemDetails (conflictType = WorkspaceRevocationBusy) — never hand-built here.
+        await _revocationService.RevokeAsync(req.WorkspaceId, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

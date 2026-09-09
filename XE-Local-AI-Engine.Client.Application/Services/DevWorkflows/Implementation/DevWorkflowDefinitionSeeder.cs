@@ -39,7 +39,8 @@ using XE_Local_AI_Engine.Client.Services.Agents;
 public sealed class DevWorkflowDefinitionSeeder : IHostedService
 {
     /// <summary>
-    ///     The Slice A template: strictly linear, no repository needed, ending on the approval that is the point of it.
+    ///     The <c>research-plan-approval</c> template: strictly linear, no repository needed, ending on the approval
+    ///     that is the point of it.
     ///     Both agent nodes bind by SEED SLUG rather than by id, because the personas they name are themselves seeded
     ///     and their ids differ per node.
     /// </summary>
@@ -79,13 +80,13 @@ public sealed class DevWorkflowDefinitionSeeder : IHostedService
                                                         """;
 
     /// <summary>
-    ///     The Slice C template (§5.10): research and a plan a human approves, a decomposition that expands into one
+    ///     The <c>feature-development-v1</c> template: research and a plan a human approves, a decomposition that expands into one
     ///     implementation-and-validation subtree per task, and an integration stage that applies nothing until a second
     ///     human gate says so.
     ///     <para>
     ///         Both gates route on <c>decision eq "Approve"</c> and have no other branch, which is what makes a refusal
-    ///         end the run rather than continue past it — for the integration gate that is Y3 itself, and the parser
-    ///         enforces the same rule structurally.
+    ///         end the run rather than continue past it — for the integration gate that is the rule that an apply node
+    ///         is reached from a human gate and from nothing else, and the parser enforces it structurally.
     ///     </para>
     ///     <para>
     ///         The implementation node declares a timeout because nothing else bounds it: Dev Mode bounds each attempt

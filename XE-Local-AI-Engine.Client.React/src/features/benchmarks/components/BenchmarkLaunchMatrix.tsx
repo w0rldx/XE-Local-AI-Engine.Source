@@ -8,6 +8,7 @@ import { BenchmarkRepeatModePicker } from "@/features/benchmarks/components/Benc
 import type {
 	BenchmarkEligibleModel,
 	BenchmarkKvCacheType,
+	BenchmarkMatrixSelection,
 	BenchmarkRepeatMode,
 } from "@/features/benchmarks/models/BenchmarkModels";
 import { benchmarkBaseModelLabel, benchmarkKvCacheTypes, benchmarkQuantTag } from "@/features/benchmarks/models/BenchmarkModels";
@@ -22,15 +23,6 @@ const kvChoices: KvChoice[] = [autoKvCacheType, ...benchmarkKvCacheTypes];
 
 // Mirrors the node's BenchmarkRunFreezeService.MaxRepeatCount, so the dialog refuses what the node would.
 const repeatCountLimits = { min: 1, max: 10 } as const;
-
-export interface BenchmarkMatrixSelection {
-	items: { modelName: string; kvCacheType?: string }[];
-	repeatCount: number;
-	warmup: boolean;
-	repeatMode: BenchmarkRepeatMode;
-	/** Null = the node's own default; omitted entirely in throughput mode, which is deterministic by definition. */
-	answerVarianceTemperature: number | null;
-}
 
 interface BenchmarkLaunchMatrixProps {
 	models: readonly BenchmarkEligibleModel[];

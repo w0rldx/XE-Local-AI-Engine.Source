@@ -10,16 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 /// <summary>The frozen membership: what trains, what is held back, and the held-back rows' canonical sequences.</summary>
 internal sealed record TrainingSplit(IReadOnlyList<Guid> Train, IReadOnlyList<Guid> Holdout, IReadOnlyList<int> HoldoutSequences);
 
-/// <summary>What the operator asked for. Options are optional — omitted means "use the computed defaults".</summary>
-public sealed record CreateTrainingRunCommand(
-    Guid DatasetId,
-    long ExpectedDatasetVersion,
-    Guid BaseArtifactId,
-    bool LicenseConfirmed,
-    TrainingRunOptionsV1? Options = null,
-    /// <summary>The installed GGUF to link as the base's counterpart; null lets the linker suggest one by repo convention.</summary>
-    string? LinkedModelName = null);
-
 /// <summary>
 ///     Creation, listing and cancellation of training runs.
 /// </summary>

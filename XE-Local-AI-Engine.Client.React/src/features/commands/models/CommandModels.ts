@@ -56,3 +56,6 @@ export const commandFormSchema = z.object({
 			message: "commandPromptTooLong",
 		}),
 });
+
+/** Which command the page's editor dialog is on: a new one, an existing one, or closed. */
+export type CommandEditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;

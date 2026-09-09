@@ -7,15 +7,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
 
-public enum DatasetExportFormat
-{
-    /// <summary>Canonical, template-agnostic JSONL (decision #16). One object per sample in <c>parts[]</c> shape.</summary>
-    Jsonl,
-
-    /// <summary>Hermes-style conversations, for reuse outside this node.</summary>
-    Hermes
-}
-
 public interface IDatasetExportService
 {
     Task<string> ExportAsync(Guid datasetId, DatasetExportFormat format, CancellationToken cancellationToken = default);

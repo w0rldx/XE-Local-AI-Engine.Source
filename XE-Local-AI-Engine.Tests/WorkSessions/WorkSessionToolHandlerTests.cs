@@ -171,7 +171,7 @@ public sealed class WorkSessionToolHandlerTests
     [Test]
     public async Task UpdateWorkPlan_Add_NamesTheNewTaskIds_SoTheSameStepCanMoveThem()
     {
-        // Live finding P3: the step's state block is composed before the added tasks exist, so in a one-step session
+        // A live finding: the step's state block is composed before the added tasks exist, so in a one-step session
         // the add result is the only place the model can learn an id. Without it no task can be marked Blocked, and
         // the workflow executor's Blocked-task signal cannot fire on a single-step node at all.
         var factory = Host.Factory;

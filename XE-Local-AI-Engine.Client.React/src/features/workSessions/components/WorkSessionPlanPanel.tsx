@@ -6,6 +6,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { WorkSessionStatusBadge, WorkSessionTaskStatusBadge } from "@/features/workSessions/components/WorkSessionStatusBadge";
 import {
 	isActiveWorkSessionStatus,
+	type TaskNode,
 	toWorkSessionTaskStatus,
 	type WorkSessionStatus,
 	type WorkSessionTaskResponse,
@@ -29,11 +30,6 @@ export interface WorkSessionPlanPanelProps {
 	readonly onPause: () => void;
 	readonly onResume: () => void;
 	readonly onCancel: () => void;
-}
-
-interface TaskNode {
-	readonly task: WorkSessionTaskResponse;
-	readonly children: readonly TaskNode[];
 }
 
 /** Nests by `parentTaskId` and orders each level by `sequence`. An orphaned child renders at the root, never dropped. */

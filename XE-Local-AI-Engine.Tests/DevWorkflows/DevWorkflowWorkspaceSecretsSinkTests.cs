@@ -14,7 +14,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 using PersistenceDevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.DevelopmentAttemptStatus;
 
 /// <summary>
-///     The P2 Phase 0 spike: can a development-workflow node-run get a prepared, command-running sandbox workspace
+///     The feasibility spike behind the sandbox node executors: can a development-workflow node-run get a prepared,
+///     command-running sandbox workspace
 ///     without a <c>DevelopmentTask</c> row behind it?
 ///     <para>
 ///         It is a go/no-go for the Tool and DevTask node executors, so it is written as evidence rather than as a

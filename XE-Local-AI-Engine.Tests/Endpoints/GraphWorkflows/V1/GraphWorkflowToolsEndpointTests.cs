@@ -16,7 +16,7 @@ public sealed class GraphWorkflowToolsEndpointTests
     private const string Tools = "/api/local/v1/graph-workflows/tools";
 
     /// <summary>
-    ///     The eight tools that pass the D6 envelope at this tip, deliberately duplicated from
+    ///     The eight tools that pass the invocation envelope at this tip, deliberately duplicated from
     ///     <c>ToolInvocationServiceTests</c> rather than shared: the point of asserting the set HERE is that the route
     ///     hands the envelope over whole, and a shared constant would move with any widening instead of failing on it.
     /// </summary>

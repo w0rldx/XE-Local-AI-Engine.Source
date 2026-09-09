@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.Abstractions.Image;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 /// <summary>
 ///     <see cref="IImageModelDiscovery" /> over <see cref="HfHubClient" />: searches the Hub's
@@ -59,7 +60,7 @@ internal sealed partial class HuggingFaceImageModelDiscovery : IImageModelDiscov
     {
         ArgumentNullException.ThrowIfNull(query);
 
-        var models = await _hubClient.ListModelsAsync(new HfHubClient.HubListQuery
+        var models = await _hubClient.ListModelsAsync(new HubListQuery
             {
                 PipelineTag = TextToImagePipelineTag,
                 Filter = query.GgufOnly ? "gguf" : null,

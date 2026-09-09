@@ -26,7 +26,7 @@ export interface DevWorkflowToolNodePanelProps {
  * A Tool node's report, rendered from the artifact the executor wrote before it moved the row (so the evidence exists
  * whatever the node run then became).
  *
- * A Tool node is one of two things (R-C3): a validation node, whose `<nodeKey>-validation.json` says what ran against
+ * A Tool node is one of two things: a validation node, whose `<nodeKey>-validation.json` says what ran against
  * a clean checkout, or an apply node, whose `<nodeKey>-apply.json` says which patches the hash-locked gate landed.
  * Both are artifact kind `Report` and the discriminator is not on the wire, so the BODY decides — the two documents'
  * evidence arrays (`commands` and `tasks`) are what tell them apart.
@@ -55,18 +55,18 @@ export function DevWorkflowToolNodePanel({ nodeRun, onShowArtifacts }: DevWorkfl
 	const contentQuery = useDevWorkflowArtifactContent(nodeRun.runId ?? undefined, artifactId);
 	const raw = contentQuery.data;
 	const text = useMemo(() => (raw ? decodeDevWorkflowArtifactContent(raw.content ?? "", raw.isBase64 === true).text : ""), [raw]);
-	// A Tool node is either a validation node or an apply node (R-C3), and BOTH write their report under the ordinary
+	// A Tool node is either a validation node or an apply node, and BOTH write their report under the ordinary
 	// `Report` artifact kind — so the document itself is what says which one this is. Handing an apply report to the
 	// validation reader produced "could not be read", which is a false alarm about evidence that is perfectly intact.
 	const applyReport = useMemo(() => parseDevWorkflowApplyReport(text), [text]);
 	const report = useMemo(() => (applyReport ? null : parseDevWorkflowValidationReport(text)), [applyReport, text]);
 	const isApply = applyReport !== null;
 	// With no artifact at all — or a body neither reader understands — NOTHING says which kind of Tool node this is: the
-	// discriminator lives in the graph node's config and P3 does not project it. So every string on those paths is
+	// discriminator lives in the graph node's config and the node-run row does not carry it. So every string on those paths is
 	// neutral. Calling a refused APPLY node's silence "no validation report was written" names a document that node was
 	// never going to write and sends whoever reads it looking for the wrong evidence; the fix is to stop guessing, not
 	// to guess better.
-	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or an X9 fix-loop reset (which
+	// `primaryArtifactId` is the node's newest artifact, NOT this attempt's: a retry or a fix-loop reset (which
 	// puts Succeeded rows back to Pending) leaves attempt N's report standing until attempt N+1's commands land. Both
 	// documents carry the attempt they were written for, so an older one is never painted as the current result — a
 	// stale "Validation passed" over a node that is re-validating is the one lie this panel must not tell.

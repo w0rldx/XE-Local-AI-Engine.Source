@@ -1,4 +1,4 @@
-<Project>
+﻿<Project>
   <PropertyGroup>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
     <!-- Required so the SQLitePCLRaw.lib.e_sqlite3 security override below can pin a transitively-resolved package without adding a direct PackageReference. -->
@@ -45,6 +45,11 @@
     <PackageVersion Include="Meziantou.Analyzer" Version="3.0.200" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
+    <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
+         Sits alongside NetArchTest rather than replacing it: NetArchTest governs dependency DIRECTION between
+         assemblies, ArchUnitNET governs WHERE a type is allowed to live inside one. Only the core package is
+         referenced; the TngTech.ArchUnitNET.TUnit adapter is deliberately not, see PlacementConventionTests. -->
+    <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.4" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
     <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />

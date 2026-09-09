@@ -16,7 +16,7 @@ import {
 import { type DevWorkflowRunResponse, devWorkflowNodeTypes } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 // React Flow type → component registry, module scope (stable identity) so React Flow does not warn about a fresh
-// object every render. Seven entries, one card: the seam for a type that earns its own body later (P4 §2.3.1).
+// object every render. Seven entries, one card: the seam for a type that earns its own body later.
 const canvasNodeTypes: NodeTypes = {
 	...Object.fromEntries(devWorkflowNodeTypes.map((nodeType) => [nodeType, DevWorkflowNodeCard])),
 	[DEV_WORKFLOW_ANCHOR_NODE_TYPE]: DevWorkflowAnchorCard,
@@ -25,8 +25,8 @@ const canvasNodeTypes: NodeTypes = {
 export interface DevWorkflowGraphViewProps {
 	readonly run?: DevWorkflowRunResponse | undefined;
 	/**
-	 * A prebuilt canvas, which is how the read-only DEFINITION view reaches this component (P4 §4, slice B: one
-	 * component, two data sources). It wins over `run`, and the cards it carries have no status because nothing ran.
+	 * A prebuilt canvas, which is how the read-only DEFINITION view reaches this component — one component, two data
+	 * sources. It wins over `run`, and the cards it carries have no status because nothing ran.
 	 */
 	readonly graph?: DevWorkflowCanvasGraph;
 	readonly selectedNodeRunId?: string;
@@ -89,7 +89,7 @@ function DevWorkflowGraphViewInner({ run, graph: provided, selectedNodeRunId, on
 				proOptions={{ hideAttribution: true }}
 				aria-label={t("pages.devWorkflows.graph.label", "Workflow graph")}
 				onNodeClick={(_event, node) => {
-					// Y6: an anchor is a client visual with no server id, so it is never a drill-down target.
+					// An anchor is a client visual with no server id, so it is never a drill-down target.
 					if (node.type !== DEV_WORKFLOW_ANCHOR_NODE_TYPE) {
 						onSelect(node.id);
 					}
@@ -105,7 +105,7 @@ function DevWorkflowGraphViewInner({ run, graph: provided, selectedNodeRunId, on
 /**
  * The run graph, strictly read-only: nothing here can move, connect or delete a node. It is the second view over the
  * same selection state the node-run table drives — clicking a card is the same `?node=` change as clicking a row —
- * and the table remains the accessible and small-screen path through a run (P4 §2.2, Y8).
+ * and the table remains the accessible and small-screen path through a run.
  */
 export function DevWorkflowGraphView(props: DevWorkflowGraphViewProps) {
 	return (

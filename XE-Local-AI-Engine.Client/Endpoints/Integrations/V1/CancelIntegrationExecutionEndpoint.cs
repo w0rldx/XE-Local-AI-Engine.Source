@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Integrations.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Client.Services.Integrations.Implementation;
 
 /// <summary>

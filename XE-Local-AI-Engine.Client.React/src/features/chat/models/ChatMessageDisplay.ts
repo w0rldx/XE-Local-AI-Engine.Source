@@ -1,8 +1,12 @@
 import type { TFunction } from "i18next";
 
 import { formatTime } from "@/core/formatting/TimeFormatting";
-import type { ChatMessageRevisionNav } from "@/features/chat/components/ChatMessageActions";
-import type { ChatFeedbackRating, ChatMessageModel, ChatMessagePart } from "@/features/chat/models/ChatModels";
+import type {
+	ChatFeedbackRating,
+	ChatMessageModel,
+	ChatMessagePart,
+	ChatMessageRevisionNav,
+} from "@/features/chat/models/ChatModels";
 
 const EMPTY_PARTS: ChatMessagePart[] = [];
 

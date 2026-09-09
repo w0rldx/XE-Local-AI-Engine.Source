@@ -118,6 +118,61 @@ public sealed class DownloadRecommendedEmbeddingEndpointTests
     }
 
     [Test]
+    public async Task DownloadRecommended_WhenBothTheRecommendedAndAnotherEmbedderAreInstalled_PrefersTheRecommended()
+    {
+        // Step one of the two-step fallback beats step two: the recommended repo is reported even when another
+        // embedding-named model is installed AND sorts first, so the identity the operator sees stays stable rather
+        // than drifting with whatever else happens to be on disk.
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
+
+        await using var factory = CreateFactory(coordinator, installed:
+        [
+            Gguf("aaa-ai/aaa-embed-GGUF:Q4_K_M"),
+            Gguf(RecommendedEmbeddingModel.CanonicalModelName)
+        ]);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedEmbeddingResponse>().ConfigureAwait(false);
+        AssertEx.NotNull(body);
+
+        AssertEx.Empty(coordinator.StartCalls);
+        AssertEx.True(body!.AlreadyInstalled);
+        AssertEx.Equal(RecommendedEmbeddingModel.CanonicalModelName, body.ModelName);
+    }
+
+    [Test]
+    public async Task DownloadRecommended_WhenSeveralNonRecommendedEmbeddersAreInstalled_ReportsTheSameOneEveryTime()
+    {
+        // Step two orders by name rather than trusting registry order, so the reported "already installed" identity is
+        // deterministic. Listed here in reverse-alphabetical order: the answer must still be the alphabetically first.
+        var coordinator = new RecordingDownloadCoordinator(alreadyInFlight: false);
+
+        await using var factory = CreateFactory(coordinator, installed:
+        [
+            Gguf("zzz-ai/zzz-embed-GGUF:Q4_K_M"),
+            Gguf("mixedbread-ai/mxbai-embed-large-v1-GGUF:Q4_K_M")
+        ]);
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Post, DownloadRoute);
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadFromJsonAsync<DownloadRecommendedEmbeddingResponse>().ConfigureAwait(false);
+        AssertEx.NotNull(body);
+
+        AssertEx.Empty(coordinator.StartCalls);
+        AssertEx.True(body!.AlreadyInstalled);
+        AssertEx.Equal("mixedbread-ai/mxbai-embed-large-v1-GGUF:Q4_K_M", body.ModelName);
+    }
+
+    [Test]
     public async Task DownloadRecommended_WhenOnlyChatModelsInstalled_StillStartsTheDownload()
     {
         // The guard against a false "already installed": a node full of chat GGUFs still cannot embed, which is exactly

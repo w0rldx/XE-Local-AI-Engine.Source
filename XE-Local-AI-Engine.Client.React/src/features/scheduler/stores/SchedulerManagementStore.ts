@@ -1,14 +1,14 @@
 import { create } from "zustand";
 
-// Transient UI state for the scheduler management page: which editor (if any) is open and which run's detail is
-// selected. The editing target is the scheduled-job id, or the sentinel "create" for the create form, or null
-// when the editor is closed. Server state (the jobs/runs themselves) lives in TanStack Query — this store holds
-// only ephemeral view state.
-export type SchedulerEditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
+import type { EditorTarget } from "@/core/ui/stores/EditorTargetStore";
 
+// Transient UI state for the scheduler management page: which editor (if any) is open, keyed by scheduled-job id,
+// and which run's redacted detail panel is selected. Server state (the jobs/runs themselves) lives in TanStack
+// Query. This is the one management store that is not `createEditorTargetStore()`: the run selection is a second,
+// unrelated concern that the page and its tests read from the same hook, and threading it through the factory costs
+// more indirection than the three action bodies below are worth. The target type is still the shared one.
 interface SchedulerManagementStore {
-	editorTarget: SchedulerEditorTarget;
-	// The run whose redacted detail panel is open, or null when none is selected.
+	editorTarget: EditorTarget;
 	selectedRunId: string | null;
 	actions: {
 		openCreate: () => void;

@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using System.IO.Compression;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Configuration;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 
 /// <summary>
 ///     Default <see cref="IStableDiffusionBinaryManager" />: validates and resolves the selected managed runtime or,

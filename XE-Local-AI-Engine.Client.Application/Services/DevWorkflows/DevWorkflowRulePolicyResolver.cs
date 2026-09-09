@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Which scoped rule sets apply to a node run, and the record of that decision.
 ///     <para>
-///         The predicate is Y2's, stated once: each of the two axes — <c>projectIds</c> and <c>nodeTypes</c> — matches
+///         The predicate is stated once: each of the two axes — <c>projectIds</c> and <c>nodeTypes</c> — matches
 ///         when it is EMPTY, and otherwise by exact case-insensitive membership; both must match; every match is
 ///         applied, ordered by name. No globs, no precedence, no conflict resolution — a rule set either applies or it
 ///         does not, and two that both apply are both injected.

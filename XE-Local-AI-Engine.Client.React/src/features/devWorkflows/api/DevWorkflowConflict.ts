@@ -7,11 +7,11 @@ import type { ConflictProblemDetails } from "@/core/api/models/ProblemDetails";
  * the enum NAME — rename one there and these strings must follow.
  */
 export const devWorkflowConflictTypes = {
-	/** The node run is in a state that takes no decision at all (Y7/C29). */
+	/** The node run is in a state that takes no decision at all. */
 	invalidTransition: "DevWorkflowInvalidTransition",
 	/** Someone else saved over the row between the read and the write. */
 	versionConflict: "DevWorkflowVersionConflict",
-	/** A run is already live on this work item (X14). */
+	/** A run is already live on this work item. */
 	runInFlight: "DevWorkflowRunInFlight",
 	/**
 	 * A DIFFERENT operation id arrived at an already-answered gate. Not a replay — a second human act — so the refusal

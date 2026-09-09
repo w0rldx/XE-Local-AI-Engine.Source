@@ -19,16 +19,16 @@ export interface DevWorkflowAgentNodePanelProps {
 }
 
 /**
- * An Agent node's bound agent, its transcript, and the way out to the full session view (P4 §2.6).
+ * An Agent node's bound agent, its transcript, and the way out to the full session view.
  *
  * The transcript is the chat page itself under a `ChatScope` — the same mechanism `WorkSessionDetailPage` uses, and
- * the pre-approved `devWorkflows → chat` edge (§2.10). Everything the chat page does (the streaming fold, tool-call
+ * the pre-approved `devWorkflows → chat` edge. Everything the chat page does (the streaming fold, tool-call
  * cards, the cold-load re-attach) comes with it; the scope only pins the view and takes the composer away. The
- * composer is disabled rather than redirected: N2 makes the RUNTIME the single writer of invocations on a workflow
+ * composer is disabled rather than redirected: the RUNTIME is the single writer of invocations on a workflow
  * node's conversation, and a follow-up typed here would be a second writer.
  *
- * `resumeNonce` comes from `useWorkSessionHub`, which is where that number is computed and nowhere else (R-C6 allows
- * the cross-feature edge). It is bumped on the session's `step` ping, which is published at step START while the
+ * `resumeNonce` comes from `useWorkSessionHub`, which is where that number is computed and nowhere else (a sanctioned
+ * cross-feature import). It is bumped on the session's `step` ping, which is published at step START while the
  * invocation is still resumable — that is what makes a live node stream here rather than back-fill a beat later.
  *
  * The purged branch is kept exactly as it was: when `workSessionAvailable` is false, nothing mounts against the dead

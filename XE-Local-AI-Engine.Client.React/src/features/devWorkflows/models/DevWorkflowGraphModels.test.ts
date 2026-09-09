@@ -77,7 +77,7 @@ describe("toDevWorkflowCanvasGraph", () => {
 	});
 
 	it("reads each materialization's group size off the node-run row rather than counting the feed", () => {
-		// The runtime counts the CHILDREN of a decomposition. The client cannot: C2 clones a template SUBTREE whole, so
+		// The runtime counts the CHILDREN of a decomposition. The client cannot: the runtime clones a template SUBTREE whole, so
 		// two children of a two-node template are four rows sharing one origin, and counting rows told every card of
 		// that group it was "… of 4". Both groups below are two children over four rows, which is the case that broke.
 		const graph = toDevWorkflowCanvasGraph(
@@ -145,7 +145,7 @@ describe("toDevWorkflowCanvasGraph", () => {
 	it("drops an edge whose endpoint has no node-run row, because there is nothing to draw it to", () => {
 		const graph = toDevWorkflowCanvasGraph(
 			chainRun({
-				// A materialization template has no node-run row until Slice C materializes its children.
+				// A materialization template has no node-run row until the runtime materializes its children.
 				graph: {
 					schemaVersion: 1,
 					nodes: [],
@@ -271,7 +271,7 @@ describe("toDevWorkflowDefinitionCanvasGraph", () => {
 
 		expect(graph.nodes.filter((node) => node.type !== "anchor").map((node) => node.id)).toEqual(["research", "plan"]);
 		expect(graph.edges.some((edge) => edge.source === "research" && edge.target === "plan")).toBe(true);
-		// Y6's anchors are computed the same way for both sources: one Start, one End on a linear chain.
+		// The anchors are computed the same way for both sources: one Start, one End on a linear chain.
 		expect(graph.nodes.filter((node) => node.type === "anchor")).toHaveLength(2);
 	});
 

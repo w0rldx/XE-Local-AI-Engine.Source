@@ -252,6 +252,26 @@ public sealed class RunningLocalModelEndpointTests
     }
 
     [Test]
+    public async Task UnloadModel_WhenOllamaAnswersWithAFailureStatus_DoesNotReportSuccess()
+    {
+        // The negative control for the transport-refusal guard above. A refused CONNECTION carries no status code and
+        // means nothing is resident; a daemon that ANSWERS 500 is a live daemon failing a real eviction, so it must not
+        // be swallowed into a 200 that tells the operator the VRAM is free.
+        var modelService = Substitute.For<IOllamaModelService>();
+        modelService.UnloadModelAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns<Task>(_ => throw new HttpRequestException("Ollama failed the eviction",
+                        inner: null,
+                        HttpStatusCode.InternalServerError));
+        await using var context = CreateContext(modelService, NotRunningSupervisor());
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Post, "/api/local/v1/models/llama3:8b/unload");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.InternalServerError, response.StatusCode);
+    }
+
+    [Test]
     public async Task UnloadModel_WhenALlamaServerProcessStaysBusy_ReportsNotUnloaded()
     {
         // The graceful eject leaves a process that did not drain within the window RUNNING. Reporting Unloaded=true

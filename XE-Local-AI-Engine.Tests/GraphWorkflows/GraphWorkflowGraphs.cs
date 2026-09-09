@@ -741,7 +741,7 @@ internal static class GraphWorkflowGraphs
                                                  """;
 
     /// <summary>
-    ///     Structurally sound and refused by the D6 tool gate alone: <c>run_python</c> parses as a tool name like any
+    ///     Structurally sound and refused by the tool gate alone: <c>run_python</c> parses as a tool name like any
     ///     other, and only the catalog knows it is WriteExecute. One offending node, so the error keying is readable.
     /// </summary>
     public const string ToolValidationWriteExecuteTool = """

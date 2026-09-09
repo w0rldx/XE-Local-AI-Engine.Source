@@ -113,6 +113,22 @@ public sealed class LocalModelExternalEndpointTests
     }
 
     [Test]
+    public async Task GetModelDetails_WhenTheExternalRegistrationIsGone_Returns404()
+    {
+        // A well-formed ext: id whose registration has been removed has nothing to report — a clean 404, exactly like
+        // a stale GGUF map row, and never a probe of a local runtime that was never going to serve it.
+        var trustResolver = Substitute.For<IModelTrustResolver>();
+        trustResolver.TryResolveExternalAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns((ExternalProviderModelRegistration?)null);
+        await using var factory = CreateFactory(trustResolver: trustResolver);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, $"/api/local/v1/models/{Uri.EscapeDataString(ModelId)}/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Test]
     public async Task SelectModel_WhenNoConnectionRegistersTheExternalId_Returns400AndWritesNothing()
     {
         // A well-formed id whose registration is gone passes the name grammar. Storing it as the node default would

@@ -56,7 +56,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     {
         ArgumentNullException.ThrowIfNull(messages);
 
-        // ORC-02: the system prompt is prepended to the request AFTER this history, and tool JSON schemas never appear
+        // The system prompt is prepended to the request AFTER this history, and tool JSON schemas never appear
         // in the message list at all — yet both count against the launched window. Folding their estimate into the
         // effective budget stops the outer budget/hard-stop from being measured against history alone (which would let
         // an actually-over-window request through, deferring to a late inner rejection). Mirrors the inner
@@ -511,7 +511,7 @@ public sealed class ConversationContextBudgeter : IConversationContextBudgeter
     }
 
     /// <summary>
-    ///     ORC-02: estimates the fixed per-round input overhead that never appears as a droppable history message but
+    ///     Estimates the fixed per-round input overhead that never appears as a droppable history message but
     ///     still counts against the context window — the resolved system prompt (measured as a System message) plus the
     ///     model-facing definition text of each advertised tool (measured as one framed unit each). Reuses the injected
     ///     <see cref="ITokenEstimator" /> (deliberately the same conservative, upper-biased estimator the history uses),

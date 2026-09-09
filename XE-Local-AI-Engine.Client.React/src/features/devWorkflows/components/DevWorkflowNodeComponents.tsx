@@ -39,7 +39,7 @@ const nodeTypeIcons: Record<DevWorkflowNodeType, typeof IconRobot> = {
 };
 
 /**
- * The card's border says what the table's badge says, in the same vocabulary (O9). `Queued` gets no border of its own
+ * The card's border says what the table's badge says, in the same vocabulary. `Queued` gets no border of its own
  * and no motion — it is waiting for a slot another node is holding, and a canvas that animated it would claim a GPU is
  * working on it. The `Running` spinner comes from the shared status badge, which already gates itself on reduced motion.
  */
@@ -65,12 +65,12 @@ function cx(...values: Array<string | false | undefined>): string {
 }
 
 /**
- * ONE card for all seven node types (Y6). ponytail: the per-type difference on the card is an icon and a translated
+ * ONE card for all seven node types. ponytail: the per-type difference on the card is an icon and a translated
  * kind badge — everything that actually diverges per type (a validation report, a Dev Mode deep link, an embedded
  * transcript) lives in the node PANEL, which already dispatches on kind. The registry below keeps seven entries so a
  * type that earns its own body later can be swapped in without touching the mapper or the view.
  *
- * The canvas is a pointer surface; the node-run TABLE stays the keyboard and screen-reader path to every node (P4 §2.2),
+ * The canvas is a pointer surface; the node-run TABLE stays the keyboard and screen-reader path to every node,
  * which is why this card is a div and not a button.
  */
 export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflowCanvasNode>) {
@@ -117,8 +117,8 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 						</Badge>
 					) : null}
 					{/* "3 of 5" names the CHILD this card belongs to, so a card says how much of a decomposition it is one
-					    card of. The index is the server's, rendered unchanged: `MaterializationIndex` is already 1-based
-					    (C2), and adding one to it made the only child of a decomposition read "2 of 2". A materialization
+					    card of. The index is the server's, rendered unchanged: `MaterializationIndex` is already 1-based,
+					    and adding one to it made the only child of a decomposition read "2 of 2". A materialization
 					    of one carries no count — "1 of 1" is noise, and the dashed border already said it. */}
 					{nodeData.isMaterialized ? (
 						<Badge size="xs" variant="outline" color="gray" data-testid={`dev-workflow-graph-node-materialized-${id}`}>
@@ -168,7 +168,7 @@ export function DevWorkflowNodeCard({ id, data, selected }: NodeProps<DevWorkflo
 	);
 }
 
-/** Y6: Start and End are not node types. This is the visual that keeps a DAG from reading as truncated at its edges. */
+/** Start and End are not node types. This is the visual that keeps a DAG from reading as truncated at its edges. */
 export function DevWorkflowAnchorCard({ data }: NodeProps<DevWorkflowAnchorNode>) {
 	const { t } = useTranslation();
 	const isStart = data.anchor === "start";

@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
+﻿namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
 using System.Net;
 using System.Net.Http.Json;
@@ -20,6 +20,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -238,6 +239,42 @@ public sealed class LocalModelEndpointTests
         var probedLocalRuntime = context.Server!.RecordedRequests
                                         .Any(recorded => recorded.Path == "/api/show" && recorded.ModelName == "gpt-5.5");
         AssertEx.False(probedLocalRuntime, "a Codex cloud id must not probe the local Ollama /api/show endpoint");
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenAzureFoundryDeployment_Returns404_AndNeverProbesLocalRuntime()
+    {
+        // An Azure Foundry deployment id has no LOCAL details either. The branch must short-circuit BEFORE provider
+        // routing reaches the Ollama /api/show probe, which 500s for an id the daemon has never heard of.
+        var modelService = Substitute.For<IOllamaModelService>();
+        var cloudModelResolver = Substitute.For<ICloudModelResolver>();
+        cloudModelResolver.IsAzureFoundryDeploymentAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(true);
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()), cloudModelResolver);
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/gpt-4o-prod/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await modelService.DidNotReceiveWithAnyArgs().ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task GetLocalModelDetails_WhenOllamaIsUnreachable_Returns404RatherThan500()
+    {
+        // Desktop mode runs no Ollama daemon, so /api/show throws a transport error. That is an ABSENCE of local
+        // details, not a server fault: the polled details route degrades to a clean 404 instead of bubbling a 500.
+        var modelService = Substitute.For<IOllamaModelService>();
+        modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+                    .Returns<Task<OllamaModelDetails>>(_ => throw new HttpRequestException("Connection refused"));
+        await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
+        using var client = context.Factory.CreateClient();
+
+        using var request = CreateRequest(context.Factory, HttpMethod.Get, "/api/local/v1/models/llama3:8b/details");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        await modelService.Received(1).ShowModelDetailsAsync("llama3:8b", Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -632,9 +669,11 @@ public sealed class LocalModelEndpointTests
         }
     }
 
-    private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
+    private static LocalModelEndpointTestContext CreateContext(IOllamaModelService modelService,
+        StubNodeSettingsStore settingsStore,
+        ICloudModelResolver? cloudModelResolver = null)
     {
-        return new LocalModelEndpointTestContext(modelService, settingsStore);
+        return new LocalModelEndpointTestContext(modelService, settingsStore, cloudModelResolver);
     }
 
     // Overload for the GGUF (llamacpp) details branch: routes every model to the given provider and supplies the
@@ -734,10 +773,12 @@ public sealed class LocalModelEndpointTests
             Factory = CreateFactory(_ownedModelService, SettingsStore);
         }
 
-        public LocalModelEndpointTestContext(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
+        public LocalModelEndpointTestContext(IOllamaModelService modelService,
+            StubNodeSettingsStore settingsStore,
+            ICloudModelResolver? cloudModelResolver = null)
         {
             SettingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
-            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), SettingsStore);
+            Factory = CreateFactory(modelService ?? throw new ArgumentNullException(nameof(modelService)), SettingsStore, cloudModelResolver);
         }
 
         public LocalModelEndpointTestContext(IOllamaModelService modelService,
@@ -783,7 +824,9 @@ public sealed class LocalModelEndpointTests
             }
         }
 
-        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService, StubNodeSettingsStore settingsStore)
+        private static TestServerWebAppFactory CreateFactory(IOllamaModelService modelService,
+            StubNodeSettingsStore settingsStore,
+            ICloudModelResolver? cloudModelResolver = null)
         {
             return new TestServerWebAppFactory
             {
@@ -793,6 +836,12 @@ public sealed class LocalModelEndpointTests
                     services.AddSingleton(modelService);
                     services.RemoveAll<INodeSettingsStore>();
                     services.AddSingleton<INodeSettingsStore>(settingsStore);
+                    if (cloudModelResolver is not null)
+                    {
+                        services.RemoveAll<ICloudModelResolver>();
+                        services.AddSingleton(cloudModelResolver);
+                    }
+
                     StubNoCodexSession(services);
                 }
             };

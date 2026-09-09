@@ -7,18 +7,6 @@ using Microsoft.Extensions.AI;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 
-/// <summary>One teacher turn. The seed is carried as a string for the same 2^53 precision reason the sampling DTO uses.</summary>
-public sealed record StructuredAgentRequest(
-    string ModelName,
-    string SystemInstructions,
-    string UserPrompt,
-    TeacherOutputMode OutputMode,
-    JsonElement ResponseSchema,
-    float Temperature,
-    string? Seed);
-
-public sealed record StructuredAgentResult(bool Success, string Text, string? FailureReason);
-
 public interface IStructuredAgentRunner
 {
     /// <summary>

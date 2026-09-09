@@ -180,7 +180,10 @@ AI-trends follow-up pass B, B4 (D13 profile-authority live proof) round 1 agains
 restarts and about sixteen minutes produced five NOT RUN observations before the missing sibling binary explained them —
 every Explore answered 400. Round 2 against a scratch copy of the same bin directory with the freshly built
 `llama-fit-params` passed 6/6 in about twelve minutes; the shared directory's 25-file md5 manifest was identical before and
-after. Evidence: `Plans/ai-trends-2026-09-02/progress/fu-b-evidence/` (`round1-blocked/`, `README.md`).
+after, and `installed-runtime.json` kept its original mtime. The blocked round's 400 is the one this incident is named for:
+`LlamaFitParamsProcessRunner` resolves the helper as a sibling of the `llama-server` it launched, so a BYO build missing it
+can freeze nothing. The rule and the supported scratch-copy procedure live in `docs/agent-knowledge.md` §3, next to the
+`XE_LLAMACPP_SERVER_PATH` bullets.
 
 ## 3. Model, inference, retrieval, and training evidence
 

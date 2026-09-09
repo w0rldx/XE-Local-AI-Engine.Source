@@ -430,10 +430,10 @@ internal sealed class NodeChatMessageCommands(NodeChatPersistenceWriter writer)
             async (dbContext, token) =>
             {
                 var current = await ReadMessageAsync(dbContext, correlation.ConversationId, correlation.MessageId, token).ConfigureAwait(false)
-                              ?? throw new InvalidOperationException("The correlated node chat message was not found.");
+                              ?? throw new NodeChatMessageCorrelationNotFoundException("The correlated node chat message was not found.");
                 if (current.RequestId != correlation.RequestId)
                 {
-                    throw new InvalidOperationException("The correlated node chat request id did not match the persisted message.");
+                    throw new NodeChatMessageCorrelationNotFoundException("The correlated node chat request id did not match the persisted message.");
                 }
 
                 // Transition guard (cancel / flush / terminalize): a write is only allowed from one of the source statuses

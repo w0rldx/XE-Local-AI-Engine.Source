@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using XE_Local_AI_Engine.Providers.LlamaServer.Configuration;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
 /// <summary>
 ///     Startup <see cref="IHostedService" /> that emits a single prominent <see cref="LogLevel.Warning" /> when the

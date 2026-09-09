@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Development;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Tests.Testing;

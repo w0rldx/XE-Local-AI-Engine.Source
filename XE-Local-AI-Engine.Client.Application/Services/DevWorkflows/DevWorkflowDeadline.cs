@@ -42,7 +42,7 @@ internal static class DevWorkflowDeadline
     ///     Whether this node run has been running longer than its node allows, by enough that its own lane is not going
     ///     to answer for it.
     ///     <para>
-    ///         Always false for a node that declares no timeout, deliberately. The defaults §8.2 names for the sandbox
+    ///         Always false for a node that declares no timeout, deliberately. The defaults for the sandbox
     ///         node types are the DEVELOPMENT attempt budget, which the lane below already applies to the work it can
     ///         actually see — and a second number derived up here could only ever disagree with it. What this adds is
     ///         the bound nothing else has: an agent node run whose session never lands, and a sandbox pass that stops

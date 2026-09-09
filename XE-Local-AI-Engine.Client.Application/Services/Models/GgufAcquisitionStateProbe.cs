@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
-public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null) : IGgufAcquisitionStateProbe
+public sealed class GgufAcquisitionStateProbe(HuggingFaceOptions? options = null)
 {
     public Task<GgufAcquisitionState> ProbeAsync(GgufAcquisitionIntent intent,
         ResolvedGgufAcquisitionIdentity identity,

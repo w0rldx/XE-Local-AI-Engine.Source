@@ -1,10 +1,12 @@
 import type { ReactNode } from "react";
-import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 
 // Re-exported so chat's own call sites keep importing from here; the type itself lives in core because `agents` also
 // depends on it (see ReasoningEffort.ts for the effort-level doc comment).
 import type { ReasoningEffort } from "@/core/models/ReasoningEffort";
+import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
+
 export type { ReasoningEffort };
+
 // Type-only import (erased at runtime, so no models→api cycle): the `ask_user` wire shape is owned by the wire
 // module so a backend field rename stays a one-line fix.
 import type { PendingUserQuestion } from "@/features/chat/api/AskUserQuestionWire";
@@ -157,6 +159,25 @@ export interface ChatMessageModel {
 	// attribution fields — no migration). Drives the collapsible "Sources" strip. Absent/empty for legacy turns,
 	// non-knowledge turns, and user messages.
 	sources?: ChatMessageSource[];
+}
+
+/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
+export interface ChatMessageRevisionNav {
+	activeIndex: number;
+	total: number;
+	onPrevious: () => void;
+	onNext: () => void;
+}
+
+/** Which action slots are active for a given chat turn. Grouped to avoid a sprawl of individual boolean props. */
+export interface ChatMessageActionCapabilities {
+	copy: boolean;
+	regenerate: boolean;
+	branch: boolean;
+	revisionNav: boolean;
+	feedback: boolean;
+	menu: boolean;
+	showTokensPerSecond: boolean;
 }
 
 export type ChatFeedbackRating = "up" | "down";

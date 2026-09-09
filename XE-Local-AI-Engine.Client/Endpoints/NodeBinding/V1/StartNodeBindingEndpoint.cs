@@ -18,15 +18,7 @@ public sealed class StartNodeBindingEndpoint(INodeBindingService nodeBindingServ
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        try
-        {
-            var session = await _nodeBindingService.StartBindingAsync(ct).ConfigureAwait(false);
-            await Send.OkAsync(session.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (NodeBindingException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        var session = await _nodeBindingService.StartBindingAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(session.ToResponse(), ct).ConfigureAwait(false);
     }
 }

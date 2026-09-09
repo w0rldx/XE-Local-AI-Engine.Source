@@ -53,7 +53,7 @@ public sealed class GraphWorkflowDocumentTests
     }
 
     /// <summary>
-    ///     Ruling C1, asserted directly: a Condition's own out-edges are evaluated against ITS output document, so
+    ///     Asserted directly: a Condition's own out-edges are evaluated against ITS output document, so
     ///     without the pass-through they would inspect an empty object and no branch would ever fire.
     /// </summary>
     [Test]

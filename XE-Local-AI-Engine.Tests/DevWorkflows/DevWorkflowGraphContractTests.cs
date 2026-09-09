@@ -75,7 +75,7 @@ public sealed class DevWorkflowGraphContractTests
         AssertEx.Equal<string?>(expected, DevWorkflowGraphContract.CanonicalToolMode(raw));
 
     /// <summary>
-    ///     X10 made honest at the moment of the click: a rejection with nowhere to go ends the run, and the confirm
+    ///     The rejection outcome made honest at the moment of the click: a rejection with nowhere to go ends the run, and the confirm
     ///     dialog can only say so because the server evaluated the gate's real out-edges first.
     /// </summary>
     [Test]

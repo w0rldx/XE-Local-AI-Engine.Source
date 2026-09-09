@@ -14,7 +14,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Trigger CRUD, and the two checks a FluentValidation rule cannot make: the target agent has to exist, and it has
-///     to be a single agent rather than an orchestrator (ruling D2). The session policy is no longer one of them —
+///     to be a single agent rather than an orchestrator. The session policy is no longer one of them —
 ///     ADR 0008 R6-1 withdrew the caller-managed read-only-tools rule once the session began persisting and replaying
 ///     its tool history.
 /// </summary>
@@ -79,7 +79,7 @@ public sealed class IntegrationTriggerServiceTests
     [Test]
     public async Task CreateAsync_WhenTheTargetAgentIsAnOrchestrator_IsRejectedAndWritesNothing()
     {
-        // Ruling D2 scopes V1 to a saved single agent. The coordinator builds no orchestration spec, so an orchestrator
+        // V1 is scoped to a saved single agent. The coordinator builds no orchestration spec, so an orchestrator
         // saved here would run as a lone agent and report Completed having run none of its participants — a plausible
         // and materially wrong answer, which is worse than a refusal at save time.
         var harness = new Harness();

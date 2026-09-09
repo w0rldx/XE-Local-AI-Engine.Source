@@ -140,9 +140,10 @@ public sealed partial class DevelopmentStore
     }
 
     /// <summary>
-    ///     The project a task belongs to. <c>KeyNotFoundException</c> rather than the <c>InvalidOperationException</c>
-    ///     a <c>SingleAsync</c> would throw for a task deleted underneath a caller: that is the type every caller of
-    ///     this store already answers for, and an untyped escape from a recording path leaves its row unresolvable.
+    ///     The project a task belongs to. <see cref="DevelopmentNotFoundException" /> rather than the
+    ///     <c>InvalidOperationException</c> a <c>SingleAsync</c> would throw for a task deleted underneath a caller:
+    ///     that is the family the global DevelopmentNotFoundExceptionHandler answers as a 404, and an untyped escape
+    ///     from a recording path leaves its row unresolvable.
     /// </summary>
     private async Task<Guid> ProjectIdForTaskAsync(Guid taskId, CancellationToken cancellationToken)
     {
@@ -151,7 +152,7 @@ public sealed partial class DevelopmentStore
                                .Select(entity => (Guid?)entity.ProjectId)
                                .SingleOrDefaultAsync(cancellationToken)
                                .ConfigureAwait(false)
-               ?? throw new KeyNotFoundException($"Development task '{taskId}' was not found.");
+               ?? throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found.");
     }
 
     private async Task<AttemptOwnership> OwnershipForAttemptAsync(Guid attemptId, CancellationToken cancellationToken)
@@ -168,7 +169,7 @@ public sealed partial class DevelopmentStore
     {
         return await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == subject.TaskId && entity.ProjectId == subject.ProjectId, cancellationToken)
                                .ConfigureAwait(false)
-               ?? throw new KeyNotFoundException($"Development task '{subject.TaskId}' was not found.");
+               ?? throw new DevelopmentNotFoundException($"Development task '{subject.TaskId}' was not found.");
     }
 
     private static void ValidateCreate(DevelopmentCreateProjectCommand command)

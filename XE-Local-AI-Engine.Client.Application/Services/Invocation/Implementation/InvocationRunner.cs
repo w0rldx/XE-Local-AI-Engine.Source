@@ -495,7 +495,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             if (package.OrchestrationSpec is { } orchestrationSpec)
             {
                 // The orchestration path's OUTER conversation budgeter sizes against the effective window via the updated
-                // turnPolicy above. ORC-07: the turn's effective window is also threaded per participant so each
+                // turnPolicy above. The turn's effective window is also threaded per participant so each
                 // participant's INNER provider-round budgeter sizes against the window ITS model was launched with.
                 await RunOrchestrationAsync(package, orchestrationSpec, resolvedModel, transport, stream, turnPolicy, effectiveContextTokens, invocationToken).ConfigureAwait(false);
             }
@@ -580,7 +580,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
             // authoritative measurement regardless of which path serves the turn.
             var generationDurationMs = (long)stream.GenerationStopwatch.Elapsed.TotalMilliseconds;
 
-            // BE-01: emit cumulative model token usage from the single per-turn finalize point (NOT the per-tool-loop
+            // Emit cumulative model token usage from the single per-turn finalize point (NOT the per-tool-loop
             // usage-arrival site, which would double-count across rounds). Content-free — token counts tagged by the
             // coarse provider dimension, model id, and direction only.
             RecordTokenUsageMetric(stream, resolvedModel);
@@ -780,7 +780,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
     }
 
     /// <summary>
-    ///     Emits the terminal token-usage counter for a completed turn (BE-01). Called once from the shared completion
+    ///     Emits the terminal token-usage counter for a completed turn. Called once from the shared completion
     ///     block — never the per-tool-loop usage-arrival site — so a multi-round tool run counts its TURN TOTAL exactly
     ///     once (cost, so the rounds sum). No-op when the model reported no usage. Content-free: only the coarse provider dimension
     ///     (<see cref="StreamState.ProviderTag" />, local | remote), the resolved model id, and the direction tag ride the

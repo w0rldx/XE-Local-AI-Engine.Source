@@ -47,10 +47,6 @@ public sealed class RegisterDevelopmentRepositoryEndpoint(IDevelopmentManagement
             var repository = await _service.RegisterRepositoryAsync(req.Alias, req.HostPath, ct).ConfigureAwait(false);
             await Send.OkAsync(repository.ToResponse(), ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
@@ -80,14 +76,6 @@ public sealed class DetectDevelopmentRepositoryProfileEndpoint(IDevelopmentManag
             var detection = await _service.DetectRepositoryProfileAsync(req.SelectedFolderId, ct).ConfigureAwait(false);
             await Send.OkAsync(new DevelopmentProfileDetectionResponse(detection.ProfileId, detection.BuildTarget, detection.Candidates), ct)
                       .ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is DevelopmentWorkspaceSecurityException or DirectoryNotFoundException)
         {
@@ -119,20 +107,11 @@ public sealed class ReconnectDevelopmentRepositoryEndpoint(IDevelopmentManagemen
                                         .ConfigureAwait(false);
             await Send.OkAsync(project.ToResponse(), ct).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
         // Reconnect is the one Development endpoint whose request BOTH carries a folder to validate and acts on the
         // project's persisted binding, so it is the only one that has to split the workspace-security family by type:
         // the persisted binding blocking the reconnect is a 409, while the folder the caller just picked being
         // unusable (not a Git root, read-only, network path) is the same 400 it is on register/create.
-        catch (Exception exception) when (exception is DevelopmentConcurrencyException
-                                              or DevelopmentRepositoryStateConflictException)
+        catch (DevelopmentRepositoryStateConflictException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);

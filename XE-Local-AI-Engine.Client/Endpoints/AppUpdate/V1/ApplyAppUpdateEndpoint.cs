@@ -30,28 +30,21 @@ public sealed class ApplyAppUpdateEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        try
+        // Base `Applying` on the REAL apply outcome (the service live-re-checks GitHub), not a possibly-stale
+        // snapshot. When true, Velopack is waiting for this process to exit; OnCompleted stops the host only after
+        // the JSON response is complete, so the client reliably enters restart polling. An apply failure throws
+        // AppUpdateException, whose contractually sanitized message (no local path or feed URL) the global
+        // DomainValidationExceptionHandler writes as the 400.
+        var applying = await _updateService.ApplyAsync(ct).ConfigureAwait(false);
+        if (applying)
         {
-            // Base `Applying` on the REAL apply outcome (the service live-re-checks GitHub), not a possibly-stale
-            // snapshot. When true, Velopack is waiting for this process to exit; OnCompleted stops the host only after
-            // the JSON response is complete, so the client reliably enters restart polling.
-            var applying = await _updateService.ApplyAsync(ct).ConfigureAwait(false);
-            if (applying)
-            {
-                _shutdownCoordinator.StopAfterResponseCompleted(HttpContext.Response);
-            }
+            _shutdownCoordinator.StopAfterResponseCompleted(HttpContext.Response);
+        }
 
-            await Send.OkAsync(new ApplyAppUpdateResponse
-                {
-                    Applying = applying
-                },
-                ct).ConfigureAwait(false);
-        }
-        catch (AppUpdateException exception)
-        {
-            // Contractually sanitized message (no local path or feed URL).
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(new ApplyAppUpdateResponse
+            {
+                Applying = applying
+            },
+            ct).ConfigureAwait(false);
     }
 }

@@ -1070,7 +1070,7 @@ public sealed class DevWorkflowRunEndpointTests
         $$"""{"operationId":"{{OperationId}}","definitionId":"{{DefinitionId}}","inputsJson":"{\"depth\":\"quick\"}"}""";
 
     /// <summary>
-    ///     P3.7: the node-run drill-down projects the resolution the ROW recorded, so it keeps naming the exact text
+    ///     The node-run drill-down projects the resolution the ROW recorded, so it keeps naming the exact text
     ///     that applied — by hash — whether or not the rule set still exists.
     /// </summary>
     [Test]

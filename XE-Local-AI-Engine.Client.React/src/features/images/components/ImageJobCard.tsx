@@ -2,24 +2,15 @@ import { Badge, Button, Card, Group, Progress, Stack, Text } from "@mantine/core
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { ImageResultView } from "@/features/images/components/ImageResultView";
 import { useImageJobProgress } from "@/features/images/hooks/useImageJobHub";
 import {
-	type ImageJobStatus,
 	type ImageJobView,
 	type ImageProgressDisplay,
 	isTerminalStatus,
 	toProgressDisplay,
 } from "@/features/images/models/ImageModels";
-import { ImageResultView } from "@/features/images/components/ImageResultView";
-
-// Mantine badge colour per coarse status. Kept tiny + local — the only place status maps to a colour.
-const statusColor: Record<ImageJobStatus, string> = {
-	Queued: "gray",
-	Generating: "blue",
-	Succeeded: "green",
-	Failed: "red",
-	Cancelled: "gray",
-};
+import { statusColor } from "@/features/images/models/ImageStatusModel";
 
 // Live elapsed seconds since a generating job started, ticking once per second. Returns 0 when inactive so a
 // terminal/queued card renders no timer. A single interval per active card is fine — the coordinator serializes to

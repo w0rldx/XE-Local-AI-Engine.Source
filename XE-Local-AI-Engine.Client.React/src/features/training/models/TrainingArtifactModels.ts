@@ -114,3 +114,14 @@ export function runPercent(step: number, totalSteps: number): number | null {
 	}
 	return Math.min(100, Math.round((step / totalSteps) * 100));
 }
+
+/** The row's action callbacks, grouped so the table hands one bag down instead of seven props. */
+export interface TrainingArtifactRowActions {
+	readonly smoke: (artifact: TrainingArtifactView) => void;
+	readonly validate: (artifact: TrainingArtifactView) => void;
+	readonly override: (artifact: TrainingArtifactView) => void;
+	readonly discard: (artifact: TrainingArtifactView) => void;
+	readonly retryCleanup: (artifact: TrainingArtifactView) => void;
+	readonly promote: (artifact: TrainingArtifactView) => void;
+	readonly remove: (artifact: TrainingArtifactView) => void;
+}

@@ -445,6 +445,37 @@ internal static class LocalModelsMapper
         };
     }
 
+    /// <summary>
+    ///     Maps an external OpenAI-compatible registration to the shared model-details response. Details for an
+    ///     external model come entirely from the operator's declarations — there is no probe, because only
+    ///     POST /v1/chat/completions is universal across OpenAI-compatible servers and none of them reports a window in
+    ///     a shape that can be trusted across all of them. The declared window is reported as BOTH the advertised
+    ///     ceiling and the effective window: for an endpoint the node does not launch, those are the same number, and
+    ///     the context meter reads the effective one.
+    /// </summary>
+    public static LocalModelDetailsResponse ToDetailsResponse(this ExternalProviderModelRegistration registration)
+    {
+        ArgumentNullException.ThrowIfNull(registration);
+
+        return new LocalModelDetailsResponse
+        {
+            ModelName = registration.ModelId,
+            MaxContextTokens = registration.Model.ContextLength,
+            EffectiveContextTokens = registration.Model.ContextLength,
+
+            // The same four connection facts the list entry carries. A details view reached directly — a deep link, a
+            // reload — has no list entry to read them from, and the egress cue must not depend on which route the
+            // client happened to arrive by.
+            DisplayLabel = registration.Model.DisplayName,
+            ExternalConnectionId = registration.Connection.Id,
+            ExternalConnectionName = registration.Connection.DisplayName,
+            DeclaredLocality = registration.Connection.Locality == ExternalProviderLocality.Local
+                ? LocalModelDeclaredLocalities.Local
+                : LocalModelDeclaredLocalities.Cloud,
+            IsReasoningEffortCapable = registration.Model.SupportsReasoningEffort
+        };
+    }
+
     private static string ReadRunningModelName(RunningModelSnapshot snapshot)
     {
         return !string.IsNullOrWhiteSpace(snapshot.ModelName)

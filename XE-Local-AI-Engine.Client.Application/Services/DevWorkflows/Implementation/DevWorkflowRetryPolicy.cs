@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>What a lane came back with, in the four terms the retry decision is made on.</summary>
-/// <param name="FailureClass">The closed §7.1 token that says why.</param>
+/// <param name="FailureClass">The closed failure-class token that says why.</param>
 /// <param name="SanitizedReason">What an operator is shown. Already sanitized by whoever produced it.</param>
 /// <param name="OutputJson">The node's output document, which a routed retry hands to the node it re-runs.</param>
 /// <param name="Outcome">The event outcome, for the two cases the status alone cannot express.</param>
@@ -15,7 +15,7 @@ internal sealed record DevWorkflowFailure(string FailureClass, string SanitizedR
 
 /// <summary>
 ///     Where a failed node run's next move is decided: re-attempt it, re-run the upstream node that produced what it was
-///     judging (X9), or stand it down for a human.
+///     judging, or stand it down for a human.
 ///     <para>
 ///         One class rather than a branch in each executor, because the agent lane and the sandbox lane must answer this
 ///         question identically — a build failing three times and an agent failing three times differ in what produced
@@ -33,7 +33,7 @@ internal sealed class DevWorkflowRetryPolicy
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
 
     /// <summary>
-    ///     The §7.1 classes another attempt can answer. The three that are absent are absent on evidence: a
+    ///     The failure classes another attempt can answer. The three that are absent are absent on evidence: a
     ///     <c>Configuration</c> or <c>Policy</c> refusal produces the byte-identical answer next time, and
     ///     <c>BudgetExhausted</c> is already the answer to having tried.
     /// </summary>
@@ -180,12 +180,12 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     <c>Internal</c> is retryable exactly once (§7.1): an executor that threw something nobody predicted may have
+    ///     <c>Internal</c> is retryable exactly once: an executor that threw something nobody predicted may have
     ///     hit a transient, but a second identical throw is a defect, and spending a node's whole attempt budget on it
     ///     only delays the human who has to read the log.
     ///     <para>
-    ///         A DECOMPOSING node's <c>Configuration</c> failure is retryable once for the same reason and by §7.1's own
-    ///         named exception: the thing that wrote the unusable task package is the thing that can rewrite it, and the
+    ///         A DECOMPOSING node's <c>Configuration</c> failure is retryable once for the same reason, the one named
+    ///         exception to <c>Configuration</c> being non-retryable: the thing that wrote the unusable task package is the thing that can rewrite it, and the
     ///         re-attempt carries the complaint into its objective. Scoped to the node rather than to the failure
     ///         because the failure class is all a lane hands over — the cost of the wider reading is one spent attempt
     ///         on a decomposing node that is misconfigured in some other way, and the answer after it is the same human.
@@ -195,7 +195,7 @@ internal sealed class DevWorkflowRetryPolicy
         (RetryableFailureClasses.Contains(failureClass) && (failureClass != DevWorkflowFailureClasses.Internal || attempt < 2))
         || (failureClass == DevWorkflowFailureClasses.Configuration && node.Materialization is not null && attempt < 2);
 
-    /// <summary>The same node again: what §7.2 calls a same-node retry, bounded by the node's cap and the run's budget.</summary>
+    /// <summary>The same node again — a same-node retry, bounded by the node's cap and the run's budget.</summary>
     private async Task<int> ReAttemptSameNodeAsync(IDevWorkflowStore store,
         DevWorkflowRunSnapshot run,
         DevWorkflowGraphNode node,
@@ -222,7 +222,7 @@ internal sealed class DevWorkflowRetryPolicy
                 .ConfigureAwait(false);
         }
 
-        // The next attempt is told what the last one came to (§7.2), or the agent composes a byte-identical objective
+        // The next attempt is told what the last one came to, or the agent composes a byte-identical objective
         // and does the same thing again. Read off the failure in hand rather than the row, which the Pending write is
         // about to clear; the helper strips any earlier priorFailure, so rounds replace rather than nest.
         //
@@ -260,7 +260,7 @@ internal sealed class DevWorkflowRetryPolicy
     }
 
     /// <summary>
-    ///     The cross-node fix loop (X9): the node that failed is not the node that is re-run. The named upstream target
+    ///     The cross-node fix loop: the node that failed is not the node that is re-run. The named upstream target
     ///     re-runs with this failure in its inputs, and every node run downstream of it re-runs with it — including the
     ///     one that failed, which is a descendant by the ancestry rule the graph validates at parse.
     ///     <para>
@@ -694,7 +694,7 @@ internal sealed class DevWorkflowRetryPolicy
     ///     retries that have not become an attempt yet.
     ///     <para>
     ///         Deliberately the same count the store admits a human <c>Retry</c> against, because it is the same budget:
-    ///         an automatic re-attempt and an operator's are both re-attempts of this run, and §8.3's <c>MaxTotalAttempts</c>
+    ///         an automatic re-attempt and an operator's are both re-attempts of this run, and <c>MaxTotalAttempts</c>
     ///         is the one bound over both. Counting the reservations is what stops an automatic retry from spending an
     ///         attempt a person has already been promised in the same tick window.
     ///     </para>

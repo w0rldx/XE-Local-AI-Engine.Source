@@ -3,8 +3,8 @@
 //
 // Every builder returns the WIRE shape (all fields optional, as hey-api types them from the OpenAPI document), so a
 // test can spread overrides in without fighting a stricter local type than the server actually promises. The graph is
-// `00-brief.md` §3.1 — eight nodes and nine edges — because a fixture that
-// diverges from the real body is a test that proves the client agrees with itself.
+// the eight-node, nine-edge shape a real definition ships — because a fixture that diverges from the real body is a
+// test that proves the client agrees with itself.
 //
 // Timestamps are epoch MILLISECONDS (numbers), as every Graph Workflows DTO carries them.
 
@@ -40,17 +40,16 @@ export function graphWorkflowTestGuid(index: number): string {
 export const graphWorkflowTestGraphHash = "sha256:0f2a9c1d4e6b8a70";
 
 /**
- * The brief's §3.1 graph: Start → Agent → Condition → { Pause | Tool } → Parallel → Join → End. Eight nodes, nine
- * edges — the plan calls it "the six-node definition" but the graph it points at has eight, and the graph wins.
+ * The canonical fixture graph: Start → Agent → Condition → { Pause | Tool } → Parallel → Join → End. Eight nodes,
+ * nine edges.
  *
  * The two Condition out-edges carry `sourceHandle` `true`/`false` with `Eq true` / `Ne true` and no `path` (they
  * inherit the Condition node's `config.path`).
  *
- * The Pause node has TWO out-edges, one per entry in its `allowedDecisions`. The brief's own §3.1 listing draws only
- * the `Approve` one, which breaks the Pause pre-flight rule the same section states: the server refuses a Pause whose
- * allowed decision has no matching or unconditional out-edge. `e9` is the missing `Reject` edge, and it makes `done` a
- * reconverging End, which needs `joinPolicy: "Any"` or the approve path is skipped on the dead reject edge. Both
- * shapes are the ones the S2 live graph uses.
+ * The Pause node has TWO out-edges, one per entry in its `allowedDecisions`, because the server's Pause pre-flight
+ * rule refuses a Pause whose allowed decision has no matching or unconditional out-edge. `e9` is the `Reject` edge,
+ * and it makes `done` a reconverging End, which needs `joinPolicy: "Any"` or the approve path is skipped on the dead
+ * reject edge. Both shapes are the ones a live run exercises.
  */
 export const eightNodeGraph: GraphWorkflowGraph = {
 	schemaVersion: 1,

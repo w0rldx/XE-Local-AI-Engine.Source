@@ -1,10 +1,11 @@
-namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+﻿namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 /// <summary>
 ///     Encrypted token store mirroring <c>CloudCredentialStore</c>: DataProtection at rest,

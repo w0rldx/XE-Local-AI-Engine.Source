@@ -81,7 +81,7 @@ public sealed class BenchmarkRunExecutorTests
     [Test]
     public async Task Execute_QueuedUnderAnOlderIdentityScheme_FailsWithTheSupersededReason()
     {
-        // D14: the run froze its intended identity at enqueue and would write its effective identity now. A scheme
+        // The run froze its intended identity at enqueue and would write its effective identity now. A scheme
         // change between the two makes them incomparable, so the row is failed BEFORE it leases or spawns anything —
         // which is what stops it writing an effective identity the compare UI would render as drift.
         var run = Run(BenchmarkPrimaryStatus.Running, version: 2) with

@@ -3,17 +3,15 @@ import { useTranslation } from "react-i18next";
 
 import { AssistantMessageBubble } from "@/features/chat/components/ChatMessage/AssistantMessageBubble";
 import { UserMessageBubble } from "@/features/chat/components/ChatMessage/UserMessageBubble";
-import {
-	type ChatMessageActionCapabilities,
-	ChatMessageActions,
-	type ChatMessageRevisionNav,
-} from "@/features/chat/components/ChatMessageActions";
+import { ChatMessageActions } from "@/features/chat/components/ChatMessageActions";
 import { deriveChatMessageDisplay } from "@/features/chat/models/ChatMessageDisplay";
 import type {
 	ChatFeedbackRating,
+	ChatMessageActionCapabilities,
 	ChatMessageFeedback,
 	ChatMessageModel,
 	ChatMessagePart,
+	ChatMessageRevisionNav,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";

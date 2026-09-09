@@ -91,7 +91,7 @@ public sealed partial class DevelopmentStore
                 // a task named against a project that does not exist would be inserted and then be unreachable.
                 if (!await _dbContext.DevelopmentProjects.AnyAsync(entity => entity.Id == command.ProjectId, cancellationToken).ConfigureAwait(false))
                 {
-                    throw new KeyNotFoundException($"Development project '{command.ProjectId}' was not found.");
+                    throw new DevelopmentNotFoundException($"Development project '{command.ProjectId}' was not found.");
                 }
 
                 var now = Now();

@@ -212,7 +212,7 @@ public sealed class DevelopmentRoundFeedbackTests
     }
 
     /// <summary>
-    ///     P2, live 2026-09-04: the reviewer judged a coder round against requirements the operator had already
+    ///     Live 2026-09-04: the reviewer judged a coder round against requirements the operator had already
     ///     amended, because the operator's Retry reason reached the coder alone. It rejected work that passed
     ///     validation 4 of 4 and demanded an edit the test-write policy forbids, and the loop could not be broken.
     /// </summary>
@@ -261,7 +261,7 @@ public sealed class DevelopmentRoundFeedbackTests
     }
 
     /// <summary>
-    ///     The coder's side of P2. Retry 3 said "this outranks the reviewer" in as many words and the coder still did
+    ///     The coder's side of that same 2026-09-04 live round. Retry 3 said "this outranks the reviewer" in as many words and the coder still did
     ///     what the reviewer had asked, because the operator's sentence arrived under "Feedback from the previous
     ///     round" — a heading that reads as one round's note next to the task's own requirements.
     /// </summary>

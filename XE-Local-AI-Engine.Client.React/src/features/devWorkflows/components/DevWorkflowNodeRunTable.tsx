@@ -24,7 +24,7 @@ export interface DevWorkflowNodeRunTableProps {
 /**
  * The second line of a row: what this node is actually doing, in the words its state earns.
  *
- * This function is the frontend half of O9. `Queued` says which slot it is waiting for and for how long; `Running`
+ * This function is the frontend half of the status-honesty rule. `Queued` says which slot it is waiting for and for how long; `Running`
  * says how long it has been running; `Pending` names the nodes it is waiting on. None of the three may borrow another
  * one's copy, because "in progress" over a queued node claims a GPU is working on it when the GPU is serving someone
  * else.
@@ -47,7 +47,7 @@ function statusLine(
 			});
 		}
 		case "Queued": {
-			// A closed token list (P2 §7.1), so it gets translated labels like any other enum — with an explicit generic
+			// A closed token list the runtime emits, so it gets translated labels like any other enum — with an explicit generic
 			// fallback, because it is not narrowed and a newer server may add one.
 			const reason = node.queueReason
 				? t(`pages.devWorkflows.queueReason.${node.queueReason}`, t("pages.devWorkflows.queueReason.unknown", "queued"))
@@ -68,7 +68,7 @@ function statusLine(
 		case "WaitingForApproval":
 			return t("pages.devWorkflows.nodes.needsDecision", "needs your decision");
 		case "Blocked":
-			// Y20: this is not a dependency wait. The run has stopped and only Retry / Skip / Abandon restarts it.
+			// This is not a dependency wait. The run has stopped and only Retry / Skip / Abandon restarts it.
 			return t("pages.devWorkflows.nodes.needsIntervention", "needs your intervention");
 		// `Succeeded`, `Failed`, `Skipped`, `Cancelled` — every state where the node has stopped and its duration is the
 		// only thing left to say. The wire value is already narrowed to the nine, so nothing else reaches this arm.
@@ -103,8 +103,8 @@ function costLine(node: DevWorkflowNodeRunSummaryResponse, t: TFunction): string
 }
 
 /**
- * THE execution view in Slice A0 (Y8): one row per node-run, in the order the runtime allocated them. No canvas, no
- * layout engine — and this stays the accessible, small-screen path to every node once the graph arrives in A1.
+ * THE execution view: one row per node-run, in the order the runtime allocated them. No canvas, no layout engine —
+ * and it stays the accessible, small-screen path to every node beside the graph view.
  */
 export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: DevWorkflowNodeRunTableProps) {
 	const { t } = useTranslation();
@@ -170,7 +170,7 @@ export function DevWorkflowNodeRunTable({ nodes, selectedNodeRunId, onSelect }: 
 													{t("pages.devWorkflows.nodes.materialized", "generated")}
 												</Badge>
 											) : null}
-											{/* D12: the row is a real `Succeeded` check — it has to be, or the join behind it would
+											{/* The row is a real `Succeeded` check — it has to be, or the join behind it would
 											    never let the apply through — but it stands for work that did not happen. Said HERE
 											    and not only in the drill-down, because this table is where an operator reads a run. */}
 											{node.validationNotApplicable ? (

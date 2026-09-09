@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Tests.DevWorkflows;
 /// <summary>The graph fixtures the runtime suites route over, named for the shape rather than for the test that uses them.</summary>
 internal static class DevWorkflowGraphs
 {
-    /// <summary>The Slice A shape: strictly linear, no repository needed, ending on a human gate.</summary>
+    /// <summary>The research → plan → approval shape: strictly linear, no repository needed, ending on a human gate.</summary>
     public const string ResearchPlanApproval = """
                                                {
                                                  "schemaVersion": 1,
@@ -306,10 +306,10 @@ internal static class DevWorkflowGraphs
                                         """;
 
     /// <summary>
-    ///     The §5.10 decomposition shape: the template is a SUBTREE — an implementation and the validation that judges
+    ///     The decomposition shape: the template is a SUBTREE — an implementation and the validation that judges
     ///     it, with the fix loop between them — cloned whole once per task into the join the decomposition names. The
     ///     implementation is an Agent rather than a DevTask so the clones can be driven end to end without a repository;
-    ///     what C2 writes for a DevTask child is its input brief, which is asserted on the row.
+    ///     what gets written for a DevTask child is its input brief, which is asserted on the row.
     /// </summary>
     public const string DecompositionSubtree = """
                                                {
@@ -563,7 +563,7 @@ internal static class DevWorkflowGraphs
     /// <summary>
     ///     Two branches into an <c>All</c> join with a tail behind it, one branch unable to run at all: the agent node
     ///     binds no definition, so it stands down for a human and an operator's Skip is what decides the join. The
-    ///     shape the live C1 finding took — one leaf excused, its siblings' work still worth carrying.
+    ///     shape the live finding took — one leaf excused, its siblings' work still worth carrying.
     /// </summary>
     public const string AllJoinOverASkippedBranch = """
                                                     {
@@ -658,7 +658,7 @@ internal static class DevWorkflowGraphs
                                                         """;
 
     /// <summary>
-    ///     A human gate beside sandbox work that is genuinely in flight — the X10 case as it actually occurs: one branch
+    ///     A human gate beside sandbox work that is genuinely in flight — the gate-reject drain as it actually occurs: one branch
     ///     is mid-build at the moment the other's approval is refused.
     /// </summary>
     public const string GateBesideSandboxWork = """

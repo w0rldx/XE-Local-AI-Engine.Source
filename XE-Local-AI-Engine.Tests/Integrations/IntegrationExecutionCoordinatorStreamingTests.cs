@@ -125,7 +125,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
     }
 
     /// <summary>
-    ///     §9(b) as a NEGATIVE requirement: neither the coordinator nor the SSE writer registers an attachment handle,
+    ///     A NEGATIVE requirement: neither the coordinator nor the SSE writer registers an attachment handle,
     ///     so the reaper cannot see an integration run at all. If either ever attached, an integrator that closed its
     ///     stream to poll instead would have its run cancelled 300 s later — the exact failure the brief forbids.
     /// </summary>
@@ -171,7 +171,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
     }
 
     /// <summary>
-    ///     Live F1 — a failed run's terminal frame carries <c>{category, summary}</c>, and the persisted row carries the
+    ///     A live finding — a failed run's terminal frame carries <c>{category, summary}</c>, and the persisted row carries the
     ///     same bytes. A null payload told an integrator nothing about why the run ended, and the reason lived only in a
     ///     column no external route returns.
     /// </summary>
@@ -196,7 +196,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
             "The poll route reads this row, so it must hand back exactly the envelope the stream gave.");
     }
 
-    /// <summary>Live F1 — a completed run's terminal frame carries <c>{tokens?, durationMs}</c>.</summary>
+    /// <summary>A live finding — a completed run's terminal frame carries <c>{tokens?, durationMs}</c>.</summary>
     [Test]
     public async Task Run_WhenTheRunCompletes_PublishesTheDurationAndTheTokenTotal()
     {
@@ -214,7 +214,7 @@ public sealed class IntegrationExecutionCoordinatorStreamingTests
         AssertEx.Equal(payload.GetRawText(), harness.Executions.Events.Last(row => row.ExecutionId == executionId).DetailJson);
     }
 
-    /// <summary>Live F1 — `tokens?` is optional: a provider that reported none omits the field rather than sending null.</summary>
+    /// <summary>A live finding — `tokens?` is optional: a provider that reported none omits the field rather than sending null.</summary>
     [Test]
     public async Task Run_WhenNoTokenTotalWasReported_OmitsTheTokensField()
     {

@@ -25,23 +25,15 @@ public sealed class EntraAuthCodeSignInEndpoint(IEntraAuthCodeSignInCoordinator 
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        try
+        // Only the user-actionable "no Entra connection configured" precondition is surfaced as a 400 with its
+        // (path-free, safe) message, by the global DomainValidationExceptionHandler. Every other failure flows to the
+        // global handlers for a clean 500 — an earlier catch of the base InvalidOperationException swallowed
+        // unexpected faults and leaked their raw messages.
+        var handle = await _signInCoordinator.StartAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(new EntraAuthCodeSignInResponse
         {
-            var handle = await _signInCoordinator.StartAsync(ct).ConfigureAwait(false);
-            await Send.OkAsync(new EntraAuthCodeSignInResponse
-            {
-                AuthorizeUrl = handle.AuthorizeUrl,
-                ExpiresAtUtc = handle.ExpiresAtUtc
-            }, ct).ConfigureAwait(false);
-        }
-        catch (EntraConnectionNotConfiguredException exception)
-        {
-            // Only the user-actionable "no Entra connection configured" precondition is surfaced as a 400 with its
-            // (path-free, safe) message. Every other failure flows to the global handlers for a clean 500 — the
-            // previous catch of the base InvalidOperationException swallowed unexpected faults and leaked their raw
-            // messages.
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+            AuthorizeUrl = handle.AuthorizeUrl,
+            ExpiresAtUtc = handle.ExpiresAtUtc
+        }, ct).ConfigureAwait(false);
     }
 }

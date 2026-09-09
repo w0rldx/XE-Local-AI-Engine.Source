@@ -35,6 +35,17 @@ public interface ISkillImportService
     Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     Phase 1 for an uploaded <c>.zip</c> that is still a stream. Buffers it under
+    ///     <see cref="SkillImportOptions.MaxArchiveBytes" /> and then runs the same archive preview. The cap is applied
+    ///     to the bytes actually read rather than to a declared length, because a declared length is caller-controlled
+    ///     and bounding what gets buffered is the whole point of the guard. Writes nothing.
+    /// </summary>
+    /// <exception cref="SkillImportException">
+    ///     The upload exceeds the import size cap, an archive guard tripped, or the archive holds no skill.
+    /// </exception>
+    Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default);
+
+    /// <summary>
     ///     Phase 1 for a pasted raw <c>SKILL.md</c>. A pasted document has no containing directory and no bundled
     ///     files, so the frontmatter <c>name</c> is authoritative and the skill imports instructions-only. Writes nothing.
     /// </summary>

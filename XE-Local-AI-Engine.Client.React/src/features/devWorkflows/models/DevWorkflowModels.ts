@@ -47,7 +47,7 @@ export type {
 	DevWorkflowWorkItemSummaryResponse,
 };
 
-/** X4, canonical. `Blocked` is needs-intervention (Y20), NOT a dependency wait — that is `Pending`. */
+/** The canonical node statuses. `Blocked` is needs-intervention, NOT a dependency wait — that is `Pending`. */
 export const devWorkflowNodeStatuses = [
 	"Pending",
 	"Queued",
@@ -61,7 +61,7 @@ export const devWorkflowNodeStatuses = [
 ] as const;
 export type DevWorkflowNodeStatus = (typeof devWorkflowNodeStatuses)[number];
 
-/** X4, canonical. No `Interrupted`: runs auto-resume after an engine restart, only node-runs reconcile. */
+/** The canonical run statuses. No `Interrupted`: runs auto-resume after an engine restart, only node-runs reconcile. */
 export const devWorkflowRunStatuses = [
 	"Pending",
 	"Running",
@@ -75,15 +75,15 @@ export const devWorkflowRunStatuses = [
 ] as const;
 export type DevWorkflowRunStatus = (typeof devWorkflowRunStatuses)[number];
 
-/** Y6: SEVEN members. Start/End are implicit — entry = no inbound edges, terminal = no outbound. */
+/** SEVEN members. Start/End are implicit — entry = no inbound edges, terminal = no outbound. */
 export const devWorkflowNodeTypes = ["Agent", "Tool", "DevTask", "HumanGate", "Gate", "Parallel", "Join"] as const;
 export type DevWorkflowNodeType = (typeof devWorkflowNodeTypes)[number];
 
-/** X3: gates use the first three, retries-exhausted interventions the rest — one enum, one endpoint. */
+/** Gates use the first three, retries-exhausted interventions the rest — one enum, one endpoint. */
 export const devWorkflowDecisionKinds = ["Approve", "Reject", "RequestChanges", "Retry", "Skip", "Abandon"] as const;
 export type DevWorkflowDecisionKind = (typeof devWorkflowDecisionKinds)[number];
 
-/** P1's ten, verbatim (C24/Y25) — not the work-session set. */
+/** The runtime's ten artifact kinds, verbatim — not the work-session set. */
 export const devWorkflowArtifactKinds = [
 	"Research",
 	"Decision",
@@ -108,7 +108,7 @@ export type DevWorkflowArtifactKind = (typeof devWorkflowArtifactKinds)[number];
 export const devWorkflowDetailTabs = ["artifacts", "events", "graph", "nodes"] as const;
 export type DevWorkflowDetailTab = (typeof devWorkflowDetailTabs)[number];
 
-/** Y4: written by the runtime, never by the client. A `Failed` run maps here to `Blocked` — it needs attention. */
+/** Written by the runtime, never by the client. A `Failed` run maps here to `Blocked` — it needs attention. */
 export const devWorkflowWorkItemStatuses = ["Draft", "Active", "Blocked", "Completed", "Cancelled"] as const;
 export type DevWorkflowWorkItemStatus = (typeof devWorkflowWorkItemStatuses)[number];
 
@@ -170,7 +170,7 @@ export function isTerminalDevWorkflowRunStatus(status: DevWorkflowRunStatus): bo
 }
 
 /**
- * The run is live, so the list polls (X16 Q7) and the toolbar offers lifecycle commands. `Pausing`/`Cancelling` count:
+ * The run is live, so the list polls and the toolbar offers lifecycle commands. `Pausing`/`Cancelling` count:
  * the commands are fire-and-forget and work is still winding down behind them.
  */
 export function isActiveDevWorkflowRunStatus(status: DevWorkflowRunStatus): boolean {
@@ -179,14 +179,14 @@ export function isActiveDevWorkflowRunStatus(status: DevWorkflowRunStatus): bool
 
 /**
  * The run has stopped and a human is the only thing that restarts it. Both a gate and an exhausted-retry
- * intervention land here (Y20) — the count that matters is `pendingDecisionCount`, never this predicate.
+ * intervention land here — the count that matters is `pendingDecisionCount`, never this predicate.
  */
 export function devWorkflowNodeAwaitsHuman(status: DevWorkflowNodeStatus): boolean {
 	return status === "WaitingForApproval" || status === "Blocked";
 }
 
 /**
- * A Tool node that LANDS patches rather than judging them (R-C3). The stored spelling is the parser's own canonical
+ * A Tool node that LANDS patches rather than judging them. The stored spelling is the parser's own canonical
  * `"Apply"`, but it crosses the wire as a bare string and a definition authored by hand may carry any casing — so the
  * comparison is case-insensitive, exactly as the server's own `Enum.TryParse(..., ignoreCase: true)` is. Absent means
  * `Validate`, which is the server's default too.
@@ -203,7 +203,7 @@ export function isSettledDevWorkflowNodeStatus(status: DevWorkflowNodeStatus): b
 	return status === "Succeeded" || status === "Failed" || status === "Skipped" || status === "Cancelled";
 }
 
-/** Only `Running` earns motion. `Queued` deliberately does not — see the O9 honesty rule in the table. */
+/** Only `Running` earns motion. `Queued` deliberately does not — see the status-honesty rule in the table. */
 export function isDevWorkflowNodeInProgress(status: DevWorkflowNodeStatus): boolean {
 	return status === "Running";
 }
@@ -235,12 +235,12 @@ export function devWorkflowArtifactLanguage(kind: DevWorkflowArtifactKind | unde
 	return "markdown";
 }
 
-/** One artifact identity across its versions (X6/Y15: the lineage is `(RunId, ProducingNodeKey, Name)`). */
+/** One artifact identity across its versions (the lineage is `(RunId, ProducingNodeKey, Name)`). */
 export interface DevWorkflowArtifactLineage {
 	readonly lineageId: string;
 	/** Every version of this lineage, NEWEST first — the order the version picker offers them in. */
 	readonly versions: readonly DevWorkflowArtifactResponse[];
-	/** The row the server marked `isLatest` (Y17/C39), or the highest version when no row claims it. */
+	/** The row the server marked `isLatest`, or the highest version when no row claims it. */
 	readonly latest: DevWorkflowArtifactResponse;
 }
 
@@ -248,8 +248,8 @@ export interface DevWorkflowArtifactLineage {
  * The run's artifact feed grouped into lineages, in first-appearance order.
  *
  * Grouping is by the SERVER's `lineageId` and nothing else: `name + kind` would silently merge a renamed artifact
- * with an unrelated one, which is the whole reason X6 put the field on the wire. `isLatest` is likewise READ rather
- * than derived (Y17/C39) — the query already computes it, and a second client-side reduce would be a second answer
+ * with an unrelated one, which is the whole reason the field is on the wire. `isLatest` is likewise READ rather
+ * than derived — the query already computes it, and a second client-side reduce would be a second answer
  * to one question. The `version` sort is only the order the picker lists them in.
  *
  * A row with no lineage id becomes its own lineage rather than joining a shared empty-string bucket: collapsing
@@ -325,5 +325,36 @@ export function devWorkflowAttemptLabel(t: TFunction, counts: DevWorkflowAttempt
 		: t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", { ...counts });
 }
 
-/** The shared decoder (P4 §2.10), kept under the feature's own name so no call site or test had to move. */
+/** A Dev Mode development project offered in a picker (rule-set scope, work-item creation). */
+export interface DevelopmentProjectOption {
+	readonly id: string;
+	readonly label: string;
+}
+
+/** An operator decision on a human gate. `operationId` is the client half of the submit idempotency contract. */
+export interface DevWorkflowDecisionSubmission {
+	readonly decision: DevWorkflowDecisionKind;
+	readonly comment?: string;
+	readonly operationId: string;
+}
+
+/** Editable rule-set form state (create and edit share one shape). */
+export interface DevWorkflowRuleSetValues {
+	readonly name: string;
+	readonly description: string;
+	readonly body: string;
+	readonly projectIds: readonly string[];
+	readonly nodeTypes: readonly string[];
+	readonly enabled: boolean;
+}
+
+/** Work-item creation form state. The definition is picked here but started by a second call (see the dialog). */
+export interface CreateWorkItemValues {
+	readonly title: string;
+	readonly request: string;
+	readonly developmentProjectId?: string;
+	readonly definitionId: string;
+}
+
+/** The shared decoder, kept under the feature's own name so no call site or test had to move. */
 export { decodeArtifactContent as decodeDevWorkflowArtifactContent } from "@/core/artifacts/ArtifactContent";

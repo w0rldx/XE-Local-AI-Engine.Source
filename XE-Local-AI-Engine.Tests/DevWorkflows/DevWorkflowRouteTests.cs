@@ -122,7 +122,7 @@ public sealed class DevWorkflowRouteTests
     }
 
     /// <summary>
-    ///     N1's unreachability assertion: <c>DevWorkflowRoute</c> has no <c>Pending</c> bucket, and the reason is that a
+    ///     The unreachability assertion: <c>DevWorkflowRoute</c> has no <c>Pending</c> bucket, and the reason is that a
     ///     non-terminal source is refused outright rather than recorded as a silently empty document.
     /// </summary>
     [Test]

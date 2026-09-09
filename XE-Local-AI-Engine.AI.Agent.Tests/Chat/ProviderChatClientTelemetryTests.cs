@@ -59,7 +59,7 @@ public sealed class ProviderChatClientTelemetryTests
             "the completion must never appear in the span");
     }
 
-    // The asymmetry D3 pins: CaptureSensitiveContent is the operator's knob over the DI pipeline (interactive chat),
+    // The deliberate asymmetry: CaptureSensitiveContent is the operator's knob over the DI pipeline (interactive chat),
     // and the provider-resolved wrapper is deliberately deaf to it. Both halves are asserted together so a future
     // "make the wrapper consistent with the pipeline" edit fails here rather than silently exporting conversations.
     [Test]

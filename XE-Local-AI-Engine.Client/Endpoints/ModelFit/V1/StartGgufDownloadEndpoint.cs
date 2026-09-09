@@ -21,7 +21,7 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
     {
         Post(LocalApiRoutes.ModelFit.Download);
         Policies(NodeAuthorizationPolicies.Operator);
-        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        // GgufDownloadExceptionHandler maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
         Description(builder => builder.ProducesProblem(StatusCodes.Status403Forbidden)
                                       .ProducesProblem(StatusCodes.Status404NotFound)
                                       .ProducesProblem(StatusCodes.Status409Conflict)
@@ -46,16 +46,7 @@ public sealed class StartGgufDownloadEndpoint(IGgufDownloadCoordinator downloadC
             Revision = string.IsNullOrWhiteSpace(req.Revision) ? null : req.Revision.Trim()
         };
 
-        GgufDownloadTicket ticket;
-        try
-        {
-            ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (GgufDownloadEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(GgufDownloadEndpointSupport.Error(exception)).ConfigureAwait(false);
-            return;
-        }
+        var ticket = await _downloadCoordinator.StartAsync(request, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new StartGgufDownloadResponse
             {

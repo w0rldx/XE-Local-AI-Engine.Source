@@ -414,7 +414,7 @@ public sealed class OrchestrationAgentFactoryTests
     [Test]
     public async Task CreateAsync_ParticipantWithSmallerEffectiveWindow_BudgetsAgainstItNotTheDefault()
     {
-        // ORC-07: a participant pinned to a model launched with a SMALLER window than the shared default must carry that
+        // A participant pinned to a model launched with a SMALLER window than the shared default must carry that
         // window as num_ctx on its construction-time ChatOptions, so the innermost provider-round budgeter
         // (ProviderCallBudgetChatClient) sizes THIS participant against its own launched window rather than
         // ProviderCallBudgetOptions.DefaultContextTokens. A peer whose window is unknown must fall back — no num_ctx key

@@ -5,8 +5,18 @@
 - **Last verified against the tree:** 2026-09-04
 - **Overall state:** Chat-list leak closed by the S0 `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
 
-This page carries the ticket text from `Plans/external-integrations-2026-09-03/S0-plan.md` §10 ("R2 — live check and
-ticket"), which was written to be filed as a standalone issue and instead is tracked here by operator decision.
+This page carries the External Integrations S0 "R2 — live check and ticket" item (2026-09-03), which was written to
+be filed as a standalone issue and instead is tracked here by operator decision. Its text, verbatim except that the
+`file:line` references are reduced to symbols per `AGENTS.md`:
+
+> **Work-session owned conversations appear in the chat list.** `WorkSessionService.CreateAsync` creates the
+> session's transcript as an ordinary `NodeConversation`, and the chat list filters only `purged`/`archived`
+> (`NodeChatReadModel`), so every work session adds an untitled chat the operator did not start and cannot explain.
+> Confirmed live on develop @d883a70b (see below). The external-integrations S0 slice adds a
+> `NodeConversation.Kind` discriminator that backfills existing work-session conversations and filters them out of
+> the list, which closes the leak for the chat list specifically. This ticket tracks the rest: whether any other
+> surface (platform sync, export, search) still exposes them, and whether a pre-S0 database needs an
+> operator-visible note that some chats will disappear from the list after upgrading.
 
 ## The leak
 

@@ -1,5 +1,6 @@
 import { ChatMessage } from "@/features/chat/components/ChatMessage";
 import { StreamingIndicator } from "@/features/chat/components/StreamingIndicator";
+import type { ListRow } from "@/features/chat/models/ChatMessageListRow";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -8,14 +9,6 @@ import type {
 	ChatStreamingState,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
-import type { groupMessageRevisions } from "@/features/chat/models/MessageRevisionGrouping";
-
-export type MessageRevisionGroup = ReturnType<typeof groupMessageRevisions>[number];
-
-// One rendered turn in the list: a persisted revision group, or the transient synthetic streaming turn.
-export type ListRow =
-	| { readonly kind: "group"; readonly key: string; readonly group: MessageRevisionGroup }
-	| { readonly kind: "streaming"; readonly key: string };
 
 interface ChatMessageRowProps {
 	row: ListRow;

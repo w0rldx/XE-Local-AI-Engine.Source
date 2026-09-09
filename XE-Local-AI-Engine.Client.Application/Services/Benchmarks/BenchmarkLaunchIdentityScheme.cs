@@ -4,7 +4,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
-///     The cutover guard for D14: frozen launch intent is immutable, so work frozen under a different launch-identity
+///     The launch-identity cutover guard: frozen launch intent is immutable, so work frozen under a different launch-identity
 ///     scheme is failed before it launches rather than executed and compared across schemes.
 /// </summary>
 /// <remarks>

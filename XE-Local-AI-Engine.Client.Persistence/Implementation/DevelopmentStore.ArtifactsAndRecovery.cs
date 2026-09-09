@@ -20,11 +20,11 @@ public sealed partial class DevelopmentStore
             {
                 var task = await _dbContext.DevelopmentTasks.SingleOrDefaultAsync(entity => entity.Id == command.TaskId && entity.ProjectId == command.ProjectId, cancellationToken)
                                            .ConfigureAwait(false)
-                           ?? throw new KeyNotFoundException($"Development task '{command.TaskId}' was not found.");
+                           ?? throw new DevelopmentNotFoundException($"Development task '{command.TaskId}' was not found.");
                 if (command.AttemptId is { } attemptId && !await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == task.Id, cancellationToken)
                                                                            .ConfigureAwait(false))
                 {
-                    throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
+                    throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
 
                 var artifact = BuildArtifact(command);
@@ -69,7 +69,7 @@ public sealed partial class DevelopmentStore
             {
                 if (!await _dbContext.DevelopmentAttempts.AnyAsync(entity => entity.Id == attemptId && entity.TaskId == taskId, cancellationToken).ConfigureAwait(false))
                 {
-                    throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
+                    throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
                 }
 
                 return await AddEventAsync(projectId,

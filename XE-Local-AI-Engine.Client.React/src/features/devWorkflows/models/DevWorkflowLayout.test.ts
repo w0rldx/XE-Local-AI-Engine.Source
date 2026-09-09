@@ -1,4 +1,4 @@
-// The four properties P4 §2.3.2 asks the layout to hold. Three of them are the reason this is a module of its own
+// The four properties the layout must hold. Three of them are the reason this is a module of its own
 // rather than positions computed inside the view: a graph that jitters on a status tick, reorders a materialized
 // sibling group, or hangs on a cycle is not something a component test would catch.
 
@@ -54,7 +54,7 @@ describe("layoutDevWorkflowGraph", () => {
 		expect(join?.rank).toBe(2);
 		expect(left?.y).not.toBe(right?.y);
 		expect(Math.abs((left?.y ?? 0) - (right?.y ?? 0))).toBe(130);
-		// Top-aligned (R-C5): every rank starts at y 0, so the first branch and the join it closes into share the spine
+		// Top-aligned: every rank starts at y 0, so the first branch and the join it closes into share the spine
 		// and the second branch hangs below it. Under the centred formula this rank straddled y 0 instead; the assertion
 		// above holds either way, and this one is the one that records which formula is in force.
 		expect(left?.y).toBe(0);
@@ -86,7 +86,7 @@ describe("layoutDevWorkflowGraph", () => {
 	});
 
 	it("leaves a pre-existing node where it was when materialized children land in ITS rank", () => {
-		// Slice C's shape, and the one the append-a-rank test above does not reach: `decompose`'s children arrive in a
+		// The materialization shape the append-a-rank test above does not reach: `decompose`'s children arrive in a
 		// rank that is already occupied — here by `publish`, which has held its row since the run started. The old
 		// centred formula divided each rank by its own population, so `publish` was dragged upwards the instant it had
 		// company; ordering the clones by barycenter alone would have pushed it down the rank instead.

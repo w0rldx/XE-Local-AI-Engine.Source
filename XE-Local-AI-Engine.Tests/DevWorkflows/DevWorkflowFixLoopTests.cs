@@ -5,7 +5,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The cross-node fix loop (X9): a downstream node that fails does not re-attempt itself, it re-runs the upstream
+///     The cross-node fix loop: a downstream node that fails does not re-attempt itself, it re-runs the upstream
 ///     node whose work it was judging, and everything downstream of THAT node re-runs with it.
 ///     <para>
 ///         Every test takes a host of its own. The scripted sandbox is a container singleton keyed by node key and these
@@ -18,9 +18,9 @@ public sealed class DevWorkflowFixLoopTests
     private static readonly Guid DevelopmentProjectId = Guid.NewGuid();
 
     /// <summary>
-    ///     The §10.2 X9 row on the fan-out it is specified against: <c>Implement → {Lint, Test} → Join</c> with
+    ///     The fix loop on the fan-out it is specified against: <c>Implement → {Lint, Test} → Join</c> with
     ///     <c>Test</c> routing its failure back to <c>Implement</c>. <c>Lint</c> SUCCEEDED and is reset anyway — that is
-    ///     the F2 ruling, and the reason for it is that a passing lint of an implementation that no longer exists is a
+    ///     deliberate, and the reason for it is that a passing lint of an implementation that no longer exists is a
     ///     stale answer presented as a current one.
     /// </summary>
     [Test]

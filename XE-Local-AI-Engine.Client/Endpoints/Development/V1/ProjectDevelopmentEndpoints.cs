@@ -69,10 +69,6 @@ public sealed class CreateDevelopmentProjectEndpoint(IDevelopmentManagementServi
                                        .ConfigureAwait(false);
             await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
         }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
         catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
@@ -94,13 +90,6 @@ public sealed class GetDevelopmentProjectEndpoint(IDevelopmentManagementService 
 
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
-        try
-        {
-            await Send.OkAsync((await _service.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync((await _service.GetProjectAsync(req.ProjectId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
     }
 }

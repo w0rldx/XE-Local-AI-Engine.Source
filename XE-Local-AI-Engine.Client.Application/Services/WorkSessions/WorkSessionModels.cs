@@ -218,3 +218,13 @@ public sealed record CreateWorkSessionRequestModel(
 
 /// <summary>Update input. A null member leaves the stored value alone.</summary>
 public sealed record UpdateWorkSessionRequestModel(string? Title, string? Objective, Guid? AgentDefinitionId);
+
+/// <summary>
+///     The completion request the supervisor reads back at step end, as it is written to the event log.
+///     <para>
+///         <see cref="ObjectiveMet" /> is nullable rather than defaulted so that an event recorded before the argument
+///         existed reads as <see langword="null" /> — absent, and therefore met — instead of as an unmet objective the
+///         model never declared. Only an explicit <see langword="false" /> stands a workflow-owned node run down.
+///     </para>
+/// </summary>
+internal sealed record WorkSessionCompletionDetail(string Summary, bool? ObjectiveMet = null);

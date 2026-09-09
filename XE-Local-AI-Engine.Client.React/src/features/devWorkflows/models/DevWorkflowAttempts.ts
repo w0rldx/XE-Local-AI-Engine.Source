@@ -1,4 +1,4 @@
-// Attempt history, derived from the event log (X2 / P4 §2.6). There is ONE node-run row per `(RunId, NodeKey)` with
+// Attempt history, derived from the event log. There is ONE node-run row per `(RunId, NodeKey)` with
 // `Attempt` incrementing in place, so the row cannot answer "what happened on attempt 2" — only "which attempt is it
 // on now". The event feed can: `node.retry.scheduled` is the only reason a node moves back to `Pending`, so each one
 // closes an attempt and opens the next, and `worksession.attached` names the session each attempt ran in.

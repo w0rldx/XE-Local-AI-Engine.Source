@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 ///     answer, and a call that parks long enough for a test to watch a lane slot being held.
 ///     <para>
 ///         Everything else is the real thing — the store, the dispatcher, the state machine, the document writer and
-///         the encrypted columns — and the D6 envelope itself is never faked anywhere: which tools may run at all is
+///         the encrypted columns — and the invocation envelope itself is never faked anywhere: which tools may run at all is
 ///         asserted against the real service by <see cref="ToolInvocationServiceTests" />. Tests that need the real
 ///         one here take the plain <see cref="GraphWorkflowHostFixture" /> instead.
 ///     </para>

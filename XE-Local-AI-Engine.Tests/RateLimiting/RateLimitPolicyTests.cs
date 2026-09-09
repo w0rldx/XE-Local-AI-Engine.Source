@@ -227,13 +227,14 @@ public sealed class RateLimitPolicyTests
     }
 
     /// <summary>
-    ///     Test 42 / §9(a): an open SSE response consumes exactly ONE permit, and holding it consumes nothing further.
+    ///     An open SSE response consumes exactly ONE permit, and holding it consumes nothing further.
     ///     <para>
     ///         Two halves, because neither alone is the claim. First, the stream routes really do keep
-    ///         <c>.RequireRateLimiting</c> — D5 stands and R2-11 forbids removing it to make anything pass. Second, the
+    ///         <c>.RequireRateLimiting</c> — the rule that stream routes stay rate-limited stands, and ADR 0008 R2-11
+    ///         forbids removing it to make anything pass. Second, the
     ///         REGISTERED policy is a fixed window over the shared peer-address partition, and a fixed-window lease
     ///         returns nothing on disposal: holding one for a response's whole lifetime is therefore indistinguishable
-    ///         from releasing it at once, which is exactly the premise D5 rests on. A concurrency limiter is what would
+    ///         from releasing it at once, which is exactly the premise that rule rests on. A concurrency limiter is what would
     ///         have made an open stream cost a slot.
     ///     </para>
     /// </summary>
@@ -255,7 +256,7 @@ public sealed class RateLimitPolicyTests
         }
 
         // The REGISTERED policy, not a limiter this test built: building one here would assert the BCL, and swapping
-        // GetFixedWindowLimiter for a concurrency limiter — the exact change D5 rests on not happening — would leave it
+        // GetFixedWindowLimiter for a concurrency limiter — the exact change that rule rests on not happening — would leave it
         // green. The map and the partition's factory are internal, so both are read by reflection.
         var options = Host.Factory.Services.GetRequiredService<IOptions<RateLimiterOptions>>().Value;
         var policyMap = AssertEx.NotNull(Property(options, "PolicyMap") as IDictionary,

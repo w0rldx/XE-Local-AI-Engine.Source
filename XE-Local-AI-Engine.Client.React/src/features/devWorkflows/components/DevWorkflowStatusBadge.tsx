@@ -29,12 +29,12 @@ const runStatusColors: Record<DevWorkflowRunStatus, MantineColor> = {
 const nodeStatusColors: Record<DevWorkflowNodeStatus, MantineColor> = {
 	Pending: "gray",
 	// Yellow, and NEVER a spinner: a queued node is waiting for the agent slot another node is holding. Animating it
-	// would tell the operator work is happening on a GPU that is in fact serving someone else — the exact lie O9 exists
+	// would tell the operator work is happening on a GPU that is in fact serving someone else — the exact lie the status-honesty rule exists
 	// to prevent.
 	Queued: "yellow",
 	Running: "blue",
 	WaitingForApproval: "orange",
-	// Y20: retries are exhausted or the failure is non-retryable. The run is stopped until a human intervenes, so this
+	// Retries are exhausted or the failure is non-retryable. The run is stopped until a human intervenes, so this
 	// is the loudest colour on the table, not the quietest.
 	Blocked: "red",
 	Succeeded: "green",
@@ -46,7 +46,7 @@ const nodeStatusColors: Record<DevWorkflowNodeStatus, MantineColor> = {
 const workItemStatusColors: Record<DevWorkflowWorkItemStatus, MantineColor> = {
 	Draft: "gray",
 	Active: "blue",
-	// Y4: a failed run maps its work item here, because it needs attention rather than being done.
+	// A failed run maps its work item here, because it needs attention rather than being done.
 	Blocked: "orange",
 	Completed: "green",
 	Cancelled: "gray",

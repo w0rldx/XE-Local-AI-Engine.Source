@@ -33,7 +33,10 @@ public sealed class StartTrainingRuntimeInstallEndpoint(ITrainingRuntimeService 
             switch (result.Outcome)
             {
                 case TrainingRuntimeInstallOutcome.AlreadyRunning:
-                    await BlockAsync("already-installing", "A training runtime install is already in progress.", prerequisites: null).ConfigureAwait(false);
+                    await BlockAsync(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
+                            "A training runtime install is already in progress.",
+                            prerequisites: null)
+                        .ConfigureAwait(false);
                     return;
                 case TrainingRuntimeInstallOutcome.InsufficientDisk:
                     await BlockAsync("disk",
@@ -66,13 +69,6 @@ public sealed class StartTrainingRuntimeInstallEndpoint(ITrainingRuntimeService 
         }
     }
 
-    private Task BlockAsync(string reason, string message, TrainingRuntimePrerequisitesResponse? prerequisites)
-    {
-        return Send.ResultAsync(Results.Conflict(new TrainingRuntimeBlockedResponse
-        {
-            Reason = reason,
-            Message = message,
-            Prerequisites = prerequisites
-        }));
-    }
+    private Task BlockAsync(string reason, string message, TrainingRuntimePrerequisitesResponse? prerequisites) =>
+        Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(reason, message, prerequisites));
 }

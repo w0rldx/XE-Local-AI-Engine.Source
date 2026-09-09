@@ -87,7 +87,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
     /// <summary>
     ///     A branch that produces beside one that cannot run at all, both handed to the same <c>All</c> join and one
-    ///     agent behind it. The C1 shape reduced to the lane: what reaches the node after the join when a person
+    ///     agent behind it. The skipped-branch join shape reduced to the lane: what reaches the node after the join when a person
     ///     excused one of the branches feeding it.
     /// </summary>
     private const string TwoBranchesIntoAVerification = $$"""
@@ -604,7 +604,7 @@ public sealed class DevWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     Live finding F1: a step that could not do the job still has to call <c>complete_work_session</c>, because
+    ///     A live finding: a step that could not do the job still has to call <c>complete_work_session</c>, because
     ///     nothing else ends a step — so a completed session is not by itself a success. A task the session left
     ///     Blocked says which piece of work stalled, and stands the node run down for a human rather than reporting a
     ///     green node.
@@ -973,7 +973,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
     /// <summary>
     ///     A step a person excused reaches the node after the join BY NAME, with the operator's own reason. Now that an
-    ///     <c>All</c> join carries on past a skipped branch (C1), the verification node can be handed four slices where
+    ///     <c>All</c> join carries on past a skipped branch, the verification node can be handed four slices where
     ///     the fan-out was five wide — and with nothing saying so it would judge the four as if they were the whole job.
     ///     An absence cannot be read; a line can.
     /// </summary>

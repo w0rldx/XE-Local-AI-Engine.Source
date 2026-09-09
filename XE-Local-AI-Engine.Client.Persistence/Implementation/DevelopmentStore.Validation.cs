@@ -139,7 +139,7 @@ public sealed partial class DevelopmentStore
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
                                                cancellationToken)
                                            .ConfigureAwait(false)
-                           ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
+                           ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.Validation)
                 {
@@ -255,7 +255,7 @@ public sealed partial class DevelopmentStore
                                                                                             && entity.ProjectId == command.Artifact.ProjectId,
                                                cancellationToken)
                                            .ConfigureAwait(false)
-                           ?? throw new KeyNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
+                           ?? throw new DevelopmentNotFoundException($"Development task '{command.Artifact.TaskId}' was not found.");
                 EnsureVersion(task.Version, command.ExpectedTaskVersion, "task");
                 if (task.Status != DevelopmentTaskStatus.InReview)
                 {

@@ -16,8 +16,8 @@
 	outline-offset: 1px;
 }
 
-/* O5: a node the runtime created from a template, rather than one the definition named. The dashed border says that
-   about ONE card; the tint and the accent rail say it about the group. Slice C's layout stacks a materialization's
+/* A node the runtime created from a template, rather than one the definition named. The dashed border says that
+   about ONE card; the tint and the accent rail say it about the group. `DevWorkflowLayout` stacks a materialization's
    clones contiguously in their rank, so the rails line up into a single bar down the side of the block — which is the
    affordance that stops five dashed cards reading as five unrelated ones.
 
@@ -35,7 +35,7 @@
 	border-color: var(--mantine-color-blue-6);
 }
 
-/* Y20: retries are exhausted and the run is stopped until a human acts, so this is the loudest border on the canvas. */
+/* Retries are exhausted and the run is stopped until a human acts, so this is the loudest border on the canvas. */
 
 .node-blocked {
 	border-color: var(--mantine-color-red-6);

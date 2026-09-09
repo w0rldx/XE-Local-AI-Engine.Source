@@ -56,23 +56,13 @@ public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scope
                 },
                 ct).ConfigureAwait(false);
         }
-        catch (SelectedFolderNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (SelectedFolderConflictException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
-        }
         // Only the rejections the CALLER can act on are echoed as 400. A bare InvalidOperationException used to be in
         // this set, which quietly turned every environment failure inside the importer — an unreadable Git index, a
         // file that could not be opened, a file that changed under the reader — into a client error carrying an I/O
         // message. Those now travel as KnowledgeRepositoryReadException and fall through to the global 500 handler.
-        catch (Exception exception) when (exception is ArgumentException
-                                              or KnowledgeRepositoryImportRejectedException
-                                              or DevelopmentWorkspaceSecurityException
-                                              or SelectedFolderValidationException)
+        // KnowledgeRepositoryImportRejectedException has moved to the global DomainValidationExceptionHandler; the two
+        // left are a framework type and a type whose status differs by endpoint, so neither can be centralized.
+        catch (Exception exception) when (exception is ArgumentException or DevelopmentWorkspaceSecurityException)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);

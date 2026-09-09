@@ -36,7 +36,7 @@ export function useDevWorkflowDetailData(workItemId: string, selection: { readon
 
 	const runQuery = useDevWorkflowRun(runId, poll);
 	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
-	// The feed opens on the newest events (R-C4) and needs the run's high-water mark to compute that cursor. `?tab=`
+	// The feed opens on the newest events and needs the run's high-water mark to compute that cursor. `?tab=`
 	// carries no anchor: which end of a log you are reading is a scroll position, not a shareable view of the run.
 	const eventsQuery = useDevWorkflowRunEvents(runId, runQuery.data?.lastSequence, { ...poll, anchor: eventsAnchor });
 	// The same cursor the feed opened on. Passed down so the tab can say when a live run crossed a page boundary and
@@ -55,7 +55,7 @@ export function useDevWorkflowDetailData(workItemId: string, selection: { readon
 	const nodes = run?.nodes ?? [];
 	const pendingDecisionCount = run?.pendingDecisionCount ?? live.pendingDecisionCount ?? 0;
 	const blockingGateNodeRunId = run?.blockingGateNodeRunId ?? live.blockingGateNodeRunId ?? undefined;
-	// X14: one live run per work item, so a second start is refused with a 409. The control is simply not offered — and
+	// One live run per work item, so a second start is refused with a 409. The control is simply not offered — and
 	// the question is asked of the WORK ITEM's runs, not the selected one: viewing a terminal historical run under a
 	// newer live run offered a Start that could only ever 409. Same rows the summary panel lists, so what the operator
 	// sees and what the control believes cannot disagree.

@@ -22,7 +22,7 @@ export interface DevWorkflowRunSummaryPanelProps {
 	readonly pendingDecisionCount: number;
 	/** The run's spend, summed server-side over its node runs' final attempts. Absent until a run is selected. */
 	readonly cost?: DevWorkflowRunCostResponse;
-	/** Empty while a run is live: X14 allows one live run per work item and the start is refused with a 409 anyway. */
+	/** Empty while a run is live: the server allows one live run per work item and the start is refused with a 409 anyway. */
 	readonly startableDefinitions: readonly DevWorkflowDefinitionSummaryResponse[];
 	/** Lifted, because the centre pane previews the picked template while the work item has nothing to show yet. */
 	readonly selectedDefinitionId: string | null;
@@ -51,7 +51,7 @@ export function DevWorkflowRunSummaryPanel({
 	const { t } = useTranslation();
 	const definitionId = selectedDefinitionId;
 
-	// D12's no-op rows are in neither figure: a check that had nothing to check is a succeeded row standing for work
+	// A zero-task decomposition's no-op rows are in neither figure: a check that had nothing to check is a succeeded row standing for work
 	// that did not happen, and counting it as done reports a run that decomposed into nothing as having completed a
 	// validation. Left out of the total as well, so the fraction stays "of the work there was".
 	const counted = nodes.filter((node) => !node.validationNotApplicable);
@@ -143,7 +143,7 @@ export function DevWorkflowRunSummaryPanel({
 
 				{selectedRunId ? (
 					<SectionCard title={t("pages.devWorkflows.detail.progress", "Progress")} gap="xs">
-						{/* Queued is its own figure, never folded into "in progress" (O9): the node has one agent slot, so a
+						{/* Queued is its own figure, never folded into "in progress": the node has one agent slot, so a
 						    combined number would claim parallel agents this machine cannot run. */}
 						<Text size="sm" data-testid="dev-workflow-progress-counts">
 							{t("pages.devWorkflows.detail.counts", "{{running}} running · {{queued}} queued · {{done}}/{{total}} done", {

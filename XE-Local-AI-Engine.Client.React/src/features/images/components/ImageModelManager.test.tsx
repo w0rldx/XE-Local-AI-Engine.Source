@@ -439,7 +439,7 @@ describe("ImageModelManager", () => {
 		});
 	});
 
-	// The whole point of Stage 4: a user should not have to type a repo id, a weight file name, a model name and a
+	// The whole point of the curated catalog: a user should not have to type a repo id, a weight file name, a model name and a
 	// family to install a model. A catalog row already carries all four plus the sizes.
 	describe("curated catalog", () => {
 		it("installs the whole file-set from one click, with nothing typed", () => {

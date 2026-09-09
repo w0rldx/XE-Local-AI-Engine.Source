@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.AI.Agent.Tools;
 internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
 {
     // The Ollama num_ctx option key, byte-identical to SamplingOptionKeys.NumCtx and the key
-    // ProviderCallBudgetChatClient reads — the per-participant effective context window rides it (ORC-07).
+    // ProviderCallBudgetChatClient reads — the per-participant effective context window rides it.
     private const string NumCtxKey = "num_ctx";
 
     private readonly IChatClient _chatClient;
@@ -130,7 +130,7 @@ internal sealed class OrchestrationAgentFactory : IOrchestrationAgentFactory
             _logger,
             participant.ModelId);
 
-        // ORC-07: carry this participant's launched effective context window as num_ctx so the innermost provider-round
+        // Carry this participant's launched effective context window as num_ctx so the innermost provider-round
         // budgeter (ProviderCallBudgetChatClient) sizes THIS participant against the window ITS model was launched with,
         // not the shared configured default — a participant pinned to a smaller-window model could otherwise be fed past
         // its real window. Mirrors the single-agent InvocationAgentFactory num_ctx write; the ContainsKey guard leaves

@@ -1,5 +1,6 @@
-// The WIRE-VOCABULARY guard. Every union here is a ruling (X4 statuses, Y6's seven node types, X3's six decision
-// kinds, C24's ten artifact kinds, Y4's five work-item statuses), and every one of them is looked up as an i18n key
+// The WIRE-VOCABULARY guard. Every union here is a closed server vocabulary — the node and run statuses, the seven
+// node types, the six decision kinds, the ten artifact kinds, the five work-item statuses — and every one of them is
+// looked up as an i18n key
 // after narrowing — so a member added on the server and not here renders the FALLBACK, silently. The literal lists
 // are asserted rather than inferred for exactly that reason.
 

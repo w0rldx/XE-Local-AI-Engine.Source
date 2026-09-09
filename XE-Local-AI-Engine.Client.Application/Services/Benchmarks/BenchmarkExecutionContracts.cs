@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Invocation;
 using XE_Local_AI_Engine.Client.Services.Models;
@@ -672,3 +673,103 @@ internal sealed class BenchmarkQueueOptionsValidator : IValidateOptions<Benchmar
                                          + $"{BenchmarkQueueOptions.MaxPollInterval}.");
     }
 }
+
+/// <summary>
+///     One launch request: a project, a model, and how many measured runs to enqueue against them.
+/// </summary>
+/// <param name="KvCacheType">
+///     The KV-cache type the run asked for, or <see langword="null" /> for Auto (freeze picks). Must already be
+///     canonical — see <see cref="BenchmarkKvCacheType.TryNormalize" />.
+/// </param>
+/// <param name="RepeatCount">
+///     How many measured runs to enqueue, 1..<see cref="BenchmarkRunFreezeService.MaxRepeatCount" />. Everything but
+///     the seed is frozen ONCE and the repeats share it.
+/// </param>
+/// <param name="Warmup">
+///     Prepends one more run at repeat index 0, flagged <c>IsWarmup</c>: never ranked, never counted in a group's
+///     statistics. It exists to absorb the first-launch costs (page cache cold, GPU clocks low) the measured repeats
+///     should not pay.
+/// </param>
+/// <param name="RepeatMode">
+///     What the group measures. <see cref="BenchmarkRepeatMode.Throughput" /> is the default and the historical
+///     behaviour: temperature 0, one fixed seed, so the answer is identical across repeats and only the machine varies.
+/// </param>
+/// <param name="AnswerVarianceTemperature">
+///     The temperature an <see cref="BenchmarkRepeatMode.AnswerVariance" /> group samples at, or
+///     <see langword="null" /> for <see cref="BenchmarkRunFreezeService.DefaultAnswerVarianceTemperature" />. Ignored
+///     in throughput mode, which is deterministic by definition.
+/// </param>
+public sealed record BenchmarkRunStartRequest(
+    Guid ProjectId,
+    string PrimaryModelName,
+    long ExpectedProjectVersion,
+    string? KvCacheType = null,
+    int RepeatCount = 1,
+    bool Warmup = false,
+    BenchmarkRepeatMode RepeatMode = BenchmarkRepeatMode.Throughput,
+    double? AnswerVarianceTemperature = null);
+
+/// <summary>
+///     One model's freeze, decided but NOT written. Every read a freeze takes — the verified model lease, the
+///     eligibility, the agent resolution, the project version — has already happened and produced these commands;
+///     <see cref="IBenchmarkRunFreezeService.CommitAsync" /> is the only step that touches the database. That split is
+///     what lets a PAIR be validated on both sides before either side exists: committing one side first left the
+///     caller with queued runs it was never told the ids of when the other side then failed, and the only retry
+///     available duplicated the committed side.
+/// </summary>
+public sealed record BenchmarkFrozenRunPlan(Guid ProjectId, long ExpectedProjectVersion, IReadOnlyList<BenchmarkStartRunCommand> Commands);
+
+public sealed record BenchmarkRunBatchRequest(
+    Guid ProjectId,
+    long ExpectedProjectVersion,
+    IReadOnlyList<BenchmarkRunBatchItem> Items,
+    int RepeatCount,
+    bool Warmup,
+    BenchmarkRepeatMode RepeatMode,
+    double? AnswerVarianceTemperature);
+
+public sealed record BenchmarkRunBatchItem(string ModelName, string? KvCacheType);
+
+public sealed record BenchmarkRunBatchStartedItem(string ModelName, string? KvCacheType, IReadOnlyList<Guid> RunIds);
+
+public enum BenchmarkRunBatchRejectionKind
+{
+    Failure,
+    NotAttempted,
+    TimeBudget
+}
+
+public sealed record BenchmarkRunBatchRejectedItem(
+    string ModelName,
+    string? KvCacheType,
+    BenchmarkRunBatchRejectionKind Kind,
+    string Message,
+    Exception? Failure = null);
+
+public sealed record BenchmarkRunBatchResult(
+    long ProjectVersion,
+    IReadOnlyList<BenchmarkRunBatchStartedItem> Started,
+    IReadOnlyList<BenchmarkRunBatchRejectedItem> Rejected);
+
+/// <summary>
+///     One task item as an operator writes it. The index, revision and input hash are absent on purpose: a caller that
+///     could name them could present an answer to an old question as an answer to the current one.
+/// </summary>
+/// <param name="VerifierConfig">
+///     Per-criterion overrides of the judge policy's verifier config, keyed by criterion id. Carried opaquely here —
+///     it can hold expected answers, which is why it is stored encrypted.
+/// </param>
+/// <param name="GeneratorConfig">The parameters a generator item expands into child cases. Null for a plain prompt.</param>
+public sealed record BenchmarkTaskItemDraft(
+    string Prompt,
+    string? Kind = null,
+    string? ReferenceAnswer = null,
+    JsonElement? VerifierConfig = null,
+    JsonElement? GeneratorConfig = null,
+    bool CountsTowardScore = true);
+
+/// <param name="EnqueuedRunIds">The runs a judging was queued for, in the order they were enqueued. Empty on a no-op.</param>
+public sealed record BenchmarkJudgePolicyChange(
+    BenchmarkProjectRecord Project,
+    IReadOnlyList<Guid> EnqueuedRunIds,
+    int? CohortGeneration);

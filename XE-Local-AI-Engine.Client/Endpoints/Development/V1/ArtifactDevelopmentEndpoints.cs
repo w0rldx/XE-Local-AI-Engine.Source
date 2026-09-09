@@ -20,15 +20,8 @@ public sealed class ListDevelopmentArtifactsEndpoint(IDevelopmentManagementServi
 
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
-        try
-        {
-            var artifacts = await _service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListDevelopmentArtifactsResponse(artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
+        var artifacts = await _service.ListArtifactsAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListDevelopmentArtifactsResponse(artifacts.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
     }
 }
 
@@ -45,19 +38,7 @@ public sealed class GetDevelopmentArtifactEndpoint(IDevelopmentManagementService
 
     public override async Task HandleAsync(DevelopmentArtifactRequest req, CancellationToken ct)
     {
-        try
-        {
-            var artifact = await _service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct).ConfigureAwait(false);
-            await Send.OkAsync(new DevelopmentArtifactContentResponse(artifact.Artifact.ToResponse(), artifact.Content), ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (DevelopmentInvalidTransitionException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
-        }
+        var artifact = await _service.ReadArtifactAsync(req.ProjectId, req.TaskId, req.ArtifactId, ct).ConfigureAwait(false);
+        await Send.OkAsync(new DevelopmentArtifactContentResponse(artifact.Artifact.ToResponse(), artifact.Content), ct).ConfigureAwait(false);
     }
 }

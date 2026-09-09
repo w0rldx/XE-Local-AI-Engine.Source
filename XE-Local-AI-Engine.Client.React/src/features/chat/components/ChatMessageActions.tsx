@@ -12,27 +12,14 @@ import {
 import { useTranslation } from "react-i18next";
 
 import { MessageFeedbackControl } from "@/features/chat/components/MessageFeedbackControl";
-import type { ChatFeedbackRating, ChatMessageFeedback, ChatMessageModel } from "@/features/chat/models/ChatModels";
+import type {
+	ChatFeedbackRating,
+	ChatMessageActionCapabilities,
+	ChatMessageFeedback,
+	ChatMessageModel,
+	ChatMessageRevisionNav,
+} from "@/features/chat/models/ChatModels";
 import { VoiceMessagePlayButton } from "@/features/voice/components/VoiceMessagePlayButton";
-
-/** Prev/next navigation across the sibling revisions (variant group) of an assistant turn. */
-export interface ChatMessageRevisionNav {
-	activeIndex: number;
-	total: number;
-	onPrevious: () => void;
-	onNext: () => void;
-}
-
-/** Which action slots are active for a given chat turn. Grouped to avoid a sprawl of individual boolean props. */
-export interface ChatMessageActionCapabilities {
-	copy: boolean;
-	regenerate: boolean;
-	branch: boolean;
-	revisionNav: boolean;
-	feedback: boolean;
-	menu: boolean;
-	showTokensPerSecond: boolean;
-}
 
 interface ChatMessageActionsProps {
 	message: ChatMessageModel;

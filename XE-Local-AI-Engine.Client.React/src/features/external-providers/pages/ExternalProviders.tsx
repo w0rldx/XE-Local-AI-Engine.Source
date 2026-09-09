@@ -30,16 +30,12 @@ import {
 	toSaveRequestBody,
 } from "@/features/external-providers/models/ExternalProviderFormState";
 import {
+	type EditorTarget,
 	type ExternalProviderFormErrors,
 	type ExternalProviderFormValues,
 	shouldWarnLocalDeclaration,
 	validateExternalProviderForm,
 } from "@/features/external-providers/models/ExternalProviderModel";
-
-interface EditorTarget {
-	readonly connectionId: string;
-	readonly isNew: boolean;
-}
 
 export function ExternalProviders() {
 	const { t } = useTranslation();

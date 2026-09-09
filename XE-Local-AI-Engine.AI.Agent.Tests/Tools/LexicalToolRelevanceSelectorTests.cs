@@ -145,7 +145,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     [Test]
     public async Task SelectAsync_OnTheLiveCatalogue_OffersTheToolTheQueryIsAbout()
     {
-        // The C3 live round (2026-09-03, evidence 06-07-core-and-hatch.log). This is the real 20-tool catalogue of that
+        // The live round of 2026-09-03 (evidence 06-07-core-and-hatch.log). This is the real 20-tool catalogue of that
         // node with its real descriptions. The raw-overlap ranker scored search_knowledge_base 3 on "A", "THEN" and
         // "TO", Calculate / read_document / read_surrounding_chunks / spawn_subagent 2 apiece on the same function
         // words, and left custom__currency_convert — the one tool on the node that could answer — ranked ninth and
@@ -188,7 +188,7 @@ public sealed class LexicalToolRelevanceSelectorTests
     }
 
     /// <summary>
-    ///     The 20 tools the C3 live-validation node resolved, in resolution order, with the descriptions the model
+    ///     The 20 tools the 2026-09-03 live-validation node resolved, in resolution order, with the descriptions the model
     ///     actually saw. The four <c>custom__*</c> stubs are the harness's; every other description is the product's.
     /// </summary>
     private static List<ToolRelevanceCandidate> BuildLiveCatalogue()

@@ -60,7 +60,7 @@ function costSummary(t: TFunction, cost: DevWorkflowAttemptCost): string {
 }
 
 /**
- * Attempt N → outcome → session link, from the event log (X2, P4 §2.6). The node-run row increments `Attempt` in
+ * Attempt N → outcome → session link, from the event log. The node-run row increments `Attempt` in
  * place, so this is the only surface on which an earlier attempt exists at all.
  *
  * A single attempt renders nothing: the panel header already says "attempt 1 of 3", and a one-row list under it would

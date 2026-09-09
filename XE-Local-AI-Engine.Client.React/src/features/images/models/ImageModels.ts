@@ -510,3 +510,15 @@ export interface DownloadDraft {
 	isAdvanced: boolean;
 	parts: readonly PartDraft[];
 }
+
+/** The file-set an operator assembled in the browse panel, ready for the install mutation. */
+export interface BrowseInstallRequest {
+	modelName: string;
+	repoId: string;
+	family: ImageModelFamily;
+	parts: readonly {
+		role: ImageModelPartRole;
+		fileName: string;
+		sizeBytes: number;
+	}[];
+}

@@ -208,3 +208,13 @@ public sealed class TrainingRunRejectedException : Exception
     {
     }
 }
+
+/// <summary>What the operator asked for. Options are optional — omitted means "use the computed defaults".</summary>
+public sealed record CreateTrainingRunCommand(
+    Guid DatasetId,
+    long ExpectedDatasetVersion,
+    Guid BaseArtifactId,
+    bool LicenseConfirmed,
+    TrainingRunOptionsV1? Options = null,
+    /// <summary>The installed GGUF to link as the base's counterpart; null lets the linker suggest one by repo convention.</summary>
+    string? LinkedModelName = null);

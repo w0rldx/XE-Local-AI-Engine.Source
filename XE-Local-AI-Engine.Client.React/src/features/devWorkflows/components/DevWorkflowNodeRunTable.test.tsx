@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 
-// The O9 honesty regression tests live here, because the table is the execution view in Slice A0 and it is where a
-// dishonest status would first be seen. Two of them guard rulings that were WRONG in an earlier draft of the plan:
+// The status-honesty regression tests live here, because the table is the execution view and it is where a
+// dishonest status would first be seen. Two of them guard behaviour an earlier design had backwards:
 // a `Queued` node must not animate (it is waiting for a slot another node holds), and `Blocked` must read as
-// needs-intervention rather than as a passive dependency wait (Y20) — rendered the old way, a run that had stopped
+// needs-intervention rather than as a passive dependency wait — rendered the old way, a run that had stopped
 // dead would have looked like a run quietly making progress.
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
@@ -74,7 +74,7 @@ describe("DevWorkflowNodeRunTable", () => {
 		);
 
 		const detail = screen.getByTestId(`dev-workflow-node-detail-${devWorkflowTestIds.nodeRun}`);
-		// X7: admission is the work-session supervisor's single agent slot, so the copy says agent slot, not "model process".
+		// Admission is the work-session supervisor's single agent slot, so the copy says agent slot, not "model process".
 		expect(detail.textContent).toContain("waiting for the agent slot");
 		expect(detail.textContent).toContain("queued for 45s");
 		expect(hasProgressIndicator(statusCell(devWorkflowTestIds.nodeRun))).toBe(false);
@@ -246,7 +246,7 @@ describe("DevWorkflowNodeRunTable", () => {
 	});
 
 	it("says a no-op validation row validated nothing, rather than letting it read as a pass", () => {
-		// D12: a zero-task decomposition seeds its template's checks as Succeeded — the join behind them would never let
+		// A zero-task decomposition seeds its template's checks as Succeeded — the join behind them would never let
 		// the apply through otherwise — but the row stands for work that did not happen, and this table is where an
 		// operator reads a run.
 		renderWithProviders(

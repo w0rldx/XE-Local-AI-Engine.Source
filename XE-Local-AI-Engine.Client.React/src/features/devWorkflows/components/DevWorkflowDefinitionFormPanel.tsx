@@ -22,7 +22,7 @@ export interface DevWorkflowDefinitionFormPanelProps {
 }
 
 /**
- * The definition EDITOR (P4 §2.9, D row): a form over the stored graph document, deliberately not a canvas (N1/X16).
+ * The definition EDITOR: a form over the stored graph document, deliberately not a canvas.
  *
  * Editing is scoped to the fields an operator authors — the node's identity, its binding to an agent, its per-node
  * model and effort overrides, its retry budget and target, and the edges between nodes. `toolMode`,
@@ -74,7 +74,7 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 		try {
 			await update.mutateAsync({
 				path: { definitionId: definitionId ?? "" },
-				// The version this edit was made from (X5). Without it the PUT is a last-writer-wins overwrite.
+				// The version this edit was made from. Without it the PUT is a last-writer-wins overwrite.
 				body: { version: definition?.version ?? 0, name: name.trim(), graph },
 			});
 		} catch (error) {

@@ -29,22 +29,15 @@ public sealed class StartGgufImportEndpoint(IGgufImportTransactionCoordinator co
             return;
         }
 
-        try
+        var ticket = await _coordinator.StartAsync(new StartGgufImportCommand(req.SourcePath,
+            req.PreviewToken,
+            req.ModelBaseName,
+            req.Quantization), ct).ConfigureAwait(false);
+        await Send.ResultAsync(Results.Accepted(value: new GgufAcquisitionTicketResponse
         {
-            var ticket = await _coordinator.StartAsync(new StartGgufImportCommand(req.SourcePath,
-                req.PreviewToken,
-                req.ModelBaseName,
-                req.Quantization), ct).ConfigureAwait(false);
-            await Send.ResultAsync(Results.Accepted(value: new GgufAcquisitionTicketResponse
-            {
-                OperationId = ticket.OperationId,
-                OperationKind = ticket.OperationKind,
-                ModelName = ticket.ModelName
-            })).ConfigureAwait(false);
-        }
-        catch (GgufImportApplicationException exception)
-        {
-            await Send.ResultAsync(GgufImportEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+            OperationId = ticket.OperationId,
+            OperationKind = ticket.OperationKind,
+            ModelName = ticket.ModelName
+        })).ConfigureAwait(false);
     }
 }

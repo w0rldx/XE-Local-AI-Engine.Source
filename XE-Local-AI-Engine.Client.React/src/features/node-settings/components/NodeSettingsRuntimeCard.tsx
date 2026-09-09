@@ -12,16 +12,13 @@ import {
 	kvCacheTypeSelectValues,
 	type NodeSettingsFieldBounds,
 	type NodeSettingsFieldsForm,
+	type NodeSettingsModelOption,
 	requiresExternalDraftModel,
 	SPECULATIVE_DISABLED_MODE,
 	speculativeModeSelectValues,
 	usesDraftTokensPerStep,
 } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 
-export interface NodeSettingsModelOption {
-	readonly value: string;
-	readonly label: string;
-}
 interface Props {
 	readonly form: NodeSettingsFieldsForm;
 	readonly bounds: NodeSettingsFieldBounds;

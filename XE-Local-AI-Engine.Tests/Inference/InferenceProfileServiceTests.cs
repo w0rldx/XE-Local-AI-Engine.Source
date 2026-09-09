@@ -132,7 +132,7 @@ public sealed class InferenceProfileServiceTests
     [Test]
     public async Task Explore_WhenExpertsStayInSystemRam_PersistsTheEquivalentOverrideTensor()
     {
-        // D14, end to end: the spawn that decided expert offload carried --cpu-moe, the helper fitted against it and
+        // The frozen launch identity, end to end: the spawn that decided expert offload carried --cpu-moe, the helper fitted against it and
         // echoed the equivalent tensor override, and THAT is what freezes. The frozen intent therefore replays the
         // placement the admission ledger booked, without a --cpu-moe the replay branch never sets.
         var fixture = new ServiceFixture();
@@ -200,7 +200,7 @@ public sealed class InferenceProfileServiceTests
     [Test]
     public async Task Benchmark_ForALegacyExpertOffloadProfileWithNoOverrideTensor_IsStaleAndNeverSpawns()
     {
-        // The legacy row an intermediate C5 build could freeze: fingerprint version 5, expert offload decided, but no
+        // The legacy row an intermediate build could freeze: fingerprint version 5, expert offload decided, but no
         // -ot recorded. Its replay would launch an MoE model fully resident, so the placement axis marks it Stale.
         var fixture = new ServiceFixture();
         var profile = ExploredRecord() with

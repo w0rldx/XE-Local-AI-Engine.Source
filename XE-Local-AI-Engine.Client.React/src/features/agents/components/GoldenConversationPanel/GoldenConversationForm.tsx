@@ -3,9 +3,13 @@ import { IconX } from "@tabler/icons-react";
 import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 
-import { parseTurnLine, toLines } from "@/features/agents/models/GoldenConversationFormHelpers";
-
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import {
+	type GoldenFormAction,
+	type GoldenFormState,
+	parseTurnLine,
+	toLines,
+} from "@/features/agents/models/GoldenConversationFormHelpers";
 import {
 	type CreateGoldenConversationRequestDto,
 	findGoldenFieldOverLimit,
@@ -30,21 +34,6 @@ interface GoldenConversationFormProps {
 	onSubmit: (request: CreateGoldenConversationRequestDto) => void;
 	onCancel: () => void;
 }
-
-// Consolidated form state for the golden-case add form. The text fields plus the on-submit validation message live in
-// one object so a logical update never fans out into separate renders (was 6 useState calls).
-interface GoldenFormState {
-	title: string;
-	turnsText: string;
-	requiredText: string;
-	forbiddenText: string;
-	rubric: string;
-	validationError: string | null;
-}
-
-type GoldenFormAction =
-	| { type: "setField"; field: "title" | "turnsText" | "requiredText" | "forbiddenText" | "rubric"; value: string }
-	| { type: "setValidationError"; value: string | null };
 
 const initialGoldenFormState: GoldenFormState = {
 	title: "",

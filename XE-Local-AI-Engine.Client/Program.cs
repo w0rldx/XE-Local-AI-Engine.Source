@@ -305,7 +305,7 @@ namespace XE_Local_AI_Engine.Client
             // Aspire services
             builder.AddServiceDefaults();
 
-            // Operator hint (BE-03): purely informational, fires once at startup, never gates or alters telemetry
+            // Operator hint: purely informational, fires once at startup, never gates or alters telemetry
             // registration. AddServiceDefaults/ConfigureOpenTelemetry above always instruments gen_ai spans/metrics; only the
             // OTLP exporter is conditional on OTEL_EXPORTER_OTLP_ENDPOINT (AddOpenTelemetryExporters,
             // XE-Local-AI-Engine.ServiceDefaults/Extensions.cs). Aspire auto-injects that variable, so this stays silent

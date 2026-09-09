@@ -169,7 +169,7 @@ public sealed class GraphWorkflowAgentExecutorTests
     }
 
     /// <summary>
-    ///     The C13 case itself: a node overriding a CLOUD-pinned agent to a local model runs on the local model, and
+    ///     The case itself: a node overriding a CLOUD-pinned agent to a local model runs on the local model, and
     ///     the offer is gated by it. Without the suppressed pin this turn would be gated against a cloud model the
     ///     locality gate has already refused to run on.
     /// </summary>

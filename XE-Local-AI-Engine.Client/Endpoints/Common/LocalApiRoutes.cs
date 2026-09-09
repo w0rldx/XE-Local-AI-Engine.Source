@@ -914,7 +914,7 @@ public static class LocalApiRoutes
 
         /// <summary>
         ///     The Tool node's picker feed: every tool a Tool node may actually run, already filtered server-side to
-        ///     the D6 envelope by the same service the runtime invokes through, so the picker cannot offer a name the
+        ///     the invocation envelope by the same service the runtime invokes through, so the picker cannot offer a name the
         ///     run would then refuse.
         /// </summary>
         public const string Tools = "graph-workflows/tools";

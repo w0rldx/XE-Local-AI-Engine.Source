@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
 using System.Collections.Concurrent;
+using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 
 /// <summary>
 ///     Default in-memory <see cref="ILlamaLayerPlacementReport" />. Process-lifetime singleton, shared by the process

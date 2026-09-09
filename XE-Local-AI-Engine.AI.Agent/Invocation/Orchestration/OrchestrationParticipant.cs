@@ -65,7 +65,7 @@ public sealed record OrchestrationParticipant
     public IReadOnlyList<ChatMessage> ConversationContext { get; init; } = [];
 
     /// <summary>
-    ///     ORC-07: the effective per-slot context window (in tokens) the participant's resolved <see cref="ModelId" />
+    ///     The effective per-slot context window (in tokens) the participant's resolved <see cref="ModelId" />
     ///     was launched with, when known. Carried onto the participant agent's construction-time <c>ChatOptions</c> as
     ///     the <c>num_ctx</c> option so the innermost provider-round budgeter (<c>ProviderCallBudgetChatClient</c>) sizes
     ///     THIS participant against its own launched window rather than the shared configured default. Workflow

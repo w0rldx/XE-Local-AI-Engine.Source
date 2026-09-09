@@ -8,7 +8,7 @@ using XE_Local_AI_Engine.Client.Persistence.Cryptography;
 
 /// <summary>
 ///     Wraps NEWLY written Data Protection key-ring elements at rest with AES-256-GCM under an operator-secret-derived
-///     KEK (BE-02), so that on non-Windows hosts the key-ring XML is no longer plaintext next to the ciphertext it
+///     KEK, so that on non-Windows hosts the key-ring XML is no longer plaintext next to the ciphertext it
 ///     unlocks. Registered ONLY on the non-Windows branch (Windows keeps DPAPI, unchanged).
 /// </summary>
 /// <remarks>

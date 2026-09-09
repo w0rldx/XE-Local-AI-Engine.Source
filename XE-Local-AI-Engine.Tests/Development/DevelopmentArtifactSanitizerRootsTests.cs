@@ -236,7 +236,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
     ///     What replaced the glob exemption. The pass preserves the LITERALS the caller names and nothing that merely
     ///     looks like one, so a path written in glob shape is redacted like any other.
     ///     <para>
-    ///         Codex rated the earlier <c>(?&lt;!\*\*)</c> lookbehind a P1 for exactly this: it exempted every '/'
+    ///         The earlier <c>(?&lt;!\*\*)</c> lookbehind was a leak for exactly this: it exempted every '/'
     ///         after '**', so <c>**/home/alice/private</c> in repository output or model prose crossed the boundary
     ///         <see cref="DevelopmentCloudContextBuilder" /> uses to reach a cloud provider. A lookbehind can only
     ///         recognise a shape; <c>SanitizePromptText</c> knows the strings.
@@ -253,7 +253,7 @@ public sealed class DevelopmentArtifactSanitizerRootsTests
         AssertEx.False(single.Contains("/etc/shadow", StringComparison.Ordinal), single);
         AssertEx.Contains(single, "[REDACTED:development-path]");
 
-        // The P1 itself: the shape that used to ride the lookbehind out to a cloud provider.
+        // The leak itself: the shape that used to ride the lookbehind out to a cloud provider.
         var doubled = DevelopmentArtifactSanitizer.SanitizePromptText("excluded: **/home/alice/private", profile.ProtectedPaths, RepositoryRoot);
 
         AssertEx.False(doubled.Contains("/home/alice", StringComparison.Ordinal), doubled);

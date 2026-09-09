@@ -85,7 +85,7 @@ public sealed class BenchmarkComparisonExecutor(
         {
             comparison = await store.GetComparisonAsync(comparisonId, token).ConfigureAwait(false)
                          ?? throw new BenchmarkExecutionException("The comparison is no longer available.");
-            // D14: a comparison frozen under a different launch-identity scheme is failed before it launches.
+            // A comparison frozen under a different launch-identity scheme is failed before it launches.
             BenchmarkLaunchIdentityScheme.RequireCurrent(comparison.LaunchIntent);
             var revision = await store.GetJudgePolicyRevisionAsync(comparison.PolicyRevisionId, token).ConfigureAwait(false)
                            ?? throw new BenchmarkExecutionException("The judge policy revision is no longer available.");

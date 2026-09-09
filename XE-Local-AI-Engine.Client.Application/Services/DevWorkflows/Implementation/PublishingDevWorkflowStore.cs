@@ -20,7 +20,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     </para>
 /// </summary>
 /// <remarks>
-///     ponytail: one ping per committed mutation, with no coalescing window. Slice A's graphs are linear, so a tick
+///     ponytail: one ping per committed mutation, with no coalescing window. The seeded graphs are linear, so a tick
 ///     writes one or two; a parallel stage would want a debounce here, keyed by run id, before the client turns each
 ///     ping into a refetch.
 /// </remarks>

@@ -1,9 +1,9 @@
-namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
+﻿namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 /// <summary>
 ///     <c>POST cloud/codex/login</c> (Operator): starts the loopback PKCE login and returns the authorize URL so the

@@ -4,24 +4,10 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTime } from "@/core/formatting/TimeFormatting";
-import type { WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
+import type { StepConsumption, WorkSessionEventResponse } from "@/features/workSessions/models/WorkSessionModels";
 
 /** The two event types whose `detailJson` carries the step's consumption record. Every other type is rendered as-is. */
 const consumptionEventTypes = new Set(["StepEnded", "StepFailed"]);
-
-/**
- * What one step spent, as the supervisor writes it onto its StepEnded/StepFailed row. Deliberately a narrow read: the
- * `detailJson` column is opaque and other writers use it for their own shapes, so anything that does not carry the
- * four required counts renders nothing extra rather than a half-filled line.
- */
-interface StepConsumption {
-	readonly providerCalls: number;
-	readonly estimatedInputTokens: number;
-	readonly toolCallsCompleted: number;
-	readonly providerCallCap: number;
-	/** How many invocations ran under the step's cap scope. Absent on rows written before the field existed; read as 1. */
-	readonly attachedBudgets: number;
-}
 
 function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);

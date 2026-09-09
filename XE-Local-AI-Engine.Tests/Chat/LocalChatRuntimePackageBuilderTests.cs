@@ -245,7 +245,7 @@ public sealed class LocalChatRuntimePackageBuilderTests
         AssertEx.True(unattended.IsUnattended);
     }
 
-    // The §5 byte-identity guard for the tool-relevance opt-out (same posture as IsUnattended above): the filter narrows
+    // The byte-identity guard for the tool-relevance opt-out (same posture as IsUnattended above): the filter narrows
     // only the array handed to the provider, never the offer, the resolved prompt or the approval wrap, so an agent that
     // opts out must hash byte-identically to the same agent that does not — and toggling it can never invalidate a resume.
     [Test]

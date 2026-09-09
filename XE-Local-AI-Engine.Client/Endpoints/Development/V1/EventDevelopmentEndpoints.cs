@@ -19,14 +19,7 @@ public sealed class ListDevelopmentEventsEndpoint(IDevelopmentManagementService 
 
     public override async Task HandleAsync(DevelopmentProjectRequest req, CancellationToken ct)
     {
-        try
-        {
-            var events = await _service.ListEventsAsync(req.ProjectId, ct).ConfigureAwait(false);
-            await Send.OkAsync(new ListDevelopmentEventsResponse(events.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
+        var events = await _service.ListEventsAsync(req.ProjectId, ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListDevelopmentEventsResponse(events.Select(DevelopmentContractMapper.ToResponse).ToArray()), ct).ConfigureAwait(false);
     }
 }

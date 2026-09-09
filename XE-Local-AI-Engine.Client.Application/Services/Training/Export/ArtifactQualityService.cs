@@ -7,51 +7,6 @@ using XE_Local_AI_Engine.Client.Services.Training.Comparison;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
-public enum ArtifactQualityOutcome
-{
-    Pending,
-    Passed,
-    Failed,
-    Overridden
-}
-
-public sealed record ArtifactQualityDecisionAuditV1
-{
-    public Guid ArtifactId { get; init; }
-    public string ArtifactSha256 { get; init; } = string.Empty;
-    public Guid ComparisonId { get; init; }
-    public Guid BaseEvaluationId { get; init; }
-    public Guid TunedEvaluationId { get; init; }
-    public int PolicyVersion { get; init; }
-    public double MinimumAggregateDelta { get; init; }
-    public double MinimumPerKindDelta { get; init; }
-    public ArtifactQualityOutcome Outcome { get; init; }
-    public IReadOnlyList<string> FailureCodes { get; init; } = [];
-    public long DecidedAtUtc { get; init; }
-    public string? OverrideReason { get; init; }
-    public long? OverriddenAtUtc { get; init; }
-}
-
-public sealed record ArtifactQualityDecisionV1
-{
-    public const int CurrentPolicyVersion = 1;
-    public int SchemaVersion { get; init; } = 1;
-    public int PolicyVersion { get; init; } = CurrentPolicyVersion;
-    public Guid ArtifactId { get; init; }
-    public string ArtifactSha256 { get; init; } = string.Empty;
-    public Guid ComparisonId { get; init; }
-    public Guid BaseEvaluationId { get; init; }
-    public Guid TunedEvaluationId { get; init; }
-    public ArtifactQualityOutcome Outcome { get; init; }
-    public IReadOnlyList<string> FailureCodes { get; init; } = [];
-    public double MinimumAggregateDelta { get; init; }
-    public double MinimumPerKindDelta { get; init; }
-    public long DecidedAtUtc { get; init; }
-    public string? OverrideReason { get; init; }
-    public long? OverriddenAtUtc { get; init; }
-    public IReadOnlyList<ArtifactQualityDecisionAuditV1> History { get; init; } = [];
-}
-
 public interface IArtifactQualityService
 {
     Task<TrainingArtifactRecord> DecideAsync(Guid artifactId, Guid comparisonId, long expectedVersion,

@@ -48,6 +48,7 @@ import type {
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
+import type { ActiveChatStream, PendingStreamCommit } from "@/features/chat/models/ChatStreamState";
 import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
@@ -64,23 +65,6 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 // Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
 // message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
 const emptyConversationList: ChatConversationListModel = { conversations: [] };
-
-interface ActiveChatStream {
-	conversationId: string;
-	messageId: string;
-	requestId: string;
-	abortController: AbortController;
-}
-
-// One rAF-batched streaming commit (see commitStreamState / useStreamCommitScheduler).
-interface PendingStreamCommit {
-	conversation: ChatConversationModel;
-	// Terminal frames also refresh the conversation-LIST cache; per-token frames update only the detail cache.
-	writeConversationList: boolean;
-	streamingMessage: ChatStreamingState;
-	// Tool-lifecycle entries seen since the last flush; empty on plain token deltas.
-	toolTimelineEntries: ChatTimelineEntry[];
-}
 
 // Strip SignalR's generic HubException wrapper so the bubble/toast lead with the sentence the hub deliberately
 // wrote (e.g. the message-size rejection); anything not matching the wrapper passes through untouched. The regex

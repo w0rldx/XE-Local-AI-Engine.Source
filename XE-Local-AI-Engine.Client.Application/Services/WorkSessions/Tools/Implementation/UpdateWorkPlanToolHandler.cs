@@ -119,7 +119,7 @@ internal sealed class UpdateWorkPlanToolHandler(
     ///     The sentence handed back to the model. An 'add' mints its id here, so naming those ids is the only way a
     ///     one-step session can move a task it just added: the state block for the step was composed before the task
     ///     existed, and a model with no id for 'update' cannot mark that task Blocked — the signal a workflow node
-    ///     reads to stand the step down for a human never fires (live finding P3).
+    ///     reads to stand the step down for a human never fires.
     /// </summary>
     private static string Describe(IReadOnlyList<WorkPlanTaskChange> changes)
     {

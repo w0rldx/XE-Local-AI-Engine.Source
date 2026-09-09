@@ -7,7 +7,7 @@ using Microsoft.AspNetCore.DataProtection.KeyManagement.Internal;
 /// <summary>
 ///     Decorates Data Protection's default <see cref="IDefaultKeyResolver" /> so a SILENT key regeneration caused by an
 ///     undecryptable key-ring becomes a LOUD, fatal startup failure instead. Applied on BOTH at-rest schemes: the
-///     non-Windows AES-GCM wrapper keyed from the node operator secret (BE-02), and the Windows DPAPI wrapper.
+///     non-Windows AES-GCM wrapper keyed from the node operator secret, and the Windows DPAPI wrapper.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -46,7 +46,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedKeyResolver : IDefaultKey
     private readonly string _remediation;
 
     /// <summary>
-    ///     The non-Windows (BE-02) form: recognises only this node's own distinctive decryption exception, so an
+    ///     The non-Windows form: recognises only this node's own distinctive decryption exception, so an
     ///     unrelated <see cref="IKey.CreateEncryptor" /> failure is left to the framework rather than masked as a KEK
     ///     problem.
     /// </summary>

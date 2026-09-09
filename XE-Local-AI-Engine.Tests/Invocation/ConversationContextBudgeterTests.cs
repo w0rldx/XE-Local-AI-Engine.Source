@@ -479,7 +479,7 @@ public sealed class ConversationContextBudgeterTests
     [Test]
     public void Budget_FoldsSystemPromptAndToolOverheadIntoCapacity_TrimsWhatHistoryAloneWouldNot()
     {
-        // ORC-02: the system prompt is prepended AFTER this history and tool schemas never appear in the message list,
+        // The system prompt is prepended AFTER this history and tool schemas never appear in the message list,
         // yet both count against the launched window. A history that fits when measured alone must now trim once the
         // fixed overhead is folded in — otherwise the outer budget passes an actually-over-window round through.
         // Four 10-char turns (70 total); keep-count 2 protects turns 2 and 3, leaving turns 0 and 1 (40) droppable.

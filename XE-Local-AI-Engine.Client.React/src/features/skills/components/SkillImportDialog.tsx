@@ -11,7 +11,8 @@ import type {
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SkillImportPreviewPresentation } from "@/features/skills/components/SkillImportPreviewPresentation";
-import { type SkillImportSourceTab, SkillImportSourceTabs } from "@/features/skills/components/SkillImportSourceTabs";
+import { SkillImportSourceTabs } from "@/features/skills/components/SkillImportSourceTabs";
+import type { SkillImportSourceTab } from "@/features/skills/models/SkillModels";
 import { useCommitSkillImport, usePreviewSkillImport } from "@/features/skills/queries/useSkillImport";
 
 interface SkillImportDialogProps {

@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     D14's cutover guard, stated directly. Frozen launch intent is immutable, so the guard's whole job is to decide
+///     The launch-identity cutover guard, stated directly. Frozen launch intent is immutable, so the guard's whole job is to decide
 ///     whether this build may compare against a hash it did not compute — and to say no in BOTH directions.
 /// </summary>
 public sealed class BenchmarkLaunchIdentitySchemeTests

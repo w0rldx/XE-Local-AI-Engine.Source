@@ -12,11 +12,11 @@ const EVENT_NAME = "devWorkflowChanged";
 export const DEV_WORKFLOW_POLL_INTERVAL_MS = 3_000;
 
 /**
- * X19: exactly four kinds, **LOWERCASE on the wire** — the publisher serializes the kind in lower case, so a casing
+ * Exactly four kinds, **LOWERCASE on the wire** — the publisher serializes the kind in lower case, so a casing
  * slip here makes every invalidation a silent no-op rather than an error. The literals are asserted in
  * `useDevWorkflowRunHub.test.tsx` for exactly that reason.
  *
- * `graph` and `event` are deliberately absent: a materialization folds into a `node` ping (Y12 — the client refetches
+ * `graph` and `event` are deliberately absent: a materialization folds into a `node` ping (the client refetches
  * the run, which carries the nodes and the bumped graph revision), and every kind invalidates the event feed anyway.
  */
 const devWorkflowChangeKinds = ["run", "node", "artifact", "gate"] as const;
@@ -64,7 +64,7 @@ function isChangeKind(kind: string): kind is DevWorkflowChangeKind {
 /**
  * Live state for one workflow run over `development-workflows/hub`.
  *
- * Modelled on `useWorkSessionHub`, and explicitly NOT on a hub hook that dispatches payload into a store: under O10
+ * Modelled on `useWorkSessionHub`, and explicitly NOT on a hub hook that dispatches payload into a store:
  * these pings carry no content at all — the DB is the replay authority and every byte the UI paints comes from a
  * REST read. So there is no client-side mirror, only a watermark: its jobs are `afterSeq` on re-subscribe and
  * monotonic dedupe of pings.
@@ -129,7 +129,7 @@ export function useDevWorkflowRunHub(runId: string | undefined, workItemId: stri
 					invalidateWorkItem();
 					break;
 				case "node":
-					// The node-runs ride the run payload, so a materialization (Y12) is seen here as new rows and a bumped
+					// The node-runs ride the run payload, so a materialization is seen here as new rows and a bumped
 					// graph revision — no separate `graph` kind exists to miss.
 					invalidateRun();
 					invalidateNodes();

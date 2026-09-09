@@ -440,7 +440,7 @@ internal sealed class GraphWorkflowRunService(
 
     /// <summary>
     ///     Re-checks, at run start, that every <c>Tool</c> node of the pinned graph names a tool this node will actually
-    ///     run — ruling D6's gate, as ONE mechanism in one place rather than a check the dispatcher repeats per kind.
+    ///     run — the tool gate, as ONE mechanism in one place rather than a check the dispatcher repeats per kind.
     ///     <para>
     ///         Asked again here rather than trusted from save time: a definition saved when a tool was invocable must
     ///         not start once the envelope has been tightened away from it. Failing the START rather than the node is

@@ -187,7 +187,7 @@ public sealed class IntegrationExecutionEndpointTests
     }
 
     /// <summary>
-    ///     F12: a repeated status is a caller-supplied array, so the malformed shapes are pinned rather than assumed.
+    ///     A repeated status is a caller-supplied array, so the malformed shapes are pinned rather than assumed.
     ///     An EMPTY element is a binding failure and takes the whole parameter down with it — which is the answer that
     ///     matters, because the alternative would be it binding as the default enum member and silently filtering on a
     ///     status nobody asked for. Neither shape may ever reach a 500.

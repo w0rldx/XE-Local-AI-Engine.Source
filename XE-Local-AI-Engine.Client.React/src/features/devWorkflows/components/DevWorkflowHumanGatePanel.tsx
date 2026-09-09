@@ -1,5 +1,4 @@
 import { Alert, Anchor, Badge, Button, Group, Stack, Text, Textarea } from "@mantine/core";
-
 import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -14,6 +13,7 @@ import { devWorkflowConflictTypes, readDevWorkflowConflict } from "@/features/de
 import {
 	asDevWorkflowDecisionKind,
 	type DevWorkflowDecisionKind,
+	type DevWorkflowDecisionSubmission,
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowNodeType,
 	devWorkflowNodeAwaitsHuman,
@@ -21,12 +21,6 @@ import {
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
-
-export interface DevWorkflowDecisionSubmission {
-	readonly decision: DevWorkflowDecisionKind;
-	readonly comment?: string;
-	readonly operationId: string;
-}
 
 export interface DevWorkflowHumanGatePanelProps {
 	readonly nodeRun: DevWorkflowNodeRunDetailResponse;
@@ -77,7 +71,7 @@ function commentHint(allowedDecisions: readonly DevWorkflowDecisionKind[], nodeT
 
 /**
  * The one decision surface, serving BOTH an open human gate (`WaitingForApproval`) and a stopped node needing an
- * intervention (`Blocked`, Y20) — operationally the same situation: the run has halted until a human acts, and the
+ * intervention (`Blocked`) — operationally the same situation: the run has halted until a human acts, and the
  * runtime takes both answers through the same endpoint, the same table and the same audit shape.
  *
  * It fails closed. No `pendingDecisionKind` means the runtime is not asking, and no controls render at all; which
@@ -130,7 +124,7 @@ export function DevWorkflowHumanGatePanel({
 	}
 
 	const submit = async (decision: DevWorkflowDecisionKind): Promise<void> => {
-		// X10: a Reject with no accepting out-edge does not "reject a step" — it drains the run and cancels it. An
+		// A Reject with no accepting out-edge does not "reject a step" — it drains the run and cancels it. An
 		// operator must not discover that after the fact, so the confirm says so in as many words.
 		if (decision === "Reject" && nodeRun.hasRejectBranch !== true) {
 			const confirmed = await confirm({
@@ -188,7 +182,7 @@ export function DevWorkflowHumanGatePanel({
 			}
 			data-testid="dev-workflow-gate-panel"
 		>
-			{/* Y24: the graph node's `instructions` IS the gate prompt — there is no separate prompt field. */}
+			{/* The graph node's `instructions` IS the gate prompt — there is no separate prompt field. */}
 			{nodeRun.instructions ? <MarkdownView content={nodeRun.instructions} /> : null}
 
 			{/* Evidence first, decision second: these are the artifacts the gate is ABOUT, recorded as the node's

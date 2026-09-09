@@ -25,29 +25,22 @@ public sealed class PreviewGgufImportEndpoint(IGgufImportTransactionCoordinator 
             return;
         }
 
-        try
+        var preview = await _coordinator.PreviewAsync(req.SourcePath, ct).ConfigureAwait(false);
+        await Send.OkAsync(new PreviewGgufImportResponse
         {
-            var preview = await _coordinator.PreviewAsync(req.SourcePath, ct).ConfigureAwait(false);
-            await Send.OkAsync(new PreviewGgufImportResponse
-            {
-                ModelBaseName = preview.ModelBaseName,
-                DetectedQuantization = preview.DetectedQuantization,
-                CanonicalQuantizationChoices = preview.CanonicalQuantizationChoices,
-                CanonicalModelName = preview.CanonicalModelName,
-                FinalFileName = preview.FinalFileName,
-                SizeBytes = preview.SizeBytes,
-                SourceDisplayName = preview.SourceDisplayName,
-                Architecture = preview.Architecture,
-                GgufVersion = preview.GgufVersion,
-                Warnings = preview.Warnings,
-                HasSufficientStorage = preview.HasSufficientStorage,
-                PreviewToken = preview.PreviewToken,
-                ExpiresAtUtc = preview.ExpiresAtUtc
-            }, ct).ConfigureAwait(false);
-        }
-        catch (GgufImportApplicationException exception)
-        {
-            await Send.ResultAsync(GgufImportEndpointSupport.Error(exception)).ConfigureAwait(false);
-        }
+            ModelBaseName = preview.ModelBaseName,
+            DetectedQuantization = preview.DetectedQuantization,
+            CanonicalQuantizationChoices = preview.CanonicalQuantizationChoices,
+            CanonicalModelName = preview.CanonicalModelName,
+            FinalFileName = preview.FinalFileName,
+            SizeBytes = preview.SizeBytes,
+            SourceDisplayName = preview.SourceDisplayName,
+            Architecture = preview.Architecture,
+            GgufVersion = preview.GgufVersion,
+            Warnings = preview.Warnings,
+            HasSufficientStorage = preview.HasSufficientStorage,
+            PreviewToken = preview.PreviewToken,
+            ExpiresAtUtc = preview.ExpiresAtUtc
+        }, ct).ConfigureAwait(false);
     }
 }

@@ -1,6 +1,7 @@
-namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+﻿namespace XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 
 using Microsoft.Extensions.Logging;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 /// <summary>The state of the most recent / current Codex login attempt, surfaced by the <c>codex/status</c> endpoint.</summary>
 public enum CodexLoginState

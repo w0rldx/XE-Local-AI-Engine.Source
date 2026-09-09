@@ -92,7 +92,7 @@ public sealed class DevWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     The C1 gate: a fan-out wider than the lane never has more than the cap inside its commands AT ONCE.
+    ///     The concurrency gate: a fan-out wider than the lane never has more than the cap inside its commands AT ONCE.
     ///     <para>
     ///         Concurrency is counted where the commands run rather than read off the rows, because the rows only say
     ///         what the dispatcher wrote. A cap that held on paper and not in fact would look identical from the rows,

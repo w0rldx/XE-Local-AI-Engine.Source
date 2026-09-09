@@ -250,12 +250,14 @@ This is the architectural choke point of the platform's "only the Node Web Serve
 
 ### Exception handling → RFC7807
 
-Registered **before** `UseFastEndpoints` so it wraps endpoints (see the `UseExceptionHandler` / `UseFastEndpoints` order in `Program.cs`). Two `IExceptionHandler` implementations are chained in order by `ConfigureServices.AddServices()` plus `AddProblemDetails()`:
+Registered **before** `UseFastEndpoints` so it wraps endpoints (see the `UseExceptionHandler` / `UseFastEndpoints` order in `Program.cs`). A chain of `IExceptionHandler` implementations is registered in order by `ConfigureServices.AddServices()` plus `AddProblemDetails()`; the registration block itself is the inventory, and `ExceptionHandlerRegistrationOrderTests` pins the order. The shape of the chain:
 
-1. `ConflictExceptionHandler` — maps domain conflict exceptions to 409.
-2. `DefaultExceptionHandler` — catch-all 500; redacts internal detail outside development (takes `IHostEnvironment`).
+1. **Shared wire contracts** — `ConflictExceptionHandler` (typed domain conflict → the one 409 `ConflictProblemDetails` envelope) and `DomainValidationExceptionHandler` (single-message validation → the FastEndpoints 400 body).
+2. **Per-family handlers** — one per area that owns its own status split or response DTO: Development conflicts and not-found, the selected-folder family (404 / 409 / 400 by type), Training, Benchmark, the GGUF import and download mappers, WorkSession / DevWorkflow / GraphWorkflow not-found.
+3. **Host refusals** — `RequestBodyTooLargeExceptionHandler`, which answers Kestrel's own body-cap rejection (raised inside model binding, before any endpoint runs).
+4. `DefaultExceptionHandler` — catch-all 500; redacts internal detail outside development (takes `IHostEnvironment`).
 
-This mirrors the central platform's handler-chain pattern: specific handlers first, generic catch-all last. Internal error detail is never leaked to the browser.
+This mirrors the central platform's handler-chain pattern: specific handlers first, generic catch-all last. Internal error detail is never leaked to the browser. An endpoint-local `catch` that re-states a mapping the chain already owns is the anti-pattern `EndpointExceptionMappingSourceGuardTests` guards against — a type belongs in the chain when its status is the same at every endpoint that raises it, and stays local when it is not.
 
 ### Health checks
 

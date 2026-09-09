@@ -33,7 +33,7 @@ function definitionsRoute() {
 		items: [
 			{
 				id: definitionId,
-				// Y5 fixes the seeded template names; the picker shows them verbatim rather than inventing labels.
+				// The seeded template names are fixed; the picker shows them verbatim rather than inventing labels.
 				name: "Research → Plan → Approval",
 				source: "Seeded",
 				seedSlug: "research-plan-approval",
@@ -103,7 +103,7 @@ describe("DevWorkflowsPage", () => {
 		);
 		renderWithProviders(<DevWorkflowsPage />);
 
-		// O9: the node has ONE agent slot, so "5 in progress" would claim parallelism this machine cannot deliver.
+		// The node has ONE agent slot, so "5 in progress" would claim parallelism this machine cannot deliver.
 		const counts = await screen.findByTestId(`dev-workflow-card-counts-${workItemId}`);
 		expect(counts.textContent).toBe("1 running · 4 queued · 2/8 done");
 	});
@@ -161,7 +161,7 @@ describe("DevWorkflowsPage", () => {
 		await waitFor(() =>
 			expect(navigate).toHaveBeenCalledWith({ to: "/development-workflows/$workItemId", params: { workItemId } }),
 		);
-		// A work item is definition-agnostic at creation (P3 §4.1): the template rides on the SECOND call.
+		// A work item is definition-agnostic at creation: the template rides on the SECOND call.
 		expect(startBodies).toHaveLength(1);
 		expect((startBodies[0] as { definitionId: string }).definitionId).toBe(definitionId);
 		expect((startBodies[0] as { operationId: string }).operationId).toMatch(/^[0-9a-f-]{36}$/i);

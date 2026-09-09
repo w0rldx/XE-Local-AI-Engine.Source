@@ -2,7 +2,7 @@
 // opt-in per feature, so this area owns its own file the way work sessions do. Not jsdom-scoped: it operates purely on
 // the JSON locale files.
 //
-// This lands with the FIRST keys rather than as a polish item (C38). Six closed vocabularies — 9 node statuses, 9 run
+// This lands with the FIRST keys rather than as a polish item. Six closed vocabularies — 9 node statuses, 9 run
 // statuses, 7 node types, 6 decision kinds, 10 artifact kinds, 5 work-item statuses, 10 failure classes and 3 queue
 // reasons — are looked up by their narrowed value, so a missing German string is a `MissingKey` render rather than a
 // compile error. Cheap to hold at 50 keys, miserable to retrofit at 300.
@@ -103,7 +103,7 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 			],
 		},
 		{ section: "workItemStatus", members: ["Draft", "Active", "Blocked", "Completed", "Cancelled"] },
-		// C4's apply outcomes. Not narrowed client-side either — the panel falls back to the raw token — so this map is
+		// The apply-outcome vocabulary. Not narrowed client-side either — the panel falls back to the raw token — so this map is
 		// the only thing standing between a `blocked` patch and a row that reads as a key.
 		{ section: "applyOutcome", members: ["applied", "already-applied", "blocked", "refused", "cancelled"] },
 		// Not narrowed client-side, so both carry a generic `unknown` fallback for a token a newer server invents.
@@ -125,7 +125,7 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 				"unknown",
 			],
 		},
-		// C1's cross-unit failure vocabulary, projected from the eleven DevWorkflow failure classes plus the two tokens only
+		// The cross-unit failure vocabulary, projected from the eleven DevWorkflow failure classes plus the two tokens only
 		// the other two arms can write. `AgentUnitFailureClassTests.TheVocabulary_IsThirteenDistinctTokens` pins the C# side
 		// at thirteen; this is the other side of that claim — a token added there without a label here would reach an
 		// operator as a raw identifier, and no C# test can see a locale file.
@@ -161,7 +161,7 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 	});
 
 	it("says nothing that reads literally as 'waiting for approval' at run level", () => {
-		// The run-level WaitingForApproval covers an open gate AND a node needing intervention (Y20), so the badge must
+		// The run-level WaitingForApproval covers an open gate AND a node needing intervention, so the badge must
 		// not promise an approval when the truth may be "a node died and needs you".
 		const label = resolvePath(en as LocaleShape, "pages.devWorkflows.runStatus.WaitingForApproval");
 		expect(String(label).toLowerCase()).not.toContain("approval");

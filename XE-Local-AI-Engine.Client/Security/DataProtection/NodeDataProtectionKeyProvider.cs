@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 
 /// <summary>
-///     Derives and holds the Data Protection key-ring KEK (BE-02). Mirrors <c>NodeSqliteKeyHolder</c> and
+///     Derives and holds the Data Protection key-ring KEK. Mirrors <c>NodeSqliteKeyHolder</c> and
 ///     <c>NodeJwtKeyProvider</c> exactly — same HKDF-SHA256 derivation, same operator-secret source, same
 ///     zero-on-dispose discipline — but with a Data Protection-specific info string so the three keys never collide.
 ///     The at-rest (<c>c0re-node-sqlite</c>), auth (<c>c0re-node-jwt</c>), and key-ring (<c>c0re-node-dpkeyring</c>)

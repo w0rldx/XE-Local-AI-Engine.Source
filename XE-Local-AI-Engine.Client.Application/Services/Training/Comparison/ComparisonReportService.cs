@@ -7,15 +7,6 @@ using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
 
-/// <summary>What the operator asked to compare. The benchmark ids are optional and validated to exist before binding.</summary>
-public sealed record CreateComparisonCommand(
-    string Name,
-    Guid BaseEvaluationRunId,
-    Guid TunedEvaluationRunId,
-    Guid? BaseBenchmarkRunId = null,
-    Guid? TunedBenchmarkRunId = null,
-    Guid? TrainingRunId = null);
-
 public interface IComparisonReportService
 {
     Task<TrainingComparisonRecord> CreateAsync(CreateComparisonCommand command, CancellationToken cancellationToken = default);

@@ -24,19 +24,12 @@ public sealed class CreateWorkspaceEndpoint(ISelectedFolderResolver selectedFold
 
     public override async Task HandleAsync(CreateWorkspaceRequest req, CancellationToken ct)
     {
-        try
-        {
-            var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(req.Alias ?? string.Empty,
-                    req.HostPath ?? string.Empty,
-                    SelectedFolderMode.ReadOnlyMount),
-                ct).ConfigureAwait(false);
+        var reference = await _selectedFolders.RegisterAsync(new SelectedFolderRegistration(req.Alias ?? string.Empty,
+                req.HostPath ?? string.Empty,
+                SelectedFolderMode.ReadOnlyMount),
+            ct).ConfigureAwait(false);
 
-            await Send.OkAsync(ToResponse(reference), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(ToResponse(reference), ct).ConfigureAwait(false);
     }
 
     private static WorkspaceResponse ToResponse(SelectedFolderReference reference)

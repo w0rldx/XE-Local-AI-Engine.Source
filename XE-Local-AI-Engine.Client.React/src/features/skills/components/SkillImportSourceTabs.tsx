@@ -2,7 +2,8 @@ import { FileInput, Stack, Tabs, Text, Textarea, TextInput } from "@mantine/core
 import { IconBrandGithub, IconClipboardText, IconUpload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-export type SkillImportSourceTab = "upload" | "github" | "paste";
+import type { SkillImportSourceTab } from "@/features/skills/models/SkillModels";
+
 const PASTE_PLACEHOLDER = "---\nname: invoice-review\ndescription: …\n---\n\n# …";
 
 interface SkillImportSourceTabsProps {

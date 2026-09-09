@@ -328,7 +328,7 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		expect(state.cancel).toHaveBeenCalledWith(undefined, expect.any(Object));
 	});
 
-	// P5 regression: the draft used to be re-seeded by an effect keyed on the `managed` object, so every refetch of the
+	// Regression: the draft used to be re-seeded by an effect keyed on the `managed` object, so every refetch of the
 	// runtime status — a fresh object each time — replaced whatever the operator had just typed.
 	it("keeps an in-progress draft across a status refetch and re-seeds only when a new runtime is installed", () => {
 		const managed = {

@@ -46,7 +46,6 @@ public sealed class RegisterDevelopmentTemplateEndpoint(IDevelopmentTemplateServ
         }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
-                                              or DevelopmentTemplateAliasInUseException
                                               or DirectoryNotFoundException)
         {
             AddError(exception.Message);
@@ -103,17 +102,8 @@ public sealed class CreateDevelopmentRepositoryFromTemplateEndpoint(IDevelopment
                     result.TemplateCommit),
                 ct).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
         catch (Exception exception) when (exception is ArgumentException
                                               or DevelopmentWorkspaceSecurityException
-                                              or DevelopmentTemplateMaterializationException
                                               or DirectoryNotFoundException
                                               or IOException
                                               or UnauthorizedAccessException)

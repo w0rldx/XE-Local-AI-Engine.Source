@@ -20,18 +20,13 @@ import { useQuickStartReadiness } from "@/features/onboarding/hooks/useQuickStar
 import { clearTutorialProgress, readTutorialProgress, writeTutorialProgress } from "@/features/onboarding/hooks/useTourState";
 import { useTutorialProgress } from "@/features/onboarding/hooks/useTutorialProgress";
 import { useVisibleAssistantReplyCount } from "@/features/onboarding/hooks/useVisibleAssistantReplyCount";
+import type { ActiveTutorial } from "@/features/onboarding/models/OnboardingModels";
 
 const TOUR_Z_INDEX = 1000;
 const TARGET_WAIT_TIMEOUT_MS = 3000;
 const MAX_TARGET_RETRIES = 4;
 
 /* eslint-disable react-doctor/no-adjust-state-on-prop-change, react-doctor/no-chain-state-updates -- the optional welcome invitation and real milestone advancement react to authenticated backend/cache state. */
-
-interface ActiveTutorial {
-	tutorialId: TutorialId;
-	stepIds: readonly string[];
-	stepId: string;
-}
 
 export function OnboardingProvider({ children }: { children: ReactNode }) {
 	const { t } = useTranslation();

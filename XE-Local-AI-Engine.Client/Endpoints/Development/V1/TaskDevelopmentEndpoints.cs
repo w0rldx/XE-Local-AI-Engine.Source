@@ -20,14 +20,7 @@ public sealed class GetDevelopmentTaskEndpoint(IDevelopmentManagementService ser
 
     public override async Task HandleAsync(DevelopmentTaskRequest req, CancellationToken ct)
     {
-        try
-        {
-            await Send.OkAsync((await _service.GetTaskAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync((await _service.GetTaskAsync(req.ProjectId, req.TaskId, ct).ConfigureAwait(false)).ToResponse(), ct).ConfigureAwait(false);
     }
 }
 
@@ -58,17 +51,7 @@ public sealed class StartDevelopmentNextActionEndpoint(IDevelopmentManagementSer
                     result.Role?.ToString()),
                 ct).ConfigureAwait(false);
         }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (SelectedFolderEndpointSupport.IsHandled(exception))
-        {
-            await SelectedFolderEndpointSupport.SendAsync(this, Send, exception, ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (exception is DevelopmentInvalidTransitionException
-                                              or DevelopmentConcurrencyException
-                                              or DevelopmentWorkspaceSecurityException)
+        catch (DevelopmentWorkspaceSecurityException exception)
         {
             AddError(exception.Message);
             await Send.ErrorsAsync(statusCode: StatusCodes.Status409Conflict, cancellation: ct).ConfigureAwait(false);
@@ -90,19 +73,9 @@ public sealed class CancelDevelopmentAttemptEndpoint(IDevelopmentManagementServi
 
     public override async Task HandleAsync(DevelopmentAttemptRequest req, CancellationToken ct)
     {
-        try
-        {
-            if (!await _service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct).ConfigureAwait(false))
-            {
-                await Send.NoContentAsync(ct).ConfigureAwait(false);
-                return;
-            }
-
-            await Send.NoContentAsync(ct).ConfigureAwait(false);
-        }
-        catch (KeyNotFoundException)
-        {
-            await Send.NotFoundAsync(ct).ConfigureAwait(false);
-        }
+        // Cancelling an attempt that had already finished is not an error — both outcomes are 204. A missing
+        // project/task/attempt throws DevelopmentNotFoundException, which the global handler answers 404.
+        _ = await _service.CancelAttemptAsync(req.ProjectId, req.TaskId, req.AttemptId, ct).ConfigureAwait(false);
+        await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

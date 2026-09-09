@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 
 /// <summary>
@@ -39,6 +40,21 @@ public static class RecommendedRerankerModel
             RepoId = RepoId,
             Quant = Quant
         };
+    }
+
+    /// <summary>
+    ///     The installed recommended reranker, or <see langword="null" /> when it is not present. Reads the LOCAL
+    ///     registry only — no network resolve. Deliberately NARROWER than
+    ///     <see cref="RecommendedEmbeddingModel.ResolveExistingAsync" />: reranking is optional and choosing a reranker
+    ///     is an explicit operator act, so only THIS repo counts as "already installed" — another installed reranker is
+    ///     not one the operator asked for here.
+    /// </summary>
+    public static async Task<LocalModelDescriptor?> ResolveExistingAsync(IGgufModelStore modelStore, CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(modelStore);
+
+        var installed = await modelStore.ListInstalledModelsAsync(cancellationToken).ConfigureAwait(false);
+        return installed.FirstOrDefault(model => Matches(model.ModelName));
     }
 
     /// <summary>

@@ -116,5 +116,25 @@ export function artifactEditorLanguage(kind: WorkSessionArtifactKind, mediaType:
 	return "plaintext";
 }
 
-/** Re-exported so no work-session call site had to move when the decoder became shared (P4 §2.10). */
+/** Re-exported so no work-session call site had to move when the decoder became shared. */
 export { decodeArtifactContent } from "@/core/artifacts/ArtifactContent";
+
+/** One task and its nested children, as the plan panel renders them. */
+export interface TaskNode {
+	readonly task: WorkSessionTaskResponse;
+	readonly children: readonly TaskNode[];
+}
+
+/**
+ * What one step spent, as the supervisor writes it onto its StepEnded/StepFailed row. Deliberately a narrow read: the
+ * `detailJson` column is opaque and other writers use it for their own shapes, so anything that does not carry the
+ * four required counts renders nothing extra rather than a half-filled line.
+ */
+export interface StepConsumption {
+	readonly providerCalls: number;
+	readonly estimatedInputTokens: number;
+	readonly toolCallsCompleted: number;
+	readonly providerCallCap: number;
+	/** How many invocations ran under the step's cap scope. Absent on rows written before the field existed; read as 1. */
+	readonly attachedBudgets: number;
+}

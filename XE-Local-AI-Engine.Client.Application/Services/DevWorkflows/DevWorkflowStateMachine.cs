@@ -814,7 +814,7 @@ internal static class DevWorkflowStateMachine
     ///         Nearly the transition table, and deliberately not quite: that table answers "may the RUNTIME move this row
     ///         here", and one of its edges — an open gate going back to <c>Pending</c> — belongs to the fix loop's reset
     ///         and to nothing a person clicks. A <c>Retry</c> on an unanswered gate has no failed attempt to schedule
-    ///         again, and X3 is explicit that a gate takes the first three answers and nothing else.
+    ///         again, and a gate takes the first three answers and nothing else.
     ///     </para>
     ///     <para>
     ///         Shared by the decision endpoint and by the surface that advertises the answers, so what is offered and
@@ -873,7 +873,7 @@ internal static class DevWorkflowStateMachine
     ///         caller that can produce that target is <c>RecomputeRunStatusAsync</c>, and <see cref="Recompute" />
     ///         reaches its terminalization branch ONLY once every node run is already terminal. There is nothing left
     ///         to strand, and nothing to drain either — routing through <c>Cancelling</c> would cost a whole extra tick
-    ///         to settle something already knowable. The X10 gate-reject path keeps its drain, because there a live
+    ///         to settle something already knowable. The gate-reject path keeps its drain, because there a live
     ///         sibling genuinely may still be mid-build.
     ///     </para>
     /// </summary>
@@ -907,7 +907,7 @@ internal static class DevWorkflowStateMachine
     ///         node run. Both re-derive the same way, which is why the row is cleaned rather than annotated.
     ///     </para>
     ///     <para>
-    ///         The four edges OUT of a terminal status back to <c>Pending</c> belong to the cross-node fix loop (X9) and
+    ///         The four edges OUT of a terminal status back to <c>Pending</c> belong to the cross-node fix loop and
     ///         to nothing else: when a failure routes to an upstream node, every node run downstream of that node has to
     ///         re-run against the new implementation, and those rows are settled by definition — the whole point is that
     ///         they already produced an answer to a question that is being asked again. A <c>Succeeded</c> row left
@@ -937,7 +937,7 @@ internal static class DevWorkflowStateMachine
                 or DevWorkflowNodeRunStatus.Blocked
                 or DevWorkflowNodeRunStatus.Pending
                 or DevWorkflowNodeRunStatus.Cancelled,
-            // NOT Skipped (X3): a gate's three answers all SUCCEED it and route on the answer, while the three
+            // NOT Skipped: a gate's three answers all SUCCEED it and route on the answer, while the three
             // interventions belong to Blocked. Skipping an open gate would be an operator walking past an approval
             // instead of giving one — the one thing a gate exists to make impossible. The only other moves are the
             // drain's cancel and the fix loop's reset, and the reset is the OPPOSITE of walking past it: an open gate

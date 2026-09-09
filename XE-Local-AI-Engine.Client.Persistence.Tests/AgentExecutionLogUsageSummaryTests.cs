@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     Aggregation round-trips for <see cref="AgentExecutionLogStore.SummarizeTokenUsageAsync" /> (BE-01): the set-based
+///     Aggregation round-trips for <see cref="AgentExecutionLogStore.SummarizeTokenUsageAsync" />: the set-based
 ///     GROUP BY over the run-envelope ledger sums tokens per (model, provider, UTC day), excludes the memory-diagnostics
 ///     producer, counts missing token fields as zero, and honours the half-open date range — all executed server-side
 ///     against real SQLite so the arithmetic day-bucket and nullable SUM translations are proven. The per-provider rollup

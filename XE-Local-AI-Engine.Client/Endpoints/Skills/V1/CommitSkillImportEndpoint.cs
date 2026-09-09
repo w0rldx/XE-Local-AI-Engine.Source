@@ -29,20 +29,12 @@ public sealed class CommitSkillImportEndpoint(ISkillImportService importService)
 
     public override async Task HandleAsync(SkillImportCommitEndpointRequest req, CancellationToken ct)
     {
-        try
-        {
-            var result = await _importService.CommitAsync(new SkillImportCommitRequest(req.Token,
-                    req.SkillNames ?? [],
-                    req.ConflictResolution,
-                    req.Acknowledged),
-                ct).ConfigureAwait(false);
+        var result = await _importService.CommitAsync(new SkillImportCommitRequest(req.Token,
+                req.SkillNames ?? [],
+                req.ConflictResolution,
+                req.Acknowledged),
+            ct).ConfigureAwait(false);
 
-            await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
-        }
-        catch (SkillImportException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
+        await Send.OkAsync(result.ToResponse(), ct).ConfigureAwait(false);
     }
 }

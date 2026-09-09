@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp;
 
 using NSubstitute;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Options;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp;
-using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Configuration;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;

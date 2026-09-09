@@ -43,7 +43,7 @@ describe("DevWorkflowDevTaskNodePanel", () => {
 
 		fireEvent.click(screen.getByTestId("dev-workflow-node-development-link"));
 
-		// X8: the pointer is the workflow's whole contribution to the Dev Mode surface, so it has to arrive complete.
+		// The pointer is the workflow's whole contribution to the Dev Mode surface, so it has to arrive complete.
 		expect(navigate).toHaveBeenCalledWith({ to: "/development", search: { project: projectId, task: taskId } });
 	});
 

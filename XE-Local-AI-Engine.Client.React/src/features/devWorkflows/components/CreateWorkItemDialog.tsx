@@ -4,19 +4,11 @@ import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import type { DevWorkflowDefinitionSummaryResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
-
-export interface CreateWorkItemValues {
-	readonly title: string;
-	readonly request: string;
-	readonly developmentProjectId?: string;
-	readonly definitionId: string;
-}
-
-export interface DevelopmentProjectOption {
-	readonly id: string;
-	readonly label: string;
-}
+import type {
+	CreateWorkItemValues,
+	DevelopmentProjectOption,
+	DevWorkflowDefinitionSummaryResponse,
+} from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface CreateWorkItemDialogProps {
 	readonly opened: boolean;
@@ -34,11 +26,11 @@ const TITLE_MAX = 200;
 const REQUEST_MAX = 8000;
 
 /**
- * Creating a work item and starting its run are TWO calls (P3 §4.1: a work item is definition-agnostic at creation).
+ * Creating a work item and starting its run are TWO calls: a work item is definition-agnostic at creation.
  * This dialog collects both halves and the page makes the calls in order — a failure between them leaves a
  * definition-less work item, which is a legal state whose detail page offers "start a run".
  *
- * The template picker shows the seeded definitions by their own names (Y5: "Research → Plan → Approval" and
+ * The template picker shows the seeded definitions by their own names ("Research → Plan → Approval" and
  * "Feature Development v1"); it does not invent labels for them.
  */
 export function CreateWorkItemDialog({
@@ -136,7 +128,7 @@ export function CreateWorkItemDialog({
 					onChange={setDefinitionId}
 					data-testid="create-dev-workflow-work-item-definition"
 				/>
-				{/* X17: the project stays optional — a research/plan-only workflow needs no repository. A run whose graph
+				{/* The project stays optional — a research/plan-only workflow needs no repository. A run whose graph
 				    does contain repo-bound nodes is refused at start with a 400 that says so. */}
 				<Select
 					label={t("pages.devWorkflows.create.projectLabel", "Development project (optional)")}

@@ -32,6 +32,10 @@ internal static class AddNodeWorkerInfrastructureExtensions
         // Model-picker catalog: fans out over Ollama, the installed GGUFs and the two cloud providers, degrading each
         // source independently. Scoped because it consumes the scoped IModelClassificationService.
         builder.Services.AddScoped<ILocalModelCatalogService, LocalModelCatalogService>();
+        // Model-details provider routing for the details endpoint: decides which of the five providers owns a model id
+        // and what "details" means for it. Scoped for the same reason as the catalog above — it consumes the scoped
+        // cloud/external resolvers.
+        builder.Services.AddScoped<ILocalModelDetailsResolver, LocalModelDetailsResolver>();
 
         return builder;
     }

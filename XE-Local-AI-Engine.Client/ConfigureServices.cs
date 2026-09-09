@@ -109,7 +109,7 @@ public static class ConfigureServices
                                     .SetApplicationName("XE-Local-AI-Engine")
                                     .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(dataProtectionRoot, "dp-keys")));
 
-        // Encrypt the key-ring at rest. On Windows, DPAPI (CurrentUser) — unchanged. On non-Windows (BE-02), wrap NEW
+        // Encrypt the key-ring at rest. On Windows, DPAPI (CurrentUser) — unchanged. On non-Windows, wrap NEW
         // key-ring elements with AES-256-GCM under a KEK derived from the node operator secret (HKDF-SHA256, distinct
         // info string), so the key-ring inherits the same env/secret-file protection as node.sqlite instead of sitting
         // in plaintext beside the ciphertext it unlocks. The encryptor is WRITE-side only: existing plaintext keys and
@@ -232,10 +232,15 @@ public static class ConfigureServices
         builder.Services
                .AddExceptionHandler<ConflictExceptionHandler>()
                .AddExceptionHandler<DomainValidationExceptionHandler>()
+               .AddExceptionHandler<DevelopmentConflictExceptionHandler>()
+               .AddExceptionHandler<SelectedFolderExceptionHandler>()
                .AddExceptionHandler<TrainingExceptionHandler>()
                .AddExceptionHandler<BenchmarkExceptionHandler>()
+               .AddExceptionHandler<GgufImportExceptionHandler>()
+               .AddExceptionHandler<GgufDownloadExceptionHandler>()
                .AddExceptionHandler<WorkSessionNotFoundExceptionHandler>()
                .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
+               .AddExceptionHandler<DevelopmentNotFoundExceptionHandler>()
                .AddExceptionHandler<GraphWorkflowNotFoundExceptionHandler>()
                .AddExceptionHandler<RequestBodyTooLargeExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();

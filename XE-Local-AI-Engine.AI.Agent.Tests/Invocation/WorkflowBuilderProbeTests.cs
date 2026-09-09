@@ -1,7 +1,6 @@
-// D8 probe: the raw Microsoft.Agents.AI.Workflows WorkflowBuilder API, at the pinned version
+// The WorkflowBuilder probe: the raw Microsoft.Agents.AI.Workflows WorkflowBuilder API, at the pinned version
 // (Directory.Packages.props). PreviewWorkflows was the only production caller of the raw builder and has been
-// deleted; the operator ruled (KICKOFF.md D8, REPORT.md F12) that one builder-shaped test must survive so the
-// API stays exercised across MAF bumps. Fully deterministic: plain code executors, NO IChatClient, no model, no
+// deleted; one builder-shaped test is kept deliberately so the API stays exercised across MAF bumps. Fully deterministic: plain code executors, NO IChatClient, no model, no
 // network — this probe deliberately has nothing to do with agents.
 //
 // This probe intentionally uses underscore-rich test names (CA1707), direct awaits in test code (CA2007), and

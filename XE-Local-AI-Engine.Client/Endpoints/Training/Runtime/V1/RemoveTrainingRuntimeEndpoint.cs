@@ -38,21 +38,15 @@ public sealed class RemoveTrainingRuntimeEndpoint(ITrainingRuntimeService runtim
         {
             if (!await runtimeService.RemoveAsync(ct).ConfigureAwait(false))
             {
-                await Send.ResultAsync(Results.Conflict(new TrainingRuntimeBlockedResponse
-                {
-                    Reason = "already-installing",
-                    Message = "A training runtime install is in progress. Cancel it before removing the runtime."
-                })).ConfigureAwait(false);
+                await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked(TrainingRuntimeBlockedEndpointSupport.AlreadyInstallingReason,
+                              "A training runtime install is in progress. Cancel it before removing the runtime."))
+                          .ConfigureAwait(false);
                 return;
             }
         }
         catch (TrainingRuntimeException exception)
         {
-            await Send.ResultAsync(Results.Conflict(new TrainingRuntimeBlockedResponse
-            {
-                Reason = "remove-failed",
-                Message = exception.Message
-            })).ConfigureAwait(false);
+            await Send.ResultAsync(TrainingRuntimeBlockedEndpointSupport.Blocked("remove-failed", exception.Message)).ConfigureAwait(false);
             return;
         }
 

@@ -3,7 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.GraphWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tools;
 
 /// <summary>
-///     Ruling D6's gate over a parsed graph: every <c>Tool</c> node must name a tool
+///     The tool gate over a parsed graph: every <c>Tool</c> node must name a tool
 ///     <see cref="IToolInvocationService" /> would actually invoke. Save time and run start ask the SAME question of
 ///     the same catalog, so a definition accepted at save is refused at start only because the envelope tightened in
 ///     between — which is the case the run-start check exists for.

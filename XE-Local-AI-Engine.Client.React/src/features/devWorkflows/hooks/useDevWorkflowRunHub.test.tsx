@@ -162,8 +162,8 @@ describe("useDevWorkflowRunHub", () => {
 		const invalidate = vi.spyOn(queryClient, "invalidateQueries").mockResolvedValue();
 
 		const expectations = [
-			// X19's four kinds, verbatim. `graph` and `event` are deliberately absent: a materialization folds into
-			// `node` (Y12) and every kind moves the event feed anyway.
+			// The hub's four kinds, verbatim. `graph` and `event` are deliberately absent: a materialization folds into
+			// `node` and every kind moves the event feed anyway.
 			{ kind: "run", key: devWorkflowInvalidationKey(devWorkflowQueryIds.run, { runId }) },
 			{ kind: "node", key: devWorkflowInvalidationKey(devWorkflowQueryIds.node, { runId }) },
 			{ kind: "gate", key: devWorkflowInvalidationKey(devWorkflowQueryIds.node, { runId }) },

@@ -7,10 +7,7 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevWorkflowAgentNodePanel } from "@/features/devWorkflows/components/DevWorkflowAgentNodePanel";
 import { DevWorkflowDevTaskNodePanel } from "@/features/devWorkflows/components/DevWorkflowDevTaskNodePanel";
-import {
-	type DevWorkflowDecisionSubmission,
-	DevWorkflowHumanGatePanel,
-} from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
+import { DevWorkflowHumanGatePanel } from "@/features/devWorkflows/components/DevWorkflowHumanGatePanel";
 import { DevWorkflowNodeAttempts } from "@/features/devWorkflows/components/DevWorkflowNodeAttempts";
 import { DevWorkflowNodeCascadeRerunNotice } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCascadeRerunNotice";
 import { DevWorkflowNodeCostSection } from "@/features/devWorkflows/components/DevWorkflowNodePanel/DevWorkflowNodeCostSection";
@@ -19,6 +16,7 @@ import { DevWorkflowStructuralNodePanel } from "@/features/devWorkflows/componen
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";
 import { devWorkflowNodeAttempts, devWorkflowNodeEvents } from "@/features/devWorkflows/models/DevWorkflowAttempts";
 import {
+	type DevWorkflowDecisionSubmission,
 	type DevWorkflowNodeRunDetailResponse,
 	type DevWorkflowRunEventResponse,
 	type DevWorkflowRunResponse,
@@ -39,7 +37,7 @@ export interface DevWorkflowNodePanelProps {
 	readonly artifactNameById?: ReadonlyMap<string, string>;
 	/**
 	 * The run's loaded event pages, and the run's own node-run rows. Both are the panel's only source for facts the
-	 * node-run DETAIL response does not carry: attempt history lives in the log (X2), and a structural node's
+	 * node-run DETAIL response does not carry: attempt history lives in the log, and a structural node's
 	 * dependencies and branches live in its siblings' rows and the pinned graph's edges.
 	 */
 	readonly events?: readonly DevWorkflowRunEventResponse[];
@@ -57,7 +55,7 @@ export interface DevWorkflowNodePanelProps {
  * Where each kind's evidence comes from is the distinction that matters. A Tool node renders its own report and an
  * Agent node its own transcript, because both are workflow-owned and neither has another home. A DevTask node stays a
  * LINK-OUT: the Dev Mode evidence chain exists at its own route and re-hosting it would fork the one place the
- * hash-locked apply gate is rendered (O13).
+ * hash-locked apply gate is rendered.
  */
 export function DevWorkflowNodePanel({
 	nodeRun,
@@ -214,7 +212,7 @@ export function DevWorkflowNodePanel({
 }
 
 /**
- * The policy that was baked into this node run's objective (D/Y2), read off the persisted resolution rather than
+ * The policy that was baked into this node run's objective, read off the persisted resolution rather than
  * re-resolved: a rule set edited or deleted after materialization must not change what this run was told to do.
  *
  * That is exactly what the two hashes say. `contentSha256` is the body the run used; `currentContentSha256` is the

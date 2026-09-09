@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 /// <summary>
@@ -327,8 +328,8 @@ internal sealed partial class HuggingFaceGgufDiscovery : IHuggingFaceGgufDiscove
     }
 
     /// <summary>A selectable repo file paired with the quant token parsed from its name.</summary>
-    private sealed record UsableFile(HfHubClient.HubRepoFile File, string Quant);
+    private sealed record UsableFile(HubRepoFile File, string Quant);
 
     /// <summary>One split of a sharded GGUF: a <see cref="UsableFile" /> plus its zero-padded part number.</summary>
-    private sealed record ShardCandidate(HfHubClient.HubRepoFile File, string Quant, string Part);
+    private sealed record ShardCandidate(HubRepoFile File, string Quant, string Part);
 }

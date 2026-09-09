@@ -127,7 +127,7 @@ public sealed class WorkSessionStateBlockTests
 
         // The stuck instruction names the two signals DevWorkflowAgentExecutor reads out of a completed session before
         // it decides the node run's fate. A step told to complete without them is a step told to report a success it
-        // did not have, which is live finding F1.
+        // did not have.
         AssertEx.Contains(block, "mark the task Blocked with the reason");
         AssertEx.Contains(block, "objective was NOT met");
         AssertEx.Contains(block, "complete_work_session with objectiveMet false");

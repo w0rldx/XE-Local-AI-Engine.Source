@@ -3,6 +3,21 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.Logging.Abstractions;
+using XE_Local_AI_Engine.Client.ExceptionHandling;
+using XE_Local_AI_Engine.Client.Models.NodeBinding;
+using XE_Local_AI_Engine.Client.Services.Agents;
+using XE_Local_AI_Engine.Client.Services.AppUpdate;
+using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
+using XE_Local_AI_Engine.Client.Services.Development;
+using XE_Local_AI_Engine.Client.Services.ExternalProviders;
+using XE_Local_AI_Engine.Client.Services.Knowledge;
+using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
+using XE_Local_AI_Engine.Client.Services.Training.Export;
+using XE_Local_AI_Engine.Client.Services.Training.Runs;
+using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -64,6 +79,101 @@ public sealed class DomainValidationExceptionHandlerTests
         // Whole-payload equality once the two values that are allowed to differ (the message and the per-request
         // trace id) are masked: property set, property order and formatting must all match, not just the values.
         AssertEx.Equal(Canonicalize(local), Canonicalize(global));
+    }
+
+    /// <summary>
+    ///     Every exception type promoted OUT of a per-endpoint <c>catch … AddError(exception.Message) +
+    ///     Send.ErrorsAsync()</c> and INTO the switch. The route test above pins the body SHAPE once; this pins that
+    ///     each promoted type actually reaches the switch and still answers 400 with its own message, which a shape
+    ///     test over one route cannot show. Driven against the handler directly because these come from ten different
+    ///     services, several of which need real infrastructure (Entra, Velopack, a GPU queue) to raise naturally.
+    /// </summary>
+    [Test]
+    public async Task TryHandleAsync_ForEachPromotedValidationType_Writes400WithTheExceptionMessage()
+    {
+        Exception[] promoted =
+        [
+            new NodeBindingException("The node binding session expired."),
+            new EntraConnectionNotConfiguredException("No Entra connection is configured."),
+            new SkillImportException("The archive contains an entry outside the skill root."),
+            new AppUpdateException("The update could not be applied."),
+            new ExternalProviderValidationException("The connection id is not a valid slug."),
+            new NodeChatInvalidBranchSelectionException(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid()),
+            new EvaluationRejectedException("The training run held nothing back."),
+            new TrainingExportRejectedException("The artifact has already been promoted."),
+            new TrainingRunRejectedException("The base model licence was not confirmed."),
+            new KnowledgeRepositoryImportRejectedException("The repository is past the configured file-count bound.")
+        ];
+
+        foreach (var exception in promoted)
+        {
+            var typeName = exception.GetType().Name;
+            var context = new DefaultHttpContext
+            {
+                TraceIdentifier = "trace-" + Guid.NewGuid().ToString("N"),
+                Request =
+                {
+                    Path = "/api/local/v1/promoted"
+                },
+                Response =
+                {
+                    Body = new MemoryStream()
+                }
+            };
+            var handler = new DomainValidationExceptionHandler(NullLogger<DomainValidationExceptionHandler>.Instance);
+
+            AssertEx.True(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false),
+                $"{typeName} must be answered by the global validation handler, not left to a per-endpoint catch.");
+            AssertEx.Equal(expected: 400, context.Response.StatusCode, typeName);
+            AssertEx.Contains(context.Response.ContentType, "problem+json", StringComparison.OrdinalIgnoreCase, typeName);
+
+            context.Response.Body.Position = 0;
+            using var document = await JsonDocument.ParseAsync(context.Response.Body).ConfigureAwait(false);
+            var root = document.RootElement;
+            var firstError = root.GetProperty("errors")[0];
+
+            AssertEx.Equal(expected: 400, root.GetProperty("status").GetInt32(), typeName);
+            AssertEx.Equal("/api/local/v1/promoted", root.GetProperty("instance").GetString(), typeName);
+            AssertEx.Equal(context.TraceIdentifier, root.GetProperty("traceId").GetString(), typeName);
+            AssertEx.Equal(expected: 1, root.GetProperty("errors").GetArrayLength(), typeName);
+            // The field NAME the message hangs off. Its wire casing ("generalErrors") comes from FastEndpoints'
+            // global Config.Serializer naming policy, which only the real host configures — the route test above
+            // pins that; over a bare context the raw constant is what lands.
+            AssertEx.Equal("GeneralErrors", firstError.GetProperty("name").GetString(), typeName);
+            AssertEx.Equal(exception.Message, firstError.GetProperty("reason").GetString(), typeName);
+            AssertEx.Equal(exception.Message, root.GetProperty("detail").GetString(), typeName);
+        }
+    }
+
+    /// <summary>
+    ///     The two types the promotion deliberately LEFT at their endpoints, so a later "finish the job" pass cannot
+    ///     quietly move them without this failing: <c>SelectedFolderValidationException</c> is the base of a 404 and a
+    ///     409 type, and <c>DevelopmentWorkspaceSecurityException</c> is answered 409 by the patch/next-action
+    ///     endpoints and 400 by the register/create ones. A global 400 would move real routes in both cases.
+    /// </summary>
+    [Test]
+    public async Task TryHandleAsync_ForTheTypesWhoseStatusIsNotAlways400_DeclinesToHandleThem()
+    {
+        Exception[] excluded =
+        [
+            new SelectedFolderValidationException("The selected folder is not a Git repository root."),
+            new DevelopmentWorkspaceSecurityException("The workspace path escapes the approved root.")
+        ];
+
+        foreach (var exception in excluded)
+        {
+            var context = new DefaultHttpContext
+            {
+                Response =
+                {
+                    Body = new MemoryStream()
+                }
+            };
+            var handler = new DomainValidationExceptionHandler(NullLogger<DomainValidationExceptionHandler>.Instance);
+
+            AssertEx.False(await handler.TryHandleAsync(context, exception, CancellationToken.None).ConfigureAwait(false),
+                $"{exception.GetType().Name} answers more than one status across the endpoints that raise it, so the global 400 must not claim it.");
+        }
     }
 
     private static string Canonicalize(ProblemBody body)

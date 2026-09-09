@@ -32,10 +32,5 @@ public sealed class PollNodeBindingEndpoint(INodeBindingService nodeBindingServi
                 ExpiresAt = req.ExpiresAt
             }, CancellationToken.None).ConfigureAwait(false);
         }
-        catch (NodeBindingException exception)
-        {
-            AddError(exception.Message);
-            await Send.ErrorsAsync(cancellation: ct).ConfigureAwait(false);
-        }
     }
 }

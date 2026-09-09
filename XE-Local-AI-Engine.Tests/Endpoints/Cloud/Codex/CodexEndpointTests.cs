@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.Endpoints.Cloud.Codex;
+﻿namespace XE_Local_AI_Engine.Tests.Endpoints.Cloud.Codex;
 
 using System.Net;
 using System.Text.Json;
@@ -8,6 +8,7 @@ using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
+using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

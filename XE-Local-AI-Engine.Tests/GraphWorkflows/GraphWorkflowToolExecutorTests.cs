@@ -250,9 +250,9 @@ public sealed class GraphWorkflowToolExecutorTests
     }
 
     /// <summary>
-    ///     <b>C17, the model-controlled arguments.</b> A binding reads the node's input document, whose upstream map
+    ///     <b>The model-controlled arguments.</b> A binding reads the node's input document, whose upstream map
     ///     carries whatever the node above wrote — so an agent's generated text can choose <c>read_file</c>'s path.
-    ///     That is the design, not a hole: D6 reasons about WHICH tool may run and never about who authors its
+    ///     That is the design, not a hole: the invocation envelope reasons about WHICH tool may run and never about who authors its
     ///     arguments, and containment is each tool's own guard.
     ///     <para>
     ///         What comes back is <c>WorkspacePathGuard</c>'s own refusal, verbatim, as a perfectly successful

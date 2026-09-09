@@ -1,44 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 public interface IBenchmarkRunBatchService
 {
     Task<BenchmarkRunBatchResult> StartAsync(BenchmarkRunBatchRequest request, CancellationToken cancellationToken = default);
 }
-
-public sealed record BenchmarkRunBatchRequest(
-    Guid ProjectId,
-    long ExpectedProjectVersion,
-    IReadOnlyList<BenchmarkRunBatchItem> Items,
-    int RepeatCount,
-    bool Warmup,
-    BenchmarkRepeatMode RepeatMode,
-    double? AnswerVarianceTemperature);
-
-public sealed record BenchmarkRunBatchItem(string ModelName, string? KvCacheType);
-
-public sealed record BenchmarkRunBatchStartedItem(string ModelName, string? KvCacheType, IReadOnlyList<Guid> RunIds);
-
-public enum BenchmarkRunBatchRejectionKind
-{
-    Failure,
-    NotAttempted,
-    TimeBudget
-}
-
-public sealed record BenchmarkRunBatchRejectedItem(
-    string ModelName,
-    string? KvCacheType,
-    BenchmarkRunBatchRejectionKind Kind,
-    string Message,
-    Exception? Failure = null);
-
-public sealed record BenchmarkRunBatchResult(
-    long ProjectVersion,
-    IReadOnlyList<BenchmarkRunBatchStartedItem> Started,
-    IReadOnlyList<BenchmarkRunBatchRejectedItem> Rejected);
 
 public sealed class BenchmarkRunBatchService(IBenchmarkRunFreezeService runs, TimeProvider timeProvider) : IBenchmarkRunBatchService
 {

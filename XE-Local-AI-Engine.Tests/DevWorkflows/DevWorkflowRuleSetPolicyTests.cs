@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     O6 policy: which scoped rule sets a node run resolves to, what the row records about it, and what reaches the
+///     Scoped rule-set policy: which scoped rule sets a node run resolves to, what the row records about it, and what reaches the
 ///     agent's objective.
 /// </summary>
 public sealed class DevWorkflowRuleSetPolicyTests
@@ -40,7 +40,7 @@ public sealed class DevWorkflowRuleSetPolicyTests
                                          """;
 
     /// <summary>
-    ///     Y2's predicate, stated as a table: an EMPTY axis matches everything, a populated one is exact and
+    ///     The scope predicate, stated as a table: an EMPTY axis matches everything, a populated one is exact and
     ///     case-insensitive, and BOTH have to match. The last two rows are the ones that would silently ship wrong —
     ///     a rule set scoped to a project a node has none of must not apply, and a scope nothing can parse applies to
     ///     nothing rather than to everything.

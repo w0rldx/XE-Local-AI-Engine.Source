@@ -35,7 +35,8 @@ internal sealed class DevWorkflowAgentExecutor
     ///     How the completion event's detail is read. Case-INSENSITIVE deliberately: the handler writes it with bare
     ///     defaults today (PascalCase), and a later tidy-up onto the shared Web options would silently rename the
     ///     members to camelCase — after which a case-sensitive read binds nothing, every declared unmet objective reads
-    ///     as met, and live finding F1 is back with no exception and no log line to find it by.
+    ///     as met, and a session that closed WITHOUT meeting its objective silently reads as a success again, with no
+    ///     exception and no log line to find it by.
     /// </summary>
     private static readonly JsonSerializerOptions CompletionDetailOptions = new()
     {
@@ -471,8 +472,8 @@ internal sealed class DevWorkflowAgentExecutor
     ///     will really be offered a tool that writes or runs commands has to have SAID so, or the template has to have
     ///     waived the rule once and in writing.
     ///     <para>
-    ///         The structural half alone would be inert by construction — it can only bite on an apply node, which Y3
-    ///         already gates, and on a declaration an author volunteered. What a node may actually do is decided when
+    ///         The structural half alone would be inert by construction — it can only bite on an apply node, which the
+    ///         parser already requires a human gate in front of, and on a declaration an author volunteered. What a node may actually do is decided when
     ///         the binding is resolved, so the question is asked there.
     ///     </para>
     ///     <para>
@@ -557,7 +558,7 @@ internal sealed class DevWorkflowAgentExecutor
             _ = objective.AppendLine().AppendLine(DevWorkflowDecompositionContract.Text);
         }
 
-        // The scoped rule sets, between the node's own instructions and what was asked, per §5.6.1a. Their text counts
+        // The scoped rule sets, between the node's own instructions and what was asked. Their text counts
         // against the same budget everything else does: policy that pushed the objective over the limit would crowd out
         // the request it is supposed to govern.
         //
@@ -775,7 +776,8 @@ internal sealed class DevWorkflowAgentExecutor
     ///     <para>
     ///         A session completes for two different reasons and its status cannot tell them apart: the objective was
     ///         met, or the step could not meet it and closed anyway because nothing else lets a step end. Reading every
-    ///         completion as a success is live finding F1 — a verify node wrote that it had NOT signed the work off and
+    ///         completion as a success is the regression this reading exists to stop — a verify node wrote that it had
+    ///         NOT signed the work off and
     ///         the run still went green — so the two honest signals a stuck session leaves are read here instead: a plan
     ///         task it moved to <c>Blocked</c>, and the <c>objectiveMet:false</c> it may declare on
     ///         <c>complete_work_session</c>. Either stands the row down for a human, who answers on the intervention
@@ -1049,7 +1051,7 @@ internal sealed class DevWorkflowAgentExecutor
         return 1;
     }
 
-    /// <summary>The agent node's slice of the output document every executor writes (§5.5 of the runtime plan).</summary>
+    /// <summary>The agent node's slice of the output document every executor writes.</summary>
     private sealed record AgentOutput(
         string Status,
         int Attempt,

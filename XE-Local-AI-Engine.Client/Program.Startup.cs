@@ -83,7 +83,7 @@ public sealed partial class Program
 
         await using var scope = services.CreateAsyncScope();
 
-        // BE-06: snapshot the node database before applying pending migrations, in the same scope. Best-effort — a backup
+        // Snapshot the node database before applying pending migrations, in the same scope. Best-effort — a backup
         // failure is logged and swallowed inside the service, so it can never block migration or brick startup.
         var backupService = scope.ServiceProvider.GetRequiredService<INodeDbBackupService>();
         await backupService.BackupBeforeMigrationAsync().ConfigureAwait(false);

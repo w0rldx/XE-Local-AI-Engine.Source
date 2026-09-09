@@ -3,31 +3,14 @@ import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import type { IntegrationExecutionEvent } from "@/features/integrations/models/IntegrationModels";
+import type { EventDetail, IntegrationExecutionEvent } from "@/features/integrations/models/IntegrationModels";
 
 interface IntegrationExecutionTimelineProps {
 	events: readonly IntegrationExecutionEvent[];
 	isLoading: boolean;
-}
-
-// The payloads the nine persisted event types carry, per the backend's own writers. Everything is optional because a
-// detail line must degrade to nothing rather than throw on a shape this client has not seen.
-interface EventDetail {
-	readonly name?: string;
-	readonly ok?: boolean;
-	readonly category?: string | null;
-	readonly summary?: string | null;
-	// The pre-unification `execution.failed` spelling. Rows written before the writer moved to `{category, summary}`
-	// are still in the store and must keep rendering, so both spellings are read.
-	readonly failureCategory?: string | null;
-	readonly failureSummary?: string | null;
-	readonly tokens?: number;
-	readonly durationMs?: number;
-	readonly contentType?: string;
-	readonly payload?: unknown;
 }
 
 /**

@@ -18,7 +18,7 @@ using DevelopmentAttemptStatus = XE_Local_AI_Engine.Client.Persistence.Entities.
 ///         Slow and environment-bound by construction — it clones a repository and builds a solution, so it needs Git
 ///         and the .NET SDK, and it restores offline from this host's own package cache the way
 ///         <see cref="DevelopmentSyntheticSolutionRepository" /> arranges for every other gate test in this repository.
-///         It is deliberately the only test in Slice B that does this; everything else runs against the scripted lane.
+///         It is deliberately the only DevWorkflows test that does this; everything else runs against the scripted lane.
 ///     </para>
 /// </summary>
 public sealed class DevWorkflowToolSandboxTests : IDisposable

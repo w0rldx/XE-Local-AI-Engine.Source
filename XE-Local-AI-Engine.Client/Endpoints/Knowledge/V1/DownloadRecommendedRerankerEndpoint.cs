@@ -34,7 +34,7 @@ public sealed class DownloadRecommendedRerankerEndpoint(
     {
         Post(LocalApiRoutes.KnowledgeBase.RerankerDownloadRecommended);
         Policies(NodeAuthorizationPolicies.Operator);
-        // GgufDownloadEndpointSupport maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
+        // GgufDownloadExceptionHandler maps the synchronous acquisition/HF failures to these ProblemDetails statuses.
         Description(builder => builder.ProducesProblem(StatusCodes.Status403Forbidden)
                                       .ProducesProblem(StatusCodes.Status404NotFound)
                                       .ProducesProblem(StatusCodes.Status409Conflict)
@@ -44,10 +44,9 @@ public sealed class DownloadRecommendedRerankerEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        // Already-installed friendly no-op: check the LOCAL registry (no network resolve) for any quant of the
-        // recommended repo. Reranking only needs the model present; re-downloading it would be wasted bytes.
-        var installed = await _modelStore.ListInstalledModelsAsync(ct).ConfigureAwait(false);
-        var existing = installed.FirstOrDefault(model => RecommendedRerankerModel.Matches(model.ModelName));
+        // Already-installed friendly no-op: RecommendedRerankerModel's rule is deliberately the narrow one — only the
+        // recommended repo counts, because choosing a reranker is an explicit operator act.
+        var existing = await RecommendedRerankerModel.ResolveExistingAsync(_modelStore, ct).ConfigureAwait(false);
         if (existing is not null)
         {
             await Send.OkAsync(new DownloadRecommendedRerankerResponse
@@ -64,16 +63,7 @@ public sealed class DownloadRecommendedRerankerEndpoint(
 
         // Start (or rejoin) the download through the coordinator's detached path — the SAME path an operator-initiated
         // GGUF download uses, so progress/cancel and the model_provider_map write happen through one code path.
-        GgufDownloadTicket ticket;
-        try
-        {
-            ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct).ConfigureAwait(false);
-        }
-        catch (Exception exception) when (GgufDownloadEndpointSupport.IsHandled(exception))
-        {
-            await Send.ResultAsync(GgufDownloadEndpointSupport.Error(exception)).ConfigureAwait(false);
-            return;
-        }
+        var ticket = await _downloadCoordinator.StartAsync(RecommendedRerankerModel.ToDownloadRequest(), ct).ConfigureAwait(false);
 
         await Send.OkAsync(new DownloadRecommendedRerankerResponse
             {

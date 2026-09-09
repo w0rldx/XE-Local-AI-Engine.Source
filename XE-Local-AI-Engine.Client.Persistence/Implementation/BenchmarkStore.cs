@@ -177,7 +177,7 @@ public sealed partial class BenchmarkStore(NodeChatDbContext dbContext, TimeProv
             entity.ReasoningBudgetTokens, entity.FidelityEnabled, entity.FidelityKldEnabled, entity.FidelityChunks,
             entity.FidelityKldBaseModelName, entity.FidelityKldBaseFingerprint, entity.TaskItemSetHash);
 
-    // One place writes the six throughput columns, so the success path and the cancel-reset path can never disagree
+    // One place writes the seven throughput columns, so the success path and the cancel-reset path can never disagree
     // about which of them a run carries.
     private static void ApplyThroughput(BenchmarkRun run, BenchmarkRunThroughput? throughput)
     {

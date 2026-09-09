@@ -115,7 +115,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
-    ///     P2, live 2026-09-04. An operator's amendment has to reach the REVIEWER, and it has to still be there several
+    ///     Live 2026-09-04: an operator's amendment has to reach the REVIEWER, and it has to still be there several
     ///     hops later — the round it corrects is the review, not the coder round it starts. It is also not read as the
     ///     previous round's feedback, so the prompts that rank the two can never render the same sentence twice.
     ///     <para>
@@ -327,7 +327,7 @@ public sealed class DevelopmentReworkEdgeTests : IDisposable
     }
 
     /// <summary>
-    ///     P1, live 2026-09-05. The round cap is the ONE thing about a Dev Mode task an operator can change, and a
+    ///     Live 2026-09-05: the round cap is the ONE thing about a Dev Mode task an operator can change, and a
     ///     Retry buys exactly one round of it. The widening is also what pays for the single edge out of
     ///     <c>Blocked</c>: without it the task would be handed a round it has no budget to finish, which is the
     ///     two-second re-block the live round measured twice over.

@@ -9,12 +9,7 @@ import type {
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SkillImportCandidateCard } from "@/features/skills/components/SkillImportCandidateCard";
-
-interface SkillImportOutcome {
-	readonly name: string;
-	readonly status: string;
-	readonly reason?: string | null;
-}
+import type { SkillImportOutcome } from "@/features/skills/models/SkillModels";
 
 interface SkillImportPreviewPresentationProps {
 	readonly warningId: string;

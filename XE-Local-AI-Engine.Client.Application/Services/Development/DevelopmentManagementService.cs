@@ -51,7 +51,7 @@ public interface IDevelopmentManagementService
     ///     Puts a task's approved patch into the repository.
     ///     <para>
     ///         <paramref name="onBehalfOfWorkflowRunId" /> names the development-workflow run whose apply lane is
-    ///         asking, and is the ONLY thing that gets an apply past a live run's ownership of that decision (Y3).
+    ///         asking, and is the ONLY thing that gets an apply past a live run's ownership of that decision.
     ///         An operator surface — the endpoint — passes <see langword="null" />, which is what makes the refusal
     ///         server-side rather than a button a React build withholds.
     ///     </para>
@@ -434,7 +434,7 @@ internal sealed class DevelopmentManagementService(
         _ = await RequireTaskAsync(projectId, taskId, cancellationToken).ConfigureAwait(false);
         var attempt = (await _store.ListAttemptsAsync(taskId, cancellationToken).ConfigureAwait(false))
                       .SingleOrDefault(candidate => candidate.Id == attemptId)
-                      ?? throw new KeyNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
+                      ?? throw new DevelopmentNotFoundException($"Development attempt '{attemptId}' was not found on the task.");
         if (attempt.Status is not (DevelopmentAttemptStatus.Pending or DevelopmentAttemptStatus.Running))
         {
             return false;
@@ -466,7 +466,7 @@ internal sealed class DevelopmentManagementService(
         var artifact = await _store.GetArtifactAsync(artifactId, cancellationToken).ConfigureAwait(false);
         if (artifact.ProjectId != projectId || artifact.TaskId != taskId || artifact.ManagedReference is null)
         {
-            throw new KeyNotFoundException($"Development artifact '{artifactId}' was not found on the task.");
+            throw new DevelopmentNotFoundException($"Development artifact '{artifactId}' was not found on the task.");
         }
 
         var read = await _blobStore.ReadAsync(projectId,
@@ -510,7 +510,7 @@ internal sealed class DevelopmentManagementService(
     }
 
     /// <summary>
-    ///     Y3, enforced where it is actually enforceable: while the run driving a task is LIVE, the approval that lets
+    ///     The apply gate, enforced where it is actually enforceable: while the run driving a task is LIVE, the approval that lets
     ///     that task's patch land is a gate node in the run, and this gate is not it.
     ///     <para>
     ///         The Development page already hides its Apply button for such a task, but a hidden button is a hint, not
@@ -581,7 +581,7 @@ internal sealed class DevelopmentManagementService(
         var task = await _store.GetTaskAsync(taskId, cancellationToken).ConfigureAwait(false);
         if (task.ProjectId != projectId)
         {
-            throw new KeyNotFoundException($"Development task '{taskId}' was not found on project '{projectId}'.");
+            throw new DevelopmentNotFoundException($"Development task '{taskId}' was not found on project '{projectId}'.");
         }
 
         return task;

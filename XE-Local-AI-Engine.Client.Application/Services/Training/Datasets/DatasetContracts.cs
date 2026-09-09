@@ -4,6 +4,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>How the teacher is asked to produce a structured sample.</summary>
 public enum TeacherOutputMode
@@ -217,3 +218,30 @@ public static class TrainingJson
         return options;
     }
 }
+
+public enum DatasetExportFormat
+{
+    /// <summary>Canonical, template-agnostic JSONL (decision #16). One object per sample in <c>parts[]</c> shape.</summary>
+    Jsonl,
+
+    /// <summary>Hermes-style conversations, for reuse outside this node.</summary>
+    Hermes
+}
+
+/// <summary>One teacher turn. The seed is carried as a string for the same 2^53 precision reason the sampling DTO uses.</summary>
+public sealed record StructuredAgentRequest(
+    string ModelName,
+    string SystemInstructions,
+    string UserPrompt,
+    TeacherOutputMode OutputMode,
+    JsonElement ResponseSchema,
+    float Temperature,
+    string? Seed);
+
+public sealed record StructuredAgentResult(bool Success, string Text, string? FailureReason);
+
+public sealed record DatasetDefinitionDraft(string Name, DatasetDefinitionBodyV1 Body);
+
+public sealed record ToolMockDraft(string ToolName, ToolMockBodyV1 Body, bool Enabled);
+
+public sealed record ToolMockVerifyResult(ToolMockRecord Mock, ToolMockVerificationV1 Verification);

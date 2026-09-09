@@ -316,3 +316,9 @@ export function validateExternalProviderForm(
 
 	return errors;
 }
+
+/** Which connection the page's editor is on. `isNew` distinguishes a just-created draft from an existing row. */
+export interface EditorTarget {
+	readonly connectionId: string;
+	readonly isNew: boolean;
+}

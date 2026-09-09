@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 /// <summary>
-///     BE-08: guards against the exact drift <see cref="ConversationFootprintPurge" />'s remarks warn about — FK
+///     Guards against the exact drift <see cref="ConversationFootprintPurge" />'s remarks warn about — FK
 ///     cascades are off on the node-sqlite connection, so a table keyed by <c>conversation_id</c> (or
 ///     <c>message_id</c>) that is added to the EF model but never added to the purge helper would silently orphan
 ///     encrypted rows on a retention purge. This walks the live EF model rather than a migrated schema so the failure

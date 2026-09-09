@@ -5,7 +5,8 @@ import type { Dispatch, SetStateAction } from "react";
 
 import { DownloadRow } from "@/features/images/components/ImageDownloadRow";
 import { ManualDownloadForm } from "@/features/images/components/ImageManualDownloadForm";
-import { type BrowseInstallRequest, ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
+import { ImageModelBrowsePanel } from "@/features/images/components/ImageModelBrowsePanel";
+import type { BrowseInstallRequest } from "@/features/images/models/ImageModels";
 import { ImageModelCatalogPanel } from "@/features/images/components/ImageModelCatalogPanel";
 import type {
 	DownloadDraft,

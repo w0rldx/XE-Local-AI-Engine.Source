@@ -53,7 +53,7 @@ public sealed class NodeDataProtectionKeyRingFailClosedTests
     [Test]
     public void NonWindowsRing_StaysNarrowAndDoesNotClaimAPlainCryptographicFailure()
     {
-        // The BE-02 classifier recognises only this node's own decryption exception, so an unrelated cryptographic
+        // The non-Windows classifier recognises only this node's own decryption exception, so an unrelated cryptographic
         // failure is still left to the framework's own handling rather than reported as a KEK problem.
         var resolver = NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(isWindows: false)(new FakeInnerResolver(shouldGenerateNewKey: true));
 

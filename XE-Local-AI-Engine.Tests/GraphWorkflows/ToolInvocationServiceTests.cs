@@ -15,7 +15,7 @@ using XE_Local_AI_Engine.Client.Services.Tools;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     The D6 envelope, asserted where it is enforced. <c>IToolInvocationService</c> is the ONLY place a workflow node's
+///     The invocation envelope, asserted where it is enforced. <c>IToolInvocationService</c> is the ONLY place a workflow node's
 ///     tool call is admitted, so this class pins both halves of that claim: which tools get through (exactly the eight
 ///     built-in read tools), and that every refusal — risk class, composed approval, unknown name, bad arguments, a
 ///     spent budget — comes back as an outcome rather than an exception or a silent success.
@@ -78,7 +78,7 @@ public sealed class ToolInvocationServiceTests
     [Test]
     public async Task ListInvocableTools_IsExactlyTheEightBuiltInReadTools_EachWithASchema()
     {
-        // The set IS the D6 envelope, so it is asserted as a set rather than a spot-check: a future category or
+        // The set IS the invocation envelope, so it is asserted as a set rather than a spot-check: a future category or
         // approval change on any node tool moves this list and fails here rather than silently widening a Tool node.
         var invocable = await ServiceOf(Factory).ListInvocableToolsAsync().ConfigureAwait(false);
 
@@ -261,7 +261,7 @@ public sealed class ToolInvocationServiceTests
     }
 
     /// <summary>
-    ///     A real, enabled custom tool: the catalog leg is non-empty, so the D6 closure over custom tools is asserted
+    ///     A real, enabled custom tool: the catalog leg is non-empty, so the envelope's closure over custom tools is asserted
     ///     rather than passing vacuously on a host that has none. This is also the definition-site pin for
     ///     <c>CustomToolCatalog</c> — <c>Network</c> for <c>HttpFetch</c>, approval forced on unconditionally — which is
     ///     what makes "no custom tool can ever be invocable" true by construction rather than by policy.

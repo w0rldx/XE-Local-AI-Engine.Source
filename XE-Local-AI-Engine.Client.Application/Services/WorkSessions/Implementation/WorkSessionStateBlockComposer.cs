@@ -43,8 +43,8 @@ internal static class WorkSessionStateBlockComposer
     ///     <para>
     ///         The stuck sentence names the two things <c>DevWorkflowAgentExecutor</c> now READS out of a completed
     ///         session before it decides the node run's fate: a task left <c>Blocked</c>, and <c>objectiveMet:false</c>
-    ///         on the completion. Either one blocks the row for a human instead of reporting a success nobody had
-    ///         (live finding F1). So this is no longer only a plea for honesty — it is the wording of a contract the
+    ///         on the completion. Either one blocks the row for a human instead of reporting a success nobody had.
+    ///         So this is no longer only a plea for honesty — it is the wording of a contract the
     ///         executor enforces, and the two signals must stay named here for a model to know to leave them.
     ///     </para>
     /// </summary>

@@ -25,7 +25,7 @@ public sealed class CustomToolCatalogTests
     [Test]
     public async Task TryResolveManyAsync_ForSeveralNames_ReadsTheStoreOnce()
     {
-        // The whole point of O1: k requested names cost ONE scope and ONE ListAsync, not k of each.
+        // The whole point of the batch read: k requested names cost ONE scope and ONE ListAsync, not k of each.
         var names = new[]
         {
             "custom__alpha",
