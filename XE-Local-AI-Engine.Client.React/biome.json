@@ -30,6 +30,7 @@
 			"!**/package-lock.json",
 			"!**/pnpm-lock.yaml",
 			"!**/yarn.lock",
+			"!**/.omc/**",
 			"!src/routeTree.gen.ts",
 			"!src/core/api/generated/**"
 		]
