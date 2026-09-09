@@ -59,7 +59,11 @@ export function DatasetSampleReview({ dataset }: DatasetSampleReviewProps) {
 			</Group>
 
 			{items.length === 0 && !samplesQuery.isLoading ? (
-				<EmptyState size="sm" message={t("training.samples.empty", "No samples match this filter.")} data-testid="training-samples-empty" />
+				<EmptyState
+					size="sm"
+					message={t("training.samples.empty", "No samples match this filter.")}
+					data-testid="training-samples-empty"
+				/>
 			) : null}
 
 			{items.map((sample) => (

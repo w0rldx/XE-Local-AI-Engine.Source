@@ -51,7 +51,15 @@ describe("BenchmarkPairedDelta", () => {
 	// The interval IS the finding. A point estimate without one is the reading this panel exists to replace.
 	it("states the difference with its interval and the node's own separated flag", async () => {
 		compareMock.mockResolvedValue(
-			answer({ aCellKey: "cell:a", bCellKey: "cell:b", sharedItemCount: 5, delta: 6.2, ciLow: 1.4, ciHigh: 13.9, separated: true }),
+			answer({
+				aCellKey: "cell:a",
+				bCellKey: "cell:b",
+				sharedItemCount: 5,
+				delta: 6.2,
+				ciLow: 1.4,
+				ciHigh: 13.9,
+				separated: true,
+			}),
 		);
 		renderWithProviders(<BenchmarkPairedDelta projectId="project-1" cells={cells} />);
 
@@ -65,7 +73,15 @@ describe("BenchmarkPairedDelta", () => {
 	// Rendered from the flag, never re-derived from the bounds — and the sentence is the whole point of the panel.
 	it("says the suite does not separate them when zero is inside the interval", async () => {
 		compareMock.mockResolvedValue(
-			answer({ aCellKey: "cell:a", bCellKey: "cell:b", sharedItemCount: 5, delta: 6.2, ciLow: -1.4, ciHigh: 13.9, separated: false }),
+			answer({
+				aCellKey: "cell:a",
+				bCellKey: "cell:b",
+				sharedItemCount: 5,
+				delta: 6.2,
+				ciLow: -1.4,
+				ciHigh: 13.9,
+				separated: false,
+			}),
 		);
 		renderWithProviders(<BenchmarkPairedDelta projectId="project-1" cells={cells} />);
 
@@ -79,7 +95,15 @@ describe("BenchmarkPairedDelta", () => {
 	// under a B − A heading.
 	it("flips the sign when the pair is picked the other way round", async () => {
 		compareMock.mockResolvedValue(
-			answer({ aCellKey: "cell:a", bCellKey: "cell:b", sharedItemCount: 4, delta: 6.2, ciLow: 1.4, ciHigh: 13.9, separated: true }),
+			answer({
+				aCellKey: "cell:a",
+				bCellKey: "cell:b",
+				sharedItemCount: 4,
+				delta: 6.2,
+				ciLow: 1.4,
+				ciHigh: 13.9,
+				separated: true,
+			}),
 		);
 		renderWithProviders(<BenchmarkPairedDelta projectId="project-1" cells={cells} />);
 
@@ -95,9 +119,7 @@ describe("BenchmarkPairedDelta", () => {
 
 		pick("owner/Repo:Q4_K_M · q8_0", "owner/Repo:Q8_0 · q8_0");
 
-		await waitFor(() =>
-			expect(screen.getByTestId("benchmark-paired-insufficient").textContent).toContain("not a tie"),
-		);
+		await waitFor(() => expect(screen.getByTestId("benchmark-paired-insufficient").textContent).toContain("not a tie"));
 	});
 
 	// A failed request reports NOTHING about how many items the two share. Reading its empty result as "fewer than three
@@ -123,7 +145,15 @@ describe("BenchmarkPairedDelta", () => {
 
 		pick("owner/Repo:Q4_K_M · q8_0", "owner/Repo:Q8_0 · q8_0");
 		compareMock.mockResolvedValue(
-			answer({ aCellKey: "cell:a", bCellKey: "cell:b", sharedItemCount: 5, delta: 6.2, ciLow: 1.4, ciHigh: 13.9, separated: true }),
+			answer({
+				aCellKey: "cell:a",
+				bCellKey: "cell:b",
+				sharedItemCount: 5,
+				delta: 6.2,
+				ciLow: 1.4,
+				ciHigh: 13.9,
+				separated: true,
+			}),
 		);
 		fireEvent.click(await screen.findByTestId("benchmark-paired-retry"));
 

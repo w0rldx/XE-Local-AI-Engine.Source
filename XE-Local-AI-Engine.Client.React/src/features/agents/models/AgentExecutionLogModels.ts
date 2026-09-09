@@ -22,9 +22,7 @@ export interface AgentExecutionLog {
 
 // Project a generated execution-log response into the immutable domain view-model. Every field is optional on the
 // wire, so each coalesces to a safe default (null for the optional metadata, 0 for counters).
-export function toAgentExecutionLog(
-	dto: XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse,
-): AgentExecutionLog {
+export function toAgentExecutionLog(dto: XeLocalAiEngineClientEndpointsAgentsV1AgentExecutionLogResponse): AgentExecutionLog {
 	return {
 		id: dto.id ?? "",
 		agentDefinitionId: dto.agentDefinitionId ?? "",

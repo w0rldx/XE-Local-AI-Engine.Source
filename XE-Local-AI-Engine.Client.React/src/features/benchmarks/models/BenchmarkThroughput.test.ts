@@ -58,7 +58,11 @@ describe("benchmarkRepeatStats", () => {
 			id,
 			tokensPerSecond,
 			primaryModelName: "owner/Repo:Q4_K_M",
-			primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "q8_0", effectiveLaunchIdentity: "identity-a" },
+			primaryLaunch: {
+				...benchmarkRunSummaryFixture().primaryLaunch,
+				kvCacheType: "q8_0",
+				effectiveLaunchIdentity: "identity-a",
+			},
 			...overrides,
 		});
 
@@ -93,10 +97,18 @@ describe("benchmarkRepeatStats", () => {
 		const stats = benchmarkRepeatStats([
 			measured("a", 80),
 			measured("b", 40, {
-				primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "f16", effectiveLaunchIdentity: "identity-a" },
+				primaryLaunch: {
+					...benchmarkRunSummaryFixture().primaryLaunch,
+					kvCacheType: "f16",
+					effectiveLaunchIdentity: "identity-a",
+				},
 			}),
 			measured("c", 60, {
-				primaryLaunch: { ...benchmarkRunSummaryFixture().primaryLaunch, kvCacheType: "q8_0", effectiveLaunchIdentity: "identity-b" },
+				primaryLaunch: {
+					...benchmarkRunSummaryFixture().primaryLaunch,
+					kvCacheType: "q8_0",
+					effectiveLaunchIdentity: "identity-b",
+				},
 			}),
 		]);
 

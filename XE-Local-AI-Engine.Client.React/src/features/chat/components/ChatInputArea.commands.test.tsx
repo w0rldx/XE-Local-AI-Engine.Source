@@ -13,7 +13,10 @@ const commandOptions: ChatCommandOption[] = [
 ];
 
 function installBrowserMocks(): void {
-	Object.defineProperty(window, "matchMedia", { writable: true, value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })) });
+	Object.defineProperty(window, "matchMedia", {
+		writable: true,
+		value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
+	});
 	Object.defineProperty(window, "ResizeObserver", {
 		writable: true,
 		value: class ResizeObserverMock {
@@ -22,13 +25,32 @@ function installBrowserMocks(): void {
 			unobserve = vi.fn();
 		},
 	});
-	Object.defineProperty(document, "fonts", { writable: true, value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() } });
+	Object.defineProperty(document, "fonts", {
+		writable: true,
+		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
+	});
 	Element.prototype.scrollIntoView = vi.fn();
 }
 
 function renderComposer(overrides: Record<string, unknown> = {}) {
 	const onSend = vi.fn();
-	render(<MantineProvider><ChatInputArea availableReasoningEfforts={["none", "medium"]} isSending={false} modelOptions={[]} selectedModel="local-default" reasoningEffort="medium" commandOptions={commandOptions} onCancel={vi.fn()} onModelChange={vi.fn()} onReasoningEffortChange={vi.fn()} onSend={onSend} {...overrides} /></MantineProvider>);
+	render(
+		<MantineProvider>
+			<ChatInputArea
+				availableReasoningEfforts={["none", "medium"]}
+				isSending={false}
+				modelOptions={[]}
+				selectedModel="local-default"
+				reasoningEffort="medium"
+				commandOptions={commandOptions}
+				onCancel={vi.fn()}
+				onModelChange={vi.fn()}
+				onReasoningEffortChange={vi.fn()}
+				onSend={onSend}
+				{...overrides}
+			/>
+		</MantineProvider>,
+	);
 	return { input: screen.getByTestId<HTMLTextAreaElement>("chat-input"), onSend };
 }
 

@@ -58,7 +58,9 @@ function ModelDetailsBody({
 
 	// Fit content is computed here (not as a chained JSX ternary) to keep the panel readable: when model-fit is off
 	// show a disabled note; otherwise mount the cache-only llmfit query only while the Fit tab is the active one.
-	let fitContent = <Text c="dimmed">Model-fit recommendations are disabled on this node.</Text>;
+	let fitContent = (
+		<Text c="dimmed">{t("pages.models.details.fitDisabled", "Model-fit recommendations are disabled on this node.")}</Text>
+	);
 	if (modelFitEnabled) {
 		fitContent = tab === "fit" ? <ModelFitPanel modelName={model.modelName} /> : <span />;
 	}
@@ -66,10 +68,10 @@ function ModelDetailsBody({
 	return (
 		<Tabs value={tab} onChange={setTab} keepMounted={false}>
 			<Tabs.List>
-				<Tabs.Tab value="overview">Overview</Tabs.Tab>
+				<Tabs.Tab value="overview">{t("pages.models.details.tabs.overview", "Overview")}</Tabs.Tab>
 				<Tabs.Tab value="type">{t("pages.models.type.columnHeader", "Type")}</Tabs.Tab>
-				<Tabs.Tab value="license">License &amp; template</Tabs.Tab>
-				<Tabs.Tab value="fit">Fit</Tabs.Tab>
+				<Tabs.Tab value="license">{t("pages.models.details.tabs.license", "License & template")}</Tabs.Tab>
+				<Tabs.Tab value="fit">{t("pages.models.details.tabs.fit", "Fit")}</Tabs.Tab>
 				{showLaunchArgs ? (
 					<Tabs.Tab value="advanced" data-testid="model-advanced-tab">
 						{t("pages.models.launchArgs.tab", "Advanced")}
@@ -80,19 +82,30 @@ function ModelDetailsBody({
 			<Tabs.Panel value="overview" pt="md">
 				<Stack gap="sm">
 					{detailsLoading ? <Loader size="sm" /> : null}
-					<Text>Parameter size: {model.parameterSizeLabel}</Text>
-					<Text>Family: {model.familyLabel}</Text>
-					<Text>Quantization: {model.quantizationLabel}</Text>
+					<Text>{t("pages.models.details.parameterSize", "Parameter size: {{value}}", { value: model.parameterSizeLabel })}</Text>
+					<Text>{t("pages.models.details.family", "Family: {{value}}", { value: model.familyLabel })}</Text>
+					<Text>{t("pages.models.details.quantization", "Quantization: {{value}}", { value: model.quantizationLabel })}</Text>
 					<Text>
-						{t("pages.models.local.origin.label", "Origin")}:{" "}
-						{model.origin === "imported"
-							? t("pages.models.local.origin.imported", "Imported")
-							: model.origin === "huggingface"
-								? t("pages.models.local.origin.huggingFace", "Hugging Face")
-								: t("pages.models.local.origin.legacy", "Legacy / unknown")}
+						{t("pages.models.details.origin", "{{label}}: {{value}}", {
+							label: t("pages.models.local.origin.label", "Origin"),
+							value:
+								model.origin === "imported"
+									? t("pages.models.local.origin.imported", "Imported")
+									: model.origin === "huggingface"
+										? t("pages.models.local.origin.huggingFace", "Hugging Face")
+										: t("pages.models.local.origin.legacy", "Legacy / unknown"),
+						})}
 					</Text>
-					<Text>Context length: {details?.maxContextTokens?.toLocaleString() ?? "Unknown"}</Text>
-					{details?.system ? <Alert color="blue">System prompt: {details.system}</Alert> : null}
+					<Text>
+						{t("pages.models.details.contextLength", "Context length: {{value}}", {
+							value: details?.maxContextTokens?.toLocaleString() ?? t("pages.models.details.unknown", "Unknown"),
+						})}
+					</Text>
+					{details?.system ? (
+						<Alert color="blue">
+							{t("pages.models.details.systemPrompt", "System prompt: {{value}}", { value: details.system })}
+						</Alert>
+					) : null}
 				</Stack>
 			</Tabs.Panel>
 
@@ -105,7 +118,7 @@ function ModelDetailsBody({
 						{model.isOverridden ? (
 							<Group gap={6} align="center">
 								<Text size="sm" c="dimmed">
-									Detected: {kindLabel(t, model.detectedKind)}
+									{t("pages.models.details.detected", "Detected: {{kind}}", { kind: kindLabel(t, model.detectedKind) })}
 								</Text>
 								<Button
 									variant="subtle"
@@ -113,7 +126,7 @@ function ModelDetailsBody({
 									color="gray"
 									leftSection={<IconArrowBackUp size={14} />}
 									disabled={isActionPending}
-									aria-label={`Reset ${model.modelName} type to detected`}
+									aria-label={t("pages.models.type.resetAria", "Reset {{name}} type to detected", { name: model.modelName })}
 									onClick={() => onResetKind(model.modelName)}
 								>
 									{t("pages.models.type.reset", "Reset to detected")}
@@ -134,7 +147,7 @@ function ModelDetailsBody({
 
 					<Select
 						label={t("pages.models.type.overrideLabel", "Override type")}
-						aria-label={`Override type for ${model.modelName}`}
+						aria-label={t("pages.models.type.overrideAria", "Override type for {{name}}", { name: model.modelName })}
 						data={buildKindOptions(t, model.kind)}
 						value={model.kind}
 						allowDeselect={false}
@@ -154,7 +167,7 @@ function ModelDetailsBody({
 					{details?.template ? (
 						<Stack gap={4}>
 							<Text fw={600} size="sm">
-								Template
+								{t("pages.models.details.template", "Template")}
 							</Text>
 							<Code block={true} style={{ whiteSpace: "pre-wrap" }} data-testid="model-template-content">
 								{details.template}
@@ -164,14 +177,16 @@ function ModelDetailsBody({
 					{details?.license ? (
 						<Stack gap={4}>
 							<Text fw={600} size="sm">
-								License
+								{t("pages.models.details.license", "License")}
 							</Text>
 							<Code block={true} style={{ whiteSpace: "pre-wrap" }} data-testid="model-license-content">
 								{details.license}
 							</Code>
 						</Stack>
 					) : null}
-					{!hasLicenseOrTemplate ? <Text c="dimmed">No license or template provided for this model.</Text> : null}
+					{!hasLicenseOrTemplate ? (
+						<Text c="dimmed">{t("pages.models.details.empty", "No license or template provided for this model.")}</Text>
+					) : null}
 				</Stack>
 			</Tabs.Panel>
 
@@ -202,8 +217,15 @@ export function ModelDetailsDialog({
 	onSetKind,
 	onResetKind,
 }: ModelDetailsDialogProps) {
+	const { t } = useTranslation();
+
 	return (
-		<DialogShell opened={opened} onClose={onClose} title={model?.modelName ?? "Model details"} size="lg">
+		<DialogShell
+			opened={opened}
+			onClose={onClose}
+			title={model?.modelName ?? t("pages.models.details.title", "Model details")}
+			size="lg"
+		>
 			{model ? (
 				<ModelDetailsBody
 					key={model.modelName}

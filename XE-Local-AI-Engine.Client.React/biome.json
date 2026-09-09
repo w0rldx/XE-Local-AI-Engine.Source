@@ -8,6 +8,11 @@
 	"files": {
 		"ignoreUnknown": false
 	},
+	"css": {
+		"formatter": {
+			"enabled": false
+		}
+	},
 	"formatter": {
 		"enabled": true,
 		"formatWithErrors": false,
@@ -20,7 +25,14 @@
 		"bracketSpacing": true,
 		"expand": "auto",
 		"useEditorconfig": true,
-		"includes": ["**", "!**/package-lock.json", "!**/pnpm-lock.yaml", "!**/yarn.lock"]
+		"includes": [
+			"**",
+			"!**/package-lock.json",
+			"!**/pnpm-lock.yaml",
+			"!**/yarn.lock",
+			"!src/routeTree.gen.ts",
+			"!src/core/api/generated/**"
+		]
 	},
 	"linter": {
 		"enabled": true,

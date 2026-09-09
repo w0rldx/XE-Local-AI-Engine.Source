@@ -40,9 +40,12 @@ describe("notifySchedulerRunEvent", () => {
 	it("falls back to a localized message when a failed run carries no error message", () => {
 		notifySchedulerRunEvent("scheduler.runFailed", { runId: "run-failed-2" }, t);
 
-		expect(toastMock.error).toHaveBeenCalledWith("pages.scheduler.toasts.failedFallback", expect.objectContaining({
-			title: "pages.scheduler.toasts.failedTitle",
-		}));
+		expect(toastMock.error).toHaveBeenCalledWith(
+			"pages.scheduler.toasts.failedFallback",
+			expect.objectContaining({
+				title: "pages.scheduler.toasts.failedTitle",
+			}),
+		);
 	});
 
 	it("raises a warning toast on a cancelled run", () => {

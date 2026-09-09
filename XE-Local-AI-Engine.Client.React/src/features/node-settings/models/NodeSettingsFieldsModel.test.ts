@@ -413,7 +413,12 @@ describe("buildNodeSettingsRequest", () => {
 		expect(missing.errors["speculativeMode"]).toBeUndefined();
 		expect(missing.errors["speculativeDraftModelName"]).toBe("required");
 
-		const withDraft = { ...baseline, speculativeMode: mode, speculativeDraftModelName: "my-draft", speculativeDraftMaxTokens: 15 };
+		const withDraft = {
+			...baseline,
+			speculativeMode: mode,
+			speculativeDraftModelName: "my-draft",
+			speculativeDraftMaxTokens: 15,
+		};
 		const saved = buildNodeSettingsRequest(withDraft, baseline, bounds, false);
 		expect(saved.errors).toEqual({});
 		expect(saved.body.speculativeMode).toBe(mode);
@@ -550,7 +555,9 @@ describe("detachedGraceSeconds", () => {
 	});
 
 	it("reads the value and its bounds off the response, falling back to the seed default", () => {
-		expect(toNodeSettingsFieldsForm({ maxMessageRequestTimeoutSeconds: 300 } as NodeSettingsResponse).detachedGraceSeconds).toBe(300);
+		expect(toNodeSettingsFieldsForm({ maxMessageRequestTimeoutSeconds: 300 } as NodeSettingsResponse).detachedGraceSeconds).toBe(
+			300,
+		);
 		expect(
 			toNodeSettingsFieldsForm({ maxMessageRequestTimeoutSeconds: 300, detachedGraceSeconds: 45 } as NodeSettingsResponse)
 				.detachedGraceSeconds,

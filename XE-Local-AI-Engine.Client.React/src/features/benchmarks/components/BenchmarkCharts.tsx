@@ -212,9 +212,7 @@ function FidelityBars({ runs }: { runs: readonly BenchmarkRunSummary[] }) {
 							data={[...group.bars]}
 							dataKey="quant"
 							valueFormatter={(value) => value.toFixed(4)}
-							series={[
-								{ name: "kldMean", label: t("pages.benchmarks.charts.kld", "KL divergence"), color: seriesColors[4] },
-							]}
+							series={[{ name: "kldMean", label: t("pages.benchmarks.charts.kld", "KL divergence"), color: seriesColors[4] }]}
 							data-testid="benchmark-chart-kld"
 						/>
 					</ChartPanel>

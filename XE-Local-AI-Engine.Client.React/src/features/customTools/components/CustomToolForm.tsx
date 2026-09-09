@@ -1,4 +1,4 @@
-import { Alert, Checkbox, Divider, SegmentedControl, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
+import { Checkbox, Divider, SegmentedControl, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -237,11 +237,7 @@ export function CustomToolForm({
 				/>
 			) : null}
 
-			{submitError ? (
-				<Alert color="red" data-testid="custom-tool-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="custom-tool-form-submit-error" /> : null}
 		</Stack>
 	);
 }

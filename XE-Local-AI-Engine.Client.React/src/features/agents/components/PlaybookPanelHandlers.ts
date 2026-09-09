@@ -149,7 +149,9 @@ export function usePlaybookPanelHandlers({
 			if (confirmed) {
 				deleteMutation.mutate(action.id, {
 					onError: (error) =>
-						toast.error(apiErrorMessage(error, t("pages.agents.playbook.errors.delete", "Could not delete the playbook action."))),
+						toast.error(
+							apiErrorMessage(error, t("pages.agents.playbook.errors.delete", "Could not delete the playbook action.")),
+						),
 				});
 			}
 		},
@@ -160,7 +162,8 @@ export function usePlaybookPanelHandlers({
 	// notice is derived from analyzeMutation below.
 	const handleAnalyze = useCallback(() => {
 		analyzeMutation.mutate(undefined, {
-			onError: (error) => toast.error(apiErrorMessage(error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))),
+			onError: (error) =>
+				toast.error(apiErrorMessage(error, t("pages.agents.playbook.errors.analyze", "Could not analyze feedback."))),
 		});
 	}, [analyzeMutation, t]);
 

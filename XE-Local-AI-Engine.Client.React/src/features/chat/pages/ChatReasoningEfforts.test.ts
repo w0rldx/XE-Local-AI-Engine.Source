@@ -21,7 +21,13 @@ describe("resolveAvailableReasoningEfforts", () => {
 	});
 
 	it("offers the graded set for a model advertising the thinking capability", () => {
-		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: true }))).toEqual(["none", "low", "medium", "high", "auto"]);
+		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: true }))).toEqual([
+			"none",
+			"low",
+			"medium",
+			"high",
+			"auto",
+		]);
 	});
 
 	it("offers the binary set for a non-reasoning model and for no selection at all", () => {
@@ -70,8 +76,8 @@ describe("resolveAvailableReasoningEfforts", () => {
 	it("does not offer auto for a binary model", () => {
 		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: false }))).not.toContain("auto");
 		expect(resolveAvailableReasoningEfforts(undefined)).not.toContain("auto");
-		expect(
-			resolveAvailableReasoningEfforts(option({ isReasoningModel: false, isNativeReasoningModel: true })),
-		).not.toContain("auto");
+		expect(resolveAvailableReasoningEfforts(option({ isReasoningModel: false, isNativeReasoningModel: true }))).not.toContain(
+			"auto",
+		);
 	});
 });

@@ -162,9 +162,7 @@ describe("DevelopmentProjectForm", () => {
 		expect(create.disabled).toBe(false);
 
 		fireEvent.submit(screen.getByTestId("development-project-form"));
-		expect(submit).toHaveBeenCalledWith(
-			expect.objectContaining({ commandProfileId: "dotnet-slnx", buildTarget: "Engine.slnx" }),
-		);
+		expect(submit).toHaveBeenCalledWith(expect.objectContaining({ commandProfileId: "dotnet-slnx", buildTarget: "Engine.slnx" }));
 	});
 
 	it("moves the profile with the build target when the operator picks a different candidate", async () => {

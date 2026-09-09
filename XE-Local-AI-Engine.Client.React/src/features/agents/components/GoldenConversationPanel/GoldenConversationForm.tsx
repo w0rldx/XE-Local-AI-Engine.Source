@@ -1,9 +1,11 @@
-import { Alert, Button, Group, Paper, Stack, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, Paper, Stack, Textarea, TextInput } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { useCallback, useReducer } from "react";
 import { useTranslation } from "react-i18next";
 
 import { parseTurnLine, toLines } from "@/features/agents/models/GoldenConversationFormHelpers";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	type CreateGoldenConversationRequestDto,
 	findGoldenFieldOverLimit,
@@ -186,16 +188,8 @@ export function GoldenConversationForm({ isSubmitting, submitError, onSubmit, on
 					onChange={(event) => dispatch({ type: "setField", field: "rubric", value: event.currentTarget.value })}
 					data-testid="golden-form-rubric"
 				/>
-				{validationError ? (
-					<Alert color="red" data-testid="golden-form-validation-error">
-						{validationError}
-					</Alert>
-				) : null}
-				{submitError ? (
-					<Alert color="red" data-testid="golden-form-submit-error">
-						{submitError}
-					</Alert>
-				) : null}
+				{validationError ? <InlineErrorAlert message={validationError} data-testid="golden-form-validation-error" /> : null}
+				{submitError ? <InlineErrorAlert message={submitError} data-testid="golden-form-submit-error" /> : null}
 				<Group justify="flex-end">
 					<Button
 						variant="subtle"

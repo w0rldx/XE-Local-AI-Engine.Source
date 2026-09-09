@@ -221,7 +221,9 @@ describe("SkillImportDialog", () => {
 
 		fireEvent.click(screen.getByTestId("skill-import-body-toggle-invoice-review"));
 
-		await waitFor(() => expect(screen.getByTestId("skill-import-body-invoice-review").textContent).toContain("Review an invoice"));
+		await waitFor(() =>
+			expect(screen.getByTestId("skill-import-body-invoice-review").textContent).toContain("Review an invoice"),
+		);
 	});
 
 	it("commits the report token, the selected names and the acknowledgement", async () => {

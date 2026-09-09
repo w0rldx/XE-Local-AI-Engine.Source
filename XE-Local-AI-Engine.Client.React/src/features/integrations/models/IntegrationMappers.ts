@@ -40,7 +40,9 @@ function toInputKinds(names: readonly string[]): IntegrationInputKind[] {
 	return kinds;
 }
 
-export function toIntegrationTrigger(dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView): IntegrationTrigger {
+export function toIntegrationTrigger(
+	dto: XeLocalAiEngineClientEndpointsIntegrationsV1IntegrationTriggerView,
+): IntegrationTrigger {
 	return {
 		id: dto.id,
 		name: dto.name,

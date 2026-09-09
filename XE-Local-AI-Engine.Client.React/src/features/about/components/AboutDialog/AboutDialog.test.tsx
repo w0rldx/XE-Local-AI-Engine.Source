@@ -16,10 +16,7 @@ vi.mock("@/features/app-update/components/AppUpdateSection", () => ({
 
 import { AboutDialog } from "@/features/about/components/AboutDialog/AboutDialog";
 import { OnboardingContext, type OnboardingContextValue } from "@/features/onboarding/context/OnboardingContext";
-import {
-	applicationInfo,
-	runtimeLegalDocumentsForUserAgent,
-} from "@/features/about/data/AboutData";
+import { applicationInfo, runtimeLegalDocumentsForUserAgent } from "@/features/about/data/AboutData";
 
 function renderWithProviders(ui: ReactElement) {
 	const queryClient = new QueryClient({
@@ -170,7 +167,9 @@ describe("AboutDialog", () => {
 
 		expect(within(screen.getByTestId("tutorial-card-quick-start")).getByRole("button").hasAttribute("disabled")).toBe(true);
 		expect(within(screen.getByTestId("tutorial-card-agents-basics")).getByRole("button").hasAttribute("disabled")).toBe(true);
-		expect(within(screen.getByTestId("tutorial-card-knowledge-base-basics")).getByRole("button").hasAttribute("disabled")).toBe(true);
+		expect(within(screen.getByTestId("tutorial-card-knowledge-base-basics")).getByRole("button").hasAttribute("disabled")).toBe(
+			true,
+		);
 	});
 
 	it("links every bundled runtime license and notice from the Licenses tab", () => {
@@ -178,8 +177,9 @@ describe("AboutDialog", () => {
 
 		fireEvent.click(screen.getByRole("tab", { name: "Licenses" }));
 
-		expect(screen.getByRole("link", { name: ".NET runtime license" }).getAttribute("href"))
-			.toBe("/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt");
+		expect(screen.getByRole("link", { name: ".NET runtime license" }).getAttribute("href")).toBe(
+			"/licenses/dotnet/DOTNET-RUNTIME-LICENSE.txt",
+		);
 		expect(screen.getByRole("link", { name: ".NET runtime third-party notices" })).toBeTruthy();
 		expect(screen.getByRole("link", { name: "ASP.NET Core runtime license" })).toBeTruthy();
 		expect(screen.getByRole("link", { name: "ASP.NET Core runtime third-party notices" })).toBeTruthy();
@@ -187,14 +187,13 @@ describe("AboutDialog", () => {
 	});
 
 	it("selects only the MIT apphost terms for a Windows framework-dependent package", () => {
-		expect(runtimeLegalDocumentsForUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)"))
-			.toEqual([
-				{ name: ".NET Windows apphost license", href: "/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt" },
-				{
-					name: ".NET Windows apphost third-party notices",
-					href: "/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt",
-				},
-			]);
+		expect(runtimeLegalDocumentsForUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64)")).toEqual([
+			{ name: ".NET Windows apphost license", href: "/licenses/dotnet/DOTNET-APPHOST-LICENSE.txt" },
+			{
+				name: ".NET Windows apphost third-party notices",
+				href: "/licenses/dotnet/DOTNET-APPHOST-THIRD-PARTY-NOTICES.txt",
+			},
+		]);
 	});
 
 	it("filters the third-party license table by query", () => {

@@ -722,6 +722,9 @@
 			"loadingModel": "Loading model…",
 			"remoteViewOnlyTitle": "Remote conversation",
 			"remoteViewOnly": "This conversation was started from a paired client and is view-only on this node.",
+			"streamFailedTitle": "Local chat stream failed.",
+			"historyLoadFailedTitle": "Unable to load local chat history.",
+			"unknownError": "Unknown error",
 			"streamErrors": {
 				"epochKeyMissing": "Encryption keys are still syncing — please retry.",
 				"eventHandlerError": "A local chat update failed. Please retry or refresh the conversation."
@@ -1504,7 +1507,35 @@
 				"description": "Pairing and binding workflows will be ported from the current node UI."
 			},
 			"title": "Bind this node to your Central Platform account",
-			"subtitle": "Start binding here, then approve the request in the Central Platform using the displayed user code."
+			"subtitle": "Start binding here, then approve the request in the Central Platform using the displayed user code.",
+			"device": {
+				"title": "Device binding",
+				"status": "Status",
+				"userCode": "User code",
+				"verificationUrl": "Verification URL",
+				"expires": "Expires",
+				"empty": "No binding request is active on this worker.",
+				"start": "Start binding",
+				"cancel": "Cancel polling",
+				"cancelling": "Cancelling…",
+				"openApproval": "Open approval link"
+			},
+			"how": {
+				"title": "How binding works",
+				"step1": "Click Start binding to request a one-time user code.",
+				"step2": "Open the approval link and sign in to the Central Platform.",
+				"step3": "The worker polls at the server-provided interval and stores credentials only after approval."
+			},
+			"status": {
+				"started": "Binding started. Approve this worker in the Central Platform.",
+				"approved": "Binding approved. Worker credentials were stored securely.",
+				"ended": "Binding ended with status '{{status}}'.",
+				"cancelled": "Binding polling was cancelled locally."
+			},
+			"errors": {
+				"unexpected": "Unexpected binding error",
+				"emptyPoll": "Node binding poll returned an empty response."
+			}
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -2245,7 +2276,9 @@
 					"nativeReasoning": "Native reasoning"
 				},
 				"overrideLabel": "Override type",
-				"reset": "Reset to detected"
+				"reset": "Reset to detected",
+				"resetAria": "Reset {{name}} type to detected",
+				"overrideAria": "Override type for {{name}}"
 			},
 			"local": {
 				"setDefaultSuccess": "Default local model set to {{name}}.",
@@ -2255,6 +2288,22 @@
 				"loading": "Loading local models…",
 				"installedTitle": "Installed models",
 				"empty": "No local models found.",
+				"columns": {
+					"name": "Name",
+					"size": "Size",
+					"modified": "Modified",
+					"family": "Family",
+					"quantization": "Quantization",
+					"actions": "Actions"
+				},
+				"defaultBadge": "Default",
+				"actions": {
+					"viewDetails": "View details",
+					"viewDetailsAria": "View {{name}} details",
+					"setDefault": "Set as default model",
+					"setDefaultAria": "Set {{name}} as default",
+					"deleteAria": "Delete {{name}}"
+				},
 				"origin": {
 					"label": "Origin",
 					"imported": "Imported",
@@ -2268,6 +2317,26 @@
 				"errors": {
 					"unexpected": "Unexpected local model error"
 				}
+			},
+			"details": {
+				"title": "Model details",
+				"tabs": {
+					"overview": "Overview",
+					"license": "License & template",
+					"fit": "Fit"
+				},
+				"parameterSize": "Parameter size: {{value}}",
+				"family": "Family: {{value}}",
+				"quantization": "Quantization: {{value}}",
+				"origin": "{{label}}: {{value}}",
+				"contextLength": "Context length: {{value}}",
+				"unknown": "Unknown",
+				"systemPrompt": "System prompt: {{value}}",
+				"detected": "Detected: {{kind}}",
+				"template": "Template",
+				"license": "License",
+				"empty": "No license or template provided for this model.",
+				"fitDisabled": "Model-fit recommendations are disabled on this node."
 			},
 			"gguf": {
 				"browse": {

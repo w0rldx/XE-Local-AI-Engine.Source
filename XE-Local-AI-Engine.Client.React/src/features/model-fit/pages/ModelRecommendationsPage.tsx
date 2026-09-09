@@ -116,7 +116,11 @@ export function ModelRecommendationsPage() {
 			</SectionCard>
 
 			{model.catalog.data ? (
-				<CatalogInfoCard catalog={model.catalog.data} onRefresh={model.catalog.onRefresh} isRefreshing={model.catalog.isRefreshing} />
+				<CatalogInfoCard
+					catalog={model.catalog.data}
+					onRefresh={model.catalog.onRefresh}
+					isRefreshing={model.catalog.isRefreshing}
+				/>
 			) : null}
 
 			{/* Inference Optimizer: tuned llama.cpp launch profiles for this node. A distinct, unobtrusive

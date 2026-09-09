@@ -110,7 +110,9 @@ describe("DefinitionEditorDialog", () => {
 
 		fireEvent.change(screen.getByTestId("training-definition-holdout"), { target: { value: "45" } });
 
-		expect(screen.getByTestId("training-definition-error").textContent).toBe("The hold-out share must be between 5 and 30 percent.");
+		expect(screen.getByTestId("training-definition-error").textContent).toBe(
+			"The hold-out share must be between 5 and 30 percent.",
+		);
 		expect(submitButton().disabled).toBe(true);
 	});
 

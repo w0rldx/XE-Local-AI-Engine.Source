@@ -1,9 +1,10 @@
-import { Alert, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title } from "@mantine/core";
-import { IconAlertTriangle, IconFolder, IconRefresh, IconTrash } from "@tabler/icons-react";
+import { Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title } from "@mantine/core";
+import { IconFolder, IconRefresh, IconTrash } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useState } from "react";
 import { flushSync } from "react-dom";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
 import type { McpWorkspace } from "@/features/mcp/models/McpWorkspaceModels";
@@ -142,21 +143,20 @@ export function McpWorkspaceAllowlistPanel() {
 				) : null}
 
 				{workspacesQuery.error ? (
-					<Alert
-						color="red"
-						icon={<IconAlertTriangle size={16} />}
+					<InlineErrorAlert
 						title={t("pages.nodeSettings.mcpWorkspaces.loadError", "Could not load workspace access.")}
-					>
-						<Button
-							variant="subtle"
-							size="xs"
-							leftSection={<IconRefresh size={14} />}
-							onClick={() => workspacesQuery.refetch()}
-							loading={workspacesQuery.isFetching}
-						>
-							{t("common.retry", "Retry")}
-						</Button>
-					</Alert>
+						message={
+							<Button
+								variant="subtle"
+								size="xs"
+								leftSection={<IconRefresh size={14} />}
+								onClick={() => workspacesQuery.refetch()}
+								loading={workspacesQuery.isFetching}
+							>
+								{t("common.retry", "Retry")}
+							</Button>
+						}
+					/>
 				) : null}
 
 				{!workspacesQuery.isLoading && !workspacesQuery.error && (workspacesQuery.data?.length ?? 0) === 0 ? (

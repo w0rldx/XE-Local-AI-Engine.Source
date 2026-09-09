@@ -104,7 +104,9 @@ describe("Home landing card", () => {
 
 	it("does not count a non-chat external registration as a usable send path", async () => {
 		listLocalModelsQueryFn.mockResolvedValue({
-			items: [{ modelName: "ext:unsloth-box/bge-m3", provider: "external", kind: "Embedding", externalConnectionId: "unsloth-box" }],
+			items: [
+				{ modelName: "ext:unsloth-box/bge-m3", provider: "external", kind: "Embedding", externalConnectionId: "unsloth-box" },
+			],
 			isAvailable: true,
 		});
 

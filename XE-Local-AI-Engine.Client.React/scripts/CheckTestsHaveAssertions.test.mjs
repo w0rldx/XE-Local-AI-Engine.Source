@@ -58,7 +58,7 @@ it.each\`
 });
 
 test("does not mistake a member call named test for a test declaration", () => {
-	assert.deepEqual(findTestsWithoutAssertions('const ok = SKILL_NAME_PATTERN.test(name);\n'), []);
+	assert.deepEqual(findTestsWithoutAssertions("const ok = SKILL_NAME_PATTERN.test(name);\n"), []);
 });
 
 test("walks nested describes and ignores skipped and todo blocks", () => {

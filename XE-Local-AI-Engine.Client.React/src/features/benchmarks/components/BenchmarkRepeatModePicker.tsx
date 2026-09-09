@@ -2,7 +2,11 @@ import { Group, NumberInput, Select } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import type { BenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkModels";
-import { benchmarkAnswerVarianceTemperature, benchmarkRepeatModes, toBenchmarkRepeatMode } from "@/features/benchmarks/models/BenchmarkModels";
+import {
+	benchmarkAnswerVarianceTemperature,
+	benchmarkRepeatModes,
+	toBenchmarkRepeatMode,
+} from "@/features/benchmarks/models/BenchmarkModels";
 
 interface BenchmarkRepeatModePickerProps {
 	mode: BenchmarkRepeatMode;
@@ -45,9 +49,13 @@ export function BenchmarkRepeatModePicker({ mode, temperature, onChange }: Bench
 			{mode === "AnswerVariance" ? (
 				<NumberInput
 					label={t("pages.benchmarks.run.answerVarianceTemperature", "Temperature")}
-					description={t("pages.benchmarks.run.answerVarianceTemperatureHelp", "Above 0, at most {{max}}. Seeds vary per repeat.", {
-						max: benchmarkAnswerVarianceTemperature.max,
-					})}
+					description={t(
+						"pages.benchmarks.run.answerVarianceTemperatureHelp",
+						"Above 0, at most {{max}}. Seeds vary per repeat.",
+						{
+							max: benchmarkAnswerVarianceTemperature.max,
+						},
+					)}
 					min={0.1}
 					max={benchmarkAnswerVarianceTemperature.max}
 					step={0.1}

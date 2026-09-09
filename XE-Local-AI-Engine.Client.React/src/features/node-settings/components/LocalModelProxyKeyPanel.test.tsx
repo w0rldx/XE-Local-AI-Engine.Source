@@ -140,12 +140,8 @@ describe("LocalModelProxyKeyPanel", () => {
 		expect(screen.queryByTestId("local-model-proxy-key-value")).toBeNull();
 		expect(screen.queryByTestId("local-model-proxy-key-reveal")).toBeNull();
 		expect(screen.getByTestId("local-model-proxy-key-prefix").textContent).toContain("xeproxy_abc123");
-		expect(screen.getByTestId("local-model-proxy-key-card").textContent).not.toContain(
-			"xeproxy_abc123-the-rest-of-the-secret",
-		);
-		expect(screen.getByTestId("local-model-proxy-key-endpoint").textContent).toBe(
-			"http://127.0.0.1:5000/api/local/v1",
-		);
+		expect(screen.getByTestId("local-model-proxy-key-card").textContent).not.toContain("xeproxy_abc123-the-rest-of-the-secret");
+		expect(screen.getByTestId("local-model-proxy-key-endpoint").textContent).toBe("http://127.0.0.1:5000/api/local/v1");
 	});
 
 	it("tells the operator the configured key cannot be shown again", async () => {
@@ -154,9 +150,7 @@ describe("LocalModelProxyKeyPanel", () => {
 		renderPanel();
 
 		await waitFor(() => {
-			expect(screen.getByTestId("local-model-proxy-key-not-retrievable").textContent).toContain(
-				"cannot be shown again",
-			);
+			expect(screen.getByTestId("local-model-proxy-key-not-retrievable").textContent).toContain("cannot be shown again");
 		});
 	});
 
@@ -173,9 +167,7 @@ describe("LocalModelProxyKeyPanel", () => {
 		fireEvent.click(screen.getByTestId("local-model-proxy-key-generate"));
 
 		await waitFor(() => {
-			expect(screen.getByTestId("local-model-proxy-key-value").textContent).toBe(
-				"xeproxy_abc123-the-rest-of-the-secret",
-			);
+			expect(screen.getByTestId("local-model-proxy-key-value").textContent).toBe("xeproxy_abc123-the-rest-of-the-secret");
 		});
 		expect(screen.getByTestId("local-model-proxy-key-reveal").textContent).toContain("cannot be recovered");
 	});

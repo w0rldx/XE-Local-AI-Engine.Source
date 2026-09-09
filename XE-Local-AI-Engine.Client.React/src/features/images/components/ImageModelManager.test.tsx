@@ -288,7 +288,14 @@ describe("ImageModelManager", () => {
 			fillAndSubmit("qwen-image");
 			resolveLastStart();
 			downloads = [
-				download({ modelName: "qwen-image", phase: "Running", completedBytes: 500, totalBytes: 1000, partIndex: 2, partCount: 3 }),
+				download({
+					modelName: "qwen-image",
+					phase: "Running",
+					completedBytes: 500,
+					totalBytes: 1000,
+					partIndex: 2,
+					partCount: 3,
+				}),
 			];
 			fillAndSubmit("qwen-image");
 
@@ -394,7 +401,10 @@ describe("ImageModelManager", () => {
 
 			fireEvent.click(screen.getByTestId("image-model-download-add-part"));
 			setValue(screen.getByTestId("image-model-download-part-file-2") as HTMLInputElement, "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf");
-			setValue(screen.getByTestId("image-model-download-part-repo-2") as HTMLInputElement, "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF");
+			setValue(
+				screen.getByTestId("image-model-download-part-repo-2") as HTMLInputElement,
+				"mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+			);
 
 			fireEvent.click(screen.getByTestId("image-model-download-submit"));
 
@@ -409,7 +419,10 @@ describe("ImageModelManager", () => {
 			// free-space pre-flight it was meant to feed.
 			expect(vae?.repoId).toBeUndefined();
 			expect(vae?.sizeBytes).toBeUndefined();
-			expect(encoder).toMatchObject({ fileName: "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf", repoId: "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF" });
+			expect(encoder).toMatchObject({
+				fileName: "Qwen2.5-VL-7B-Instruct.Q4_K_M.gguf",
+				repoId: "mradermacher/Qwen2.5-VL-7B-Instruct-GGUF",
+			});
 		});
 
 		it("refuses to submit a file set with no diffusion file", () => {

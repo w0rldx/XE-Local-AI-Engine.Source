@@ -60,7 +60,9 @@ const render = (props: Partial<Parameters<typeof BenchmarkTaskItemEditor>[0]> = 
 describe("BenchmarkTaskItemEditor", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		listMock.mockResolvedValue({ data: { items: [item(), item({ id: "item-2", index: 1, prompt: "Second" })], projectVersion: 9 } });
+		listMock.mockResolvedValue({
+			data: { items: [item(), item({ id: "item-2", index: 1, prompt: "Second" })], projectVersion: 9 },
+		});
 		createMock.mockResolvedValue({ data: item({ id: "item-3" }) });
 		updateMock.mockResolvedValue({ data: item() });
 		deleteMock.mockResolvedValue({ data: undefined });

@@ -216,14 +216,11 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 
 				{/* Login mutation error */}
 				{loginMutation.isError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Stack gap="xs">
-							<Text size="sm">{t("pages.cloudSettings.codex.loginError")}</Text>
-							<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
-								{t("pages.cloudSettings.codex.retry")}
-							</Button>
-						</Stack>
-					</Alert>
+					<InlineErrorAlert message={t("pages.cloudSettings.codex.loginError")}>
+						<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
+							{t("pages.cloudSettings.codex.retry")}
+						</Button>
+					</InlineErrorAlert>
 				) : null}
 
 				{/* Status query error (not login error — the polling GET failed) */}

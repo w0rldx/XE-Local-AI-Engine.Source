@@ -49,7 +49,10 @@ export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	const scoreErrorToast = async (error: unknown): Promise<void> => {
 		await runQuery.refetch();
 		toast.error(
-			apiErrorMessage(error, t("pages.benchmarks.errors.score", "The run changed before the score was saved. It has been refreshed.")),
+			apiErrorMessage(
+				error,
+				t("pages.benchmarks.errors.score", "The run changed before the score was saved. It has been refreshed."),
+			),
 		);
 	};
 	return (

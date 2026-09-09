@@ -26,7 +26,8 @@ vi.mock("@/core/ui/notifications/Toast", () => ({ toast: toastSpies }));
 // The active conversation + selected model come from the preferences store; drive them from mutable hoisted state so
 // individual tests can vary the selection (e.g. the local-default sentinel).
 vi.mock("@/features/chat/stores/NodeChatPreferencesStore", () => ({
-	useNodeChatPreferencesStore: (selector: (state: { selectedConversationId: string; selectedModel: string }) => unknown) => selector(storeState),
+	useNodeChatPreferencesStore: (selector: (state: { selectedConversationId: string; selectedModel: string }) => unknown) =>
+		selector(storeState),
 }));
 
 describe("CompactButton", () => {

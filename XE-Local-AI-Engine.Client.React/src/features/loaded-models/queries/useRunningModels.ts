@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { ejectRunningModelMutation, listRunningModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
-import { type EjectRunningModelResult, toEjectRunningModelResult, toRunningModel } from "@/features/loaded-models/models/RunningModelsModels";
+import {
+	type EjectRunningModelResult,
+	toEjectRunningModelResult,
+	toRunningModel,
+} from "@/features/loaded-models/models/RunningModelsModels";
 
 // Server state for the llama.cpp running-models section on the Loaded Models page (relocated from the model-fit
 // advisor). This is a DIFFERENT runtime from the Ollama in-memory list (useLoadedModels): it lists llama.cpp server

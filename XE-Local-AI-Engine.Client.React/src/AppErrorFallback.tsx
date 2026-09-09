@@ -1,8 +1,9 @@
-import { Alert, Button, Center, Paper, Stack, Text, Title } from "@mantine/core";
+import { Button, Center, Paper, Stack, Text, Title } from "@mantine/core";
 import { IconAlertCircle } from "@tabler/icons-react";
 
 import type { AppErrorFallbackProps } from "@/AppErrorFallback.types";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
 	const errorMessage = apiErrorMessage(error, "Unknown error");
@@ -11,9 +12,12 @@ export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
 		<Center mih="100dvh" p="md">
 			<Paper withBorder={true} radius="md" p="xl" maw={560} w="100%">
 				<Stack gap="md">
-					<Alert icon={<IconAlertCircle size={18} />} color="red" title="Something went wrong" variant="light">
-						The application hit an unexpected error while rendering this page.
-					</Alert>
+					<InlineErrorAlert
+						icon={<IconAlertCircle size={18} />}
+						title="Something went wrong"
+						variant="light"
+						message="The application hit an unexpected error while rendering this page."
+					/>
 					<Stack gap={4}>
 						<Title order={3}>Unable to load this view</Title>
 						<Text c="dimmed">Try again to re-render the current route.</Text>

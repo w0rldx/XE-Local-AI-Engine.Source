@@ -1,12 +1,5 @@
 import { Alert, Badge, Button, Card, Code, CopyButton, Group, Stack, Text, Title } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconCheck,
-	IconCopy,
-	IconPlugConnected,
-	IconRefresh,
-	IconTrash,
-} from "@tabler/icons-react";
+import { IconAlertTriangle, IconCheck, IconCopy, IconPlugConnected, IconRefresh, IconTrash } from "@tabler/icons-react";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import {
@@ -48,11 +41,7 @@ export function LocalModelProxyKeyPanel() {
 						<Title order={4}>{t("pages.nodeSettings.localModelProxyKey.title", "Local model proxy")}</Title>
 					</Group>
 					{!isLoading ? (
-						<Badge
-							color={isConfigured ? "green" : "gray"}
-							variant="light"
-							data-testid="local-model-proxy-key-status"
-						>
+						<Badge color={isConfigured ? "green" : "gray"} variant="light" data-testid="local-model-proxy-key-status">
 							{isConfigured
 								? t("pages.nodeSettings.localModelProxyKey.configured", "Key configured")
 								: t("pages.nodeSettings.localModelProxyKey.none", "No key")}
@@ -109,10 +98,7 @@ export function LocalModelProxyKeyPanel() {
 								? t("pages.nodeSettings.localModelProxyKey.lastUsed", "Last used {{when}}", {
 										when: formatTimestamp(data.lastUsedAt),
 									})
-								: t(
-										"pages.nodeSettings.localModelProxyKey.neverUsed",
-										"Never used yet — no client has connected with this key.",
-									)}
+								: t("pages.nodeSettings.localModelProxyKey.neverUsed", "Never used yet — no client has connected with this key.")}
 						</Text>
 					</Stack>
 				) : null}

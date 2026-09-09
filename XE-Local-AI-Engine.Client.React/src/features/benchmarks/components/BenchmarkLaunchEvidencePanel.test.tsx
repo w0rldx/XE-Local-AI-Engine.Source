@@ -122,7 +122,6 @@ describe("BenchmarkLaunchEvidencePanel", () => {
 		expect(screen.queryByTestId("benchmark-intended-effective-differs")).toBeNull();
 	});
 
-
 	// A runtime-bundle listing runs to hundreds of rows; none of them are built until the operator asks for them.
 	it("keeps the evidence tables out of the DOM until their section is opened", () => {
 		renderWithProviders(

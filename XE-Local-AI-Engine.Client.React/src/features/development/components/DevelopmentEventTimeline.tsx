@@ -67,9 +67,7 @@ function EventRow({ event }: { readonly event: DevelopmentEvent }) {
 				    beside the outcome because one outcome label serves several types — `Started` is the attempt's, the
 				    validation's and the apply's — so the type is what disambiguates it. */}
 				<Text c="dimmed" size="xs">
-					{event.outcome
-						? t(`pages.development.timeline.outcome.${event.outcome}`, event.outcome)
-						: (event.operationPhase ?? "")}
+					{event.outcome ? t(`pages.development.timeline.outcome.${event.outcome}`, event.outcome) : (event.operationPhase ?? "")}
 				</Text>
 			</Group>
 			{/* Why a task was sent back, in the words of whatever sent it — a workflow's validation report or a

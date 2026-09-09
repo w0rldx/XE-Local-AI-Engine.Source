@@ -60,8 +60,7 @@ export function useConfirmDevelopmentContainerRuntime() {
 	const queryClient = useQueryClient();
 	return useMutation({
 		...withResponseValidation(confirmDevelopmentContainerRuntimeMutation()),
-		onSettled: () =>
-			queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: developmentInvalidationKey(developmentQueryIds.capability) }),
 	});
 }
 
@@ -109,9 +108,7 @@ export function useDevelopmentTemplates(enabled = true) {
  */
 export function useDevelopmentProfileDetection(selectedFolderId: string | null, enabled = true) {
 	return useQuery({
-		...withResponseValidation(
-			detectDevelopmentRepositoryProfileOptions({ path: { selectedFolderId: selectedFolderId ?? "" } }),
-		),
+		...withResponseValidation(detectDevelopmentRepositoryProfileOptions({ path: { selectedFolderId: selectedFolderId ?? "" } })),
 		enabled: enabled && selectedFolderId !== null && selectedFolderId !== "",
 		staleTime: 30_000,
 	});

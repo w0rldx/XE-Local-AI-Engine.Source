@@ -57,7 +57,9 @@ describe("PageHeader", () => {
 	});
 
 	it("keeps the icon on the title's line instead of letting it wrap above the heading", () => {
-		renderWithProviders(<PageHeader title="A page title long enough to need the whole row" icon={<svg data-testid="page-icon" />} />);
+		renderWithProviders(
+			<PageHeader title="A page title long enough to need the whole row" icon={<svg data-testid="page-icon" />} />,
+		);
 
 		// Mantine's Group emits `wrap` as the --group-wrap custom property, so this asserts the rendered flex
 		// behaviour rather than the prop we passed.

@@ -26,6 +26,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 	const startMutation = useStartGgufImport();
 	const trimmedSourcePath = sourcePath.trim();
 
+	/* eslint-disable react-doctor/no-adjust-state-on-prop-change -- DialogShell keeps this content mounted while closed, so the key-remount reset React recommends is not available here. */
 	useEffect(() => {
 		if (!opened) {
 			setSourcePath("");
@@ -135,7 +136,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 							</List>
 						</Alert>
 					) : null}
-					{startMutation.error ? <Alert color="red">{importErrorMessage(t, startErrorCode)}</Alert> : null}
+					{startMutation.error ? <InlineErrorAlert message={importErrorMessage(t, startErrorCode)} /> : null}
 					<Group justify="space-between">
 						<Button variant="subtle" leftSection={<IconArrowLeft size={16} />} onClick={() => setPreview(undefined)}>
 							{t("common.back", "Back")}
@@ -163,7 +164,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 						required={true}
 						autoFocus={true}
 					/>
-					{previewMutation.error ? <Alert color="red">{importErrorMessage(t, previewErrorCode)}</Alert> : null}
+					{previewMutation.error ? <InlineErrorAlert message={importErrorMessage(t, previewErrorCode)} /> : null}
 					<Group justify="flex-end">
 						<Button onClick={runPreview} loading={previewMutation.isPending} disabled={!trimmedSourcePath}>
 							{t("pages.models.gguf.import.preview", "Preview import")}

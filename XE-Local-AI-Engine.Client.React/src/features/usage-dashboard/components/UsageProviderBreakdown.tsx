@@ -32,10 +32,7 @@ export function UsageProviderBreakdown({
 		[byProvider, externalConnectionNames, t],
 	);
 
-	const rows = useMemo(
-		() => byProvider.toSorted((a, b) => b.totalTokens - a.totalTokens),
-		[byProvider],
-	);
+	const rows = useMemo(() => byProvider.toSorted((a, b) => b.totalTokens - a.totalTokens), [byProvider]);
 
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="usage-provider-breakdown">
@@ -52,7 +49,9 @@ export function UsageProviderBreakdown({
 							data-testid="usage-provider-donut"
 						/>
 					) : (
-						<Text c="dimmed">{t("pages.usage.providers.noTokens", "No token usage recorded for any provider in this range.")}</Text>
+						<Text c="dimmed">
+							{t("pages.usage.providers.noTokens", "No token usage recorded for any provider in this range.")}
+						</Text>
 					)}
 					{/*
 					 * `minWidth` on the table itself only made the four columns overflow the card silently. Moving the

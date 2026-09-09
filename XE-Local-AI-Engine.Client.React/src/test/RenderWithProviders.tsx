@@ -1,13 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import {
-	createMemoryHistory,
-	createRootRoute,
-	createRoute,
-	createRouter,
-	Outlet,
-	RouterProvider,
-} from "@tanstack/react-router";
+import { createMemoryHistory, createRootRoute, createRoute, createRouter, Outlet, RouterProvider } from "@tanstack/react-router";
 import { render, type RenderResult } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
 

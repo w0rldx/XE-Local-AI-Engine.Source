@@ -55,9 +55,7 @@ export function AgentDefinitionList({ definitions, isMutating, onEdit, onDelete 
 									{t(`pages.agents.form.kind.options.${definition.kind}`, definition.kind)}
 								</Badge>
 							</Table.Td>
-							<Table.Td>
-								{definition.modelProfile ?? t("pages.agents.list.nodeDefault", "Node default")}
-							</Table.Td>
+							<Table.Td>{definition.modelProfile ?? t("pages.agents.list.nodeDefault", "Node default")}</Table.Td>
 							<Table.Td>{definition.allowedToolNames.length}</Table.Td>
 							<Table.Td>{definition.version}</Table.Td>
 							<Table.Td>

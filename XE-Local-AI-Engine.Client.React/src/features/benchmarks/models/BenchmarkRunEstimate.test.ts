@@ -48,9 +48,7 @@ describe("medianBenchmarkRunDurationMs", () => {
 	});
 
 	it("averages the two middles of an even sample", () => {
-		expect(
-			medianBenchmarkRunDurationMs([run({ id: "a", durationMs: 1000 }), run({ id: "b", durationMs: 2000 })]),
-		).toBe(1500);
+		expect(medianBenchmarkRunDurationMs([run({ id: "a", durationMs: 1000 }), run({ id: "b", durationMs: 2000 })])).toBe(1500);
 	});
 
 	// A warm-up is the slow cold launch the repeats after it exist to avoid measuring; including it would inflate every

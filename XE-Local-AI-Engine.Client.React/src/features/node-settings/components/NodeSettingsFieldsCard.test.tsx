@@ -71,9 +71,11 @@ interface RenderOverrides {
 	autoEffortFastModelOptions?: NodeSettingsFieldsCardProps["autoEffortFastModelOptions"];
 }
 
-function renderCard(
-	overrides: RenderOverrides = {},
-): { onDownload: () => void; onDownloadEmbedding: () => void; onChange: ReturnType<typeof vi.fn> } {
+function renderCard(overrides: RenderOverrides = {}): {
+	onDownload: () => void;
+	onDownloadEmbedding: () => void;
+	onChange: ReturnType<typeof vi.fn>;
+} {
 	const onDownload = overrides.onDownloadRecommendedReranker ?? vi.fn();
 	const onDownloadEmbedding = overrides.onDownloadRecommendedEmbedding ?? vi.fn();
 	const onChange = overrides.onChange ?? vi.fn();

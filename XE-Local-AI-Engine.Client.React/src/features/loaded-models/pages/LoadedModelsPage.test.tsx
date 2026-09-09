@@ -225,7 +225,11 @@ describe("LoadedModelsPage", () => {
 		await waitFor(() => expect(ejectRunning.mutate).toHaveBeenCalled());
 
 		// Drive the mutation's onSuccess callback with the backend outcome the page maps to a toast.
-		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: { modelName: string; role: string; outcome: string }) => void;
+		const onSuccess = ejectRunning.mutate.mock.calls[0]?.[1]?.onSuccess as (result: {
+			modelName: string;
+			role: string;
+			outcome: string;
+		}) => void;
 		onSuccess({ modelName: "running-a", role: "chat", outcome: "ejected" });
 
 		expect(toastMock.success).toHaveBeenCalled();

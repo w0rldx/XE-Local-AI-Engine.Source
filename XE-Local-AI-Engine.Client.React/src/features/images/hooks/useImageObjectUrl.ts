@@ -33,7 +33,11 @@ export function useImageObjectUrl(imageId: string | null | undefined): {
 	isLoading: boolean;
 	isError: boolean;
 } {
-	const { data: blob, isLoading, isError } = useQuery({
+	const {
+		data: blob,
+		isLoading,
+		isError,
+	} = useQuery({
 		queryKey: [IMAGE_BLOB_QUERY_KEY, imageId],
 		queryFn: ({ signal }) => fetchImageBlob(imageId as string, signal),
 		enabled: Boolean(imageId),

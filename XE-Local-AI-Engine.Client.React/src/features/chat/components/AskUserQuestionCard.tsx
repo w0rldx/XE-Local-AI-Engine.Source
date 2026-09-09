@@ -120,11 +120,7 @@ export function AskUserQuestionCard({ pending }: AskUserQuestionCardProps) {
 				const otherSelected = draft.selected.includes(OTHER_VALUE);
 
 				return (
-					<fieldset
-						key={question.question}
-						style={fieldsetReset}
-						data-testid={`chat-ask-user-question-${index}`}
-					>
+					<fieldset key={question.question} style={fieldsetReset} data-testid={`chat-ask-user-question-${index}`}>
 						<Text component="legend" id={`chat-ask-user-legend-${index}`} size="sm" fw={600} pb={4}>
 							{question.header ?? question.question}
 						</Text>

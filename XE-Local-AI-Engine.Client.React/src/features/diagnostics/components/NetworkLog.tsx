@@ -21,9 +21,7 @@ export function NetworkLog({ entries }: NetworkLogProps) {
 	const { t } = useTranslation();
 
 	if (entries.length === 0) {
-		return (
-			<EmptyState size="sm" message={t("diagnostics.network.empty")} />
-		);
+		return <EmptyState size="sm" message={t("diagnostics.network.empty")} />;
 	}
 
 	return (

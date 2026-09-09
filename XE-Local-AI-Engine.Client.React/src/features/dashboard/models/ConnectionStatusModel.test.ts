@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { connectionActionHint, connectionStatusColor, connectionStatusLabel, formatOptionalDate } from "@/features/dashboard/models/ConnectionStatusModel";
+import {
+	connectionActionHint,
+	connectionStatusColor,
+	connectionStatusLabel,
+	formatOptionalDate,
+} from "@/features/dashboard/models/ConnectionStatusModel";
 
 describe("connection status model", () => {
 	it("maps connected and error states to high-signal labels and colors", () => {

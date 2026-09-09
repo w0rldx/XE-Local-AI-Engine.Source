@@ -13,11 +13,7 @@ vi.mock("@/features/app-update/queries/useAppUpdate", () => ({
 	useProbeAppUpdateStatus: vi.fn(),
 }));
 
-import {
-	useApplyAppUpdate,
-	useAppUpdateStatus,
-	useProbeAppUpdateStatus,
-} from "@/features/app-update/queries/useAppUpdate";
+import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
 import { AppUpdateButton } from "./AppUpdateButton";
 
 describe("AppUpdateButton", () => {
@@ -56,7 +52,11 @@ describe("AppUpdateButton", () => {
 		const mutateAsync = vi.fn().mockResolvedValue({ applying: false });
 		vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync } as never);
 		const fetchSpy = vi.spyOn(globalThis, "fetch");
-		render(<MantineProvider><AppUpdateButton /></MantineProvider>);
+		render(
+			<MantineProvider>
+				<AppUpdateButton />
+			</MantineProvider>,
+		);
 
 		fireEvent.click(screen.getByRole("button", { name: /update now/i }));
 
@@ -77,7 +77,11 @@ describe("AppUpdateButton", () => {
 		} as never);
 		vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync: vi.fn() } as never);
 
-		render(<MantineProvider><AppUpdateButton /></MantineProvider>);
+		render(
+			<MantineProvider>
+				<AppUpdateButton />
+			</MantineProvider>,
+		);
 
 		expect(screen.getByText(/up to date/i)).toBeTruthy();
 		expect(screen.queryByRole("button", { name: /update now/i })).toBeNull();
@@ -89,7 +93,11 @@ describe("AppUpdateButton", () => {
 			const mutateAsync = vi.fn().mockResolvedValue({ applying: true });
 			vi.mocked(useApplyAppUpdate).mockReturnValue({ mutateAsync } as never);
 			const fetchSpy = vi.spyOn(globalThis, "fetch").mockRejectedValue(new TypeError("host restarting"));
-			render(<MantineProvider><AppUpdateButton /></MantineProvider>);
+			render(
+				<MantineProvider>
+					<AppUpdateButton />
+				</MantineProvider>,
+			);
 
 			await act(async () => {
 				fireEvent.click(screen.getByRole("button", { name: /update now/i }));
@@ -119,7 +127,11 @@ describe("AppUpdateButton", () => {
 				.mockResolvedValueOnce({ currentVersion: "0.1.1" });
 			vi.mocked(useProbeAppUpdateStatus).mockReturnValue({ mutateAsync: refreshStatus } as never);
 			const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValue({ ok: true } as Response);
-			render(<MantineProvider><AppUpdateButton /></MantineProvider>);
+			render(
+				<MantineProvider>
+					<AppUpdateButton />
+				</MantineProvider>,
+			);
 
 			await act(async () => {
 				fireEvent.click(screen.getByRole("button", { name: /update now/i }));

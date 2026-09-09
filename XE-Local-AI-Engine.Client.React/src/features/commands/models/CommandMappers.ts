@@ -4,7 +4,6 @@ import type {
 } from "@/core/api/generated";
 import type { CommandFormValues, SlashCommand } from "@/features/commands/models/CommandModels";
 
-
 export function toSlashCommand(command: XeLocalAiEngineClientEndpointsAutomationV1SlashCommandResponse): SlashCommand | null {
 	if (command.action.type !== "sendPrompt") {
 		return null;

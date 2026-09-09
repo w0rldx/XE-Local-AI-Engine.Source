@@ -123,7 +123,9 @@ export function toHardwareProfile(dto: XeLocalAiEngineClientEndpointsModelFitV1H
 	};
 }
 
-export function toModelFitCatalogInfo(dto: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse): ModelFitCatalogInfo {
+export function toModelFitCatalogInfo(
+	dto: XeLocalAiEngineClientEndpointsModelFitV1ModelCatalogInfoResponse,
+): ModelFitCatalogInfo {
 	return {
 		catalogVersion: dto.catalogVersion ?? "",
 		updatedAt: dto.updatedAt ?? null,

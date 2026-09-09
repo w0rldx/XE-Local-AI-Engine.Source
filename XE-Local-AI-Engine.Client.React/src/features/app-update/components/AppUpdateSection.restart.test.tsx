@@ -74,7 +74,9 @@ describe("AppUpdateSection restart polling", () => {
 		});
 		render(
 			<QueryClientProvider client={queryClient}>
-				<MantineProvider><AppUpdateSection /></MantineProvider>
+				<MantineProvider>
+					<AppUpdateSection />
+				</MantineProvider>
 			</QueryClientProvider>,
 		);
 		await waitFor(() => expect(screen.getByRole("button", { name: /update now/i })).toBeTruthy());
@@ -87,11 +89,13 @@ describe("AppUpdateSection restart polling", () => {
 		});
 
 		expect(screen.getByText(/restarting/i)).toBeTruthy();
-		const statusKey = [{
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
-			_id: "getAppUpdateStatus",
-			query: { refresh: null },
-		}];
+		const statusKey = [
+			{
+				// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
+				_id: "getAppUpdateStatus",
+				query: { refresh: null },
+			},
+		];
 		expect(queryClient.getQueryData(statusKey)).toMatchObject({
 			availableVersion: "0.1.1",
 			updateAvailable: true,

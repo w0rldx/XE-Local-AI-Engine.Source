@@ -15,7 +15,12 @@ interface AgentDefinitionBasicFieldsProps {
 }
 
 // Name, description, and instructions inputs — the identity/persona section of the agent definition form.
-export function AgentDefinitionBasicFields({ values, nameError, instructionsError, onFieldChange }: AgentDefinitionBasicFieldsProps) {
+export function AgentDefinitionBasicFields({
+	values,
+	nameError,
+	instructionsError,
+	onFieldChange,
+}: AgentDefinitionBasicFieldsProps) {
 	const { t } = useTranslation();
 
 	// An applied draft overwrites the three drafted fields and records where they came from. The provenance survives

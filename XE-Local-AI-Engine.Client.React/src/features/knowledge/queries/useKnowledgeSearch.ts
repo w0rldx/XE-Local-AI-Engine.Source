@@ -5,6 +5,8 @@ import { searchKnowledgeMutation } from "@/core/api/generated/@tanstack/react-qu
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { KNOWLEDGE_DEFAULT_COLLECTION_ID, type KnowledgeSearchHit } from "@/features/knowledge/models/KnowledgeModels";
 
+/* eslint-disable react-doctor/no-adjust-state-on-prop-change -- This is a hook, not a component: there is no key prop to remount it with, so an effect reacting to a changed collectionId argument is the only reset mechanism, and requestGenerationRef already invalidates searches still in flight for the old collection. */
+
 // Number of hits requested per search. Kept modest — the panel is a "does the KB know about X" probe, not a
 // full retrieval UI. The backend re-clamps its own maximum.
 const SEARCH_RESULT_LIMIT = 10;

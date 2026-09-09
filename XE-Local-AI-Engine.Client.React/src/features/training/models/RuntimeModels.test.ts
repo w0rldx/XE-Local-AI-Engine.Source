@@ -27,9 +27,9 @@ describe("mergeTrainingLogs", () => {
 	});
 
 	it("drops entries with an unusable sequence rather than sorting them to the front", () => {
-		expect(mergeTrainingLogs([{ sequence: -1, message: "bad" }, ...trainingLogEntries(0, ["good"])]).map((e) => e.message)).toEqual([
-			"good",
-		]);
+		expect(
+			mergeTrainingLogs([{ sequence: -1, message: "bad" }, ...trainingLogEntries(0, ["good"])]).map((e) => e.message),
+		).toEqual(["good"]);
 	});
 });
 

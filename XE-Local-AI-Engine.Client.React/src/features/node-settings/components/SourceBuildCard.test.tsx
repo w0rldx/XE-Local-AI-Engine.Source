@@ -169,9 +169,7 @@ describe("SourceBuildCard", () => {
 		fireEvent.click(screen.getByRole("button", { name: "Build" }));
 
 		await waitFor(() =>
-			expect(toast.error).toHaveBeenCalledWith(
-				"Stop or eject all running llama.cpp models before building the runtime.",
-			),
+			expect(toast.error).toHaveBeenCalledWith("Stop or eject all running llama.cpp models before building the runtime."),
 		);
 	});
 

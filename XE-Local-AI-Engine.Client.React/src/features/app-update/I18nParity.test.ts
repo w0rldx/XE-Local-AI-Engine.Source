@@ -25,7 +25,9 @@ function collectKeys(obj: LocaleShape, prefix = ""): string[] {
 // Resolve a dot-path against an object, returning undefined if any segment is missing.
 function resolvePath(obj: LocaleShape, path: string): unknown {
 	return path.split(".").reduce<unknown>((acc, segment) => {
-		if (acc === undefined || acc === null || typeof acc !== "object") { return undefined; }
+		if (acc === undefined || acc === null || typeof acc !== "object") {
+			return undefined;
+		}
 		return (acc as LocaleShape)[segment];
 	}, obj);
 }

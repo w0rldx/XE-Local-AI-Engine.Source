@@ -5,9 +5,7 @@ import { fileURLToPath } from "node:url";
 import { runPnpmExec } from "./RunPackageTool.mjs";
 
 export function fingerprintDependencyViolations(violations) {
-	return violations
-		.map((violation) => JSON.stringify([violation.rule.name, violation.from, violation.to]))
-		.toSorted();
+	return violations.map((violation) => JSON.stringify([violation.rule.name, violation.from, violation.to])).toSorted();
 }
 
 export function evaluateDependencyBaseline(summary, baseline) {
@@ -21,11 +19,9 @@ export function evaluateDependencyBaseline(summary, baseline) {
 }
 
 export function checkDependencyBaseline() {
-	const result = runPnpmExec(
-		"depcruise",
-		["src", "--config", ".dependency-cruiser.cjs", "--output-type", "json"],
-		{ allowedStatuses: [0, 1] },
-	);
+	const result = runPnpmExec("depcruise", ["src", "--config", ".dependency-cruiser.cjs", "--output-type", "json"], {
+		allowedStatuses: [0, 1],
+	});
 	if (!result.stdout) {
 		throw new Error("dependency-cruiser produced no JSON output.");
 	}

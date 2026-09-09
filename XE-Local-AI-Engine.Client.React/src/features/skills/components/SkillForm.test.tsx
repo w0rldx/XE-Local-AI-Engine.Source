@@ -259,7 +259,9 @@ describe("SkillForm metadata table", () => {
 	});
 
 	it("wraps the metadata table in a scroll container with a minimum width", () => {
-		renderForm({ initialValues: { metadata: { source: "https://example.test/a-very-long-unspaced-metadata-value-that-cannot-wrap" } } });
+		renderForm({
+			initialValues: { metadata: { source: "https://example.test/a-very-long-unspaced-metadata-value-that-cannot-wrap" } },
+		});
 
 		const container = screen.getByTestId("skill-form-metadata-scroll");
 

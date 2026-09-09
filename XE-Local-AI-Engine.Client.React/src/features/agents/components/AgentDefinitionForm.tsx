@@ -1,4 +1,4 @@
-import { Alert, Stack } from "@mantine/core";
+import { Stack } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 
 import { AgentDefinitionBasicFields } from "@/features/agents/components/AgentDefinitionBasicFields";
@@ -15,6 +15,8 @@ import type { OrchestrationTopology } from "@/features/agents/models/Orchestrati
 import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
 
 import type { AgentModelOption } from "./AgentDefinitionForm.types";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export type { AgentModelOption } from "./AgentDefinitionForm.types";
 
@@ -170,11 +172,7 @@ export function AgentDefinitionForm({
 				instructionsError={fieldErrors.instructions}
 				onFieldChange={updateValues}
 			/>
-			<AgentDefinitionModelFields
-				values={values}
-				modelOptions={modelOptions}
-				onFieldChange={updateValues}
-			/>
+			<AgentDefinitionModelFields values={values} modelOptions={modelOptions} onFieldChange={updateValues} />
 			{values.kind === "Orchestrator" ? (
 				<OrchestrationTopologyEditor
 					topology={values.orchestration}
@@ -195,11 +193,7 @@ export function AgentDefinitionForm({
 				onToggleApproval={handleToggleApproval}
 			/>
 			<AgentSkillSelector selectedSkillIds={values.allowedSkillIds} onToggleSkill={handleToggleSkill} />
-			{submitError ? (
-				<Alert color="red" data-testid="agent-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="agent-form-submit-error" /> : null}
 		</Stack>
 	);
 }

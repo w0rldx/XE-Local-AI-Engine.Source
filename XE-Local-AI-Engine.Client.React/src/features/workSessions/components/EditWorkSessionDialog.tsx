@@ -1,8 +1,9 @@
-import { Alert, Button, Group, Stack, TextInput, Textarea } from "@mantine/core";
+import { Button, Group, Stack, TextInput, Textarea } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { WorkSessionStatus } from "@/features/workSessions/models/WorkSessionModels";
 
 export interface EditWorkSessionDialogProps {
@@ -74,11 +75,7 @@ export function EditWorkSessionDialog({
 			}
 		>
 			<Stack gap="md">
-				{errorMessage ? (
-					<Alert color="red" variant="light" data-testid="edit-work-session-error">
-						{errorMessage}
-					</Alert>
-				) : null}
+				{errorMessage ? <InlineErrorAlert message={errorMessage} variant="light" data-testid="edit-work-session-error" /> : null}
 				<TextInput
 					label={t("pages.workSessions.create.titleLabel", "Title")}
 					value={title}
@@ -92,7 +89,10 @@ export function EditWorkSessionDialog({
 					description={
 						objectiveEditable
 							? undefined
-							: t("pages.workSessions.edit.objectiveLocked", "The objective can only change while the session is paused or not yet started.")
+							: t(
+									"pages.workSessions.edit.objectiveLocked",
+									"The objective can only change while the session is paused or not yet started.",
+								)
 					}
 					value={objective}
 					maxLength={8000}

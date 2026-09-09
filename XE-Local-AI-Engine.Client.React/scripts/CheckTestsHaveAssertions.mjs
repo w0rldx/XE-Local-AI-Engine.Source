@@ -53,9 +53,7 @@ function maskLiterals(source) {
 		const regex =
 			character === "/" &&
 			next !== ">" &&
-			(previous === "" ||
-				/[(,=:[!&|?{};+\-*%~^]/.test(previous) ||
-				(previous === ">" && beforePrevious === "="));
+			(previous === "" || /[(,=:[!&|?{};+\-*%~^]/.test(previous) || (previous === ">" && beforePrevious === "="));
 		if (quoted || regex) {
 			const terminator = quoted ? character : "/";
 			index += 1;
@@ -138,7 +136,11 @@ export function findTestsWithoutAssertions(source) {
 		}
 		findings.push({
 			line: source.slice(0, match.index).split("\n").length,
-			name: source.slice(start, end).match(/["'`]([^"'`]*)/)?.[1]?.trim() ?? "<unnamed>",
+			name:
+				source
+					.slice(start, end)
+					.match(/["'`]([^"'`]*)/)?.[1]
+					?.trim() ?? "<unnamed>",
 		});
 	}
 	return findings;

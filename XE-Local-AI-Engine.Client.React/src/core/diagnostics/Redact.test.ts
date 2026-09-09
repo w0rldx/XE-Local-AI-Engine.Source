@@ -111,9 +111,7 @@ describe("redactBreadcrumb error case", () => {
 	});
 
 	it("leaves an error crumb without secrets untouched and preserves the source", () => {
-		const redacted = redactBreadcrumb(
-			errorCrumb({ source: "uncaught", message: "boom" }),
-		) as ErrorBreadcrumb;
+		const redacted = redactBreadcrumb(errorCrumb({ source: "uncaught", message: "boom" })) as ErrorBreadcrumb;
 
 		expect(redacted.error.message).toBe("boom");
 		expect(redacted.error.source).toBe("uncaught");

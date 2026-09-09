@@ -55,7 +55,13 @@ function profile(overrides: Partial<HardwareProfile> = {}): HardwareProfile {
 
 function renderCard(overrides: Partial<HardwareProfile> = {}) {
 	return renderWithProviders(
-		<HardwareProfileCard profile={profile(overrides)} isLoading={false} isFetching={false} error={null} onRefresh={() => undefined} />,
+		<HardwareProfileCard
+			profile={profile(overrides)}
+			isLoading={false}
+			isFetching={false}
+			error={null}
+			onRefresh={() => undefined}
+		/>,
 	);
 }
 
@@ -102,7 +108,13 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 
 	it("does not render the CPU-fallback alert when cpuFallback is false", () => {
 		renderWithProviders(
-			<HardwareProfileCard profile={profile({ cpuFallback: false })} isLoading={false} isFetching={false} error={null} onRefresh={() => undefined} />,
+			<HardwareProfileCard
+				profile={profile({ cpuFallback: false })}
+				isLoading={false}
+				isFetching={false}
+				error={null}
+				onRefresh={() => undefined}
+			/>,
 		);
 
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-alert")).toBeNull();
@@ -130,7 +142,13 @@ describe("HardwareProfileCard CPU-fallback alert", () => {
 		expect(detaillessApiError.message).toBe("");
 
 		renderWithProviders(
-			<HardwareProfileCard profile={profile()} isLoading={false} isFetching={false} error={detaillessApiError} onRefresh={() => undefined} />,
+			<HardwareProfileCard
+				profile={profile()}
+				isLoading={false}
+				isFetching={false}
+				error={detaillessApiError}
+				onRefresh={() => undefined}
+			/>,
 		);
 
 		expect(screen.getByTestId("model-fit-hardware-error").textContent).toBe("Could not detect hardware.");
@@ -175,7 +193,13 @@ describe("HardwareProfileCard layer placement", () => {
 	});
 
 	it("keeps a partial offload out of the CPU-fallback alert — the GPU is in use", () => {
-		renderCard({ inferenceBackend: "cuda", cpuFallback: false, gpuOffloadedLayers: 38, gpuTotalLayers: 49, gpuOffloadModelName: "qwen3-14b" });
+		renderCard({
+			inferenceBackend: "cuda",
+			cpuFallback: false,
+			gpuOffloadedLayers: 38,
+			gpuTotalLayers: 49,
+			gpuOffloadModelName: "qwen3-14b",
+		});
 
 		expect(screen.queryByTestId("model-fit-hardware-cpu-fallback-alert")).toBeNull();
 	});

@@ -2,11 +2,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-	binaryReasoningEfforts,
-	clampReasoningEffort,
-	reasoningEfforts,
-} from "@/features/chat/stores/NodeChatPreferencesStore";
+import { binaryReasoningEfforts, clampReasoningEffort, reasoningEfforts } from "@/features/chat/stores/NodeChatPreferencesStore";
 
 const SELECTED_MODEL_STORAGE_KEY = "xe-node-chat-selected-model";
 const REASONING_EFFORT_STORAGE_KEY = "xe-node-chat-reasoning-effort";

@@ -1,5 +1,13 @@
 import { Group, Text, ThemeIcon } from "@mantine/core";
-import { IconArrowsExchange, IconBolt, IconFilter, IconHistory, IconInfoCircle, IconToolsOff, IconUsersGroup } from "@tabler/icons-react";
+import {
+	IconArrowsExchange,
+	IconBolt,
+	IconFilter,
+	IconHistory,
+	IconInfoCircle,
+	IconToolsOff,
+	IconUsersGroup,
+} from "@tabler/icons-react";
 import { memo } from "react";
 import { useTranslation } from "react-i18next";
 

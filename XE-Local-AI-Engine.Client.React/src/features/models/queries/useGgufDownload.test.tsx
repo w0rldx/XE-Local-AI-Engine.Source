@@ -74,10 +74,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", () => ({
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
-import {
-	toGgufAcquisitionStatus,
-	type GgufAcquisitionStatus,
-} from "@/features/models/models/GgufAcquisitionModels";
+import { toGgufAcquisitionStatus, type GgufAcquisitionStatus } from "@/features/models/models/GgufAcquisitionModels";
 import { useActiveGgufDownloads } from "@/features/models/queries/useGgufDownload";
 import {
 	ACQUISITION_TERMINAL_RETENTION_LIMIT,
@@ -328,7 +325,9 @@ describe("useActiveGgufDownloads", () => {
 				}),
 		});
 		const acquisitions = renderActiveAcquisitions();
-		await waitFor(() => expect(acquisitions.result.current.get("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?.modelName).toBe("private:Q4_K_M"));
+		await waitFor(() =>
+			expect(acquisitions.result.current.get("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?.modelName).toBe("private:Q4_K_M"),
+		);
 		acquisitions.unmount();
 
 		const downloads = renderActiveDownloads();

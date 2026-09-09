@@ -116,9 +116,11 @@ export function useImageModelCatalog(pollWhilePending = false) {
 // somebody who opened this panel is looking for, and an unprompted fetch on mount costs a Hub round trip per page view.
 export function useBrowseImageRepositories(query: string) {
 	return useQuery({
-		...withResponseValidation(browseImageRepositoriesOptions({
-			query: { query, limit: 20 },
-		})),
+		...withResponseValidation(
+			browseImageRepositoriesOptions({
+				query: { query, limit: 20 },
+			}),
+		),
 		select: (data) => (data.items ?? []).map(toImageRepositoryView),
 		enabled: query.trim().length > 0,
 		staleTime: 60_000,
@@ -129,9 +131,11 @@ export function useBrowseImageRepositories(query: string) {
 // round trip per repo and the browse table lists twenty of them.
 export function useInspectImageRepository(repoId: string | null) {
 	return useQuery({
-		...withResponseValidation(inspectImageRepositoryOptions({
-			query: { repoId: repoId ?? "" },
-		})),
+		...withResponseValidation(
+			inspectImageRepositoryOptions({
+				query: { repoId: repoId ?? "" },
+			}),
+		),
 		select: (data) => ({
 			repoId: data.repoId,
 			isGated: data.isGated,

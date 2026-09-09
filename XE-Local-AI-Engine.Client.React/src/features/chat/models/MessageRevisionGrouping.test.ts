@@ -18,10 +18,7 @@ function message(overrides: Partial<ChatMessageModel> = {}): ChatMessageModel {
 
 describe("groupMessageRevisions", () => {
 	it("passes through messages without a variant group as singletons", () => {
-		const messages = [
-			message({ id: "user-1", role: "user", sortOrder: 0 }),
-			message({ id: "assistant-1", sortOrder: 1 }),
-		];
+		const messages = [message({ id: "user-1", role: "user", sortOrder: 0 }), message({ id: "assistant-1", sortOrder: 1 })];
 
 		const groups = groupMessageRevisions(messages);
 

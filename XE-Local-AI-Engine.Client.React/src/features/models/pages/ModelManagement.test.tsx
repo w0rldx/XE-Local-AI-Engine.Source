@@ -122,6 +122,7 @@ vi.mock("@/core/ui/hooks/useConfirm", () => ({
 }));
 
 import { resetSharedHubConnectionsForTest } from "@/core/api/signalr/SharedHubConnection";
+import "@/i18n";
 import { ModelManagement } from "@/features/models/pages/ModelManagement";
 import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
@@ -664,7 +665,7 @@ describe("ModelManagement", () => {
 				path: { operationId: "22222222-2222-2222-2222-222222222222" },
 			}),
 		);
-		expect(within(region).getByText("The model could not be imported.")).toBeTruthy();
+		expect(within(region).getByText("The selected GGUF file was not found.")).toBeTruthy();
 		expect(region.textContent).not.toContain("/private/models");
 	});
 });

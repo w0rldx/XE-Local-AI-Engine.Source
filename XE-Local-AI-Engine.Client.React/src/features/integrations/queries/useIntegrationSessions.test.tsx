@@ -9,10 +9,7 @@ import { http, HttpResponse } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 
-import {
-	useDeleteIntegrationSession,
-	useIntegrationSessions,
-} from "@/features/integrations/queries/useIntegrationSessions";
+import { useDeleteIntegrationSession, useIntegrationSessions } from "@/features/integrations/queries/useIntegrationSessions";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { setupMswServer } from "@/test/UseMswServer";
@@ -218,10 +215,7 @@ describe("useIntegrationSessions", () => {
 		server.use(http.delete(localApiPath(`integrations/sessions/${sessionId}`), () => new HttpResponse(null, { status: 204 })));
 		const { wrapper } = harness();
 
-		const { result } = renderHook(
-			() => ({ list: useIntegrationSessions(), remove: useDeleteIntegrationSession() }),
-			{ wrapper },
-		);
+		const { result } = renderHook(() => ({ list: useIntegrationSessions(), remove: useDeleteIntegrationSession() }), { wrapper });
 
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);

@@ -74,8 +74,7 @@ export const useDesktopNavigationBarStore = create<IDesktopNavigationBarStorePro
 
 				return {
 					...currentState,
-					sidebarState:
-						typeof persisted.sidebarState === "boolean" ? persisted.sidebarState : currentState.sidebarState,
+					sidebarState: typeof persisted.sidebarState === "boolean" ? persisted.sidebarState : currentState.sidebarState,
 					openGroups: readInitialOpenGroups(persisted),
 				};
 			},

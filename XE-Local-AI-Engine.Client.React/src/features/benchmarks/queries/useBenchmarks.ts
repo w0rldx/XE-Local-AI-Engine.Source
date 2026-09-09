@@ -815,7 +815,9 @@ const taskItemMutationBody = (draft: BenchmarkTaskItemDraft) => ({
 	kind: draft.kind,
 	countsTowardScore: draft.countsTowardScore,
 	...(draft.referenceAnswer === null ? {} : { referenceAnswer: draft.referenceAnswer }),
-	...(pruneVerifierOverrides(draft.verifierConfig) === null ? {} : { verifierConfig: pruneVerifierOverrides(draft.verifierConfig) }),
+	...(pruneVerifierOverrides(draft.verifierConfig) === null
+		? {}
+		: { verifierConfig: pruneVerifierOverrides(draft.verifierConfig) }),
 	...(draft.generatorConfig === null ? {} : { generatorConfig: draft.generatorConfig }),
 });
 
@@ -901,7 +903,6 @@ export function useReorderBenchmarkTaskItems() {
 		onSuccess: (_items, variables) => invalidate(variables.projectId),
 	});
 }
-
 
 /** The ranked cell table: one row per (model, KV, repeat group), each holding its per-item answers. */
 export interface BenchmarkCellList {

@@ -459,9 +459,7 @@ describe("ModelRecommendationsPage", () => {
 		it("shows a MoE-offloaded row's honest badge with the GPU/RAM split", () => {
 			const moeView = {
 				...populatedView,
-				recommendations: [
-					makeRecommendationFixture({ rank: 1, expertsOffloaded: true, gpuGb: 8, cpuGb: 16 }),
-				],
+				recommendations: [makeRecommendationFixture({ rank: 1, expertsOffloaded: true, gpuGb: 8, cpuGb: 16 })],
 			};
 			hooksMock.useLatestRecommendations.mockReturnValue(makeQuery(moeView));
 

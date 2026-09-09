@@ -43,9 +43,7 @@ function envEntriesToMap(entries: readonly McpEnvEntry[]): Record<string, string
 	return result;
 }
 
-export function toMcpServerRegistration(
-	dto: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse,
-): McpServerRegistration {
+export function toMcpServerRegistration(dto: XeLocalAiEngineClientEndpointsMcpV1McpServerResponse): McpServerRegistration {
 	return {
 		id: dto.id ?? "",
 		name: dto.name ?? "",
@@ -68,9 +66,7 @@ export function toMcpServerRegistration(
 // (verified against the generated CreateMcpServerRequest / UpdateMcpServerRequest — structurally identical), so one
 // mapper serves both. Only the transport-relevant fields are sent so a stored row never carries cross-transport
 // leftovers (e.g. a command on an HTTP server). A blank optional field becomes null.
-export function toSaveMcpServerRequest(
-	form: McpServerFormValues,
-): XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest {
+export function toSaveMcpServerRequest(form: McpServerFormValues): XeLocalAiEngineClientEndpointsMcpV1CreateMcpServerRequest {
 	const trimmedDescription = form.description.trim();
 	const isStdio = form.transportKind === "Stdio";
 
@@ -89,9 +85,7 @@ export function toSaveMcpServerRequest(
 	};
 }
 
-export function toMcpServerToolsView(
-	dto: XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse,
-): McpServerToolsView {
+export function toMcpServerToolsView(dto: XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse): McpServerToolsView {
 	return {
 		// status is a plain string on the wire; cast to the domain union (the panel handles unknown values).
 		status: (dto.status as McpConnectionStatus | undefined) ?? DEFAULT_CONNECTION_STATUS,

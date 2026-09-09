@@ -123,14 +123,13 @@ export function EntraAuthCodeSignInCard() {
 				) : null}
 
 				{signInMutation.isError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Stack gap="xs">
-							<Text size="sm">{t("pages.cloudSettings.entra.authCode.signInError", "Failed to start sign-in. Please try again.")}</Text>
-							<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
-								{t("pages.cloudSettings.entra.authCode.retry", "Try again")}
-							</Button>
-						</Stack>
-					</Alert>
+					<InlineErrorAlert
+						message={t("pages.cloudSettings.entra.authCode.signInError", "Failed to start sign-in. Please try again.")}
+					>
+						<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
+							{t("pages.cloudSettings.entra.authCode.retry", "Try again")}
+						</Button>
+					</InlineErrorAlert>
 				) : null}
 
 				{statusQuery.isError && signInFlowActive ? (

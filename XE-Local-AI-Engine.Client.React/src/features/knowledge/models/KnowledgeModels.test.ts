@@ -93,18 +93,12 @@ describe("isAcceptedKnowledgeFile", () => {
 		expect(KNOWLEDGE_DETERMINISTIC_TEXT_EXTENSIONS).toEqual(backendDeterministicTextExtensions);
 	});
 
-	it.each([
-		"README.md",
-		"Widget.cs",
-		"route.tsx",
-		"worker.py",
-		"main.go",
-		"lib.rs",
-		"trace.log",
-		"Dockerfile.dockerfile",
-	])("accepts deterministic prose/code ingestion for %s", (fileName) => {
-		expect(isAcceptedKnowledgeFile(fileName)).toBe(true);
-	});
+	it.each(["README.md", "Widget.cs", "route.tsx", "worker.py", "main.go", "lib.rs", "trace.log", "Dockerfile.dockerfile"])(
+		"accepts deterministic prose/code ingestion for %s",
+		(fileName) => {
+			expect(isAcceptedKnowledgeFile(fileName)).toBe(true);
+		},
+	);
 
 	it("uses the complete advisory set in the native file picker", () => {
 		expect(KNOWLEDGE_ACCEPT_ATTRIBUTE.split(",")).toEqual(KNOWLEDGE_ACCEPTED_EXTENSIONS);

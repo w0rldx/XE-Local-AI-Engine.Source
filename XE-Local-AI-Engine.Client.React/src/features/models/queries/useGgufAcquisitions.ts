@@ -73,10 +73,7 @@ function updatedAtMs(status: GgufAcquisitionStatus): number | undefined {
 	return Number.isNaN(parsed) ? undefined : parsed;
 }
 
-function shouldAcceptAcquisitionStatus(
-	current: GgufAcquisitionStatus | undefined,
-	incoming: GgufAcquisitionStatus,
-): boolean {
+function shouldAcceptAcquisitionStatus(current: GgufAcquisitionStatus | undefined, incoming: GgufAcquisitionStatus): boolean {
 	if (!current) {
 		return true;
 	}
@@ -115,7 +112,8 @@ export function pruneAcquisitionStatuses(
 		}
 	}
 	terminal.sort((left, right) => {
-		const timestampDifference = (updatedAtMs(right[1]) ?? Number.MAX_SAFE_INTEGER) - (updatedAtMs(left[1]) ?? Number.MAX_SAFE_INTEGER);
+		const timestampDifference =
+			(updatedAtMs(right[1]) ?? Number.MAX_SAFE_INTEGER) - (updatedAtMs(left[1]) ?? Number.MAX_SAFE_INTEGER);
 		return timestampDifference || left[0].localeCompare(right[0]);
 	});
 	return new Map([...active, ...terminal.slice(0, ACQUISITION_TERMINAL_RETENTION_LIMIT)]);
@@ -152,10 +150,11 @@ export function mergeStatuses(
 	return pruneAcquisitionStatuses(next, nowMs);
 }
 
-export function useActiveGgufAcquisitions({ enabled = true }: { enabled?: boolean } = {}): ReadonlyMap<
-	string,
-	GgufAcquisitionStatus
-> {
+export function useActiveGgufAcquisitions({
+	enabled = true,
+}: {
+	enabled?: boolean;
+} = {}): ReadonlyMap<string, GgufAcquisitionStatus> {
 	const queryClient = useQueryClient();
 	const completedHandled = useRef<ReadonlyMap<string, number>>(new Map());
 	const [statuses, setStatuses] = useState<ReadonlyMap<string, GgufAcquisitionStatus>>(() => new Map());

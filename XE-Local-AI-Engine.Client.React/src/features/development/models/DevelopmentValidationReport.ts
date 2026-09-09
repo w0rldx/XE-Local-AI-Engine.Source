@@ -67,9 +67,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * `commands` evidence array. The caller must render that as an explicit error rather than an empty panel: a report
  * that cannot be read is not a report that passed.
  */
-export function parseDevelopmentValidationReport(
-	content: string | null | undefined,
-): DevelopmentValidationReportBody | null {
+export function parseDevelopmentValidationReport(content: string | null | undefined): DevelopmentValidationReportBody | null {
 	if (typeof content !== "string" || content.length === 0) {
 		return null;
 	}

@@ -118,7 +118,12 @@ function SamplingFieldRow({ meta, numValue, cappedMax, unsupported, onCommit, on
 	);
 }
 
-export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens, cloudModelSelected = false }: ChatSamplingOptionsDialogProps) {
+export function ChatSamplingOptionsDialog({
+	opened,
+	onClose,
+	maxContextTokens,
+	cloudModelSelected = false,
+}: ChatSamplingOptionsDialogProps) {
 	const { t } = useTranslation();
 	const options = useChatSamplingPreferencesStore((state) => state.options);
 	const { setField, reset } = useChatSamplingPreferencesStore((state) => state.actions);
@@ -144,12 +149,7 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens, c
 			return;
 		}
 
-		const num =
-			typeof val === "number"
-				? val
-				: typeof val === "string" && val.trim() !== ""
-					? Number(val)
-					: Number.NaN;
+		const num = typeof val === "number" ? val : typeof val === "string" && val.trim() !== "" ? Number(val) : Number.NaN;
 		setField(key, Number.isFinite(num) ? (num as never) : (undefined as never));
 	}
 
@@ -208,14 +208,19 @@ export function ChatSamplingOptionsDialog({ opened, onClose, maxContextTokens, c
 				{/* Stop sequences: one entry per line */}
 				<Textarea
 					label={t("pages.chat.samplingOptions.stop", "Stop sequences")}
-					description={t("pages.chat.samplingOptions.stopDescription", "One stop sequence per line. The model halts when it emits any of these strings.")}
+					description={t(
+						"pages.chat.samplingOptions.stopDescription",
+						"One stop sequence per line. The model halts when it emits any of these strings.",
+					)}
 					placeholder={t("pages.chat.samplingOptions.modelDefault", "Model default")}
 					value={(options.stop ?? []).join("\n")}
 					onChange={(e) => {
 						const sequences: string[] = [];
 						for (const l of e.currentTarget.value.split("\n")) {
 							const trimmed = l.trimEnd();
-							if (trimmed.length > 0) { sequences.push(trimmed); }
+							if (trimmed.length > 0) {
+								sequences.push(trimmed);
+							}
 						}
 						setField("stop", sequences.length > 0 ? sequences : undefined);
 					}}

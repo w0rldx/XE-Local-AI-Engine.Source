@@ -108,19 +108,41 @@ describe("hasVisibleAssistantReply", () => {
 	}
 
 	it("is false when no assistant message has content yet", () => {
-		const client = fakeClient([[["c1"], conversation([{ role: "user", content: "hi" }, { role: "assistant", content: "" }])]]);
+		const client = fakeClient([
+			[
+				["c1"],
+				conversation([
+					{ role: "user", content: "hi" },
+					{ role: "assistant", content: "" },
+				]),
+			],
+		]);
 		expect(hasVisibleAssistantReply(client)).toBe(false);
 	});
 
 	it("is true once an assistant message carries non-empty content", () => {
-		const client = fakeClient([[["c1"], conversation([{ role: "user", content: "hi" }, { role: "assistant", content: "Hello!" }])]]);
+		const client = fakeClient([
+			[
+				["c1"],
+				conversation([
+					{ role: "user", content: "hi" },
+					{ role: "assistant", content: "Hello!" },
+				]),
+			],
+		]);
 		expect(hasVisibleAssistantReply(client)).toBe(true);
 	});
 
 	it("counts visible replies so a later reply can be distinguished from existing conversation history", () => {
 		const client = fakeClient([
 			[["c1"], conversation([{ role: "assistant", content: "First" }])],
-			[["c2"], conversation([{ role: "assistant", content: "Second" }, { role: "assistant", content: "   " }])],
+			[
+				["c2"],
+				conversation([
+					{ role: "assistant", content: "Second" },
+					{ role: "assistant", content: "   " },
+				]),
+			],
 		]);
 
 		expect(countVisibleAssistantReplies(client)).toBe(2);

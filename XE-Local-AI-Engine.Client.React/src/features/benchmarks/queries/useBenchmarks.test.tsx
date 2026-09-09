@@ -263,7 +263,13 @@ describe("benchmark queries over the real client", () => {
 	it("stops offering more once every run is loaded", async () => {
 		server.use(
 			http.get(localApiPath(`benchmarks/projects/${projectId}/runs`), () =>
-				HttpResponse.json({ items: [runRow()], page: 1, pageSize: 200, totalCount: 1, rankCohort: { rankedCount: 0, totalScored: 0 } }),
+				HttpResponse.json({
+					items: [runRow()],
+					page: 1,
+					pageSize: 200,
+					totalCount: 1,
+					rankCohort: { rankedCount: 0, totalScored: 0 },
+				}),
 			),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -312,10 +318,9 @@ describe("benchmark queries over the real client", () => {
 		);
 		const { wrapper } = createProvidersWrapper();
 
-		const { result } = renderHook(
-			() => ({ project: useBenchmarkProject(projectId), update: useUpdateBenchmarkProject() }),
-			{ wrapper },
-		);
+		const { result } = renderHook(() => ({ project: useBenchmarkProject(projectId), update: useUpdateBenchmarkProject() }), {
+			wrapper,
+		});
 		await waitFor(() => expect(result.current.project.isSuccess).toBe(true));
 
 		result.current.update.mutate({ projectId, expectedVersion: 2, draft });
@@ -337,7 +342,14 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
+		result.current.mutate({
+			projectId,
+			modelName: "model.gguf",
+			expectedProjectVersion: 2,
+			kvCacheType: null,
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
+		});
 
 		await waitFor(() => expect(result.current.isSuccess).toBe(true));
 		// The mode always rides along; the temperature never does in throughput mode, which the node samples at 0.
@@ -357,7 +369,14 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 1, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
+		result.current.mutate({
+			projectId,
+			modelName: "model.gguf",
+			expectedProjectVersion: 1,
+			kvCacheType: null,
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
+		});
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect(result.current.error).toBeInstanceOf(ApiError);
@@ -378,13 +397,32 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: null, repeatMode: "Throughput", answerVarianceTemperature: null });
+		result.current.mutate({
+			projectId,
+			modelName: "model.gguf",
+			expectedProjectVersion: 2,
+			kvCacheType: null,
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
+		});
 		await waitFor(() => expect(bodies).toHaveLength(1));
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput", answerVarianceTemperature: null });
+		result.current.mutate({
+			projectId,
+			modelName: "model.gguf",
+			expectedProjectVersion: 2,
+			kvCacheType: "q8_0",
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
+		});
 		await waitFor(() => expect(bodies).toHaveLength(2));
 
 		expect(bodies[0]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, repeatMode: "Throughput" });
-		expect(bodies[1]).toEqual({ modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q8_0", repeatMode: "Throughput" });
+		expect(bodies[1]).toEqual({
+			modelName: "model.gguf",
+			expectedProjectVersion: 2,
+			kvCacheType: "q8_0",
+			repeatMode: "Throughput",
+		});
 	});
 
 	// A 422 is the node refusing this KV type on this runtime; its sanitized reason has to survive to the caller.
@@ -399,7 +437,14 @@ describe("benchmark queries over the real client", () => {
 
 		const { result } = renderHook(() => useStartBenchmarkRun(), { wrapper });
 
-		result.current.mutate({ projectId, modelName: "model.gguf", expectedProjectVersion: 2, kvCacheType: "q4_0", repeatMode: "Throughput", answerVarianceTemperature: null });
+		result.current.mutate({
+			projectId,
+			modelName: "model.gguf",
+			expectedProjectVersion: 2,
+			kvCacheType: "q4_0",
+			repeatMode: "Throughput",
+			answerVarianceTemperature: null,
+		});
 
 		await waitFor(() => expect(result.current.isError).toBe(true));
 		expect((result.current.error as ApiError).statusCode).toBe(422);
@@ -712,7 +757,10 @@ describe("benchmark queries over the real client", () => {
 		server.use(
 			http.post(localApiPath(`benchmarks/projects/${projectId}/rejudge`), async ({ request }) => {
 				observedBody = await request.json();
-				return HttpResponse.json({ project: projectDetail({ version: 3 }), enqueuedRunIds: [runId, "dddddddd-0000-4000-8000-000000000004"] });
+				return HttpResponse.json({
+					project: projectDetail({ version: 3 }),
+					enqueuedRunIds: [runId, "dddddddd-0000-4000-8000-000000000004"],
+				});
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();

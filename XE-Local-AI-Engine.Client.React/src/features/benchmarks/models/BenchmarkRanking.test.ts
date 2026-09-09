@@ -70,7 +70,6 @@ describe("groupBenchmarkRunsByModel", () => {
 		expect(groups[0]?.leader.id).toBe("q8");
 	});
 
-
 	it("collapses a model's runs under its best-ranked one", () => {
 		const groups = groupBenchmarkRunsByModel([
 			run({ id: "a-old", modelGroupKey: "model-a", rank: 3, createdAtUtc: 1 }),
@@ -152,9 +151,7 @@ describe("project-level judge guards", () => {
 
 	// The confirmation says how many runs a re-judge touches; only succeeded runs have output to judge.
 	it("counts only the succeeded runs a re-judge would re-score", () => {
-		expect(
-			succeededRunCount([run(), run({ primaryStatus: "Failed" }), run({ primaryStatus: "Running" }), run()]),
-		).toBe(2);
+		expect(succeededRunCount([run(), run({ primaryStatus: "Failed" }), run({ primaryStatus: "Running" }), run()])).toBe(2);
 	});
 });
 
@@ -176,7 +173,11 @@ describe("rankExclusionAction for pairwise reasons", () => {
 	});
 
 	it("re-judges the ones a new generation fixes", () => {
-		for (const reason of ["pairwise-cross-case", "pairwise-execution-mismatch", "pairwise-execution-identity-incomplete"] as const) {
+		for (const reason of [
+			"pairwise-cross-case",
+			"pairwise-execution-mismatch",
+			"pairwise-execution-identity-incomplete",
+		] as const) {
 			expect(rankExclusionAction(reason)).toBe("rejudge");
 		}
 	});

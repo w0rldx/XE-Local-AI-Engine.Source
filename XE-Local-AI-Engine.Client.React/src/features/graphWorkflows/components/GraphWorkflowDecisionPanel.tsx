@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import {
@@ -209,9 +210,14 @@ export function GraphWorkflowDecisionPanel({
 					{t("pages.graphWorkflows.decision.runMovedOn", "This run has moved on — it is no longer waiting for this decision.")}
 				</Alert>
 			) : decide.error ? (
-				<Alert color="red" variant="light" data-testid="graph-workflow-decision-error">
-					{apiErrorMessage(decide.error, t("pages.graphWorkflows.decision.failed", "That decision could not be recorded."))}
-				</Alert>
+				<InlineErrorAlert
+					message={apiErrorMessage(
+						decide.error,
+						t("pages.graphWorkflows.decision.failed", "That decision could not be recorded."),
+					)}
+					variant="light"
+					data-testid="graph-workflow-decision-error"
+				/>
 			) : null}
 
 			{/* Wraps on a narrow viewport on purpose: a non-wrapping action row makes a decision visible but

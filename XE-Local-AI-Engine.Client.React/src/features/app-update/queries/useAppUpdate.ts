@@ -24,15 +24,9 @@ export function useRefreshAppUpdateStatus() {
 	const queryClient = useQueryClient();
 
 	return useMutation({
-		mutationFn: () =>
-			queryClient.fetchQuery(
-				withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: true } })),
-			),
+		mutationFn: () => queryClient.fetchQuery(withResponseValidation(getAppUpdateStatusOptions({ query: { refresh: true } }))),
 		onSuccess: (data) => {
-			queryClient.setQueryData(
-				getAppUpdateStatusQueryKey({ query: { refresh: null } }),
-				data,
-			);
+			queryClient.setQueryData(getAppUpdateStatusQueryKey({ query: { refresh: null } }), data);
 		},
 	});
 }
@@ -41,10 +35,12 @@ export function useRefreshAppUpdateStatus() {
 export function useProbeAppUpdateStatus() {
 	return useMutation({
 		mutationFn: async () => {
-			const { data } = await callWithResponseValidation(getAppUpdateStatus({
-				query: { refresh: null },
-				throwOnError: true,
-			}));
+			const { data } = await callWithResponseValidation(
+				getAppUpdateStatus({
+					query: { refresh: null },
+					throwOnError: true,
+				}),
+			);
 			return data;
 		},
 	});
@@ -57,9 +53,9 @@ export function useApplyAppUpdate() {
 		...withResponseValidation(applyAppUpdateMutation()),
 		onSuccess: (result) => {
 			if (!result.applying) {
-				queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, (current) => current
-					? { ...current, availableVersion: null, updateAvailable: false, checkStatus: "ready" }
-					: current);
+				queryClient.setQueryData<GetAppUpdateStatusResponse>(statusKey, (current) =>
+					current ? { ...current, availableVersion: null, updateAvailable: false, checkStatus: "ready" } : current,
+				);
 			}
 		},
 	});

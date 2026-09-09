@@ -41,7 +41,9 @@ export function AppUpdateButton() {
 		mountedRef.current = true;
 		return () => {
 			mountedRef.current = false;
-			if (timerRef.current !== null) { clearTimeout(timerRef.current); }
+			if (timerRef.current !== null) {
+				clearTimeout(timerRef.current);
+			}
 		};
 	}, []);
 
@@ -146,7 +148,9 @@ export function AppUpdateButton() {
 			variant="filled"
 			leftSection={<IconRefresh size={16} />}
 			loading={applyState === "applying"}
-			onClick={() => { handleApply().catch((error: unknown) => console.error("apply failed", error)); }}
+			onClick={() => {
+				handleApply().catch((error: unknown) => console.error("apply failed", error));
+			}}
 		>
 			{t("pages.about.appUpdate.updateNow")}
 		</Button>

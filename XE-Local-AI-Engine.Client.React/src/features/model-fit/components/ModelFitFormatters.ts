@@ -35,12 +35,7 @@ export function formatModelFitReleaseDate(value: string | null): string {
 	const day = Number(match[3]);
 	const date = new Date(year, month - 1, day);
 	// Reject out-of-range parts (e.g. "2025-13-40") that would silently roll over into a different, wrong day.
-	if (
-		Number.isNaN(date.getTime()) ||
-		date.getFullYear() !== year ||
-		date.getMonth() !== month - 1 ||
-		date.getDate() !== day
-	) {
+	if (Number.isNaN(date.getTime()) || date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) {
 		return "—";
 	}
 	return formatTimestamp(date.getTime(), { year: "numeric", month: "short", day: "numeric" });

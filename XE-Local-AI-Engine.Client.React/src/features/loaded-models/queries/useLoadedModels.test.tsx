@@ -106,7 +106,12 @@ describe("resolveLoadedModelsPollIntervalMs back-off", () => {
 	it("backs off to a slower cadence once a configured provider reports unreachable", () => {
 		// A configured-but-down Ollama must not be polled every 4s: the interval grows so the connection-refused loop is
 		// throttled while still recovering automatically if it later comes up.
-		const slow = resolveLoadedModelsPollIntervalMs({ isAvailable: false, ollamaConfigured: true, error: "Provider unreachable", models: [] });
+		const slow = resolveLoadedModelsPollIntervalMs({
+			isAvailable: false,
+			ollamaConfigured: true,
+			error: "Provider unreachable",
+			models: [],
+		});
 		expect(slow).toBe(30_000);
 	});
 

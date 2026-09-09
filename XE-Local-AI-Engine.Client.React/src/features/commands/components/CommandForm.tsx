@@ -1,8 +1,10 @@
-import { Alert, Stack, Textarea, TextInput } from "@mantine/core";
+import { Stack, Textarea, TextInput } from "@mantine/core";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { type CommandFormValues, commandFormSchema } from "@/features/commands/models/CommandModels";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface CommandFormHandle {
 	submit: () => void;
@@ -44,7 +46,7 @@ export function CommandForm({ initialValues, isSubmitting, submitError, onSubmit
 
 	return (
 		<Stack gap="md" data-testid="command-form">
-			{submitError ? <Alert color="red">{submitError}</Alert> : null}
+			{submitError ? <InlineErrorAlert message={submitError} /> : null}
 			<TextInput
 				label={t("pages.commands.form.name.label")}
 				description={t("pages.commands.form.name.description")}

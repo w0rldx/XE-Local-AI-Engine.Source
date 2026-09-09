@@ -49,8 +49,14 @@ function installRoutes(): void {
  */
 function cachedText(queryClient: ReturnType<typeof createTestQueryClient>): string {
 	return JSON.stringify([
-		queryClient.getMutationCache().getAll().map((mutation) => mutation.state),
-		queryClient.getQueryCache().getAll().map((query) => query.state.data),
+		queryClient
+			.getMutationCache()
+			.getAll()
+			.map((mutation) => mutation.state),
+		queryClient
+			.getQueryCache()
+			.getAll()
+			.map((query) => query.state.data),
 	]);
 }
 

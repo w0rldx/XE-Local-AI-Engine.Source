@@ -12,7 +12,8 @@ import { benchmarkRepeatCohortKey, benchmarkRepeatStats } from "@/features/bench
 // being controlled for; a failed run has no measurement at all, and 0 is a measurement.
 
 const isPlottable = (run: BenchmarkRunSummary): boolean => run.primaryStatus === "Succeeded" && !run.isWarmup;
-const finite = (value: number | null | undefined): value is number => value !== null && value !== undefined && Number.isFinite(value);
+const finite = (value: number | null | undefined): value is number =>
+	value !== null && value !== undefined && Number.isFinite(value);
 
 /**
  * Whether anything at all can be charted. Every panel derives from the same set of plottable runs, so one check

@@ -147,7 +147,9 @@ export function imageFormDefaultsForModel(model: ImageModelView | undefined): Im
 	if (model === undefined) {
 		return base;
 	}
-	const sampler = (imageSamplers as readonly string[]).includes(model.defaultSampler) ? (model.defaultSampler as ImageSampler) : base.sampler;
+	const sampler = (imageSamplers as readonly string[]).includes(model.defaultSampler)
+		? (model.defaultSampler as ImageSampler)
+		: base.sampler;
 	return { ...base, steps: model.defaultSteps, cfgScale: model.defaultCfgScale, sampler };
 }
 
@@ -408,7 +410,10 @@ export function toImageJobProgressView(push: ImageJobStatusPush): ImageJobProgre
  *   backwards. The server reports synchronously to keep that from happening; this rule makes the client independent
  *   of that guarantee.
  */
-export function keepLatestImageJobProgress(current: ImageJobProgressView | null, next: ImageJobProgressView): ImageJobProgressView {
+export function keepLatestImageJobProgress(
+	current: ImageJobProgressView | null,
+	next: ImageJobProgressView,
+): ImageJobProgressView {
 	if (current === null) {
 		return next;
 	}
@@ -433,7 +438,13 @@ export type ImageProgressDisplay =
 	| { kind: "none" }
 	| { kind: "queued"; queuePosition: number | null }
 	| { kind: "preparing" }
-	| { kind: "sampling"; step: number; totalSteps: number; secondsPerIteration: number | null; estimatedRemainingMs: number | null }
+	| {
+			kind: "sampling";
+			step: number;
+			totalSteps: number;
+			secondsPerIteration: number | null;
+			estimatedRemainingMs: number | null;
+	  }
 	| { kind: "finishing" };
 
 /**

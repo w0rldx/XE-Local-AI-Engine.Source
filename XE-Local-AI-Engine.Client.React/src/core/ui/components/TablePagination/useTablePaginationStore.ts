@@ -14,8 +14,7 @@ export const useTablePaginationStore = create<TablePaginationStoreState>()(
 	persist(
 		(set) => ({
 			pageSizeByKey: {},
-			setPageSize: (key, pageSize) =>
-				set((state) => ({ pageSizeByKey: { ...state.pageSizeByKey, [key]: pageSize } })),
+			setPageSize: (key, pageSize) => set((state) => ({ pageSizeByKey: { ...state.pageSizeByKey, [key]: pageSize } })),
 		}),
 		{ name: "xe-table-pagination" },
 	),

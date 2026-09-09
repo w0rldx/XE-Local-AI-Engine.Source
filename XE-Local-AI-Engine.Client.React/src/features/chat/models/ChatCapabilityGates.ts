@@ -24,10 +24,7 @@ export const defaultChatUiCapabilities: ChatUiCapabilities = {
 // `manifestVoiceEnabled` is the operator-owned manifest.Enabled gate (server-state): voice UI is shown
 // only when the node ships the voice surface AND the operator has enabled it on this node. Defaults to false so the
 // module-level call sites (which lack the runtime manifest) keep voice hidden until a manifest-aware caller opts in.
-export function buildChatUiCapabilities(
-	capabilities: ChatCapabilities,
-	manifestVoiceEnabled = false,
-): ChatUiCapabilities {
+export function buildChatUiCapabilities(capabilities: ChatCapabilities, manifestVoiceEnabled = false): ChatUiCapabilities {
 	return {
 		showLocalToolControls: capabilities.localTools,
 		showToolApprovalControls: capabilities.toolApprovals,

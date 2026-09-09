@@ -45,9 +45,7 @@ export function useKnowledgeBaseHub(): void {
 			queryClient
 				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.listDocuments) })
 				.catch(() => undefined);
-			queryClient
-				.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) })
-				.catch(() => undefined);
+			queryClient.invalidateQueries({ queryKey: knowledgeInvalidationKey(knowledgeQueryIds.getDocument) }).catch(() => undefined);
 		};
 
 		const applyDocumentChanged = (event: KnowledgeDocumentChangedEvent | undefined): void => {

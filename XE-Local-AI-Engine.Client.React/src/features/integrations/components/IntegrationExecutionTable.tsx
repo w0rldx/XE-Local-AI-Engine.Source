@@ -90,11 +90,7 @@ export function IntegrationExecutionTable({
 									    approval-required run from a queue-timeout without opening either dialog. It is
 									    rendered verbatim: a value this client does not know must still be readable. */}
 									{execution.failureCategory === null ? null : (
-										<Badge
-											variant="light"
-											color="gray"
-											data-testid={`integration-execution-category-${execution.id}`}
-										>
+										<Badge variant="light" color="gray" data-testid={`integration-execution-category-${execution.id}`}>
 											{execution.failureCategory}
 										</Badge>
 									)}

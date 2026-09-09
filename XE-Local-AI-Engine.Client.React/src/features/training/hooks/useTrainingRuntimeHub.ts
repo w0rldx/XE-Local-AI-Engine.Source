@@ -49,7 +49,10 @@ export function useTrainingRuntimeHub(enabled = true) {
 			const event = parsed.data;
 			setState((current) => ({
 				phase: event.phase,
-				logEntries: mergeTrainingLogs(current.logEntries, trainingLogEntries(event.appendedLogStartSequence, event.appendedLogLines)),
+				logEntries: mergeTrainingLogs(
+					current.logEntries,
+					trainingLogEntries(event.appendedLogStartSequence, event.appendedLogLines),
+				),
 				error: event.sanitizedError,
 			}));
 			if (event.terminal) {

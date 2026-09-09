@@ -50,7 +50,9 @@ describe("WorkSessionEventsTab", () => {
 	it("summarises what a step spent beside the outcome", () => {
 		renderTab([event("e1", { detailJson: consumption() })]);
 
-		expect(screen.getByTestId("work-session-event-consumption-e1").textContent).toBe("7/10 provider calls · 3 tool calls · ~18.2k est. input tokens");
+		expect(screen.getByTestId("work-session-event-consumption-e1").textContent).toBe(
+			"7/10 provider calls · 3 tool calls · ~18.2k est. input tokens",
+		);
 		expect(screen.getByTestId("work-session-event-outcome-e1").textContent).toBe("Completed");
 	});
 
@@ -59,13 +61,23 @@ describe("WorkSessionEventsTab", () => {
 		// next to a step-total call count and a step-total estimate would read as a contradiction.
 		renderTab([event("e2", { detailJson: consumption({ usageInputTokens: 21_400, usageOutputTokens: 900 }) })]);
 
-		expect(screen.getByTestId("work-session-event-consumption-e2").textContent).toBe("7/10 provider calls · 3 tool calls · ~18.2k est. input tokens");
+		expect(screen.getByTestId("work-session-event-consumption-e2").textContent).toBe(
+			"7/10 provider calls · 3 tool calls · ~18.2k est. input tokens",
+		);
 	});
 
 	it("summarises a failed step the same way", () => {
-		renderTab([event("e3", { eventType: "StepFailed", outcome: "1", detailJson: consumption({ providerCalls: 2, toolCallsCompleted: 0, estimatedInputTokens: 640 }) })]);
+		renderTab([
+			event("e3", {
+				eventType: "StepFailed",
+				outcome: "1",
+				detailJson: consumption({ providerCalls: 2, toolCallsCompleted: 0, estimatedInputTokens: 640 }),
+			}),
+		]);
 
-		expect(screen.getByTestId("work-session-event-consumption-e3").textContent).toBe("2/10 provider calls · 0 tool calls · ~640 est. input tokens");
+		expect(screen.getByTestId("work-session-event-consumption-e3").textContent).toBe(
+			"2/10 provider calls · 0 tool calls · ~640 est. input tokens",
+		);
 	});
 
 	it("renders nothing extra for a detail payload of some other shape", () => {

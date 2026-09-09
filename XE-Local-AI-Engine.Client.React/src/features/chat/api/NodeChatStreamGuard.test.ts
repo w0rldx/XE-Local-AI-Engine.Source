@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { clientWatchdogFailureCategory, guardNodeChatStream, StreamWatchdogError, streamWatchdogNotice } from "@/features/chat/api/NodeChatStreamGuard";
+import {
+	clientWatchdogFailureCategory,
+	guardNodeChatStream,
+	StreamWatchdogError,
+	streamWatchdogNotice,
+} from "@/features/chat/api/NodeChatStreamGuard";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 
 function event(sequence: number, content: string): NodeChatStreamEventDto {

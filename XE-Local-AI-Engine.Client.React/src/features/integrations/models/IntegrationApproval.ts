@@ -1,7 +1,4 @@
-import {
-	type IntegrationToolFacts,
-	integrationToolContinuesUnanswered,
-} from "@/features/integrations/models/IntegrationModels";
+import { type IntegrationToolFacts, integrationToolContinuesUnanswered } from "@/features/integrations/models/IntegrationModels";
 
 // Client-side mirror of the backend's TIGHTEN-ONLY tool-approval compose
 // (AgentDefinitionResolver: policy.RequiresApproval(...) || definition.ToolApprovals[name]). The catalog's

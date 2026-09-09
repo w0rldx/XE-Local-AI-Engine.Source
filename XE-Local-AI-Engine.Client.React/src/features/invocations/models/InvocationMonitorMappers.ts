@@ -14,9 +14,7 @@ import type {
 // Generated and domain enum values stay aligned.
 const DEFAULT_STATUS: InvocationStatusDto = "Pending";
 
-function toInvocationCurrent(
-	dto: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse,
-): InvocationCurrentDto {
+function toInvocationCurrent(dto: XeLocalAiEngineClientEndpointsInvocationsV1InvocationCurrentResponse): InvocationCurrentDto {
 	return {
 		invocationId: dto.invocationId ?? "",
 		conversationId: dto.conversationId ?? "",
@@ -36,9 +34,7 @@ function toInvocationCurrent(
 	};
 }
 
-function toInvocationHistory(
-	dto: XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse,
-): InvocationHistoryDto {
+function toInvocationHistory(dto: XeLocalAiEngineClientEndpointsInvocationsV1InvocationHistoryResponse): InvocationHistoryDto {
 	return {
 		invocationId: dto.invocationId ?? "",
 		conversationId: dto.conversationId ?? "",

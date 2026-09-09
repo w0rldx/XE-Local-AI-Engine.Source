@@ -1,8 +1,9 @@
-import { Alert, Button, Group, SegmentedControl, Stack, Text, TextInput, Textarea } from "@mantine/core";
+import { Button, Group, SegmentedControl, Stack, Text, TextInput, Textarea } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import type { AgentOption } from "@/features/chat/models/ChatModels";
 import { type WorkSessionKind, workSessionKinds } from "@/features/workSessions/models/WorkSessionModels";
@@ -71,9 +72,7 @@ export function CreateWorkSessionDialog({
 		>
 			<Stack gap="md">
 				{errorMessage ? (
-					<Alert color="red" variant="light" data-testid="create-work-session-error">
-						{errorMessage}
-					</Alert>
+					<InlineErrorAlert message={errorMessage} variant="light" data-testid="create-work-session-error" />
 				) : null}
 				<TextInput
 					label={t("pages.workSessions.create.titleLabel", "Title")}
@@ -85,7 +84,10 @@ export function CreateWorkSessionDialog({
 				/>
 				<Textarea
 					label={t("pages.workSessions.create.objectiveLabel", "Objective")}
-					description={t("pages.workSessions.create.objectiveHint", "What should the agent achieve? It plans its own tasks from this.")}
+					description={t(
+						"pages.workSessions.create.objectiveHint",
+						"What should the agent achieve? It plans its own tasks from this.",
+					)}
 					value={objective}
 					maxLength={OBJECTIVE_MAX}
 					required={true}

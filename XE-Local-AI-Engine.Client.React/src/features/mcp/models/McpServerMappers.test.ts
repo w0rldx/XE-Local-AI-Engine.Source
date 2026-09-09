@@ -4,11 +4,7 @@ import type {
 	XeLocalAiEngineClientEndpointsMcpV1McpServerResponse,
 	XeLocalAiEngineClientEndpointsMcpV1McpServerToolsResponse,
 } from "@/core/api/generated";
-import {
-	toMcpServerRegistration,
-	toMcpServerToolsView,
-	toSaveMcpServerRequest,
-} from "@/features/mcp/models/McpServerMappers";
+import { toMcpServerRegistration, toMcpServerToolsView, toSaveMcpServerRequest } from "@/features/mcp/models/McpServerMappers";
 import type { McpServerFormValues } from "@/features/mcp/models/McpServerModels";
 
 // Env var names are conventionally UPPER_SNAKE, which biome's useNamingConvention rejects as object-literal keys —
@@ -84,9 +80,7 @@ describe("toMcpServerRegistration", () => {
 
 	it("coalesces omitted optional fields to safe defaults (null description/env/args)", () => {
 		// The generated response makes every field optional; an omitted field must coalesce to a total domain value.
-		const registration = toMcpServerRegistration(
-			makeStdioResponse({ description: null, env: undefined, arguments: undefined }),
-		);
+		const registration = toMcpServerRegistration(makeStdioResponse({ description: null, env: undefined, arguments: undefined }));
 
 		expect(registration.description).toBe("");
 		expect(registration.env).toEqual([]);

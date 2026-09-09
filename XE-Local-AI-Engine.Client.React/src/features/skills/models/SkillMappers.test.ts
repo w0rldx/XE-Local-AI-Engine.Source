@@ -46,7 +46,18 @@ describe("toSkill", () => {
 
 	it("defaults every omitted optional field", () => {
 		expect(
-			toSkill({ id: "", name: "", description: "", body: "", enabled: false, version: 0, createdAtUtc: 0, updatedAtUtc: 0, origin: "Local", resourceCount: 0 }),
+			toSkill({
+				id: "",
+				name: "",
+				description: "",
+				body: "",
+				enabled: false,
+				version: 0,
+				createdAtUtc: 0,
+				updatedAtUtc: 0,
+				origin: "Local",
+				resourceCount: 0,
+			}),
 		).toEqual({
 			id: "",
 			name: "",

@@ -1,22 +1,11 @@
-import {
-	Alert,
-	Button,
-	Group,
-	NumberInput,
-	Paper,
-	Select,
-	Stack,
-	Textarea,
-	TextInput,
-} from "@mantine/core";
+import { Button, Group, NumberInput, Paper, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { IconX } from "@tabler/icons-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	type PlaybookActionFormValues,
-	playbookActionFormSchema,
-} from "@/features/agents/models/PlaybookActionModels";
+import { type PlaybookActionFormValues, playbookActionFormSchema } from "@/features/agents/models/PlaybookActionModels";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface PlaybookActionFormProps {
 	initialValues: PlaybookActionFormValues;
@@ -136,11 +125,7 @@ export function PlaybookActionForm({
 					}}
 					data-testid="playbook-form-trigger"
 				/>
-				{submitError ? (
-					<Alert color="red" data-testid="playbook-form-submit-error">
-						{submitError}
-					</Alert>
-				) : null}
+				{submitError ? <InlineErrorAlert message={submitError} data-testid="playbook-form-submit-error" /> : null}
 				<Group justify="flex-end">
 					<Button
 						variant="subtle"

@@ -505,7 +505,9 @@ describe("toBenchmarkRankCohort", () => {
 	});
 
 	it("carries the cohort identity and counts through", () => {
-		expect(toBenchmarkRankCohort({ policyRevision: 2, executionKey: "key", cohortGeneration: 3, rankedCount: 2, totalScored: 5 })).toEqual({
+		expect(
+			toBenchmarkRankCohort({ policyRevision: 2, executionKey: "key", cohortGeneration: 3, rankedCount: 2, totalScored: 5 }),
+		).toEqual({
 			policyRevision: 2,
 			executionKey: "key",
 			cohortGeneration: 3,

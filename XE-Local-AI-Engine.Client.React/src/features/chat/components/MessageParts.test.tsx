@@ -120,7 +120,11 @@ describe("MessageParts", () => {
 		expect(live.textContent).toContain("Still thinking abo");
 		expect(screen.getByTestId("chat-message-reasoning-m3:0")).toBeTruthy();
 		expect(screen.queryByTestId("chat-message-reasoning-m3:2")).toBeNull();
-		expectDocumentOrder([screen.getByTestId("chat-message-reasoning-m3:0"), screen.getByTestId("chat-tool-call-card-get_time"), live]);
+		expectDocumentOrder([
+			screen.getByTestId("chat-message-reasoning-m3:0"),
+			screen.getByTestId("chat-tool-call-card-get_time"),
+			live,
+		]);
 	});
 
 	it("folds every reasoning run once the turn is no longer streaming", () => {

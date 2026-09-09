@@ -14,10 +14,7 @@ describe("BenchmarkBatchProgressAlert", () => {
 
 	it("states every bucket of the launch", () => {
 		renderWithProviders(
-			<BenchmarkBatchProgressAlert
-				progress={{ total: 12, done: 5, running: 2, queued: 5, failed: 1 }}
-				onDismiss={vi.fn()}
-			/>,
+			<BenchmarkBatchProgressAlert progress={{ total: 12, done: 5, running: 2, queued: 5, failed: 1 }} onDismiss={vi.fn()} />,
 		);
 
 		expect(screen.getByTestId("benchmark-batch-progress").textContent).toContain(

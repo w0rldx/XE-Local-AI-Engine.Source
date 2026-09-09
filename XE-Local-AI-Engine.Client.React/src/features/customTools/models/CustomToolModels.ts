@@ -99,7 +99,12 @@ export interface CustomToolFormValues {
 }
 
 const parameterSchema = z.object({
-	name: z.string().trim().min(1).max(CUSTOM_TOOL_PARAM_NAME_MAX).regex(CUSTOM_TOOL_PARAM_NAME_PATTERN, { message: "paramNameInvalid" }),
+	name: z
+		.string()
+		.trim()
+		.min(1)
+		.max(CUSTOM_TOOL_PARAM_NAME_MAX)
+		.regex(CUSTOM_TOOL_PARAM_NAME_PATTERN, { message: "paramNameInvalid" }),
 	type: z.enum(CUSTOM_TOOL_PARAMETER_TYPES),
 	description: z.string().trim(),
 	required: z.boolean(),

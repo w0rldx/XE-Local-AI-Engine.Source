@@ -1,8 +1,8 @@
 import { Alert, type AlertProps, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import type { CSSProperties, ReactNode } from "react";
 
-interface InlineErrorAlertProps extends Pick<AlertProps, "variant" | "mt" | "mb" | "my"> {
+interface InlineErrorAlertProps extends Pick<AlertProps, "variant" | "mt" | "mb" | "my" | "p" | "w"> {
 	/**
 	 * The operator-facing text, ALREADY resolved. Call sites keep owning `apiErrorMessage(error, t(...))` — only a
 	 * quarter of them resolve an error that way, the rest render a `t(...)` string, a state variable or a
@@ -12,6 +12,11 @@ interface InlineErrorAlertProps extends Pick<AlertProps, "variant" | "mt" | "mb"
 	title?: ReactNode;
 	/** Extra content under the message; by convention a retry button. Renders the pair as a stack. */
 	children?: ReactNode;
+	/** Replaces the default warning triangle. For the few banners that deliberately lead with another glyph. */
+	icon?: ReactNode;
+	/** DOM id, for the call sites that point an `aria-describedby` at the banner. */
+	id?: string;
+	style?: CSSProperties;
 	"data-testid"?: string;
 }
 
@@ -22,21 +27,30 @@ export function InlineErrorAlert({
 	message,
 	title,
 	children,
+	icon,
+	id,
+	style,
 	variant,
 	mt,
 	mb,
 	my,
+	p,
+	w,
 	"data-testid": testId,
 }: InlineErrorAlertProps) {
 	return (
 		<Alert
 			color="red"
-			icon={<IconAlertTriangle size={16} />}
+			icon={icon ?? <IconAlertTriangle size={16} />}
 			title={title}
+			id={id}
+			style={style}
 			variant={variant}
 			mt={mt}
 			mb={mb}
 			my={my}
+			p={p}
+			w={w}
 			data-testid={testId}
 		>
 			{children === undefined ? (

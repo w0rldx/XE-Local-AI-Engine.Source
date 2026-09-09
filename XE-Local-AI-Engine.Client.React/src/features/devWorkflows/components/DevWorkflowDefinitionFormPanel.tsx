@@ -217,15 +217,23 @@ export function DevWorkflowDefinitionFormPanel({ definitionId }: DevWorkflowDefi
 
 			{/* Checked BEFORE the save, because a 400 from the graph parser names the rule and not the row. */}
 			{issues.length > 0 ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-definition-issues">
-					<Stack gap={4}>
-						{issues.map((issue) => (
-							<Text key={`${issue.rule}:${issue.subject}`} size="sm" data-testid={`dev-workflow-definition-issue-${issue.rule}`}>
-								{t(`pages.devWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject })}
-							</Text>
-						))}
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					data-testid="dev-workflow-definition-issues"
+					message={
+						<Stack gap={4}>
+							{issues.map((issue) => (
+								<Text
+									key={`${issue.rule}:${issue.subject}`}
+									size="sm"
+									data-testid={`dev-workflow-definition-issue-${issue.rule}`}
+								>
+									{t(`pages.devWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject })}
+								</Text>
+							))}
+						</Stack>
+					}
+				/>
 			) : null}
 
 			<Stack gap="xs">

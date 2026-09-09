@@ -87,9 +87,7 @@ function summarize(values: readonly number[]): BenchmarkStatSummary | null {
 	// Sample (n-1) deviation, not population: these are repeated samples of a process, not the whole population of its
 	// runs. With a single sample there is no spread to report, and n-1 would divide by zero.
 	const stdDev =
-		values.length < 2
-			? 0
-			: Math.sqrt(values.reduce((total, value) => total + (value - mean) ** 2, 0) / (values.length - 1));
+		values.length < 2 ? 0 : Math.sqrt(values.reduce((total, value) => total + (value - mean) ** 2, 0) / (values.length - 1));
 	return { mean, stdDev, count: values.length };
 }
 

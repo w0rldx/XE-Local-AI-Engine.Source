@@ -43,9 +43,7 @@ export function useSkillResources(skillId: string | null) {
  */
 export function useSkillResourceContent(skillId: string | null, resourceName: string | null) {
 	return useQuery({
-		...withResponseValidation(
-			getSkillResourceOptions({ path: { resourceName: resourceName ?? "", skillId: skillId ?? "" } }),
-		),
+		...withResponseValidation(getSkillResourceOptions({ path: { resourceName: resourceName ?? "", skillId: skillId ?? "" } })),
 		enabled: skillId !== null && resourceName !== null,
 	});
 }

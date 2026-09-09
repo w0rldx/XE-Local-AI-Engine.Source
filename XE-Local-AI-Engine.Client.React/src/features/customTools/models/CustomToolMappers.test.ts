@@ -34,7 +34,10 @@ describe("toDefinition", () => {
 
 	it("keeps declared parameters on a Parameterized tool", () => {
 		const definition = toDefinition(
-			baseForm({ mode: "Parameterized", parameters: [{ name: "city", type: "string", description: "the city", required: true }] }),
+			baseForm({
+				mode: "Parameterized",
+				parameters: [{ name: "city", type: "string", description: "the city", required: true }],
+			}),
 		);
 		expect(definition.parameters).toEqual([{ name: "city", type: "string", description: "the city", required: true }]);
 	});

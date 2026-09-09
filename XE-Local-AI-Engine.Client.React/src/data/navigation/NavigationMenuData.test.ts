@@ -256,10 +256,7 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ images: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.development,
-			nodeRoutePaths.devWorkflows,
-		]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.development, nodeRoutePaths.devWorkflows]);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "images")).toBe(false);
 	});
@@ -268,10 +265,7 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ devWorkflows: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
-			nodeRoutePaths.images,
-			nodeRoutePaths.development,
-		]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.images, nodeRoutePaths.development]);
 	});
 
 	// Graph Workflows ships ON since S4 and is a TOP-LEVEL entry, not a Preview child (R3): it replaced Open Canvas,

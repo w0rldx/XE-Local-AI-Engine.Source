@@ -33,8 +33,7 @@ export const applicationInfo: IApplicationInfo = {
 	// Injected at build time from eng/ReleaseVersion.props (the single version source of truth, also used by
 	// `vpk --packVersion`). See vite.config.ts `resolveAppVersion()`.
 	version: environment.VITE_APP_VERSION,
-	description:
-		"Local AI engine for running, managing, and chatting with on-device AI models.",
+	description: "Local AI engine for running, managing, and chatting with on-device AI models.",
 	// Must match the holder and year in the repo-root LICENSE. Deliberately not `new Date().getFullYear()`:
 	// that silently rolls over on the viewer's clock, so a build cut in 2026 would claim 2027.
 	copyright: "© 2026 w0rldx — Apache-2.0 licensed",
@@ -71,9 +70,7 @@ export const bundledDataLegalDocuments: readonly IRuntimeLegalDocument[] = [
 
 /** Terms copied byte-for-byte for the platform-specific Microsoft components in the published payload. */
 export function runtimeLegalDocumentsForUserAgent(userAgent: string): readonly IRuntimeLegalDocument[] {
-	return userAgent.includes("Windows")
-		? windowsApphostLegalDocuments
-		: selfContainedRuntimeLegalDocuments;
+	return userAgent.includes("Windows") ? windowsApphostLegalDocuments : selfContainedRuntimeLegalDocuments;
 }
 
 export const runtimeLegalDocuments: readonly IRuntimeLegalDocument[] = runtimeLegalDocumentsForUserAgent(

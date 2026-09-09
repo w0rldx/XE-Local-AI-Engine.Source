@@ -17,7 +17,12 @@ export function deriveUsedContextTokens(messages: readonly ContextUsageMessageTo
 			return message.totalTokens;
 		}
 
-		if (message.inputTokens !== null && message.inputTokens !== undefined && message.outputTokens !== null && message.outputTokens !== undefined) {
+		if (
+			message.inputTokens !== null &&
+			message.inputTokens !== undefined &&
+			message.outputTokens !== null &&
+			message.outputTokens !== undefined
+		) {
 			return message.inputTokens + message.outputTokens;
 		}
 	}

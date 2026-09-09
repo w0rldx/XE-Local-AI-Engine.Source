@@ -464,13 +464,14 @@ describe("useIntegrationExecutions", () => {
 
 	it("refetches the list after a cancellation is accepted", async () => {
 		const requests = listRoute();
-		server.use(http.post(localApiPath(`integrations/executions/${executionId}/cancel`), () => new HttpResponse(null, { status: 202 })));
+		server.use(
+			http.post(localApiPath(`integrations/executions/${executionId}/cancel`), () => new HttpResponse(null, { status: 202 })),
+		);
 		const { wrapper } = harness();
 
-		const { result } = renderHook(
-			() => ({ list: useIntegrationExecutions(), cancel: useCancelIntegrationExecution() }),
-			{ wrapper },
-		);
+		const { result } = renderHook(() => ({ list: useIntegrationExecutions(), cancel: useCancelIntegrationExecution() }), {
+			wrapper,
+		});
 
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);
@@ -501,10 +502,9 @@ describe("useIntegrationExecutions", () => {
 		);
 		const { wrapper } = harness();
 
-		const { result } = renderHook(
-			() => ({ list: useIntegrationExecutions(), cancel: useCancelIntegrationExecution() }),
-			{ wrapper },
-		);
+		const { result } = renderHook(() => ({ list: useIntegrationExecutions(), cancel: useCancelIntegrationExecution() }), {
+			wrapper,
+		});
 
 		await waitFor(() => {
 			expect(requests).toHaveLength(1);

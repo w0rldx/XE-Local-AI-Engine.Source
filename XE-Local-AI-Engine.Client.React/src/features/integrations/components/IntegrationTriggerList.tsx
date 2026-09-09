@@ -72,10 +72,7 @@ export function IntegrationTriggerList({
 							</Table.Td>
 							<Table.Td>
 								<Badge variant="light" color="blue">
-									{t(
-										`pages.integrations.triggers.form.sessionPolicy.options.${trigger.sessionPolicy}`,
-										trigger.sessionPolicy,
-									)}
+									{t(`pages.integrations.triggers.form.sessionPolicy.options.${trigger.sessionPolicy}`, trigger.sessionPolicy)}
 								</Badge>
 							</Table.Td>
 							<Table.Td>
@@ -83,10 +80,7 @@ export function IntegrationTriggerList({
 									{trigger.acceptedInputKinds.map((kind) => (
 										<Badge key={kind} variant="outline" color="grape">
 											{/* The same two labels the editor's checkboxes use, so the row and the form never disagree. */}
-											{t(
-												`pages.integrations.triggers.form.acceptedInputs.options.${kind === "json" ? "Json" : "Text"}`,
-												kind,
-											)}
+											{t(`pages.integrations.triggers.form.acceptedInputs.options.${kind === "json" ? "Json" : "Text"}`, kind)}
 										</Badge>
 									))}
 								</Group>

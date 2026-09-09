@@ -35,7 +35,11 @@ export function CommandList({ commands, isMutating, onEdit, onDelete }: CommandL
 										<Text fw={600}>/{command.name}</Text>
 										{command.source === "builtIn" ? <Badge size="sm">{t("pages.commands.list.builtIn")}</Badge> : null}
 									</Group>
-									{command.description ? <Text size="sm" c="dimmed">{command.description}</Text> : null}
+									{command.description ? (
+										<Text size="sm" c="dimmed">
+											{command.description}
+										</Text>
+									) : null}
 								</Stack>
 							</Table.Td>
 							<Table.Td>{t("pages.commands.form.action.sendPrompt")}</Table.Td>
@@ -43,8 +47,12 @@ export function CommandList({ commands, isMutating, onEdit, onDelete }: CommandL
 								<Group justify="flex-end" gap="xs">
 									{command.source === "custom" && command.id ? (
 										<>
-											<Button size="xs" variant="subtle" disabled={isMutating} onClick={() => onEdit(command.id ?? "")}>{t("common.edit")}</Button>
-											<Button size="xs" color="red" variant="subtle" disabled={isMutating} onClick={() => onDelete(command)}>{t("common.delete")}</Button>
+											<Button size="xs" variant="subtle" disabled={isMutating} onClick={() => onEdit(command.id ?? "")}>
+												{t("common.edit")}
+											</Button>
+											<Button size="xs" color="red" variant="subtle" disabled={isMutating} onClick={() => onDelete(command)}>
+												{t("common.delete")}
+											</Button>
 										</>
 									) : null}
 								</Group>

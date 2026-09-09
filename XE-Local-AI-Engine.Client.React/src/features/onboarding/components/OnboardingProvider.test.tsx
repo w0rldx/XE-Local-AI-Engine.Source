@@ -31,7 +31,12 @@ vi.mock("react-joyride", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("react-joyride")>();
 	return {
 		...actual,
-		Joyride: (props: { run: boolean; stepIndex: number; steps: { title?: string }[]; onEvent?: (data: Record<string, unknown>) => void }) => {
+		Joyride: (props: {
+			run: boolean;
+			stepIndex: number;
+			steps: { title?: string }[];
+			onEvent?: (data: Record<string, unknown>) => void;
+		}) => {
 			joyrideProps.current = { run: props.run, stepIndex: props.stepIndex, steps: props.steps };
 			onEventRef.current = props.onEvent ?? null;
 			return null;
@@ -93,23 +98,41 @@ function installDomMocks() {
 }
 
 function renderProvider() {
-	return render(<MantineProvider><OnboardingProvider><ContextCapture />app</OnboardingProvider></MantineProvider>);
+	return render(
+		<MantineProvider>
+			<OnboardingProvider>
+				<ContextCapture />
+				app
+			</OnboardingProvider>
+		</MantineProvider>,
+	);
 }
 
 function applyModelsQuery(view: ReturnType<typeof renderProvider>, query: typeof modelsRef.current) {
 	modelsRef.current = query;
 	act(() => {
-		view.rerender(<MantineProvider><OnboardingProvider><ContextCapture />app</OnboardingProvider></MantineProvider>);
+		view.rerender(
+			<MantineProvider>
+				<OnboardingProvider>
+					<ContextCapture />
+					app
+				</OnboardingProvider>
+			</MantineProvider>,
+		);
 	});
 }
 
-function applyConversations(
-	view: ReturnType<typeof renderProvider>,
-	conversations: typeof conversationsRef.current,
-) {
+function applyConversations(view: ReturnType<typeof renderProvider>, conversations: typeof conversationsRef.current) {
 	conversationsRef.current = conversations;
 	act(() => {
-		view.rerender(<MantineProvider><OnboardingProvider><ContextCapture />app</OnboardingProvider></MantineProvider>);
+		view.rerender(
+			<MantineProvider>
+				<OnboardingProvider>
+					<ContextCapture />
+					app
+				</OnboardingProvider>
+			</MantineProvider>,
+		);
 	});
 }
 
@@ -121,8 +144,8 @@ beforeEach(() => {
 	stateRef.current = { isResolved: true, isSuccess: true, statusByKey: {} };
 	modelsRef.current = { data: undefined, isSuccess: false };
 	conversationsRef.current = [];
-	markDoneMock.mockImplementation(
-		(_key: string, _status: string, callbacks?: { onSuccess?: () => void }) => callbacks?.onSuccess?.(),
+	markDoneMock.mockImplementation((_key: string, _status: string, callbacks?: { onSuccess?: () => void }) =>
+		callbacks?.onSuccess?.(),
 	);
 });
 
@@ -149,8 +172,16 @@ describe("explicit opt-in", () => {
 
 describe("frozen Quick Start readiness", () => {
 	it.each([
-		["ready", { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true }, "navChat"],
-		["installed-unselected", { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, "setDefaultModel"],
+		[
+			"ready",
+			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true },
+			"navChat",
+		],
+		[
+			"installed-unselected",
+			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true },
+			"setDefaultModel",
+		],
 		["missing", { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true }, "navModels"],
 		[
 			"cloud-only",
@@ -191,7 +222,10 @@ describe("frozen Quick Start readiness", () => {
 	});
 
 	it("finishes the frozen flow as completed and clears progress", () => {
-		modelsRef.current = { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true };
+		modelsRef.current = {
+			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
+			isSuccess: true,
+		};
 		renderProvider();
 		fireEvent.click(screen.getByTestId("onboarding-welcome-start"));
 		act(() => onEventRef.current?.({ type: EVENTS.STEP_AFTER, action: ACTIONS.NEXT, index: 3, status: STATUS.RUNNING }));
@@ -240,11 +274,7 @@ describe("frozen Quick Start readiness", () => {
 			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" }, isSuccess: true },
 			3,
 		],
-		[
-			"only the install step",
-			{ data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true },
-			2,
-		],
+		["only the install step", { data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }] }, isSuccess: true }, 2],
 	])("skips %s when readiness changes before entering the setup step", (_name, query, expectedIndex) => {
 		modelsRef.current = { data: { isAvailable: true, items: [], selectedModelName: null }, isSuccess: true };
 		const view = renderProvider();
@@ -341,11 +371,9 @@ describe("frozen Quick Start readiness", () => {
 			status: string;
 			onSuccess?: () => void;
 		}> = [];
-		markDoneMock.mockImplementation(
-			(_key: string, status: string, resultCallbacks?: { onSuccess?: () => void }) => {
-				callbacks.push({ status, onSuccess: resultCallbacks?.onSuccess });
-			},
-		);
+		markDoneMock.mockImplementation((_key: string, status: string, resultCallbacks?: { onSuccess?: () => void }) => {
+			callbacks.push({ status, onSuccess: resultCallbacks?.onSuccess });
+		});
 		modelsRef.current = {
 			data: { isAvailable: true, items: [{ modelName: "chat", kind: "Chat" }], selectedModelName: "chat" },
 			isSuccess: true,
@@ -374,7 +402,14 @@ describe("frozen Quick Start readiness", () => {
 			statusByKey: { "agents-v1": "completed" },
 		};
 		act(() => {
-			view.rerender(<MantineProvider><OnboardingProvider><ContextCapture />app</OnboardingProvider></MantineProvider>);
+			view.rerender(
+				<MantineProvider>
+					<OnboardingProvider>
+						<ContextCapture />
+						app
+					</OnboardingProvider>
+				</MantineProvider>,
+			);
 		});
 
 		expect(contextRef.current?.tutorials["agents-basics"].status).toBe("completed");
@@ -393,8 +428,8 @@ describe("frozen Quick Start readiness", () => {
 	});
 
 	it("reports a failed terminal-state save without presenting it as persisted", () => {
-		markDoneMock.mockImplementation(
-			(_key: string, _status: string, callbacks?: { onError?: () => void }) => callbacks?.onError?.(),
+		markDoneMock.mockImplementation((_key: string, _status: string, callbacks?: { onError?: () => void }) =>
+			callbacks?.onError?.(),
 		);
 		renderProvider();
 

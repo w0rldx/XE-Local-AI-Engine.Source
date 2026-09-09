@@ -81,15 +81,47 @@ describe("WorkSessionPlanPanel", () => {
 	});
 
 	const controlCases: ReadonlyArray<{ status: WorkSessionStatus; shown: readonly string[]; hidden: readonly string[] }> = [
-		{ status: "Draft", shown: ["work-session-start"], hidden: ["work-session-pause", "work-session-resume", "work-session-cancel"] },
-		{ status: "Running", shown: ["work-session-pause", "work-session-cancel"], hidden: ["work-session-start", "work-session-resume"] },
-		{ status: "WaitingForApproval", shown: ["work-session-pause", "work-session-cancel"], hidden: ["work-session-start", "work-session-resume"] },
-		{ status: "WaitingForInput", shown: ["work-session-pause", "work-session-cancel"], hidden: ["work-session-start", "work-session-resume"] },
-		{ status: "Paused", shown: ["work-session-resume", "work-session-cancel"], hidden: ["work-session-start", "work-session-pause"] },
+		{
+			status: "Draft",
+			shown: ["work-session-start"],
+			hidden: ["work-session-pause", "work-session-resume", "work-session-cancel"],
+		},
+		{
+			status: "Running",
+			shown: ["work-session-pause", "work-session-cancel"],
+			hidden: ["work-session-start", "work-session-resume"],
+		},
+		{
+			status: "WaitingForApproval",
+			shown: ["work-session-pause", "work-session-cancel"],
+			hidden: ["work-session-start", "work-session-resume"],
+		},
+		{
+			status: "WaitingForInput",
+			shown: ["work-session-pause", "work-session-cancel"],
+			hidden: ["work-session-start", "work-session-resume"],
+		},
+		{
+			status: "Paused",
+			shown: ["work-session-resume", "work-session-cancel"],
+			hidden: ["work-session-start", "work-session-pause"],
+		},
 		{ status: "Interrupted", shown: ["work-session-resume"], hidden: ["work-session-start", "work-session-pause"] },
-		{ status: "Completed", shown: [], hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"] },
-		{ status: "Failed", shown: [], hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"] },
-		{ status: "Cancelled", shown: [], hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"] },
+		{
+			status: "Completed",
+			shown: [],
+			hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"],
+		},
+		{
+			status: "Failed",
+			shown: [],
+			hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"],
+		},
+		{
+			status: "Cancelled",
+			shown: [],
+			hidden: ["work-session-start", "work-session-pause", "work-session-resume", "work-session-cancel"],
+		},
 	];
 
 	it.each(controlCases)("offers only the controls that apply in $status", ({ status, shown, hidden }) => {

@@ -107,7 +107,13 @@ describe("BenchmarkVerifierEditor", () => {
 
 	it("shows the pre-check failure on the field it belongs to", () => {
 		renderWithProviders(
-			<BenchmarkVerifierEditor kind="regex" config='{"pattern":""}' issue="patternRequired" onChange={vi.fn()} testId="verifier" />,
+			<BenchmarkVerifierEditor
+				kind="regex"
+				config='{"pattern":""}'
+				issue="patternRequired"
+				onChange={vi.fn()}
+				testId="verifier"
+			/>,
 		);
 
 		expect(screen.getByTestId("verifier").textContent).toContain("State a pattern.");

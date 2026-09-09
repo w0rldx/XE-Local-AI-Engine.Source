@@ -3,10 +3,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-	type RateTrackedProgress,
-	useDownloadRateEstimates,
-} from "@/features/models/hooks/useDownloadRateEstimates";
+import { type RateTrackedProgress, useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
 
 // The hook timestamps each status-map change with Date.now(), so the sample window only advances if wall-clock time
 // advances between renders. Only Date.now is stubbed — NOT the whole timer set — because `waitFor` needs real timers to
@@ -57,8 +54,7 @@ describe("useDownloadRateEstimates", () => {
 	// dropped and the runtime banner rendered with no rate and no ETA.
 	it("derives estimates for a non-default active phase", async () => {
 		const { result, rerender } = renderHook(
-			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) =>
-				useDownloadRateEstimates(statuses, "Downloading"),
+			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) => useDownloadRateEstimates(statuses, "Downloading"),
 			{ initialProps: { statuses: new Map([["runtime", progress("Downloading", 4_000_000, 12_000_000)]]) } },
 		);
 
@@ -76,8 +72,7 @@ describe("useDownloadRateEstimates", () => {
 	// the window so a retry that re-enters Downloading starts from a clean slate rather than a stale rate.
 	it("drops the sample window when the tracked entry leaves the active phase", async () => {
 		const { result, rerender } = renderHook(
-			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) =>
-				useDownloadRateEstimates(statuses, "Downloading"),
+			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) => useDownloadRateEstimates(statuses, "Downloading"),
 			{ initialProps: { statuses: new Map([["runtime", progress("Downloading", 4_000_000, 12_000_000)]]) } },
 		);
 
@@ -99,8 +94,7 @@ describe("useDownloadRateEstimates", () => {
 	// lands). Speed is still stateable; an ETA is not, and must not be invented.
 	it("reports speed but no ETA when the total size is unknown", async () => {
 		const { result, rerender } = renderHook(
-			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) =>
-				useDownloadRateEstimates(statuses, "Downloading"),
+			({ statuses }: { statuses: ReadonlyMap<string, RateTrackedProgress> }) => useDownloadRateEstimates(statuses, "Downloading"),
 			{ initialProps: { statuses: new Map([["runtime", progress("Downloading", 1_000_000, null)]]) } },
 		);
 

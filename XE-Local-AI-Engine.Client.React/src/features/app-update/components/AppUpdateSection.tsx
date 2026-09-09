@@ -3,10 +3,9 @@ import { IconInfoCircle, IconRefresh } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { AppUpdateButton } from "@/features/app-update/components/AppUpdateButton";
-import {
-	useAppUpdateStatus,
-	useRefreshAppUpdateStatus,
-} from "@/features/app-update/queries/useAppUpdate";
+import { useAppUpdateStatus, useRefreshAppUpdateStatus } from "@/features/app-update/queries/useAppUpdate";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 /** App-update section rendered inside the About dialog for managed portable desktop builds. */
 export function AppUpdateSection() {
@@ -37,7 +36,9 @@ export function AppUpdateSection() {
 			</Group>
 
 			<Group gap="xs">
-				<Text size="sm" c="dimmed">{t("pages.about.version")}</Text>
+				<Text size="sm" c="dimmed">
+					{t("pages.about.version")}
+				</Text>
 				<Badge variant="light">{status.currentVersion}</Badge>
 			</Group>
 
@@ -54,9 +55,7 @@ export function AppUpdateSection() {
 			) : null}
 
 			{status.isConfigured && status.checkStatus === "failed" ? (
-				<Alert icon={<IconInfoCircle size={16} />} color="red">
-					{t("pages.about.appUpdate.checkFailed")}
-				</Alert>
+				<InlineErrorAlert icon={<IconInfoCircle size={16} />} message={t("pages.about.appUpdate.checkFailed")} />
 			) : null}
 
 			{status.isConfigured && status.checkStatus === "ready" ? (
@@ -65,8 +64,12 @@ export function AppUpdateSection() {
 
 					{status.availableVersion ? (
 						<Group gap="xs">
-							<Text size="sm" c="dimmed">{t("pages.about.appUpdate.availableVersion")}</Text>
-							<Badge variant="dot" color="blue">{status.availableVersion}</Badge>
+							<Text size="sm" c="dimmed">
+								{t("pages.about.appUpdate.availableVersion")}
+							</Text>
+							<Badge variant="dot" color="blue">
+								{status.availableVersion}
+							</Badge>
 						</Group>
 					) : null}
 				</Stack>

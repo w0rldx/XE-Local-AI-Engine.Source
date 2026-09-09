@@ -31,7 +31,9 @@ const emptyCommand: CustomToolCommandDefinition = {
 	env: [],
 };
 
-function toHttpDefinition(dto: XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition | null | undefined): CustomToolHttpDefinition {
+function toHttpDefinition(
+	dto: XeLocalAiEngineClientServicesCustomToolsHttpFetchDefinition | null | undefined,
+): CustomToolHttpDefinition {
 	if (!dto) {
 		return emptyHttp;
 	}
@@ -103,7 +105,9 @@ export function toFormValues(view: CustomToolView): CustomToolFormValues {
 		acknowledged: false,
 		parameters: view.parameters.map((parameter) => ({ ...parameter })),
 		http: view.http ? { ...view.http, headers: [...view.http.headers], allowedHosts: [...view.http.allowedHosts] } : emptyHttp,
-		command: view.command ? { ...view.command, argsTemplate: [...view.command.argsTemplate], env: [...view.command.env] } : emptyCommand,
+		command: view.command
+			? { ...view.command, argsTemplate: [...view.command.argsTemplate], env: [...view.command.env] }
+			: emptyCommand,
 	};
 }
 

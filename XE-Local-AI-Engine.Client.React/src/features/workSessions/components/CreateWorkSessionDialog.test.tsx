@@ -9,12 +9,25 @@ import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const agentId = "bbbbbbbb-0000-4000-8000-000000000002";
 const agentOptions: AgentOption[] = [
-	{ id: agentId, name: "Work Session — Research", description: "Research persona", kind: "Single", modelProfile: null, playbookEnabled: false },
+	{
+		id: agentId,
+		name: "Work Session — Research",
+		description: "Research persona",
+		kind: "Single",
+		modelProfile: null,
+		playbookEnabled: false,
+	},
 ];
 
 function render(onSubmit = vi.fn()) {
 	renderWithProviders(
-		<CreateWorkSessionDialog opened={true} agentOptions={agentOptions} isSubmitting={false} onClose={vi.fn()} onSubmit={onSubmit} />,
+		<CreateWorkSessionDialog
+			opened={true}
+			agentOptions={agentOptions}
+			isSubmitting={false}
+			onClose={vi.fn()}
+			onSubmit={onSubmit}
+		/>,
 	);
 	return onSubmit;
 }

@@ -1,34 +1,10 @@
-import {
-	ActionIcon,
-	Badge,
-	Button,
-	Collapse,
-	Group,
-	Paper,
-	Stack,
-	Text,
-	Tooltip,
-} from "@mantine/core";
-import {
-	IconCheck,
-	IconChevronDown,
-	IconChevronUp,
-	IconFlask,
-	IconPencil,
-	IconX,
-} from "@tabler/icons-react";
+import { ActionIcon, Badge, Button, Collapse, Group, Paper, Stack, Text, Tooltip } from "@mantine/core";
+import { IconCheck, IconChevronDown, IconChevronUp, IconFlask, IconPencil, IconX } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	memoryScopeColors,
-	memoryScopeFallbacks,
-	sourceFallbacks,
-} from "@/features/agents/components/PlaybookActionDisplay";
-import type {
-	EvalResult,
-	PlaybookAction,
-} from "@/features/agents/models/PlaybookActionModels";
+import { memoryScopeColors, memoryScopeFallbacks, sourceFallbacks } from "@/features/agents/components/PlaybookActionDisplay";
+import type { EvalResult, PlaybookAction } from "@/features/agents/models/PlaybookActionModels";
 
 function toConfidencePercent(confidence: number): string {
 	return `${Math.round(confidence * 100)}%`;
@@ -157,7 +133,15 @@ export interface SuggestedActionRowProps {
 // "Based on N feedback items" summary that expands to the cited ids and points the operator to the feedback
 // insights panel mounted on the same page. Carries Approve (→ promote), Edit (→ existing edit form/PUT), and
 // Reject (→ archive) controls.
-export function SuggestedActionRow({ action, disabled, isEvaluating, onApprove, onEdit, onReject, onRunEval }: SuggestedActionRowProps) {
+export function SuggestedActionRow({
+	action,
+	disabled,
+	isEvaluating,
+	onApprove,
+	onEdit,
+	onReject,
+	onRunEval,
+}: SuggestedActionRowProps) {
 	const { t } = useTranslation();
 	const [evidenceOpen, setEvidenceOpen] = useState(false);
 

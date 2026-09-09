@@ -7,6 +7,7 @@ import type { XeLocalAiEngineClientEndpointsLocalModelsV1LocalModelResponse } fr
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import {
 	ASSIST_BRIEF_MAX,
@@ -256,9 +257,10 @@ export function GenerationAssistDialog({
 					</Alert>
 				) : null}
 				{showFailure && status !== 409 && status !== 422 ? (
-					<Alert color="red" data-testid="assist-error">
-						{apiErrorMessage(mutation.error, t("assist.errors.generic", "Could not generate a draft."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(mutation.error, t("assist.errors.generic", "Could not generate a draft."))}
+						data-testid="assist-error"
+					/>
 				) : null}
 
 				{draft ? (

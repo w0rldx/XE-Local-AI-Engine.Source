@@ -24,27 +24,27 @@ vi.mock("@/features/chat/pages/Chat", () => ({
 	Chat: ({ scope }: { scope?: ChatScope }) => {
 		lastScope.current = scope;
 		return (
-		<div
-			data-testid="embedded-chat"
-			data-conversation={scope?.conversationId}
-			data-agent={scope?.pinnedAgentId}
-			data-composer-disabled={String(scope?.composerDisabled === true)}
-			data-embedded={String(scope?.embedded === true)}
-			data-resume-nonce={String(scope?.resumeNonce ?? 0)}
-		>
-			<button
-				type="button"
-				data-testid="embedded-send"
-				onClick={() => {
-					scope?.onSendOverride?.("check the second source").catch(() => undefined);
-				}}
+			<div
+				data-testid="embedded-chat"
+				data-conversation={scope?.conversationId}
+				data-agent={scope?.pinnedAgentId}
+				data-composer-disabled={String(scope?.composerDisabled === true)}
+				data-embedded={String(scope?.embedded === true)}
+				data-resume-nonce={String(scope?.resumeNonce ?? 0)}
 			>
-				send
-			</button>
-			<button type="button" data-testid="embedded-stop" onClick={() => scope?.onStopOverride?.()}>
-				stop
-			</button>
-		</div>
+				<button
+					type="button"
+					data-testid="embedded-send"
+					onClick={() => {
+						scope?.onSendOverride?.("check the second source").catch(() => undefined);
+					}}
+				>
+					send
+				</button>
+				<button type="button" data-testid="embedded-stop" onClick={() => scope?.onStopOverride?.()}>
+					stop
+				</button>
+			</div>
 		);
 	},
 }));

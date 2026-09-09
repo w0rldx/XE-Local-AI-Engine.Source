@@ -37,8 +37,16 @@ export function UsageTotalsCards({ totals }: { readonly totals: UsageTotalsDto }
 	const { t } = useTranslation();
 	return (
 		<SimpleGrid cols={{ base: 1, xs: 2, md: 6 }} spacing="md" data-testid="usage-totals">
-			<StatCard label={t("pages.usage.totals.totalTokens", "Total tokens")} value={totals.totalTokens} testId="usage-total-tokens" />
-			<StatCard label={t("pages.usage.totals.promptTokens", "Prompt tokens")} value={totals.promptTokens} testId="usage-prompt-tokens" />
+			<StatCard
+				label={t("pages.usage.totals.totalTokens", "Total tokens")}
+				value={totals.totalTokens}
+				testId="usage-total-tokens"
+			/>
+			<StatCard
+				label={t("pages.usage.totals.promptTokens", "Prompt tokens")}
+				value={totals.promptTokens}
+				testId="usage-prompt-tokens"
+			/>
 			<StatCard
 				label={t("pages.usage.totals.completionTokens", "Completion tokens")}
 				value={totals.completionTokens}

@@ -62,7 +62,9 @@ describe("StreamingIndicator", () => {
 	});
 
 	it("shows the model-loading indicator during the preparing_runtime phase", () => {
-		renderWithProviders(<StreamingIndicator isActive={true} isQueued={false} hasContent={false} runtimePhase="preparing_runtime" />);
+		renderWithProviders(
+			<StreamingIndicator isActive={true} isQueued={false} hasContent={false} runtimePhase="preparing_runtime" />,
+		);
 
 		expect(screen.getByTestId("chat-stream-loading-model-indicator")).toBeTruthy();
 	});

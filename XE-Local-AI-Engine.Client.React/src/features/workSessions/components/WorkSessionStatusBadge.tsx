@@ -48,5 +48,13 @@ export function WorkSessionStatusBadge({ status, testId }: { status: WorkSession
 export function WorkSessionTaskStatusBadge({ status, testId }: { status: WorkSessionTaskStatus; testId?: string }) {
 	const { t } = useTranslation();
 	const label = t(`pages.workSessions.taskStatus.${status}`, status);
-	return <StatusBadge color={taskStatusColors[status]} label={label} inProgress={status === "Active"} aria-label={label} data-testid={testId} />;
+	return (
+		<StatusBadge
+			color={taskStatusColors[status]}
+			label={label}
+			inProgress={status === "Active"}
+			aria-label={label}
+			data-testid={testId}
+		/>
+	);
 }

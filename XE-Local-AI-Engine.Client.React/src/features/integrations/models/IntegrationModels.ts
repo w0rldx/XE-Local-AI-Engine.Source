@@ -178,11 +178,7 @@ export function isActiveExecutionStatus(status: IntegrationExecutionStatus): boo
  * takes a repeated `status` parameter, so "everything in flight" is a question the server can answer rather than a
  * union the browser would have to assemble out of a bounded window.
  */
-export const activeIntegrationExecutionStatuses: readonly IntegrationExecutionStatus[] = [
-	"Accepted",
-	"Queued",
-	"Running",
-];
+export const activeIntegrationExecutionStatuses: readonly IntegrationExecutionStatus[] = ["Accepted", "Queued", "Running"];
 
 /** Lifecycle state of one caller-managed session. */
 export type IntegrationSessionStatus = "Active" | "Closed";

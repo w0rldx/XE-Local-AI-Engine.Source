@@ -2,6 +2,7 @@ import { Alert, Button, Group, Text } from "@mantine/core";
 import { IconPlayerPause, IconPlayerPlay, IconWifiOff, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { DevWorkflowRunStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import { type DevWorkflowRunStatus, isTerminalDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
@@ -125,9 +126,13 @@ export function DevWorkflowRunToolbar({
 				</Alert>
 			) : null}
 			{commandError ? (
-				<Alert color="red" variant="light" p="xs" w="100%" data-testid="dev-workflow-run-command-error">
-					<Text size="xs">{commandError}</Text>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					p="xs"
+					w="100%"
+					data-testid="dev-workflow-run-command-error"
+					message={<Text size="xs">{commandError}</Text>}
+				/>
 			) : null}
 		</Group>
 	);

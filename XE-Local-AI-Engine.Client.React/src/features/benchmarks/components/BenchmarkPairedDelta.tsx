@@ -39,7 +39,9 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 	const autoLabel = t("pages.benchmarks.run.kvCacheTypeAuto", "Auto");
 	const options = cells.map((cell) => ({ value: cell.cellKey, label: benchmarkCellLabel(cell, autoLabel) }));
 	const delta =
-		distinct && comparison.data ? benchmarkPairedDeltaFor(comparison.data.pairedDeltas, aCellKey as string, bCellKey as string) : null;
+		distinct && comparison.data
+			? benchmarkPairedDeltaFor(comparison.data.pairedDeltas, aCellKey as string, bCellKey as string)
+			: null;
 
 	return (
 		<Stack gap="xs" data-testid="benchmark-paired-delta">

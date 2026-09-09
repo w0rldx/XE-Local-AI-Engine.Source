@@ -1,17 +1,17 @@
-import { Alert, Button, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Button, Drawer, Loader, Paper, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle, IconSitemap } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 import { GraphWorkflowDefinitionList } from "@/features/graphWorkflows/components/GraphWorkflowDefinitionList";
 import { GraphWorkflowDefinitionMetaDialog } from "@/features/graphWorkflows/components/GraphWorkflowDefinitionMetaDialog";
 import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowEdgeConfigPanel";
 import { GraphWorkflowEditorCanvas } from "@/features/graphWorkflows/components/GraphWorkflowEditorCanvas";
 import { GraphWorkflowEditorToolbar } from "@/features/graphWorkflows/components/GraphWorkflowEditorToolbar";
 import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowNodeConfigPanel";
-import { GraphWorkflowResponsivePaneLayout } from "@/features/graphWorkflows/components/GraphWorkflowResponsivePaneLayout";
 import { GraphWorkflowStartRunDialog } from "@/features/graphWorkflows/components/GraphWorkflowStartRunDialog";
 import { GraphWorkflowValidationStrip } from "@/features/graphWorkflows/components/GraphWorkflowValidationStrip";
 import { useGraphWorkflowEditorPage } from "@/features/graphWorkflows/hooks/useGraphWorkflowEditorPage";
@@ -65,8 +65,10 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 		closeSidePanel,
 	} = useGraphWorkflowEditorPage(selection, onSelectionChange);
 
+	// The rail scrolls inside its own column rather than stretching the grid row. Harmless in the stacked narrow mode,
+	// where the column has no height to overflow.
 	const definitionList = (
-		<Stack gap="xs" data-testid="gw-page-definitions">
+		<Stack gap="xs" style={{ minHeight: 0, overflowY: "auto" }} data-testid="gw-page-definitions">
 			<GraphWorkflowDefinitionList
 				definitions={definitionsQuery.data?.definitions ?? []}
 				selectedId={definitionId}
@@ -209,24 +211,34 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 
 	return (
 		<>
-			<GraphWorkflowResponsivePaneLayout
-				isNarrow={isNarrow}
+			{/* Stacked rather than dropped: without the definition list there is no way to reach another workflow from a
+			    phone, and the toolbar is not that. */}
+			<ResponsivePaneLayout
+				narrowMode="stack"
 				list={definitionList}
 				main={body}
-				side={sidePanel}
+				side={
+					sidePanel === null ? null : (
+						<Paper withBorder={true} p="sm" style={{ minHeight: 0, overflowY: "auto" }} data-testid="gw-page-config-pane">
+							{sidePanel}
+						</Paper>
+					)
+				}
 				narrowTestId="gw-page-editor-narrow"
 				gridTestId="gw-page-editor-grid"
-				sideTestId="gw-page-config-pane"
-				drawer={{
-					// On a narrow viewport the config panel is the same subtree in a drawer — the panel itself is a plain Stack.
-					opened: isNarrow && sidePanel !== null,
-					onClose: closeSidePanel,
-					title: t("pages.graphWorkflows.page.configTitle", "Configuration"),
-					size: "95%",
-					testId: "gw-page-config-drawer",
-					children: sidePanel,
-				}}
 			/>
+
+			{/* On a narrow viewport the config panel is the same subtree in a drawer — the panel itself is a plain Stack. */}
+			<Drawer
+				opened={isNarrow && sidePanel !== null}
+				onClose={closeSidePanel}
+				position="right"
+				size="95%"
+				title={t("pages.graphWorkflows.page.configTitle", "Configuration")}
+				attributes={{ content: { "data-testid": "gw-page-config-drawer" } }}
+			>
+				{sidePanel}
+			</Drawer>
 
 			<GraphWorkflowDefinitionMetaDialog
 				opened={metaDialog !== undefined}

@@ -2,10 +2,7 @@ import type { MantineColor } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
-import type {
-	IntegrationExecutionStatus,
-	IntegrationSessionStatus,
-} from "@/features/integrations/models/IntegrationModels";
+import type { IntegrationExecutionStatus, IntegrationSessionStatus } from "@/features/integrations/models/IntegrationModels";
 
 // Colour maps only — the pill itself is the shared StatusBadge, exactly as DevWorkflowStatusBadge does it.
 

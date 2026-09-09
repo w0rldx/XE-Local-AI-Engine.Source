@@ -54,7 +54,9 @@ export function DevelopmentContainerRuntimePanel({
 	return (
 		<Alert
 			color={ready ? "green" : needsConfirmation ? "yellow" : "red"}
-			icon={ready ? <IconCircleCheck size={16} /> : needsConfirmation ? <IconShieldLock size={16} /> : <IconAlertTriangle size={16} />}
+			icon={
+				ready ? <IconCircleCheck size={16} /> : needsConfirmation ? <IconShieldLock size={16} /> : <IconAlertTriangle size={16} />
+			}
 			title={t("pages.development.containerRuntime.title", "Container runtime")}
 			data-testid="development-container-runtime"
 		>

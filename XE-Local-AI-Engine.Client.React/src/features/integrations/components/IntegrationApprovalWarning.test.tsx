@@ -56,11 +56,7 @@ function renderWarning(
 ) {
 	return render(
 		<MantineProvider>
-			<IntegrationApprovalWarning
-				allowedToolNames={allowedToolNames}
-				toolApprovals={toolApprovals}
-				toolsByName={toolsByName}
-			/>
+			<IntegrationApprovalWarning allowedToolNames={allowedToolNames} toolApprovals={toolApprovals} toolsByName={toolsByName} />
 		</MantineProvider>,
 	);
 }
@@ -157,7 +153,9 @@ describe("IntegrationApprovalWarning", () => {
 		renderWarning(
 			["future_tool"],
 			{},
-			catalog({ future_tool: { effectiveRequiresApproval: true, category: "WriteExecute", unattendedBehaviour: "parksForever" } }),
+			catalog({
+				future_tool: { effectiveRequiresApproval: true, category: "WriteExecute", unattendedBehaviour: "parksForever" },
+			}),
 		);
 
 		expect(screen.getByTestId("integration-approval-warning")).toBeTruthy();

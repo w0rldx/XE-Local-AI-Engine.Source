@@ -26,13 +26,17 @@ export function BenchmarkBatchProgressAlert({ progress, onDismiss }: BenchmarkBa
 			onClose={onDismiss}
 			data-testid="benchmark-batch-progress"
 		>
-			{t("pages.benchmarks.matrix.progress", "Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)", {
-				done: progress.done,
-				total: progress.total,
-				running: progress.running,
-				queued: progress.queued,
-				failed: progress.failed,
-			})}
+			{t(
+				"pages.benchmarks.matrix.progress",
+				"Batch: {{done}} of {{total}} done ({{running}} running, {{queued}} queued, {{failed}} failed)",
+				{
+					done: progress.done,
+					total: progress.total,
+					running: progress.running,
+					queued: progress.queued,
+					failed: progress.failed,
+				},
+			)}
 		</Alert>
 	);
 }

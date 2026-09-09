@@ -21,7 +21,13 @@ interface StreamingIndicatorProps {
 	runtimePhase?: string | null;
 }
 
-export function StreamingIndicator({ hasContent = false, isDelayed = false, isQueued = false, isActive, runtimePhase }: StreamingIndicatorProps) {
+export function StreamingIndicator({
+	hasContent = false,
+	isDelayed = false,
+	isQueued = false,
+	isActive,
+	runtimePhase,
+}: StreamingIndicatorProps) {
 	const { t } = useTranslation();
 
 	// Queued is distinct from streaming/typing: the turn is accepted but waiting behind another active

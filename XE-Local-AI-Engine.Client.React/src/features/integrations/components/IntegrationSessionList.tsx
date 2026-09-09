@@ -66,19 +66,13 @@ export function IntegrationSessionList({ sessions, isMutating, onView, onDelete 
 								{/* The OWNING integrator, rendered like every other principal on this surface: shortened, with
 								    the full identity in the tooltip. Not the agent — a key rotation keeps the principal. */}
 								<Tooltip label={session.principalId}>
-									<Code
-										data-testid={`integration-session-principal-${session.id}`}
-										title={session.principalId}
-									>
+									<Code data-testid={`integration-session-principal-${session.id}`} title={session.principalId}>
 										{shortPrincipalId(session.principalId)}
 									</Code>
 								</Tooltip>
 							</Table.Td>
 							<Table.Td>
-								<IntegrationSessionStatusBadge
-									status={session.status}
-									data-testid={`integration-session-status-${session.id}`}
-								/>
+								<IntegrationSessionStatusBadge status={session.status} data-testid={`integration-session-status-${session.id}`} />
 							</Table.Td>
 							<Table.Td>
 								<Text size="sm">{formatTimestamp(session.createdAtUtc)}</Text>

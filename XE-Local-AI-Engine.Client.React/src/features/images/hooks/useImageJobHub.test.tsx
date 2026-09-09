@@ -73,7 +73,11 @@ function renderHub(jobIds: readonly string[]) {
 	function Wrapper({ children }: { children: ReactNode }) {
 		return <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>;
 	}
-	return { ...renderHook(({ ids }) => useImageJobHub(ids), { wrapper: Wrapper, initialProps: { ids: jobIds } }), invalidateSpy, queryClient };
+	return {
+		...renderHook(({ ids }) => useImageJobHub(ids), { wrapper: Wrapper, initialProps: { ids: jobIds } }),
+		invalidateSpy,
+		queryClient,
+	};
 }
 
 describe("useImageJobHub", () => {

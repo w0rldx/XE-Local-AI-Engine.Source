@@ -97,7 +97,13 @@ describe("ImageJobCard generation timeline", () => {
 	});
 
 	it("shows the step count and the remaining time while sampling", () => {
-		currentProgress = progress({ generationPhase: "Sampling", step: 12, totalSteps: 20, secondsPerIteration: 2, estimatedRemainingMs: 16_000 });
+		currentProgress = progress({
+			generationPhase: "Sampling",
+			step: 12,
+			totalSteps: 20,
+			secondsPerIteration: 2,
+			estimatedRemainingMs: 16_000,
+		});
 
 		renderCard();
 

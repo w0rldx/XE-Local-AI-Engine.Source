@@ -1,10 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 
 import { queryRetryDelay, shouldRetryQuery } from "@/core/api/errors/RetryClassification";
-import {
-	createDiagnosticsMutationCache,
-	createDiagnosticsQueryCache,
-} from "@/core/diagnostics/collectors/Query";
+import { createDiagnosticsMutationCache, createDiagnosticsQueryCache } from "@/core/diagnostics/collectors/Query";
 
 const queryClient = new QueryClient({
 	// Diagnostics caches record a redacted error breadcrumb after retries exhaust.

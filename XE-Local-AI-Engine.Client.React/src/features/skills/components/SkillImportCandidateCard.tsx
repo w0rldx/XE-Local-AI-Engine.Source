@@ -98,21 +98,21 @@ export function SkillImportCandidateCard({ candidate, selected, onToggle }: Skil
 				) : null}
 
 				{candidate.refusedScripts.length > 0 ? (
-					<Alert
-						color="red"
+					<InlineErrorAlert
 						variant="light"
 						icon={<IconBan size={16} />}
 						title={t("pages.skills.import.candidate.refusedTitle", "Refused — scripts are never imported")}
 						data-testid={`skill-import-refused-${candidate.name}`}
-					>
-						<List size="sm" withPadding={true}>
-							{candidate.refusedScripts.map((script) => (
-								<List.Item key={script} ff="monospace">
-									{script}
-								</List.Item>
-							))}
-						</List>
-					</Alert>
+						message={
+							<List size="sm" withPadding={true}>
+								{candidate.refusedScripts.map((script) => (
+									<List.Item key={script} ff="monospace">
+										{script}
+									</List.Item>
+								))}
+							</List>
+						}
+					/>
 				) : null}
 
 				{candidate.conflictsWithExistingSkill ? (

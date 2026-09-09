@@ -190,7 +190,10 @@ export function useModelRecommendations(): UseModelRecommendationsResult {
 			},
 			onError: (error) =>
 				toast.error(
-					apiErrorMessage(error, t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog.")),
+					apiErrorMessage(
+						error,
+						t("pages.modelFit.recommendations.catalog.toasts.refreshError", "Could not refresh the model catalog."),
+					),
 				),
 		});
 	};

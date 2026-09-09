@@ -25,10 +25,9 @@ test("recursively measures all deployed js/mjs", (context) => {
 
 	assert.equal(measurements.applicationJavaScriptBytes, 150);
 	assert.equal(measurements.lazyEditorJavaScriptBytes, 1207);
-	assert.deepEqual(
-		evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149, lazyEditorJavaScriptBytes: 1207 }),
-		[{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 }],
-	);
+	assert.deepEqual(evaluateBundleBudget(measurements, { applicationJavaScriptBytes: 149, lazyEditorJavaScriptBytes: 1207 }), [
+		{ name: "applicationJavaScriptBytes", limit: 149, actual: 150 },
+	]);
 	assert.deepEqual(evaluateBundleBudget(measurements, { lazyEditorJavaScriptBytes: 1206 }), [
 		{ name: "lazyEditorJavaScriptBytes", limit: 1206, actual: 1207 },
 	]);

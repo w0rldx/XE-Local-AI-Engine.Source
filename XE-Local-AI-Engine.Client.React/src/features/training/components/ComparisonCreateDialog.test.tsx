@@ -114,7 +114,13 @@ describe("ComparisonCreateDialog revalidation", () => {
 		mocks.evaluations = [...mocks.evaluations, evaluation("fresh-base", "InstalledModel", null, null)];
 		view.rerender(
 			<MantineProvider>
-				<ComparisonCreateDialog artifactId="artifact-1" freshEvaluations={true} initialRunId="run-1" onClose={vi.fn()} opened={true} />
+				<ComparisonCreateDialog
+					artifactId="artifact-1"
+					freshEvaluations={true}
+					initialRunId="run-1"
+					onClose={vi.fn()}
+					opened={true}
+				/>
 			</MantineProvider>,
 		);
 
@@ -124,7 +130,13 @@ describe("ComparisonCreateDialog revalidation", () => {
 		mocks.evaluations = [...mocks.evaluations, evaluation("fresh-tuned", "StagedTrainingArtifact", "artifact-1", null)];
 		view.rerender(
 			<MantineProvider>
-				<ComparisonCreateDialog artifactId="artifact-1" freshEvaluations={true} initialRunId="run-1" onClose={vi.fn()} opened={true} />
+				<ComparisonCreateDialog
+					artifactId="artifact-1"
+					freshEvaluations={true}
+					initialRunId="run-1"
+					onClose={vi.fn()}
+					opened={true}
+				/>
 			</MantineProvider>,
 		);
 

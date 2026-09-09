@@ -162,7 +162,12 @@ describe("ChatInputArea image attachment gate", () => {
 
 	it("omits the image accept hint when the active model is not multimodal even with the gate on", () => {
 		const { container } = renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} activeModelMultimodal={false} onUploadFiles={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={attachmentCapabilities()}
+				activeModelMultimodal={false}
+				onUploadFiles={vi.fn()}
+			/>,
 		);
 
 		const fileInput = container.querySelector('input[type="file"]');
@@ -186,7 +191,12 @@ describe("ChatInputArea image attachment gate", () => {
 
 	it("includes the image accept hint when the gate is on and the active model is multimodal", () => {
 		const { container } = renderWithProviders(
-			<ChatInputArea {...baseProps()} capabilities={attachmentCapabilities()} activeModelMultimodal={true} onUploadFiles={vi.fn()} />,
+			<ChatInputArea
+				{...baseProps()}
+				capabilities={attachmentCapabilities()}
+				activeModelMultimodal={true}
+				onUploadFiles={vi.fn()}
+			/>,
 		);
 
 		const fileInput = container.querySelector('input[type="file"]');

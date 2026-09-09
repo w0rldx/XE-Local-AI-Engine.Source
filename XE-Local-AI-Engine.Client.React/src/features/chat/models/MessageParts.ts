@@ -82,7 +82,14 @@ function toTextPart(segment: TextSegmentInput): ChatTextPart {
 }
 
 function toNoticePart(entry: NoticeEntryInput): ChatNoticePart {
-	return { kind: "notice", id: entry.id, sequence: entry.sequence, noticeKind: entry.noticeKind, text: entry.text, detail: entry.detail };
+	return {
+		kind: "notice",
+		id: entry.id,
+		sequence: entry.sequence,
+		noticeKind: entry.noticeKind,
+		text: entry.text,
+		detail: entry.detail,
+	};
 }
 
 /**

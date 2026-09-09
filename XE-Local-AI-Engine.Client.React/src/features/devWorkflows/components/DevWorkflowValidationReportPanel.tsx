@@ -1,8 +1,9 @@
-import { Alert, Badge, Code, Group, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Code, Group, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { StatTile } from "@/core/ui/components/StatTile/StatTile";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ValidationCommandCard } from "@/core/ui/components/ValidationCommandCard/ValidationCommandCard";
 import type { DevWorkflowNodeRunDetailResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	type DevWorkflowTestOutcome,
@@ -99,12 +100,9 @@ export function DevWorkflowValidationReportPanel({
 			{/* Server prose, displayed verbatim (§2.11): the verdict's detail already names the command and the reason,
 			    and the raw code is shown beside it so an unrecognised one is never silently dropped. */}
 			{report.failureCode && !partial ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-validation-failure">
-					<Stack gap={4}>
-						{report.failureDetail ? <Text size="sm">{report.failureDetail}</Text> : null}
-						<Code data-testid="dev-workflow-validation-failure-code">{report.failureCode}</Code>
-					</Stack>
-				</Alert>
+				<InlineErrorAlert variant="light" message={report.failureDetail} data-testid="dev-workflow-validation-failure">
+					<Code data-testid="dev-workflow-validation-failure-code">{report.failureCode}</Code>
+				</InlineErrorAlert>
 			) : null}
 
 			{commands.length === 0 ? (
@@ -119,7 +117,7 @@ export function DevWorkflowValidationReportPanel({
 			) : (
 				<Stack gap="xs">
 					{commands.map((command) => (
-						<ValidationCommandCard key={command.commandId} command={command} />
+						<DevWorkflowValidationCommandCard key={command.commandId} command={command} />
 					))}
 				</Stack>
 			)}
@@ -127,107 +125,53 @@ export function DevWorkflowValidationReportPanel({
 	);
 }
 
-function ValidationCommandCard({ command }: { readonly command: DevWorkflowValidationCommand }) {
+function DevWorkflowValidationCommandCard({ command }: { readonly command: DevWorkflowValidationCommand }) {
 	const { t } = useTranslation();
-	const failed = !command.completed || command.exitCode !== 0;
-	// Only a failing command's captured output is rendered: on a pass it is noise, on a failure it is the only record
-	// of why. It is sanitized server-side, and when the whole report would not fit it is the server's own sentence
-	// saying the text was left out — which is why it is printed verbatim rather than pattern-matched.
-	const capturedOutput = failed ? [command.standardError, command.standardOutput].filter((output) => !!output?.trim()) : [];
 
 	return (
-		<Paper withBorder={true} p="xs" data-testid={`dev-workflow-validation-command-${command.commandId}`}>
-			<Group justify="space-between" wrap="nowrap" align="flex-start">
-				<Code>{command.commandId}</Code>
-				<Group gap={4} wrap="wrap">
-					{command.completed ? null : (
-						<Badge size="xs" color="red">
-							{t("pages.devWorkflows.validation.command.incomplete", "Did not complete")}
-						</Badge>
-					)}
-					{command.outputTruncated ? (
-						<Badge size="xs" color="yellow" variant="light">
-							{t("pages.devWorkflows.validation.command.truncated", "Output truncated")}
-						</Badge>
-					) : null}
-					<Badge size="xs" color={failed ? "red" : "green"} variant="light">
-						{t("pages.devWorkflows.validation.command.exitCode", "exit {{code}}", { code: command.exitCode })}
-					</Badge>
-					<Text size="xs" c="dimmed">
-						{((command.durationMilliseconds ?? 0) / 1000).toFixed(1)}s
-					</Text>
-				</Group>
-			</Group>
-			{command.testOutcome ? <TestOutcomeView outcome={command.testOutcome} /> : null}
-			{capturedOutput.length > 0 ? (
-				<ScrollArea.Autosize mah={200} mt="xs">
-					<Code block={true} data-testid={`dev-workflow-validation-output-${command.commandId}`}>
-						{capturedOutput.join("\n")}
-					</Code>
-				</ScrollArea.Autosize>
-			) : null}
-		</Paper>
+		<ValidationCommandCard
+			command={command}
+			labels={{
+				incomplete: t("pages.devWorkflows.validation.command.incomplete", "Did not complete"),
+				truncated: t("pages.devWorkflows.validation.command.truncated", "Output truncated"),
+				exitCode: t("pages.devWorkflows.validation.command.exitCode", "exit {{code}}", { code: command.exitCode }),
+				testDiscovered: t("pages.devWorkflows.validation.tests.discovered", "Discovered"),
+				testExecuted: t("pages.devWorkflows.validation.tests.executed", "Executed"),
+				testPassed: t("pages.devWorkflows.validation.tests.passed", "Passed"),
+				testFailed: t("pages.devWorkflows.validation.tests.failed", "Failed"),
+			}}
+			testIds={{
+				card: `dev-workflow-validation-command-${command.commandId}`,
+				output: `dev-workflow-validation-output-${command.commandId}`,
+				testCounts: "dev-workflow-validation-tests",
+				testCountValuePrefix: "dev-workflow-validation-tests",
+			}}
+			unparsedOutcome={command.testOutcome ? <ValidationTestParseFailure outcome={command.testOutcome} /> : null}
+		/>
 	);
 }
 
 /** A parse failure is a validation failure, never missing data — so it renders instead of the counts, never beside them. */
-function TestOutcomeView({ outcome }: { readonly outcome: DevWorkflowTestOutcome }) {
+function ValidationTestParseFailure({ outcome }: { readonly outcome: DevWorkflowTestOutcome }) {
 	const { t } = useTranslation();
 
-	if (!outcome.parsed) {
-		return (
-			<Alert
-				mt="xs"
-				color="red"
-				variant="light"
-				icon={<IconAlertTriangle size={16} />}
-				data-testid="dev-workflow-validation-tests-unparsed"
-			>
-				<Stack gap={4}>
-					<Text size="sm">
-						{t(
-							"pages.devWorkflows.validation.tests.unparsed",
-							"The test results could not be read, so no executed, passed or failed count is available for this run.",
-						)}
-					</Text>
-					<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
-					{outcome.parseFailureDetail ? (
-						<Text size="xs" c="dimmed">
-							{outcome.parseFailureDetail}
-						</Text>
-					) : null}
-				</Stack>
-			</Alert>
-		);
-	}
-
 	return (
-		<SimpleGrid cols={{ base: 2, sm: 4 }} mt="xs" data-testid="dev-workflow-validation-tests">
-			{/* The test ids sit on the VALUES: a test that could only find the tile would pass against four zeroes. */}
-			<StatTile
-				variant="paper"
-				label={t("pages.devWorkflows.validation.tests.discovered", "Discovered")}
-				value={outcome.discovered}
-				valueTestId="dev-workflow-validation-tests-discovered"
-			/>
-			<StatTile
-				variant="paper"
-				label={t("pages.devWorkflows.validation.tests.executed", "Executed")}
-				value={outcome.executed}
-				valueTestId="dev-workflow-validation-tests-executed"
-			/>
-			<StatTile
-				variant="paper"
-				label={t("pages.devWorkflows.validation.tests.passed", "Passed")}
-				value={outcome.passed}
-				valueTestId="dev-workflow-validation-tests-passed"
-			/>
-			<StatTile
-				variant="paper"
-				label={t("pages.devWorkflows.validation.tests.failed", "Failed")}
-				value={outcome.failed}
-				valueTestId="dev-workflow-validation-tests-failed"
-			/>
-		</SimpleGrid>
+		<InlineErrorAlert
+			mt="sm"
+			variant="light"
+			message={t(
+				"pages.devWorkflows.validation.tests.unparsed",
+				"The test results could not be read, so no executed, passed or failed count is available for this run.",
+			)}
+			data-testid="dev-workflow-validation-tests-unparsed"
+		>
+			<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
+			{/* Server prose, verbatim (§2.11). */}
+			{outcome.parseFailureDetail ? (
+				<Text size="xs" c="dimmed">
+					{outcome.parseFailureDetail}
+				</Text>
+			) : null}
+		</InlineErrorAlert>
 	);
 }

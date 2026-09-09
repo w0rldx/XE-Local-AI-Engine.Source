@@ -119,10 +119,10 @@ export function BenchmarkRubricEditor({ rubric, presets, issue, onChange }: Benc
 				>
 					<Stack gap="xs">
 						{/*
-						  * One line on a wide form, three wrapped fields on a phone: the title claims the first line
-						  * once the row can no longer seat all three, and the id shrinks (`miw={0}`, which the weight
-						  * deliberately does not do) rather than pushing the delete button off the card.
-						  */}
+						 * One line on a wide form, three wrapped fields on a phone: the title claims the first line
+						 * once the row can no longer seat all three, and the id shrinks (`miw={0}`, which the weight
+						 * deliberately does not do) rather than pushing the delete button off the card.
+						 */}
 						<Group gap="xs" align="flex-start">
 							<TextInput
 								flex="1 1 220px"

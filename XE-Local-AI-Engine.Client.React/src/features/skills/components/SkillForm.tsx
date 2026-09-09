@@ -3,6 +3,7 @@ import { IconDeviceFloppy, IconInfoCircle, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownEditorField } from "@/core/ui/components/MarkdownEditorField/MarkdownEditorField";
 import { AssistActions } from "@/features/assist/components/AssistActions";
 import type { AssistDraft } from "@/features/assist/models/AssistModels";
@@ -139,7 +140,10 @@ export function SkillForm({
 		}
 		return values.name.trim().length === 0
 			? t("pages.skills.form.name.required", "Name is required.")
-			: t("pages.skills.form.name.invalid", "Use lowercase letters and digits separated by single dashes (no leading, trailing or doubled dash).");
+			: t(
+					"pages.skills.form.name.invalid",
+					"Use lowercase letters and digits separated by single dashes (no leading, trailing or doubled dash).",
+				);
 	}, [nameIssue, values.name, t]);
 
 	// Body budget against the Agent Skills specification's authoring guidance (<500 lines / <5k tokens). Neither is a
@@ -148,7 +152,11 @@ export function SkillForm({
 	const bodyBudget = useMemo(() => {
 		const lines = values.body.length === 0 ? 0 : values.body.split("\n").length;
 		const estimatedTokens = Math.ceil(values.body.length / 4);
-		return { estimatedTokens, isOverGuidance: lines > SKILL_BODY_GUIDANCE_LINES || estimatedTokens > SKILL_BODY_GUIDANCE_TOKENS, lines };
+		return {
+			estimatedTokens,
+			isOverGuidance: lines > SKILL_BODY_GUIDANCE_LINES || estimatedTokens > SKILL_BODY_GUIDANCE_TOKENS,
+			lines,
+		};
 	}, [values.body]);
 
 	const metadataEntries = Object.entries(values.metadata ?? {});
@@ -161,21 +169,26 @@ export function SkillForm({
 					"Skills are sent to the agent's model when it loads them. If that model is a cloud provider, the skill content leaves this node.",
 				)}
 			</Alert>
+			{/* An AI-drafted skill lands in the same Imported bucket, but "imported from generated" reads as
+			    nonsense — it was written here, by a model, and never reviewed. Say that instead. */}
 			{provenance?.origin === "Imported" ? (
-				<Alert color="red" variant="light" icon={<IconInfoCircle size={16} />} data-testid="skill-form-imported-note">
-					{/* An AI-drafted skill lands in the same Imported bucket, but "imported from generated" reads as
-					    nonsense — it was written here, by a model, and never reviewed. Say that instead. */}
-					{provenance.sourceUri === "generated"
-						? t(
-								"pages.skills.form.generatedNote",
-								"This skill was written by a model on this node and has not been reviewed. Its instructions run with your agent's tool access once enabled.",
-							)
-						: t(
-								"pages.skills.form.importedNote",
-								"This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
-								{ source: provenance.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source") },
-							)}
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					icon={<IconInfoCircle size={16} />}
+					data-testid="skill-form-imported-note"
+					message={
+						provenance.sourceUri === "generated"
+							? t(
+									"pages.skills.form.generatedNote",
+									"This skill was written by a model on this node and has not been reviewed. Its instructions run with your agent's tool access once enabled.",
+								)
+							: t(
+									"pages.skills.form.importedNote",
+									"This skill was imported from {{source}}. Its instructions are third-party content this node never validated, and they run with your agent's tool access once enabled.",
+									{ source: provenance.sourceUri ?? t("pages.skills.list.importedUnknownSource", "an unknown source") },
+								)
+					}
+				/>
 			) : null}
 			<AssistActions
 				surface="skill"
@@ -234,10 +247,14 @@ export function SkillForm({
 					tokens: bodyBudget.estimatedTokens.toLocaleString(),
 				})}
 				{bodyBudget.isOverGuidance
-					? ` · ${t("pages.skills.form.body.overGuidance", "the specification suggests staying under {{lines}} lines and {{tokens}} tokens", {
-							lines: SKILL_BODY_GUIDANCE_LINES,
-							tokens: SKILL_BODY_GUIDANCE_TOKENS,
-						})}`
+					? ` · ${t(
+							"pages.skills.form.body.overGuidance",
+							"the specification suggests staying under {{lines}} lines and {{tokens}} tokens",
+							{
+								lines: SKILL_BODY_GUIDANCE_LINES,
+								tokens: SKILL_BODY_GUIDANCE_TOKENS,
+							},
+						)}`
 					: null}
 			</Text>
 
@@ -334,11 +351,7 @@ export function SkillForm({
 				/>
 			) : null}
 
-			{submitError ? (
-				<Alert color="red" data-testid="skill-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="skill-form-submit-error" /> : null}
 			{hideActions ? null : (
 				<Group justify="flex-end">
 					<Button

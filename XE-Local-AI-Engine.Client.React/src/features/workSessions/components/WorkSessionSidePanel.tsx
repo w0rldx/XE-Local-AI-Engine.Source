@@ -52,7 +52,13 @@ export function WorkSessionSidePanel({
 	const [tab, setTab] = useState<string | null>(() => initialTab(status));
 
 	return (
-		<Paper withBorder={true} p="md" h="100%" data-testid="work-session-side-panel" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+		<Paper
+			withBorder={true}
+			p="md"
+			h="100%"
+			data-testid="work-session-side-panel"
+			style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+		>
 			<Tabs value={tab} onChange={setTab} style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
 				<Tabs.List>
 					<Tabs.Tab value="findings" data-testid="work-session-tab-findings">

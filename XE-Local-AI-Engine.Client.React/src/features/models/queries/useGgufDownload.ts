@@ -152,7 +152,12 @@ export function useActiveGgufDownloads({ enabled = true }: { enabled?: boolean }
 	// hook point. Guarded by completedHandled so a re-pushed/re-hydrated Completed status refetches exactly once.
 	useEffect(() => {
 		for (const status of statuses.values()) {
-			if (status.phase === "Queued" || status.phase === "Validating" || status.phase === "Downloading" || status.phase === "Committing") {
+			if (
+				status.phase === "Queued" ||
+				status.phase === "Validating" ||
+				status.phase === "Downloading" ||
+				status.phase === "Committing"
+			) {
 				markInFlight(status.modelName);
 				continue;
 			}

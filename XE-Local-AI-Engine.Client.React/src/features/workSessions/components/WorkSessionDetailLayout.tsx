@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 
 interface WorkSessionDetailLayoutProps {
 	readonly title: string;
@@ -90,9 +91,17 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 					<InlineErrorAlert message={props.deleteError} variant="light" data-testid="work-session-delete-error" />
 				) : null}
 				{props.editDialog}
+				{/* Both side surfaces reach a phone through the header's two toggles, so the narrow viewport keeps the
+				    conversation alone rather than stacking anything above it. */}
+				<ResponsivePaneLayout
+					narrowMode="mainOnly"
+					list={props.planPanel}
+					main={props.conversationPane}
+					side={props.sidePanel}
+					gridTestId="work-session-detail-grid"
+				/>
 				{props.isMobile ? (
 					<>
-						<div style={{ flex: 1, minHeight: 0 }}>{props.conversationPane}</div>
 						<Drawer
 							opened={props.planDrawerOpened}
 							onClose={props.onClosePlan}
@@ -114,28 +123,7 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 							{props.sidePanel}
 						</Drawer>
 					</>
-				) : (
-					<div
-						data-testid="work-session-detail-grid"
-						// Same three-column template, same floor, for the same reason as the dev-workflow run page:
-						// between 1024 and roughly 1180 the unfloored centre track was squeezed under its own chrome.
-						// A message thread degrades more gracefully than a tab header, so it read as cramped rather
-						// than broken — the geometry was identical either way.
-						style={{
-							display: "grid",
-							gridTemplateColumns: "320px minmax(240px, 1fr) minmax(380px, 420px)",
-							gridTemplateRows: "minmax(0, 1fr)",
-							gap: "var(--mantine-spacing-md)",
-							flex: 1,
-							minHeight: 0,
-							overflowX: "auto",
-						}}
-					>
-						{props.planPanel}
-						{props.conversationPane}
-						{props.sidePanel}
-					</div>
-				)}
+				) : null}
 			</Stack>
 		</FullHeightPage>
 	);

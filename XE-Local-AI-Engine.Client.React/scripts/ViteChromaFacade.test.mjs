@@ -39,7 +39,9 @@ function requiredImport(source, description, predicate) {
 	return specifier;
 }
 
-test("Vite dev server traverses Mantine through the light Chroma facade without optimizer errors", { timeout: 20_000 }, async () => {
+test("Vite dev server traverses Mantine through the light Chroma facade without optimizer errors", {
+	timeout: 20_000,
+}, async () => {
 	const viteErrors = [];
 	const logger = createLogger("info", { allowClearScreen: false });
 	const forwardError = logger.error.bind(logger);
@@ -62,18 +64,14 @@ test("Vite dev server traverses Mantine through the light Chroma facade without 
 
 		const colorUtils = await request(new URL("/src/modules/theme-configurator/components/ColorUtils.ts", baseUrl));
 		assert.equal(colorUtils.statusCode, 200, colorUtils.body);
-		const mantineSpecifier = requiredImport(
-			colorUtils.body,
-			"the optimized @mantine/colors-generator dependency",
-			(specifier) => specifier.includes("@mantine_colors-generator"),
+		const mantineSpecifier = requiredImport(colorUtils.body, "the optimized @mantine/colors-generator dependency", (specifier) =>
+			specifier.includes("@mantine_colors-generator"),
 		);
 
 		const mantine = await request(new URL(mantineSpecifier, baseUrl));
 		assert.equal(mantine.statusCode, 200, mantine.body);
-		const facadeSpecifier = requiredImport(
-			mantine.body,
-			"the virtual Mantine Chroma facade",
-			(specifier) => specifier.includes("mantine-chroma-generator"),
+		const facadeSpecifier = requiredImport(mantine.body, "the virtual Mantine Chroma facade", (specifier) =>
+			specifier.includes("mantine-chroma-generator"),
 		);
 
 		const facade = await request(new URL(facadeSpecifier, baseUrl));
@@ -81,9 +79,7 @@ test("Vite dev server traverses Mantine through the light Chroma facade without 
 		const chromaSpecifiers = [
 			requiredImport(facade.body, "Chroma's light entry", (specifier) => specifier.includes("index.umd.light.js")),
 			requiredImport(facade.body, "Chroma's LCH support", (specifier) => specifier.includes("/src/io/lch/index.js")),
-			requiredImport(facade.body, "Chroma's saturation support", (specifier) =>
-				specifier.includes("/src/ops/saturate.js"),
-			),
+			requiredImport(facade.body, "Chroma's saturation support", (specifier) => specifier.includes("/src/ops/saturate.js")),
 		];
 
 		const chromaModules = await Promise.all(chromaSpecifiers.map((specifier) => request(new URL(specifier, baseUrl))));

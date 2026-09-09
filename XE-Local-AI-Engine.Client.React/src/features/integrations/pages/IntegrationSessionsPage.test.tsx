@@ -148,9 +148,7 @@ function lastSessionWindow(): { limit?: number; offset?: number } {
 
 /** Every offset the page has asked for, in order — one entry per render, so repeats are expected and a CHANGE is not. */
 function requestedOffsets(): number[] {
-	return sessionHooksMock.useIntegrationSessions.mock.calls.map(
-		(call) => ((call[1] ?? {}) as { offset?: number }).offset ?? 0,
-	);
+	return sessionHooksMock.useIntegrationSessions.mock.calls.map((call) => ((call[1] ?? {}) as { offset?: number }).offset ?? 0);
 }
 
 describe("IntegrationSessionsPage", () => {
@@ -172,8 +170,8 @@ describe("IntegrationSessionsPage", () => {
 	it("renders rows in the order the response supplied them, and names a deleted trigger", () => {
 		renderPage();
 
-		const rendered = Array.from(screen.getByTestId("integration-sessions-table").querySelectorAll("tbody tr")).map(
-			(row) => row.getAttribute("data-testid"),
+		const rendered = Array.from(screen.getByTestId("integration-sessions-table").querySelectorAll("tbody tr")).map((row) =>
+			row.getAttribute("data-testid"),
 		);
 		expect(rendered).toEqual(sessions.map((row) => `integration-session-row-${row.id}`));
 
@@ -283,10 +281,7 @@ describe("IntegrationSessionsPage", () => {
 		});
 		expect(screen.getByTestId("integration-session-execution-exec-1")).toBeTruthy();
 		// The executions read is scoped by sessionId server-side, not filtered in the dialog.
-		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith(
-			{ sessionId: activeSession.id },
-			{ limit: 200 },
-		);
+		expect(executionHooksMock.useIntegrationExecutions).toHaveBeenCalledWith({ sessionId: activeSession.id }, { limit: 200 });
 	});
 
 	it("confirms before deleting and then deletes that session", async () => {

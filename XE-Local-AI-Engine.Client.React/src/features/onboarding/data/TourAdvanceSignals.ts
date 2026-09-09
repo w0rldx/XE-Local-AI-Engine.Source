@@ -47,9 +47,8 @@ export function countVisibleAssistantReplies(queryClient: QueryClient): number {
 	return conversations.reduce(
 		(total, [, conversation]) =>
 			total +
-			(conversation?.messages ?? []).filter(
-				(message) => message.role === "assistant" && message.content.trim().length > 0,
-			).length,
+			(conversation?.messages ?? []).filter((message) => message.role === "assistant" && message.content.trim().length > 0)
+				.length,
 		0,
 	);
 }

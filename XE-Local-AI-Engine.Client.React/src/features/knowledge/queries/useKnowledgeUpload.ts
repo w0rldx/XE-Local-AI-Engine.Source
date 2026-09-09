@@ -79,10 +79,7 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 				}
 			} catch (error) {
 				toast.error(
-					knowledgeErrorMessage(
-						error,
-						t("pages.knowledgeBase.upload.failed", "Failed to upload {{name}}.", { name: file.name }),
-					),
+					knowledgeErrorMessage(error, t("pages.knowledgeBase.upload.failed", "Failed to upload {{name}}.", { name: file.name })),
 				);
 			} finally {
 				removePending(tempId);

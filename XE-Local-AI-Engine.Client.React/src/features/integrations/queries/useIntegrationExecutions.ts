@@ -144,7 +144,6 @@ export function useCancelIntegrationExecution() {
 
 	return useMutation({
 		...withResponseValidation(cancelIntegrationExecutionMutation()),
-		onSettled: () =>
-			queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) }),
+		onSettled: () => queryClient.invalidateQueries({ queryKey: integrationInvalidationKey(integrationQueryIds.listExecutions) }),
 	});
 }

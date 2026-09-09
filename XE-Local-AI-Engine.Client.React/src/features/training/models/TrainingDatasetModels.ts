@@ -290,7 +290,6 @@ export function applyGenerationEvent(
 	return next;
 }
 
-
 // Domain view-models for the training feature. The generated shapes mark nullable fields as optional-and-nullable;
 // mapping them once here — at the query boundary — keeps `?? null` out of every component that reads them, and gives
 // the UI a single stable shape to render even as the wire shape grows.

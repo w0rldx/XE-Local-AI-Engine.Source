@@ -1,9 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import {
-	deleteIntegrationSessionMutation,
-	listIntegrationSessionsOptions,
-} from "@/core/api/generated/@tanstack/react-query.gen";
+import { deleteIntegrationSessionMutation, listIntegrationSessionsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { toIntegrationSession } from "@/features/integrations/models/IntegrationMappers";
 import { type IntegrationSessionFilters, integrationPageSize } from "@/features/integrations/models/IntegrationModels";

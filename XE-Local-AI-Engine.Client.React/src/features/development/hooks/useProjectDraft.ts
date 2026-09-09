@@ -9,7 +9,9 @@ import {
 } from "@/features/development/models/DevelopmentModels";
 import type { DevelopmentProjectFormValues } from "@/features/development/models/DevelopmentProjectFormModels";
 
-const initialValues: DevelopmentProjectFormValues = {
+// Frozen because the hook hands the raw `setValues` back to its caller: every update in here spreads into a new
+// object, and freezing keeps a future caller from mutating this shared seed instead.
+const initialValues: DevelopmentProjectFormValues = Object.freeze({
 	selectedFolderId: "",
 	objective: "",
 	baseBranch: "main",
@@ -20,7 +22,7 @@ const initialValues: DevelopmentProjectFormValues = {
 	coderModelId: "",
 	reviewerModelId: "",
 	trustedRepositoryAcknowledged: false,
-};
+});
 
 interface UseProjectDraftOptions {
 	readonly repositories: readonly DevelopmentRepository[];

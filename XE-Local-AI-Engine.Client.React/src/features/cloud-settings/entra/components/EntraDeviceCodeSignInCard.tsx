@@ -75,7 +75,10 @@ export function EntraDeviceCodeSignInCard() {
 				<Stack gap={2}>
 					<Text fw={600}>{t("pages.cloudSettings.entra.title", "Sign in with Entra ID")}</Text>
 					<Text size="sm" c="dimmed">
-						{t("pages.cloudSettings.entra.subtitle", "Complete interactive sign-in for this Entra ID connection using the device-code flow.")}
+						{t(
+							"pages.cloudSettings.entra.subtitle",
+							"Complete interactive sign-in for this Entra ID connection using the device-code flow.",
+						)}
 					</Text>
 				</Stack>
 
@@ -83,7 +86,10 @@ export function EntraDeviceCodeSignInCard() {
 					<Stack gap="xs">
 						<Alert color="blue" icon={<Loader size={14} />}>
 							<Text size="sm">
-								{t("pages.cloudSettings.entra.pendingHint", "Enter the device code below at the verification link to complete sign-in.")}
+								{t(
+									"pages.cloudSettings.entra.pendingHint",
+									"Enter the device code below at the verification link to complete sign-in.",
+								)}
 							</Text>
 						</Alert>
 						<TextInput
@@ -166,14 +172,11 @@ export function EntraDeviceCodeSignInCard() {
 				) : null}
 
 				{signInMutation.isError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Stack gap="xs">
-							<Text size="sm">{t("pages.cloudSettings.entra.signInError", "Failed to start sign-in. Please try again.")}</Text>
-							<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
-								{t("pages.cloudSettings.entra.retry", "Try again")}
-							</Button>
-						</Stack>
-					</Alert>
+					<InlineErrorAlert message={t("pages.cloudSettings.entra.signInError", "Failed to start sign-in. Please try again.")}>
+						<Button variant="subtle" size="xs" leftSection={<IconRefresh size={14} />} onClick={handleRetry} w="fit-content">
+							{t("pages.cloudSettings.entra.retry", "Try again")}
+						</Button>
+					</InlineErrorAlert>
 				) : null}
 
 				{statusQuery.isError && signInFlowActive ? (

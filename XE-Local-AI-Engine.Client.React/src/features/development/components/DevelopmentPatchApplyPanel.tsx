@@ -18,7 +18,12 @@ interface DevelopmentPatchApplyPanelProps {
 	readonly readOnly?: boolean;
 }
 
-export function DevelopmentPatchApplyPanel({ apply, preview, repositoryReady, readOnly = false }: DevelopmentPatchApplyPanelProps) {
+export function DevelopmentPatchApplyPanel({
+	apply,
+	preview,
+	repositoryReady,
+	readOnly = false,
+}: DevelopmentPatchApplyPanelProps) {
 	const { t } = useTranslation();
 	return (
 		<SectionCard

@@ -14,12 +14,15 @@ import en from "@/locales/en.json";
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
 		t: (key: string, fallback?: string) => {
-			const resolved = key.split(".").reduce<unknown>((acc, segment) => {
-				if (acc === undefined || acc === null || typeof acc !== "object") {
-					return undefined;
-				}
-				return (acc as Record<string, unknown>)[segment];
-			}, en as Record<string, unknown>);
+			const resolved = key.split(".").reduce<unknown>(
+				(acc, segment) => {
+					if (acc === undefined || acc === null || typeof acc !== "object") {
+						return undefined;
+					}
+					return (acc as Record<string, unknown>)[segment];
+				},
+				en as Record<string, unknown>,
+			);
 			return typeof resolved === "string" ? resolved : (fallback ?? key);
 		},
 	}),

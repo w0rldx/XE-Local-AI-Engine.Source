@@ -3,6 +3,8 @@ import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useStat
 import { useTranslation } from "react-i18next";
 
 import { IntegrationApprovalWarning } from "@/features/integrations/components/IntegrationApprovalWarning";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	type IntegrationAgentOption,
 	type IntegrationSessionPolicy,
@@ -146,10 +148,7 @@ export function IntegrationTriggerForm({
 			/>
 			<Switch
 				label={t("pages.integrations.triggers.form.enabled.label", "Enabled")}
-				description={t(
-					"pages.integrations.triggers.form.enabled.description",
-					"A disabled trigger rejects every invocation.",
-				)}
+				description={t("pages.integrations.triggers.form.enabled.description", "A disabled trigger rejects every invocation.")}
 				checked={values.enabled}
 				onChange={(event) => {
 					const checked = event.currentTarget.checked;
@@ -244,11 +243,7 @@ export function IntegrationTriggerForm({
 				</Stack>
 			</Input.Wrapper>
 
-			{submitError ? (
-				<Alert color="red" data-testid="integration-trigger-form-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="integration-trigger-form-error" /> : null}
 		</Stack>
 	);
 }

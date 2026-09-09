@@ -1,11 +1,12 @@
 import { Alert, Anchor, Badge, Button, Group, Stack, Text, Textarea } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+
 import type { TFunction } from "i18next";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -216,23 +217,27 @@ export function DevWorkflowHumanGatePanel({
 			) : null}
 
 			{isIntervention && nodeRun.failureClass ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-gate-failure">
-					<Stack gap={4}>
-						<Text size="sm">
-							{/* Not narrowed client-side, so an unrecognised class from a newer server reads as a plain
-							    sentence rather than as a raw PascalCase token. */}
-							{t(
-								`pages.devWorkflows.failureClass.${nodeRun.failureClass}`,
-								t("pages.devWorkflows.failureClass.unknown", "The node failed"),
-							)}
-						</Text>
-						{nodeRun.terminalReason ? (
-							<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-								{nodeRun.terminalReason}
+				<InlineErrorAlert
+					variant="light"
+					data-testid="dev-workflow-gate-failure"
+					message={
+						<Stack gap={4}>
+							<Text size="sm">
+								{/* Not narrowed client-side, so an unrecognised class from a newer server reads as a plain
+								    sentence rather than as a raw PascalCase token. */}
+								{t(
+									`pages.devWorkflows.failureClass.${nodeRun.failureClass}`,
+									t("pages.devWorkflows.failureClass.unknown", "The node failed"),
+								)}
 							</Text>
-						) : null}
-					</Stack>
-				</Alert>
+							{nodeRun.terminalReason ? (
+								<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
+									{nodeRun.terminalReason}
+								</Text>
+							) : null}
+						</Stack>
+					}
+				/>
 			) : null}
 
 			{priorDecisions.length > 0 ? <DecisionHistory decisions={priorDecisions} /> : null}
@@ -259,9 +264,11 @@ export function DevWorkflowHumanGatePanel({
 					{t("pages.devWorkflows.gate.noLongerPending", "This node has moved on — it is no longer waiting for a decision.")}
 				</Alert>
 			) : error ? (
-				<Alert color="red" variant="light" data-testid="dev-workflow-gate-error">
-					{apiErrorMessage(error, t("pages.devWorkflows.gate.failed", "That decision could not be recorded."))}
-				</Alert>
+				<InlineErrorAlert
+					message={apiErrorMessage(error, t("pages.devWorkflows.gate.failed", "That decision could not be recorded."))}
+					variant="light"
+					data-testid="dev-workflow-gate-error"
+				/>
 			) : null}
 
 			{/* Wraps on a narrow viewport on purpose: a non-wrapping action row once made an approval visible but

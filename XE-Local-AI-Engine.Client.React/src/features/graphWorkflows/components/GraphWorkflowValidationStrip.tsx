@@ -11,10 +11,12 @@
 // raises them; every client rule mirrors a rule that REFUSES a save, so the page never has to sort them out again.
 
 import { Alert, Button, Group, List, Stack } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconInfoCircle } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import type { GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface GraphWorkflowValidationStripProps {
 	/** Everything that REFUSES the save: the client's own rules and the server's `errors[]`. */
@@ -80,19 +82,18 @@ export function GraphWorkflowValidationStrip({
 	return (
 		<Stack gap="xs" data-testid="graph-workflow-validation-strip">
 			{errors.unkeyed.size > 0 ? (
-				<Alert
-					color="red"
+				<InlineErrorAlert
 					variant="light"
-					icon={<IconAlertTriangle size={16} />}
 					title={t("pages.graphWorkflows.editor.validation.title", "This graph cannot be saved yet")}
 					data-testid="graph-workflow-validation-unkeyed"
-				>
-					<List size="sm">
-						{[...errors.unkeyed.values()].map((line) => (
-							<List.Item key={line}>{line}</List.Item>
-						))}
-					</List>
-				</Alert>
+					message={
+						<List size="sm">
+							{[...errors.unkeyed.values()].map((line) => (
+								<List.Item key={line}>{line}</List.Item>
+							))}
+						</List>
+					}
+				/>
 			) : null}
 			{errors.keyed.size > 0 ? (
 				// A long issue list SCROLLS rather than growing: fifteen chips would otherwise push the strip up over the canvas

@@ -127,7 +127,9 @@ describe("toProgressDisplay", () => {
 	// The whole point of the phase-aware timeline: after the last step the VAE decode still has to run. A countdown
 	// that survived into it would read "0s left" while the job kept going.
 	it("shows finishing, never a countdown, once decoding starts", () => {
-		const display = toProgressDisplay(progress({ generationPhase: "Decoding", step: 20, totalSteps: 20, estimatedRemainingMs: 0 }));
+		const display = toProgressDisplay(
+			progress({ generationPhase: "Decoding", step: 20, totalSteps: 20, estimatedRemainingMs: 0 }),
+		);
 
 		expect(display).toEqual({ kind: "finishing" });
 	});

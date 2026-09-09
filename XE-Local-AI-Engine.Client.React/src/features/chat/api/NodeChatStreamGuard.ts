@@ -32,8 +32,14 @@ export const clientWatchdogFailureCategory = "ClientWatchdog";
  */
 export function streamWatchdogNotice(category: StreamWatchdogCategory): { key: string; fallback: string } {
 	return category === "no-first-chunk"
-		? { key: "pages.chat.error.clientWatchdogNoFirstChunk", fallback: "Connection watchdog: the response never started arriving in this browser." }
-		: { key: "pages.chat.error.clientWatchdogStall", fallback: "Connection watchdog: the response stopped arriving in this browser." };
+		? {
+				key: "pages.chat.error.clientWatchdogNoFirstChunk",
+				fallback: "Connection watchdog: the response never started arriving in this browser.",
+			}
+		: {
+				key: "pages.chat.error.clientWatchdogStall",
+				fallback: "Connection watchdog: the response stopped arriving in this browser.",
+			};
 }
 
 export interface StreamGuardOptions {

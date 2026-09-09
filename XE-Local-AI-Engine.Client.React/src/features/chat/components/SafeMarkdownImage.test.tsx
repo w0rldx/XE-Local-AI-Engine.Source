@@ -5,18 +5,15 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import {
-	isRemoteImageSrc,
-	markdownImageUrlTransform,
-	remoteImageOrigin,
-} from "@/features/chat/components/MarkdownImagePolicy";
+import { isRemoteImageSrc, markdownImageUrlTransform, remoteImageOrigin } from "@/features/chat/components/MarkdownImagePolicy";
 import { SafeMarkdownImage } from "@/features/chat/components/SafeMarkdownImage";
 
 function renderWithProviders(ui: ReactElement) {
 	return render(<MantineProvider>{ui}</MantineProvider>);
 }
 
-const DATA_IMAGE = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
+const DATA_IMAGE =
+	"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
 beforeEach(() => {
 	// Mantine's color-scheme provider reads matchMedia/ResizeObserver on mount; jsdom ships neither.
@@ -133,9 +130,7 @@ describe("SafeMarkdownImage consent flow", () => {
 	});
 
 	it("does not carry consent to a new source when the same element's src changes", () => {
-		const { rerender } = renderWithProviders(
-			<SafeMarkdownImage src="https://a.example.com/one.png" alt="one" />,
-		);
+		const { rerender } = renderWithProviders(<SafeMarkdownImage src="https://a.example.com/one.png" alt="one" />);
 
 		// Consent to source A: the image loads.
 		fireEvent.click(screen.getByTestId("remote-image-consent"));

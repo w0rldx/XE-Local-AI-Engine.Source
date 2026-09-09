@@ -9,12 +9,13 @@
 //
 // The Agent and Tool bodies live in `config/` for size alone; every other kind is a handful of controls and stays here.
 
-import { Alert, Button, Checkbox, Group, NumberInput, Select, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconTrash } from "@tabler/icons-react";
+import { Button, Checkbox, Group, NumberInput, Select, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
+import { IconTrash } from "@tabler/icons-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { ZodType } from "zod";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { GraphWorkflowAgentConfigForm } from "@/features/graphWorkflows/components/config/GraphWorkflowAgentConfigForm";
 import { GraphWorkflowJsonField } from "@/features/graphWorkflows/components/config/GraphWorkflowJsonField";
@@ -341,16 +342,20 @@ export function GraphWorkflowNodeConfigPanel({
 			</Group>
 
 			{issues.length > 0 ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="gw-node-config-issues">
-					<Stack gap={4}>
-						{issues.map((issue) => (
-							<Text key={`${issue.rule}:${issue.subject ?? ""}`} size="sm">
-								{issue.message ??
-									t(`pages.graphWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject ?? "" })}
-							</Text>
-						))}
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					data-testid="gw-node-config-issues"
+					message={
+						<Stack gap={4}>
+							{issues.map((issue) => (
+								<Text key={`${issue.rule}:${issue.subject ?? ""}`} size="sm">
+									{issue.message ??
+										t(`pages.graphWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject ?? "" })}
+								</Text>
+							))}
+						</Stack>
+					}
+				/>
 			) : null}
 
 			<TextInput

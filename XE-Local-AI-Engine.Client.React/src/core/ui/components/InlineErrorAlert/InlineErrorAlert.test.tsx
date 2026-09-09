@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, screen, within } from "@testing-library/react";
+import { IconBan } from "@tabler/icons-react";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
@@ -58,6 +59,28 @@ describe("InlineErrorAlert", () => {
 		renderWithProviders(<InlineErrorAlert message="Save failed." variant="light" data-testid="error" />);
 
 		expect(screen.getByTestId("error").getAttribute("data-variant")).toBe("light");
+	});
+
+	it("replaces the default icon when a call site supplies its own", () => {
+		renderWithProviders(<InlineErrorAlert message="Scripts are never imported." icon={<IconBan size={16} />} />);
+
+		const alert = screen.getByRole("alert");
+		expect(alert.querySelector(".tabler-icon-ban")).not.toBeNull();
+		expect(alert.querySelector(".tabler-icon-alert-triangle")).toBeNull();
+	});
+
+	it("forwards id so a control can point aria-describedby at the banner", () => {
+		renderWithProviders(<InlineErrorAlert message="Imported skills are untrusted." id="skill-import-warning" />);
+
+		expect(screen.getByRole("alert").id).toBe("skill-import-warning");
+	});
+
+	it("forwards style", () => {
+		renderWithProviders(
+			<InlineErrorAlert message="Response failed." style={{ borderRadius: "4px 14px 14px 14px" }} data-testid="error" />,
+		);
+
+		expect(screen.getByTestId("error").style.borderRadius).toBe("4px 14px 14px 14px");
 	});
 
 	it("forwards spacing props", () => {

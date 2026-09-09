@@ -1,9 +1,11 @@
-import { Alert, Button, Group, Text } from "@mantine/core";
+import { Button, Group, Text } from "@mantine/core";
 import { IconArrowLeft, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -94,11 +96,17 @@ export function GraphWorkflowRunToolbar({ run, onBackToEditor }: GraphWorkflowRu
 			</Group>
 
 			{cancel.error ? (
-				<Alert color="red" variant="light" p="xs" w="100%" data-testid="graph-workflow-run-toolbar-error">
-					<Text size="xs">
-						{apiErrorMessage(cancel.error, t("pages.graphWorkflows.toolbar.cancelFailed", "The run could not be cancelled."))}
-					</Text>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					p="xs"
+					w="100%"
+					data-testid="graph-workflow-run-toolbar-error"
+					message={
+						<Text size="xs">
+							{apiErrorMessage(cancel.error, t("pages.graphWorkflows.toolbar.cancelFailed", "The run could not be cancelled."))}
+						</Text>
+					}
+				/>
 			) : null}
 		</Group>
 	);

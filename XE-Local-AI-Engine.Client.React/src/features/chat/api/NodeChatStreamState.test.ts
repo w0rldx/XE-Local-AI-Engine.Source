@@ -119,7 +119,10 @@ describe("node chat stream state", () => {
 			"2026-05-24T00:00:01.000Z",
 		);
 
-		const first = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }));
+		const first = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }),
+		);
 		// The direct regression test for the delta-only wire contract: a delta must NEVER read `content`. A
 		// server that still stamped the accumulated text there — or a stale replay of it — would clobber the
 		// accumulation instead of extending it, and reading it at all is what made every frame re-send the
@@ -141,7 +144,10 @@ describe("node chat stream state", () => {
 			"2026-05-24T00:00:01.000Z",
 		);
 
-		const partial = applyNodeChatStreamEvent(optimistic, streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }));
+		const partial = applyNodeChatStreamEvent(
+			optimistic,
+			streamEvent({ sequence: 1, delta: "he", content: null, contentOffset: 0 }),
+		);
 		// A resume/gap/overflow repair replaces the client's text rather than extending it — the server is the
 		// authority on what the turn actually contains at this point.
 		const snapshot = applyNodeChatStreamEvent(
@@ -946,7 +952,11 @@ describe("node chat stream state", () => {
 		expect(toolPart).toMatchObject({ id: "call-deny", state: "failed" });
 		expect(toolPart && "pendingApprovalRequestId" in toolPart ? toolPart.pendingApprovalRequestId : undefined).toBeUndefined();
 		const streamingToolPart = failed.streamingMessage.parts?.find((part) => part.kind === "tool");
-		expect(streamingToolPart && "pendingApprovalRequestId" in streamingToolPart ? streamingToolPart.pendingApprovalRequestId : undefined).toBeUndefined();
+		expect(
+			streamingToolPart && "pendingApprovalRequestId" in streamingToolPart
+				? streamingToolPart.pendingApprovalRequestId
+				: undefined,
+		).toBeUndefined();
 	});
 
 	it("clears a lingering pending-approval waiting card on a client-driven terminal (markNodeChatStreamTerminated)", () => {

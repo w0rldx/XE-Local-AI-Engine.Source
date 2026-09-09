@@ -33,19 +33,13 @@ function okResponse(config: InternalAxiosRequestConfig): AxiosResponse {
 }
 
 function unauthorizedError(config: InternalAxiosRequestConfig): AxiosError {
-	return new AxiosError(
-		"Unauthorized",
-		AxiosError.ERR_BAD_REQUEST,
+	return new AxiosError("Unauthorized", AxiosError.ERR_BAD_REQUEST, config, undefined, {
+		data: undefined,
+		status: 401,
+		statusText: "Unauthorized",
+		headers: {},
 		config,
-		undefined,
-		{
-			data: undefined,
-			status: 401,
-			statusText: "Unauthorized",
-			headers: {},
-			config,
-		},
-	);
+	});
 }
 
 describe("form-data content-type interceptor", () => {

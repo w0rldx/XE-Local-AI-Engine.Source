@@ -1,8 +1,9 @@
-import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { DevWorkflowDefinitionSummaryResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface CreateWorkItemValues {
@@ -100,9 +101,7 @@ export function CreateWorkItemDialog({
 		>
 			<Stack gap="md">
 				{errorMessage ? (
-					<Alert color="red" variant="light" data-testid="create-dev-workflow-work-item-error">
-						{errorMessage}
-					</Alert>
+					<InlineErrorAlert message={errorMessage} variant="light" data-testid="create-dev-workflow-work-item-error" />
 				) : null}
 				<TextInput
 					label={t("pages.devWorkflows.create.titleLabel", "Title")}

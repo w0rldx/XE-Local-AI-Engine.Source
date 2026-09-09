@@ -1,7 +1,13 @@
-import { Alert, Text } from "@mantine/core";
+import { Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { isTerminalWorkSessionStatus, resumesOnFollowUp, type WorkSessionStatus } from "@/features/workSessions/models/WorkSessionModels";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+
+import {
+	isTerminalWorkSessionStatus,
+	resumesOnFollowUp,
+	type WorkSessionStatus,
+} from "@/features/workSessions/models/WorkSessionModels";
 
 /**
  * What happens to a follow-up the operator types, by status. A follow-up is ALWAYS persisted at post time, so the
@@ -16,11 +22,7 @@ export function WorkSessionFollowUpNotice({ status, error }: { status: WorkSessi
 	const { t } = useTranslation();
 
 	if (error) {
-		return (
-			<Alert color="red" variant="light" data-testid="work-session-follow-up-error">
-				{error}
-			</Alert>
-		);
+		return <InlineErrorAlert message={error} variant="light" data-testid="work-session-follow-up-error" />;
 	}
 
 	return (

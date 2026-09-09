@@ -17,10 +17,7 @@ import {
 	isActiveAttempt,
 } from "@/features/development/models/DevelopmentModels";
 import { nextActionLabel, operationId } from "@/features/development/models/DevelopmentStatusModel";
-import {
-	isTerminalDevWorkflowRunStatus,
-	toDevWorkflowRunStatus,
-} from "@/features/devWorkflows/models/DevWorkflowModels";
+import { isTerminalDevWorkflowRunStatus, toDevWorkflowRunStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
 	useApplyDevelopmentPatch,
 	useCancelDevelopmentAttempt,

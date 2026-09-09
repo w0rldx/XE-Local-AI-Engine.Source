@@ -23,17 +23,12 @@ export function jsonRoute(method: Method, path: string, body: DefaultBodyType): 
  * A route answering `status` with an RFC 9457 ProblemDetails body — what the node's `UseProblemDetails` pipeline
  * emits for a 4xx/5xx. The shared axios interceptor turns this into an `ApiError` whose `message` is the `detail`.
  */
-export function problemDetailsRoute(
-	method: Method,
-	path: string,
-	status: number,
-	problem: Partial<ProblemDetails>,
-): HttpHandler {
+export function problemDetailsRoute(method: Method, path: string, status: number, problem: Partial<ProblemDetails>): HttpHandler {
 	return http[method](localApiPath(path), () =>
-		HttpResponse.json(
-			{ type: "about:blank", title: "Error", status, detail: "", ...problem } satisfies ProblemDetails,
-			{ status, headers: { "content-type": "application/problem+json" } },
-		),
+		HttpResponse.json({ type: "about:blank", title: "Error", status, detail: "", ...problem } satisfies ProblemDetails, {
+			status,
+			headers: { "content-type": "application/problem+json" },
+		}),
 	);
 }
 

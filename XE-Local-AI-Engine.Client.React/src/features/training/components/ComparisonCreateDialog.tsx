@@ -36,7 +36,14 @@ interface ComparisonCreateDialogProps {
  * two into a report. The evaluations are the slow part — they load the model and replay every frozen hold-out sample —
  * so this dialog shows their live progress rather than blocking on them.
  */
-export function ComparisonCreateDialog({ opened, onClose, initialRunId, artifactId, freshEvaluations = false, onComparisonCreated }: ComparisonCreateDialogProps) {
+export function ComparisonCreateDialog({
+	opened,
+	onClose,
+	initialRunId,
+	artifactId,
+	freshEvaluations = false,
+	onComparisonCreated,
+}: ComparisonCreateDialogProps) {
 	const { t } = useTranslation();
 	const [runId, setRunId] = useState<string | null>(initialRunId ?? null);
 	const [name, setName] = useState("");
@@ -71,10 +78,9 @@ export function ComparisonCreateDialog({ opened, onClose, initialRunId, artifact
 	const baseEvaluation = freshEvaluations
 		? (rows.find((evaluation) => evaluation.id === freshEvaluationIds.Base) ?? null)
 		: findByModel(suggestion?.baseModelName ?? null);
-	const tunedEvaluation =
-		freshEvaluations
-			? (rows.find((evaluation) => evaluation.id === freshEvaluationIds.Tuned) ?? null)
-			: artifactId == null
+	const tunedEvaluation = freshEvaluations
+		? (rows.find((evaluation) => evaluation.id === freshEvaluationIds.Tuned) ?? null)
+		: artifactId == null
 			? findByModel(suggestion?.tunedModelName ?? null)
 			: (rows.find(
 					(evaluation) => evaluation.targetKind === "StagedTrainingArtifact" && evaluation.sourceArtifactId === artifactId,
@@ -152,7 +158,10 @@ export function ComparisonCreateDialog({ opened, onClose, initialRunId, artifact
 		);
 	};
 
-	const benchmarkRunOptions = (benchmarkRunsQuery.data?.items ?? []).map((run) => ({ value: run.id, label: run.primaryModelName }));
+	const benchmarkRunOptions = (benchmarkRunsQuery.data?.items ?? []).map((run) => ({
+		value: run.id,
+		label: run.primaryModelName,
+	}));
 
 	return (
 		<DialogShell onClose={close} opened={opened} size="lg" title={t("training.comparisons.create.title", "New comparison")}>

@@ -54,4 +54,3 @@ export interface MenuItemProperties {
 	className?: string;
 	isMobile?: boolean;
 }
-

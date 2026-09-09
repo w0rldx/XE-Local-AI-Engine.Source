@@ -36,7 +36,11 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 		stats.push({ key: "role", label: t("pages.modelFit.inferenceProfiles.metrics.role", "Role"), value: metrics.role });
 	}
 	if (metrics.ttftMs !== null) {
-		stats.push({ key: "ttft", label: t("pages.modelFit.inferenceProfiles.metrics.ttft", "TTFT"), value: formatModelFitMetric(metrics.ttftMs, "ms", 0) });
+		stats.push({
+			key: "ttft",
+			label: t("pages.modelFit.inferenceProfiles.metrics.ttft", "TTFT"),
+			value: formatModelFitMetric(metrics.ttftMs, "ms", 0),
+		});
 	}
 	if (metrics.ppTokensPerSecond !== null) {
 		stats.push({
@@ -53,10 +57,18 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 		});
 	}
 	if (metrics.cacheHitRate !== null) {
-		stats.push({ key: "cacheHit", label: t("pages.modelFit.inferenceProfiles.metrics.cacheHit", "Cache hit"), value: formatCacheHitRate(metrics.cacheHitRate) });
+		stats.push({
+			key: "cacheHit",
+			label: t("pages.modelFit.inferenceProfiles.metrics.cacheHit", "Cache hit"),
+			value: formatCacheHitRate(metrics.cacheHitRate),
+		});
 	}
 	if (metrics.toolLoopMs !== null) {
-		stats.push({ key: "toolLoop", label: t("pages.modelFit.inferenceProfiles.metrics.toolLoop", "Tool loop"), value: formatModelFitMetric(metrics.toolLoopMs, "ms", 0) });
+		stats.push({
+			key: "toolLoop",
+			label: t("pages.modelFit.inferenceProfiles.metrics.toolLoop", "Tool loop"),
+			value: formatModelFitMetric(metrics.toolLoopMs, "ms", 0),
+		});
 	}
 	if (metrics.itemsPerSecond !== null) {
 		stats.push({
@@ -87,7 +99,11 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 		});
 	}
 	if (metrics.batchSize !== null) {
-		stats.push({ key: "batchSize", label: t("pages.modelFit.inferenceProfiles.metrics.batchSize", "Batch size"), value: metrics.batchSize.toString() });
+		stats.push({
+			key: "batchSize",
+			label: t("pages.modelFit.inferenceProfiles.metrics.batchSize", "Batch size"),
+			value: metrics.batchSize.toString(),
+		});
 	}
 	if (metrics.outputDimension !== null) {
 		stats.push({
@@ -174,14 +190,28 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 		});
 	}
 	if (!hasExplicitVram && metrics.vramLoadBytes !== null) {
-		stats.push({ key: "vramLoad", label: t("pages.modelFit.inferenceProfiles.metrics.vramLoad", "VRAM at load"), value: formatBytesAsGb(metrics.vramLoadBytes) });
+		stats.push({
+			key: "vramLoad",
+			label: t("pages.modelFit.inferenceProfiles.metrics.vramLoad", "VRAM at load"),
+			value: formatBytesAsGb(metrics.vramLoadBytes),
+		});
 	}
 	if (!hasExplicitVram && metrics.vramAfterBytes !== null) {
-		stats.push({ key: "vramAfter", label: t("pages.modelFit.inferenceProfiles.metrics.vramAfter", "VRAM after"), value: formatBytesAsGb(metrics.vramAfterBytes) });
+		stats.push({
+			key: "vramAfter",
+			label: t("pages.modelFit.inferenceProfiles.metrics.vramAfter", "VRAM after"),
+			value: formatBytesAsGb(metrics.vramAfterBytes),
+		});
 	}
 
 	return (
-		<Card withBorder={true} radius="sm" p="md" bg="var(--mantine-color-default-hover)" data-testid={`inference-profile-metrics-${testIdSuffix}`}>
+		<Card
+			withBorder={true}
+			radius="sm"
+			p="md"
+			bg="var(--mantine-color-default-hover)"
+			data-testid={`inference-profile-metrics-${testIdSuffix}`}
+		>
 			<Stack gap="sm">
 				<Title order={6}>{t("pages.modelFit.inferenceProfiles.metrics.title", "Benchmark metrics")}</Title>
 				{metrics.externalPressureDetected ? (
@@ -195,7 +225,12 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 				{stats.length > 0 ? (
 					<SimpleGrid cols={{ base: 2, sm: 3, md: 4 }} spacing="md">
 						{stats.map((stat) => (
-							<Metric key={stat.key} label={stat.label} value={stat.value} testId={`inference-profile-metric-${stat.key}-${testIdSuffix}`} />
+							<Metric
+								key={stat.key}
+								label={stat.label}
+								value={stat.value}
+								testId={`inference-profile-metric-${stat.key}-${testIdSuffix}`}
+							/>
 						))}
 					</SimpleGrid>
 				) : (

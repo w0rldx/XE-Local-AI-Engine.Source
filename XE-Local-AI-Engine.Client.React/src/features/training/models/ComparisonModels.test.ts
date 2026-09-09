@@ -61,9 +61,24 @@ describe("ComparisonModels", () => {
 
 	it("degrades an unrecognized status to Queued rather than throwing", () => {
 		// A wire value this build does not know is not worth a blank page over.
-		expect(toEvaluationRun({ id: "e1", modelName: "m", targetKind: "InstalledModel", sourceArtifactId: null, datasetId: "d", datasetContentFingerprint: "fp", status: "Reticulating", totalCount: 1, scoredCount: 0, passedCount: 0, perKind: [], version: 1, createdAtUtc: 1, updatedAtUtc: 1 }).status).toBe(
-			"Queued",
-		);
+		expect(
+			toEvaluationRun({
+				id: "e1",
+				modelName: "m",
+				targetKind: "InstalledModel",
+				sourceArtifactId: null,
+				datasetId: "d",
+				datasetContentFingerprint: "fp",
+				status: "Reticulating",
+				totalCount: 1,
+				scoredCount: 0,
+				passedCount: 0,
+				perKind: [],
+				version: 1,
+				createdAtUtc: 1,
+				updatedAtUtc: 1,
+			}).status,
+		).toBe("Queued");
 	});
 
 	it("keeps an unreadable deltas document as null instead of a fabricated zero report", () => {

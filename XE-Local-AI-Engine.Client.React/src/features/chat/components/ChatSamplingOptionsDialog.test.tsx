@@ -148,10 +148,7 @@ describe("ChatSamplingOptionsDialog", () => {
 
 	it("per-field reset clears only that field and leaves others untouched", async () => {
 		vi.resetModules();
-		localStorage.setItem(
-			"xe-node-chat-sampling-options",
-			JSON.stringify({ temperature: 0.7, topP: 0.9 }),
-		);
+		localStorage.setItem("xe-node-chat-sampling-options", JSON.stringify({ temperature: 0.7, topP: 0.9 }));
 
 		const { ChatSamplingOptionsDialog } = await import("@/features/chat/components/ChatSamplingOptionsDialog");
 		const { useChatSamplingPreferencesStore } = await import("@/features/chat/stores/ChatSamplingPreferencesStore");

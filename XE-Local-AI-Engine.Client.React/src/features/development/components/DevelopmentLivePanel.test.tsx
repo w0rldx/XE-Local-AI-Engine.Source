@@ -78,10 +78,7 @@ function testOutcome(overrides: Partial<DevelopmentTestOutcome> = {}): Developme
 	};
 }
 
-function command(
-	commandId: string,
-	overrides: Partial<DevelopmentValidationCommand> = {},
-): DevelopmentValidationCommand {
+function command(commandId: string, overrides: Partial<DevelopmentValidationCommand> = {}): DevelopmentValidationCommand {
 	return {
 		commandId,
 		exitCode: 0,
@@ -227,9 +224,7 @@ describe("DevelopmentLivePanel validation evidence", () => {
 		expect(within(failure).getByText("Command dotnet_restore exited with code 1.")).toBeTruthy();
 
 		// The stderr is the only account of WHY, and it was previously withheld even once the report was reachable.
-		expect(screen.getByTestId("development-validation-command-output-dotnet_restore").textContent).toContain(
-			"errno == EROFS",
-		);
+		expect(screen.getByTestId("development-validation-command-output-dotnet_restore").textContent).toContain("errno == EROFS");
 
 		// Staleness is still reported — as its own axis, next to the failure rather than instead of it.
 		expect(screen.getByTestId("development-validation-failed-invalidated-note")).toBeTruthy();
@@ -394,7 +389,9 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 		}));
 
 		renderPanel([validationArtifact, promptArtifact], coderAttempt);
-		fireEvent.click(within(screen.getByTestId("development-prompt-artifacts")).getByTestId("development-artifact-view-artifact-prompt"));
+		fireEvent.click(
+			within(screen.getByTestId("development-prompt-artifacts")).getByTestId("development-artifact-view-artifact-prompt"),
+		);
 
 		const viewer = await screen.findByTestId("development-artifact-content-artifact-prompt");
 		expect(viewer.getAttribute("data-language")).toBe("plaintext");
@@ -437,7 +434,10 @@ describe("DevelopmentLivePanel artifact viewer", () => {
 	});
 
 	it("says so when the displayed attempt recorded no prompt, rather than showing an empty section", () => {
-		renderPanel([validationArtifact, { ...validationArtifact, id: "prompt-other", kind: "Prompt", attemptId: "attempt-2" }], coderAttempt);
+		renderPanel(
+			[validationArtifact, { ...validationArtifact, id: "prompt-other", kind: "Prompt", attemptId: "attempt-2" }],
+			coderAttempt,
+		);
 
 		const prompts = screen.getByTestId("development-prompt-artifacts");
 		expect(within(prompts).getByText("No prompt was recorded for this attempt yet.")).toBeTruthy();

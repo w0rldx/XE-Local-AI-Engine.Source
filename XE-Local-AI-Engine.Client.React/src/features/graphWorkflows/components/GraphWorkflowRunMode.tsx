@@ -1,13 +1,13 @@
-import { Button, Loader, Stack, Tabs } from "@mantine/core";
+import { Button, Drawer, Loader, Stack, Tabs } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 import { GraphWorkflowEventsTab } from "@/features/graphWorkflows/components/GraphWorkflowEventsTab";
 import { GraphWorkflowNodePanel } from "@/features/graphWorkflows/components/GraphWorkflowNodePanel";
 import { GraphWorkflowNodeRunTable } from "@/features/graphWorkflows/components/GraphWorkflowNodeRunTable";
-import { GraphWorkflowResponsivePaneLayout } from "@/features/graphWorkflows/components/GraphWorkflowResponsivePaneLayout";
 import { GraphWorkflowRunGraphView } from "@/features/graphWorkflows/components/GraphWorkflowRunGraphView";
 import { GraphWorkflowRunList } from "@/features/graphWorkflows/components/GraphWorkflowRunList";
 import { GraphWorkflowRunToolbar } from "@/features/graphWorkflows/components/GraphWorkflowRunToolbar";
@@ -145,40 +145,51 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 		</Stack>
 	);
 
+	// The rail scrolls inside its own column rather than stretching the grid row. Harmless in the stacked narrow mode,
+	// where the column has no height to overflow.
 	const runList = (
-		<GraphWorkflowRunList
-			runs={runsQuery.data ?? []}
-			isLoading={runsQuery.isPending}
-			error={runsQuery.error}
-			selectedRunId={selection.runId}
-			onSelectRun={(next) => select({ runId: next, nodeKey: undefined })}
-		/>
+		<div style={{ minHeight: 0, overflowY: "auto" }}>
+			<GraphWorkflowRunList
+				runs={runsQuery.data ?? []}
+				isLoading={runsQuery.isPending}
+				error={runsQuery.error}
+				selectedRunId={selection.runId}
+				onSelectRun={(next) => select({ runId: next, nodeKey: undefined })}
+			/>
+		</div>
 	);
 
 	return (
-		<GraphWorkflowResponsivePaneLayout
-			isNarrow={isNarrow}
-			list={runList}
-			main={main}
-			narrowTestId="gw-page-run-narrow"
-			gridTestId="gw-page-run-grid"
-			drawer={{
-				opened: selection.nodeKey !== undefined,
-				onClose: () => select({ nodeKey: undefined }),
-				title: selection.nodeKey ?? t("pages.graphWorkflows.page.nodeTitle", "Node"),
-				size: isNarrow ? "95%" : "45%",
-				testId: "gw-page-node-drawer",
-				children:
-					selection.nodeKey === undefined ? null : (
-						<GraphWorkflowNodePanel
-							runId={runId}
-							nodeKey={selection.nodeKey}
-							runStatus={run?.status}
-							pauseConfig={pauseConfig}
-							onClose={() => select({ nodeKey: undefined })}
-						/>
-					),
-			}}
-		/>
+		<>
+			{/* Stacked rather than dropped: without the run list there is no way to reach another run from a phone,
+			    and the toolbar's back button is not that. */}
+			<ResponsivePaneLayout
+				narrowMode="stack"
+				list={runList}
+				main={main}
+				narrowTestId="gw-page-run-narrow"
+				gridTestId="gw-page-run-grid"
+			/>
+
+			{/* A node panel is a drill-down at every width, not a third column: the run's own grid has two. */}
+			<Drawer
+				opened={selection.nodeKey !== undefined}
+				onClose={() => select({ nodeKey: undefined })}
+				position="right"
+				size={isNarrow ? "95%" : "45%"}
+				title={selection.nodeKey ?? t("pages.graphWorkflows.page.nodeTitle", "Node")}
+				attributes={{ content: { "data-testid": "gw-page-node-drawer" } }}
+			>
+				{selection.nodeKey === undefined ? null : (
+					<GraphWorkflowNodePanel
+						runId={runId}
+						nodeKey={selection.nodeKey}
+						runStatus={run?.status}
+						pauseConfig={pauseConfig}
+						onClose={() => select({ nodeKey: undefined })}
+					/>
+				)}
+			</Drawer>
+		</>
 	);
 }

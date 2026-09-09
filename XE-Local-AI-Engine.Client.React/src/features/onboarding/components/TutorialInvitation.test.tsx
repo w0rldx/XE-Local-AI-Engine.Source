@@ -71,9 +71,14 @@ describe("TutorialInvitation", () => {
 		expect(screen.queryByTestId("tutorial-invitation-agents-basics")).toBeNull();
 		view.rerender(
 			<MantineProvider>
-				<OnboardingContext.Provider value={context({
-					tutorials: { ...context().tutorials, "agents-basics": { isAvailable: true, hasProgress: false, status: "completed" } },
-				})}>
+				<OnboardingContext.Provider
+					value={context({
+						tutorials: {
+							...context().tutorials,
+							"agents-basics": { isAvailable: true, hasProgress: false, status: "completed" },
+						},
+					})}
+				>
 					<TutorialInvitation tutorialId="agents-basics" />
 				</OnboardingContext.Provider>
 			</MantineProvider>,

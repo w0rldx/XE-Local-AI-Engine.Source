@@ -1,5 +1,4 @@
-import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Button, Code, Group, Loader, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -141,24 +140,23 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 				</SectionCard>
 
 				{failureClass ? (
-					<Alert
-						color="red"
+					<InlineErrorAlert
 						variant="light"
-						icon={<IconAlertTriangle size={16} />}
 						data-testid="graph-workflow-node-panel-failure"
-					>
-						<Stack gap={4}>
-							<Text size="sm">{t(`pages.graphWorkflows.failureClass.${failureClass}`, failureClass)}</Text>
-							{runMovedOn ? (
-								<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-moved-on">
-									{t(
-										"pages.graphWorkflows.nodePanel.runMovedOn",
-										"The run carried on after this node failed — this is what this node did, not what the run ended up doing.",
-									)}
-								</Text>
-							) : null}
-						</Stack>
-					</Alert>
+						message={
+							<Stack gap={4}>
+								<Text size="sm">{t(`pages.graphWorkflows.failureClass.${failureClass}`, failureClass)}</Text>
+								{runMovedOn ? (
+									<Text size="xs" c="dimmed" data-testid="graph-workflow-node-panel-moved-on">
+										{t(
+											"pages.graphWorkflows.nodePanel.runMovedOn",
+											"The run carried on after this node failed — this is what this node did, not what the run ended up doing.",
+										)}
+									</Text>
+								) : null}
+							</Stack>
+						}
+					/>
 				) : null}
 
 				{nodeRun.pendingDecisionKind ? (

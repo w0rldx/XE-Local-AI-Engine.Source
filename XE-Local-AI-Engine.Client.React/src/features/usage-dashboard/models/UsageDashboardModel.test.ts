@@ -40,7 +40,14 @@ function bucket(overrides: Partial<UsageBucketDto>): UsageBucketDto {
 describe("UsageDashboardModel aggregation", () => {
 	it("aggregateByDay sums every dimension per day and returns ascending by day", () => {
 		const daily = aggregateByDay([
-			bucket({ dayStartUtcMs: DAY_2, totalTokens: 100, promptTokens: 40, completionTokens: 50, reasoningTokens: 10, runCount: 2 }),
+			bucket({
+				dayStartUtcMs: DAY_2,
+				totalTokens: 100,
+				promptTokens: 40,
+				completionTokens: 50,
+				reasoningTokens: 10,
+				runCount: 2,
+			}),
 			bucket({ dayStartUtcMs: DAY_1, provider: "codex", totalTokens: 35 }),
 			bucket({ dayStartUtcMs: DAY_1, provider: "local", totalTokens: 35 }),
 		]);
@@ -80,7 +87,15 @@ describe("UsageDashboardModel aggregation", () => {
 		expect(isUsageEmpty(undefined)).toBe(true);
 		const summary: UsageSummaryDto = {
 			items: [],
-			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
+			totals: {
+				runCount: 0,
+				promptTokens: 0,
+				completionTokens: 0,
+				reasoningTokens: 0,
+				totalTokens: 0,
+				estimatedCostUsd: 0,
+				currency: "USD",
+			},
 			byProvider: [],
 			retentionDays: 30,
 		};

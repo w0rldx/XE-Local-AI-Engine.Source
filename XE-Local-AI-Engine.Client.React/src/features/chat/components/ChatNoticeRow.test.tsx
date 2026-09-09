@@ -91,7 +91,9 @@ describe("ChatNoticeRow", () => {
 		// against BuildToolsFilteredNoticeMessage). A copy of it here would drift silently, so this uses a stand-in
 		// string: what the component owns is the kind tag and rendering the server text verbatim.
 		const serverText = "a server-owned counts-only sentence";
-		const { container } = renderWithProviders(<ChatNoticeRow part={noticePart({ noticeKind: "ToolsFiltered", text: serverText })} />);
+		const { container } = renderWithProviders(
+			<ChatNoticeRow part={noticePart({ noticeKind: "ToolsFiltered", text: serverText })} />,
+		);
 
 		expect(screen.getByTestId("chat-notice-row").getAttribute("data-notice-kind")).toBe("ToolsFiltered");
 		expect(screen.getByText(serverText)).toBeTruthy();

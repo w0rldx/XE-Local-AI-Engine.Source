@@ -10,6 +10,7 @@ import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowDefinitionPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionPanel";
@@ -370,9 +371,17 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 					) : null}
 				</Group>
 				{deleteError ? <InlineErrorAlert variant="light" message={deleteError} data-testid="dev-workflow-delete-error" /> : null}
+				{/* Both side surfaces reach a phone through the header's two toggles, so the narrow viewport keeps the
+				    centre pane alone rather than stacking anything above it. */}
+				<ResponsivePaneLayout
+					narrowMode="mainOnly"
+					list={summaryPanel}
+					main={centrePane}
+					side={sidePanel}
+					gridTestId="dev-workflow-detail-grid"
+				/>
 				{isMobile ? (
 					<>
-						<div style={{ flex: 1, minHeight: 0 }}>{centrePane}</div>
 						<Drawer
 							opened={summaryDrawerOpened}
 							onClose={summaryDrawer.close}
@@ -394,29 +403,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 							{sidePanel}
 						</Drawer>
 					</>
-				) : (
-					<div
-						data-testid="dev-workflow-detail-grid"
-						// The centre track carries a floor like the two beside it. TWO_PANE_BREAKPOINT (1024) asks
-						// "do two panes fit at all", not "does 320 + 380 plus this page's chrome fit", so a viewport
-						// just above it left `minmax(0, 1fr)` at ~120px and clipped the tab header to "Gra"/"Nod".
-						// `overflowX: auto` is the other half: FullHeightPage clips the X axis on purpose, so without
-						// its own scroller the grid would go on hiding the overflow the floor makes honest.
-						style={{
-							display: "grid",
-							gridTemplateColumns: "320px minmax(240px, 1fr) minmax(380px, 420px)",
-							gridTemplateRows: "minmax(0, 1fr)",
-							gap: "var(--mantine-spacing-md)",
-							flex: 1,
-							minHeight: 0,
-							overflowX: "auto",
-						}}
-					>
-						{summaryPanel}
-						{centrePane}
-						{sidePanel}
-					</div>
-				)}
+				) : null}
 			</Stack>
 		</FullHeightPage>
 	);

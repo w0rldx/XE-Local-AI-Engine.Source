@@ -23,18 +23,25 @@ export function DownloadRow({ modelName, status, etaSeconds, bytesPerSecond, isC
 	const completedBytes = status?.completedBytes ?? null;
 	const totalBytes = status?.totalBytes ?? null;
 	const percent =
-		totalBytes != null && totalBytes > 0 && completedBytes != null ? Math.min(100, Math.round((completedBytes / totalBytes) * 100)) : null;
+		totalBytes != null && totalBytes > 0 && completedBytes != null
+			? Math.min(100, Math.round((completedBytes / totalBytes) * 100))
+			: null;
 
 	const partLabel =
 		status?.partIndex != null && status.partCount != null && status.partCount > 1
-			? t("pages.images.models.download.part", "Part {{index}} of {{count}}", { index: status.partIndex, count: status.partCount })
+			? t("pages.images.models.download.part", "Part {{index}} of {{count}}", {
+					index: status.partIndex,
+					count: status.partCount,
+				})
 			: undefined;
 	const speedLabel =
 		bytesPerSecond !== undefined
 			? t("pages.images.models.download.speed", "{{value}}/s", { value: humanizeBytes(bytesPerSecond) })
 			: undefined;
 	const etaDuration = formatDownloadEta(etaSeconds);
-	const etaLabel = etaDuration ? t("pages.images.models.download.eta", "~{{duration}} left", { duration: etaDuration }) : undefined;
+	const etaLabel = etaDuration
+		? t("pages.images.models.download.eta", "~{{duration}} left", { duration: etaDuration })
+		: undefined;
 
 	// The headline: a percentage when one is computable, otherwise the bytes that HAVE moved. Never a fabricated
 	// percentage — the operator reading "100%" on a bar that keeps moving is the failure this guards against.
@@ -42,7 +49,9 @@ export function DownloadRow({ modelName, status, etaSeconds, bytesPerSecond, isC
 	if (percent !== null) {
 		headline = t("pages.images.models.download.progress", "Downloading… {{percent}}%", { percent });
 	} else if (completedBytes != null) {
-		headline = t("pages.images.models.download.transferred", "{{completed}} transferred", { completed: humanizeBytes(completedBytes) });
+		headline = t("pages.images.models.download.transferred", "{{completed}} transferred", {
+			completed: humanizeBytes(completedBytes),
+		});
 	}
 
 	const bytesLabel =

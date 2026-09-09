@@ -256,7 +256,7 @@ export function ImageRuntimeSourceBuildCard() {
 						</List>
 
 						{validationError ? <Alert color="yellow">{validationError}</Alert> : null}
-						{liveError ? <Alert color="red">{liveError}</Alert> : null}
+						{liveError ? <InlineErrorAlert message={liveError} /> : null}
 						{isBuilding ? <CudaBuildLogView phase={livePhase} logLines={liveLogEntries.map((entry) => entry.message)} /> : null}
 					</>
 				) : null}

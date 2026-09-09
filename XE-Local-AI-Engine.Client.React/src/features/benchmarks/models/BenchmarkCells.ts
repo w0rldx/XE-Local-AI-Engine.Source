@@ -56,7 +56,9 @@ export const toBenchmarkCell = (value: CellResponse): BenchmarkCell => ({
 	quality: value.quality ?? null,
 	rank: value.rank ?? null,
 	rankExclusionReason: toBenchmarkRankExclusionReason(value.rankExclusionReason),
-	items: (value.items ?? []).map(toBenchmarkCellItem).sort((left, right) => (left.taskItemIndex ?? 0) - (right.taskItemIndex ?? 0)),
+	items: (value.items ?? [])
+		.map(toBenchmarkCellItem)
+		.sort((left, right) => (left.taskItemIndex ?? 0) - (right.taskItemIndex ?? 0)),
 });
 
 /** Ranked first, ties by model name so the order is stable across polls; everything excluded goes to the end. */
@@ -73,10 +75,7 @@ export function sortBenchmarkCells(cells: readonly BenchmarkCell[]): BenchmarkCe
  * The scorable items this cell never answered. `item-incomplete` says a cell is missing something; this says WHICH,
  * which is the difference between "re-run this cell" and one targeted re-run.
  */
-export function missingBenchmarkCellItems(
-	cell: BenchmarkCell,
-	scorableItems: readonly BenchmarkTaskItem[],
-): BenchmarkTaskItem[] {
+export function missingBenchmarkCellItems(cell: BenchmarkCell, scorableItems: readonly BenchmarkTaskItem[]): BenchmarkTaskItem[] {
 	const answered = new Set(cell.items.map((item) => item.taskItemId).filter((id): id is string => id !== null));
 	// A cell whose runs name no item at all is a pre-suite one and owes nothing: the node ranks it on its own run.
 	return answered.size === 0 ? [] : scorableItems.filter((item) => !answered.has(item.id));

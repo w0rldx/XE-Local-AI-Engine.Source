@@ -3,6 +3,8 @@ import { create } from "zustand";
 import type { ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { localDefaultModelValue } from "@/features/chat/models/NodeChatModelSelection";
 
+/* eslint-disable react-doctor/auth-token-in-web-storage -- The nine xe-node-chat-* keys below hold composer UI preferences only (selected model, reasoning effort, tools/agent-mode/knowledge-base/tokens-per-second toggles, sidebar collapse, selected conversation and agent ids); no credential or session token is persisted here. */
+
 // Persisted chat composer selections, mirroring the platform ToolCallingStore (zustand + guarded
 // globalThis.localStorage). Keys are global (not per-conversation) like the platform client. The raw
 // persisted value is stored as-is; Chat.tsx validates the model against the live model list and the
@@ -66,10 +68,7 @@ const reasoningEffortRank: Readonly<Record<ReasoningEffort, number>> = {
 // a reasoning-OFF source ("none") maps to "none" when offered; any reasoning-ON source maps to the available
 // reasoning-ON level (rank > 0) with the nearest intensity rank — so xhigh→high, minimal→low onto a graded set, and
 // any graded level→"on" onto a binary set. Falls back to the set's first entry only when no comparable level exists.
-export function clampReasoningEffort(
-	current: ReasoningEffort,
-	available: readonly ReasoningEffort[],
-): ReasoningEffort {
+export function clampReasoningEffort(current: ReasoningEffort, available: readonly ReasoningEffort[]): ReasoningEffort {
 	if (available.includes(current)) {
 		return current;
 	}

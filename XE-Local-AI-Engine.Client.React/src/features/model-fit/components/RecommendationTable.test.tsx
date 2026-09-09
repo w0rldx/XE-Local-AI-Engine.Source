@@ -18,7 +18,9 @@ vi.mock("react-i18next", () => ({
 		t: (key: string, fallbackOrOptions?: string | TranslationOptions, maybeOptions?: TranslationOptions) => {
 			const template = typeof fallbackOrOptions === "string" ? fallbackOrOptions : (fallbackOrOptions?.defaultValue ?? key);
 			const params = typeof fallbackOrOptions === "string" ? maybeOptions : fallbackOrOptions;
-			return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) => (params && name in params ? String(params[name]) : match));
+			return template.replace(/\{\{(\w+)\}\}/g, (match, name: string) =>
+				params && name in params ? String(params[name]) : match,
+			);
 		},
 	}),
 }));
@@ -188,7 +190,13 @@ describe("RecommendationTable", () => {
 	});
 
 	it("surfaces both the required RAM and required VRAM fit estimates", () => {
-		const row = makeRecommendation({ rank: 1, requiredRamMb: 6144, requiredVramMb: 4096, isInstalled: true, pullModelName: null });
+		const row = makeRecommendation({
+			rank: 1,
+			requiredRamMb: 6144,
+			requiredVramMb: 4096,
+			isInstalled: true,
+			pullModelName: null,
+		});
 
 		renderTable(<RecommendationTable recommendations={[row]} />);
 

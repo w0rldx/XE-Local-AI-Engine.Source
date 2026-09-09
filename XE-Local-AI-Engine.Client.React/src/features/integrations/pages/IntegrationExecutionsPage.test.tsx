@@ -199,8 +199,8 @@ describe("IntegrationExecutionsPage", () => {
 	it("renders rows in the order the response supplied them, without re-sorting", () => {
 		renderPage();
 
-		const rendered = Array.from(screen.getByTestId("integration-executions-table").querySelectorAll("tbody tr")).map(
-			(row) => row.getAttribute("data-testid"),
+		const rendered = Array.from(screen.getByTestId("integration-executions-table").querySelectorAll("tbody tr")).map((row) =>
+			row.getAttribute("data-testid"),
 		);
 		expect(rendered).toEqual(executions.map((row) => `integration-execution-row-${row.id}`));
 	});

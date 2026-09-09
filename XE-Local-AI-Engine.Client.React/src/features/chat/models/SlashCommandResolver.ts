@@ -13,7 +13,12 @@ interface SlashTriggerInput {
 }
 
 export function getSlashCommandQuery(input: SlashTriggerInput): string | null {
-	if (!input.interactive || input.isComposing || input.selectionStart !== input.selectionEnd || input.selectionEnd !== input.content.length) {
+	if (
+		!input.interactive ||
+		input.isComposing ||
+		input.selectionStart !== input.selectionEnd ||
+		input.selectionEnd !== input.content.length
+	) {
 		return null;
 	}
 	const match = /^\/([^\s/]*)$/.exec(input.content);

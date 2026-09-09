@@ -151,7 +151,12 @@ describe("useBenchmarkRunHub", () => {
 		await waitFor(() => expect(invoke).toHaveBeenCalledWith("Subscribe", "run-1", 0));
 
 		act(() => {
-			handlers.get(benchmarkHubEvents.event)?.({ runId: "run-1", sequence: 1, kind: "JudgeState", payload: { state: "running" } });
+			handlers.get(benchmarkHubEvents.event)?.({
+				runId: "run-1",
+				sequence: 1,
+				kind: "JudgeState",
+				payload: { state: "running" },
+			});
 			handlers.get(benchmarkHubEvents.event)?.({
 				runId: "run-1",
 				sequence: 2,
@@ -200,7 +205,12 @@ describe("useBenchmarkRunHub", () => {
 		const { result } = renderHook(() => useBenchmarkRunHub({ run: run(), refetch }));
 		await waitFor(() => expect(invoke).toHaveBeenCalled());
 		act(() =>
-			handlers.get(benchmarkHubEvents.event)?.({ runId: "run-1", sequence: 1, kind: "JudgeState", payload: { state: "running" } }),
+			handlers.get(benchmarkHubEvents.event)?.({
+				runId: "run-1",
+				sequence: 1,
+				kind: "JudgeState",
+				payload: { state: "running" },
+			}),
 		);
 		expect(result.current.overlay.judgeState).toBe("running");
 

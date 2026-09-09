@@ -133,7 +133,9 @@ export function RuntimeAcquisitionBanner() {
 			? t("pages.nodeSettings.llamaCpp.acquisition.rate", "{{rate}}/s", { rate: humanizeBytes(estimate.bytesPerSecond) })
 			: undefined;
 	const etaDuration = formatDownloadEta(estimate?.etaSeconds);
-	const etaLabel = etaDuration ? t("pages.nodeSettings.llamaCpp.acquisition.eta", "about {{eta}} left", { eta: etaDuration }) : undefined;
+	const etaLabel = etaDuration
+		? t("pages.nodeSettings.llamaCpp.acquisition.eta", "about {{eta}} left", { eta: etaDuration })
+		: undefined;
 	const detailLine = [stepLabel, byteLabel, rateLabel, etaLabel].filter(Boolean).join(" · ");
 
 	return (

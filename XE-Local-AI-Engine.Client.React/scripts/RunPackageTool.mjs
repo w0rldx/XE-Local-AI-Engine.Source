@@ -1,11 +1,9 @@
 import { spawnSync } from "node:child_process";
 
-export function runPnpm(args, {
-	allowedStatuses = [0],
-	cwd = process.cwd(),
-	platform = process.platform,
-	spawn = spawnSync,
-} = {}) {
+export function runPnpm(
+	args,
+	{ allowedStatuses = [0], cwd = process.cwd(), platform = process.platform, spawn = spawnSync } = {},
+) {
 	// Proven repository pattern from GenerateLicenses.mjs: pnpm is a .cmd shim on Windows,
 	// so Node must invoke it through the shell there. POSIX remains shell-free.
 	const result = spawn("pnpm", args, {

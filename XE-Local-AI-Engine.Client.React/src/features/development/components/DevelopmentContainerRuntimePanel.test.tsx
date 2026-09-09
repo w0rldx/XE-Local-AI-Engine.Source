@@ -137,17 +137,25 @@ describe("DevelopmentContainerRuntimePanel", () => {
 		// Honesty check on the container-runtime banner. Without this line an operator reading a green banner would
 		// reasonably conclude their Development Mode runs are already containerised. Under the process provider —
 		// the default, since the container provider is opt-in — they are not.
-		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "process");
-
-		expect(screen.getByTestId("development-container-runtime-not-yet-in-use").textContent).toContain(
-			"not switched on yet",
+		renderPanel(
+			{ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false },
+			vi.fn(),
+			undefined,
+			"process",
 		);
+
+		expect(screen.getByTestId("development-container-runtime-not-yet-in-use").textContent).toContain("not switched on yet");
 	});
 
 	it("stops claiming container execution is off once the container provider is the one in force", () => {
 		// This sentence was hard-coded, so with `Development:Sandbox:Provider=docker` live and a container
 		// demonstrably running it told the operator the opposite of what the same screen's banner said.
-		renderPanel({ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false }, vi.fn(), undefined, "docker");
+		renderPanel(
+			{ ready: true, status: "ready", message: "ok", requiresOperatorConfirmation: false },
+			vi.fn(),
+			undefined,
+			"docker",
+		);
 
 		const note = screen.getByTestId("development-container-runtime-not-yet-in-use").textContent ?? "";
 		expect(note).not.toContain("not switched on yet");

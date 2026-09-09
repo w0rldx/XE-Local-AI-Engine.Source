@@ -107,8 +107,7 @@ export function buildTutorialSteps(
 ): Step[] {
 	return stepIds.map((stepId) => {
 		const isQuickStartAction =
-			definition.id === "quick-start" &&
-			["recommendationInstall", "setDefaultModel", "chatInput", "chatSend"].includes(stepId);
+			definition.id === "quick-start" && ["recommendationInstall", "setDefaultModel", "chatInput", "chatSend"].includes(stepId);
 		return {
 			target: targets[stepId] ?? "body",
 			title: t(`onboarding.tutorials.${definition.id}.steps.${stepId}.title`),

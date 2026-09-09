@@ -50,22 +50,24 @@ export function SandboxIsolationPanel({ roles }: SandboxIsolationPanelProps) {
 	// One line per role PER AXIS. Two axes can be "No" for different reasons at once — Development Mode on this Linux
 	// box has neither a filesystem boundary nor a ceiling, and the two sentences are not interchangeable — so they are
 	// flattened rather than folded into one. The axis label reuses the column header key, so no new copy to translate.
-	const reasons = roles.flatMap((role) => [
-		{
-			key: `${role.role}-filesystem`,
-			testId: `sandbox-isolation-reason-${role.role}`,
-			label: t("pages.development.isolation.filesystem", "Filesystem"),
-			text: role.filesystemIsolationUnavailableReason ?? "",
-			role: role.role ?? "",
-		},
-		{
-			key: `${role.role}-limits`,
-			testId: `sandbox-isolation-limits-reason-${role.role}`,
-			label: t("pages.development.isolation.limits", "Resource limits"),
-			text: role.resourceLimitsUnavailableReason ?? "",
-			role: role.role ?? "",
-		},
-	]).filter((reason) => reason.text !== "");
+	const reasons = roles
+		.flatMap((role) => [
+			{
+				key: `${role.role}-filesystem`,
+				testId: `sandbox-isolation-reason-${role.role}`,
+				label: t("pages.development.isolation.filesystem", "Filesystem"),
+				text: role.filesystemIsolationUnavailableReason ?? "",
+				role: role.role ?? "",
+			},
+			{
+				key: `${role.role}-limits`,
+				testId: `sandbox-isolation-limits-reason-${role.role}`,
+				label: t("pages.development.isolation.limits", "Resource limits"),
+				text: role.resourceLimitsUnavailableReason ?? "",
+				role: role.role ?? "",
+			},
+		])
+		.filter((reason) => reason.text !== "");
 
 	return (
 		<SectionCard

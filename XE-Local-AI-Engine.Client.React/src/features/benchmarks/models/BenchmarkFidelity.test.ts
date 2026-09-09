@@ -95,9 +95,9 @@ describe("hasFidelityNumbers", () => {
 	});
 
 	it("does not count a stale KLD as something to show", () => {
-		expect(
-			hasFidelityNumbers(benchmarkFidelityFixture({ perplexityMean: null, kldState: "kld-stale", kldMean: 0.03 })),
-		).toBe(false);
+		expect(hasFidelityNumbers(benchmarkFidelityFixture({ perplexityMean: null, kldState: "kld-stale", kldMean: 0.03 }))).toBe(
+			false,
+		);
 	});
 });
 
@@ -114,8 +114,8 @@ describe("canMeasureFidelity", () => {
 	});
 
 	it("allows a re-measure after a failed one — the previous attempt's numbers survive it", () => {
-		expect(
-			canMeasureFidelity(benchmarkRunSummaryFixture({ fidelity: benchmarkFidelityFixture({ status: "failed" }) })),
-		).toBe(true);
+		expect(canMeasureFidelity(benchmarkRunSummaryFixture({ fidelity: benchmarkFidelityFixture({ status: "failed" }) }))).toBe(
+			true,
+		);
 	});
 });

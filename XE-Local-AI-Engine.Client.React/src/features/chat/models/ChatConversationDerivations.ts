@@ -13,9 +13,7 @@ export function mergeSelectedConversation(
 		return [selectedConversation, ...conversations];
 	}
 
-	return conversations.map((conversation) =>
-		conversation.id === selectedConversation.id ? selectedConversation : conversation,
-	);
+	return conversations.map((conversation) => (conversation.id === selectedConversation.id ? selectedConversation : conversation));
 }
 
 const liveAssistantStatuses = new Set<MessageStatus>(["pending", "queued", "streaming"]);
@@ -23,9 +21,8 @@ const liveAssistantStatuses = new Set<MessageStatus>(["pending", "queued", "stre
 // Pick the persisted in-flight assistant row that a cold-load resume belongs to. A resumed stream's invocation id
 // differs from the row id already rendered by the client, so its events must be remapped onto the latest live row.
 export function inFlightAssistantMessageId(conversation: ChatConversationModel): string | undefined {
-	return conversation.messages.findLast(
-		(message) => message.role === "assistant" && liveAssistantStatuses.has(message.status),
-	)?.id;
+	return conversation.messages.findLast((message) => message.role === "assistant" && liveAssistantStatuses.has(message.status))
+		?.id;
 }
 
 export function titleFromContent(content: string): string {

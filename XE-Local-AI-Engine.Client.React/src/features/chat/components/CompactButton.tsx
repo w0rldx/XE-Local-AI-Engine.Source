@@ -71,7 +71,9 @@ export function CompactButton({ percentUsed, disabled = false }: CompactButtonPr
 				toast.info(t("pages.chat.compact.nothing", "Nothing to compact yet — the recent messages still fit the context window."));
 				break;
 			case "NoLocalModel":
-				toast.warn(t("pages.chat.compact.noModel", "No local chat model is installed to summarize with, so compaction can't run on-node."));
+				toast.warn(
+					t("pages.chat.compact.noModel", "No local chat model is installed to summarize with, so compaction can't run on-node."),
+				);
 				break;
 			default:
 				toast.warn(t("pages.chat.compact.noSummary", "Compaction didn't produce a summary. Please try again."));

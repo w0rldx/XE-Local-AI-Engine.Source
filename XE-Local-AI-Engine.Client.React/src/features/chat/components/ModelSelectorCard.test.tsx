@@ -14,7 +14,13 @@ function renderWithProviders(ui: ReactElement) {
 }
 
 function localDefaultOption(): ModelOption {
-	return { value: localDefaultModelValue, label: "Local default", displayName: "Local runtime default", isReasoningModel: false, isAvailable: true };
+	return {
+		value: localDefaultModelValue,
+		label: "Local default",
+		displayName: "Local runtime default",
+		isReasoningModel: false,
+		isAvailable: true,
+	};
 }
 
 function chatOption(value: string): ModelOption {
@@ -79,7 +85,6 @@ describe("ModelSelectorCard", () => {
 		await screen.findByTestId("chat-model-selector-option-llama3:8b");
 		expect(screen.queryByTestId("chat-model-selector-no-chat-models")).toBeNull();
 	});
-
 
 	it("does not render the cloud group when cloudModelOptions is absent", async () => {
 		renderWithProviders(

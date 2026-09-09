@@ -184,11 +184,7 @@ describe("ChatMessageList conversation-load failure", () => {
 
 	it("renders neither the error nor the loader once the conversation has messages", () => {
 		renderWithProviders(
-			<ChatMessageList
-				conversation={conversation([userMessage()])}
-				messagesLoadFailed={true}
-				onRetryLoadMessages={vi.fn()}
-			/>,
+			<ChatMessageList conversation={conversation([userMessage()])} messagesLoadFailed={true} onRetryLoadMessages={vi.fn()} />,
 		);
 
 		// A failed background refetch over an already-populated thread must not blow it away with an error.

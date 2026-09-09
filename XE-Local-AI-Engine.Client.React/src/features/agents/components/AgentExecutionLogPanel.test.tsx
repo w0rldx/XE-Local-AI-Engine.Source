@@ -106,7 +106,9 @@ describe("AgentExecutionLogPanel", () => {
 
 	it("surfaces the error class (type name only) for a failed run", () => {
 		hookMock.useAgentExecutionLogs.mockReturnValue({
-			data: [makeLog({ id: "log-2", success: false, errorClass: "TimeoutException", promptTokens: null, completionTokens: null })],
+			data: [
+				makeLog({ id: "log-2", success: false, errorClass: "TimeoutException", promptTokens: null, completionTokens: null }),
+			],
 			isLoading: false,
 			error: null,
 		});

@@ -57,7 +57,9 @@ describe("AgentSelectorCard", () => {
 	});
 
 	it("disables the trigger when there are no agents", () => {
-		renderWithProviders(<AgentSelectorCard agentOptions={[]} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={[]} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
+		);
 
 		// No jest-dom in this project — check the aria-disabled attribute directly.
 		const trigger = screen.getByTestId("chat-agent-selector-trigger");
@@ -67,7 +69,9 @@ describe("AgentSelectorCard", () => {
 	it("shows the Default Assistant label on the trigger when agent mode is off", () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
+		);
 
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Default Assistant");
 	});
@@ -75,7 +79,9 @@ describe("AgentSelectorCard", () => {
 	it("shows the selected agent name on the trigger when agent mode is on", () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={vi.fn()} />,
+		);
 
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Alpha Agent");
 	});
@@ -83,7 +89,9 @@ describe("AgentSelectorCard", () => {
 	it("lists the Default Assistant row and agents in the dropdown when opened", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" }), makeOption({ id: "agent-2", name: "Beta Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 
@@ -96,7 +104,9 @@ describe("AgentSelectorCard", () => {
 		const onSelectAgent = vi.fn();
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={onSelectAgent} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={onSelectAgent} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 		fireEvent.click(await screen.findByTestId("chat-agent-selector-option-agent-1"));
@@ -108,7 +118,14 @@ describe("AgentSelectorCard", () => {
 		const onSelectAgent = vi.fn();
 		const options = [makeOption({ id: "agent-1", name: "Alpha Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="agent-1" onSelectAgent={onSelectAgent} />);
+		renderWithProviders(
+			<AgentSelectorCard
+				agentOptions={options}
+				agentModeEnabled={true}
+				selectedAgentId="agent-1"
+				onSelectAgent={onSelectAgent}
+			/>,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 		fireEvent.click(await screen.findByTestId("chat-agent-selector-option-off"));
@@ -119,7 +136,9 @@ describe("AgentSelectorCard", () => {
 	it("shows the Orchestrator badge for orchestrator-kind agents", async () => {
 		const options = [makeOption({ id: "orch-1", name: "Orch Agent", kind: "Orchestrator" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 
@@ -130,7 +149,9 @@ describe("AgentSelectorCard", () => {
 	it("renders a pinned-model hint element for agents with a modelProfile", async () => {
 		const options = [makeOption({ id: "agent-1", name: "Pinned Agent", modelProfile: "llama3:8b" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard agentOptions={options} agentModeEnabled={false} selectedAgentId="" onSelectAgent={vi.fn()} />,
+		);
 
 		fireEvent.click(screen.getByTestId("chat-agent-selector-trigger"));
 
@@ -142,7 +163,14 @@ describe("AgentSelectorCard", () => {
 	it("treats a stale selectedAgentId (deleted agent) as Default Assistant on the trigger", () => {
 		const options = [makeOption({ id: "agent-1", name: "Live Agent" })];
 
-		renderWithProviders(<AgentSelectorCard agentOptions={options} agentModeEnabled={true} selectedAgentId="deleted-agent-id" onSelectAgent={vi.fn()} />);
+		renderWithProviders(
+			<AgentSelectorCard
+				agentOptions={options}
+				agentModeEnabled={true}
+				selectedAgentId="deleted-agent-id"
+				onSelectAgent={vi.fn()}
+			/>,
+		);
 
 		// Trigger falls back to the Default Assistant label when the persisted id maps to no live agent.
 		expect(screen.getByTestId("chat-agent-selector-trigger").textContent).toContain("Default Assistant");

@@ -26,11 +26,7 @@ describe("EmptyState", () => {
 
 	it("becomes a centred figure once an icon is supplied", () => {
 		renderWithProviders(
-			<EmptyState
-				message="No usage recorded."
-				icon={<span data-testid="empty-icon" />}
-				data-testid="usage-empty"
-			/>,
+			<EmptyState message="No usage recorded." icon={<span data-testid="empty-icon" />} data-testid="usage-empty" />,
 		);
 
 		const empty = screen.getByTestId("usage-empty");
@@ -40,11 +36,7 @@ describe("EmptyState", () => {
 
 	it("renders a call-to-action under the message", () => {
 		renderWithProviders(
-			<EmptyState
-				message="No agents yet."
-				action={<button type="button">Create agent</button>}
-				data-testid="agents-empty"
-			/>,
+			<EmptyState message="No agents yet." action={<button type="button">Create agent</button>} data-testid="agents-empty" />,
 		);
 
 		const empty = screen.getByTestId("agents-empty");

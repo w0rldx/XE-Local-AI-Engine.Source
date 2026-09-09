@@ -172,7 +172,9 @@ describe("Chat selected-conversation load failure", () => {
 			configuredDefaultModelName: null,
 			error: null,
 		});
-		adapter.listConversations.mockResolvedValue({ conversations: [summary("conversation-1", "First"), summary("conversation-2", "Second")] });
+		adapter.listConversations.mockResolvedValue({
+			conversations: [summary("conversation-1", "First"), summary("conversation-2", "Second")],
+		});
 	});
 
 	afterEach(() => {

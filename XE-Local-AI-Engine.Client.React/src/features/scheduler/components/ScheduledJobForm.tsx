@@ -2,6 +2,7 @@ import { Alert, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { ScheduledJobScheduleFields } from "@/features/scheduler/components/ScheduledJobScheduleFields";
 import {
@@ -303,11 +304,7 @@ export function ScheduledJobForm({
 				data-testid="scheduler-form-parameters"
 			/>
 
-			{submitError ? (
-				<Alert color="red" data-testid="scheduler-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="scheduler-form-submit-error" /> : null}
 		</Stack>
 	);
 }

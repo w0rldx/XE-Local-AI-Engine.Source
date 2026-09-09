@@ -138,8 +138,21 @@ describe("customToolFormSchema", () => {
 	// The flip side: each kind still has to supply its OWN field, and the issue lands on the path whose editor is
 	// on screen so the form can surface it.
 	it.each([
-		["HttpFetch", { http: { method: "GET", urlTemplate: "  ", headers: [], bodyTemplate: "", allowedHosts: [] } }, "urlRequired", "http.urlTemplate"],
-		["Command", { kind: "Command" as const, command: { executable: "  ", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] } }, "executableRequired", "command.executable"],
+		[
+			"HttpFetch",
+			{ http: { method: "GET", urlTemplate: "  ", headers: [], bodyTemplate: "", allowedHosts: [] } },
+			"urlRequired",
+			"http.urlTemplate",
+		],
+		[
+			"Command",
+			{
+				kind: "Command" as const,
+				command: { executable: "  ", argsTemplate: [], workingDirectory: "", timeoutSeconds: 0, env: [] },
+			},
+			"executableRequired",
+			"command.executable",
+		],
 	])("still requires the %s block's own field", (_kind, overrides, message, path) => {
 		const input = values(overrides as Partial<CustomToolFormValues>);
 

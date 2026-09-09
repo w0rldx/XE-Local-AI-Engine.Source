@@ -29,12 +29,12 @@ export function DatasetDriftAlert({ datasetId, frozenFingerprint, context }: Dat
 	return (
 		<Alert color="yellow" data-testid="training-dataset-drift" icon={<IconAlertTriangle size={16} />}>
 			{drift === "deleted"
-				? t("training.drift.deleted", "The dataset this used has been deleted; its frozen hold-out set can no longer be compared.")
+				? t(
+						"training.drift.deleted",
+						"The dataset this used has been deleted; its frozen hold-out set can no longer be compared.",
+					)
 				: context === "run"
-					? t(
-							"training.drift.run",
-							"The dataset was edited after this run froze its hold-out set; scores may not be comparable.",
-						)
+					? t("training.drift.run", "The dataset was edited after this run froze its hold-out set; scores may not be comparable.")
 					: t(
 							"training.drift.evaluation",
 							"The dataset was edited after this evaluation froze its hold-out set; scores may not be comparable.",

@@ -34,7 +34,9 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
 
-function event(overrides: Partial<IntegrationExecutionEvent> & { sequence: number; eventType: string }): IntegrationExecutionEvent {
+function event(
+	overrides: Partial<IntegrationExecutionEvent> & { sequence: number; eventType: string },
+): IntegrationExecutionEvent {
 	return { detailJson: null, occurredAtUtc: 1_700_000_000_000, ...overrides };
 }
 

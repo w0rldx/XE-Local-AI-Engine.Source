@@ -19,8 +19,9 @@ they drift, so a reviewer (human or agent) has to know them.
 > **What is deliberately NOT here.** Rules already enforced by `.editorconfig` + analyzers (Release =
 > warnings-as-errors) or by biome/tsc are not restated — documenting them is noise. That covers: C#
 > interface `I`-prefix, `_camelCase` private fields, file-scoped namespaces, `Nullable=enable`, the
-> `Async` suffix, one-`CancellationToken`-per-async-method; and TS path aliases (`@/…`), `import type`,
-> string-literal-unions over `enum`, named `*Props` interfaces. Trust the linters for those.
+> `Async` suffix, one-`CancellationToken`-per-async-method; and, on the TS side, `import type` placement,
+> import ordering, and string-literal-unions over `enum`. Trust the linters for those. The `@/` alias and the
+> `*Props` interface shape are **not** linter-enforced — they are conventions, and are stated under Frontend below.
 
 ---
 
@@ -145,6 +146,32 @@ Scope a run with `--treenode-filter` (not `--filter`). See
 
 ## Frontend (React / `XE-Local-AI-Engine.Client.React`)
 
+### Components and hooks are named function declarations
+
+**A component is `export function ComponentName(props: ComponentNameProps)`** — a named function
+declaration with a named export. Not an arrow-function const, not `React.FC<…>` (zero occurrences in the
+tree), not a default export. The two `export default function` components are strays, not a second school.
+
+Two sanctioned exceptions:
+
+- **`export const Foo = memo(function Foo(props: FooProps) { … })`** for a component that needs render-skip
+  memoization — keep the inner function named so stack traces and Devtools still say `Foo`. Reference:
+  `features/chat/components/MessageParts.tsx`, `core/ui/components/CodeBlock/CodeBlock.tsx`.
+- **A Zustand store hook stays `export const useFooStore = create<T>()(…)`** — it is a factory invocation,
+  not a declaration; do not "fix" one back to `function`. Every other hook is `export function useFoo()`
+  (121 files against one stray const hook, `core/theme/hooks/useTheme.ts`).
+
+### Props are an `interface <Component>Props`, colocated
+
+**The props type is an `interface` named after the component, declared in the component's own file** — 204
+files do this and `type FooProps = …` appears zero times, so do not introduce it. A bare `interface Props`
+is drift: name it after the component.
+
+Export the interface only when another file imports it. **Open decision:** 72 of the 204 are exported and
+nothing mechanical separates a genuinely shared one from a leftover, so this page states no rule on pruning
+them. Likewise `Readonly<Props>` is a minority stricter-typing choice (18 of 204) with no majority behind
+it — neither adding nor removing it is a violation today.
+
 ### Feature-folder layout
 
 `src/features/<x>/{pages, components, models, api, hooks, queries, stores}`. Placement rules:
@@ -155,6 +182,27 @@ Scope a run with `--treenode-filter` (not `--filter`). See
   colocated in each feature's **`queries/`** folder alongside reads.
 - **No API/data-fetch logic inside components** — it lives in `queries/`, `stores/`, or the generated
   client.
+- **A feature's `components/` folder is flat: `components/Foo.tsx`** (289 flat against 2 nested). A
+  `components/<Parent>/` folder exists only to hold the sub-parts of a decomposed parent component, not as
+  the default shape for a single component.
+- **A shared `core/` component gets its own folder: `core/**/components/<Name>/<Name>.tsx`**, with its test
+  and any `.module.css` beside it (28 nested, zero flat). Reference:
+  `core/ui/components/FullHeightPage/FullHeightPage.tsx`. The two halves of the tree follow different rules
+  on purpose — match the half you are editing.
+- **No `index.ts` barrels** anywhere under `src/features` — import the file directly.
+- **There is no `types/`, `utils/`, or `constants/` folder** in any feature, and adding one starts a fourth
+  category. A domain type goes in `models/` (present in 33 of 35 features), a helper sits beside its only
+  caller or in `core/` when shared. `api/` exists in four features only.
+
+### Imports use the `@/` alias; their order is Biome's output
+
+**Import across folders through the `@/` alias, never a `../../` climb** — 3895 alias occurrences against
+zero two-level relative imports. A single `../` to a sibling inside the same feature is fine.
+
+**Import order and `import type` placement are `biome check --write` output, not a style choice.**
+`organizeImports` is on with explicit `:PACKAGE:`/`:ALIAS:`/`:PATH:` groups and `useImportType` is an error,
+so Biome decides top-level `import type { … }` versus inline `{ type X }` per import. Do not hand-tune
+either; a reordering diff means the file was not formatted.
 
 ### Data layer = the hey-api generated client, not hand-written axios
 
@@ -176,10 +224,16 @@ validate-then-submit. Reference: `features/agents/components/AgentDefinitionForm
 ### State: server in TanStack Query, UI-only in Zustand
 
 Server data lives in TanStack Query and is **never mirrored** into a store. Zustand stores hold only
-ephemeral UI state, use a **nested `actions: { … }`** object (dominant convention across all
-`features/**/stores/*.ts`), and are read with **one atomic selector per value**
+ephemeral UI state, use a **nested `actions: { … }`** object (16 of the 22 Zustand stores, and the shape to
+write for a new store anywhere), and are read with **one atomic selector per value**
 (`useStore((s) => s.actions.x)`). `useShallow` is **deliberately unused** (0 occurrences) — avoid object
 selectors rather than reaching for it. Reference: `features/mcp/stores/McpManagementStore.ts`.
+
+Six stores predate the nested shape and expose flat top-level action fields — `core/layout/stores/SidebarStore`,
+`core/locales/stores/UserLanguageStore`, `core/theme/stores/ThemeStore`,
+`core/ui/components/TablePagination/useTablePaginationStore`, `features/model-fit/stores/CpuFallbackBannerStore`,
+`features/node-settings/stores/RuntimeUpdateBannerStore`. **Open decision:** converting them is an API change at
+every call site and nothing has decided it is worth doing, so they are a documented exception, not a bug.
 
 ### An unsaved-changes guard on a search-param page needs `allowSameRoute`
 
@@ -221,6 +275,65 @@ Large orchestration components (`chat/pages/Chat.tsx` and peers) carry `no-giant
 with justifications. Decomposing them changes render structure and is regression-prone — do it as its own
 reviewed change with lint + test + build run, preferably starting from a component whose sub-parts already
 exist in-file (a mechanical extract, as done for `ImageModelManager.tsx`).
+
+### Styling: Mantine props first, `.module.css` next, inline `style` last
+
+**Reach for Mantine's style props (`mt`, `p`, `gap`, `w`, …) first** — they are the dominant mechanism by an
+order of magnitude. Escalate only when they cannot express the thing:
+
+1. **`.module.css`** for pseudo-selectors, keyframes, and React Flow node styling — the handful of modules in
+   the tree are almost all canvas nodes in `devWorkflows`/`graphWorkflows`.
+2. **Inline `style={{ … }}` only for a genuinely computed value** (a measured offset, a progress width). A
+   static inline style object is a Mantine prop that has not been written yet, and 319 such sites across 24 of
+   35 features make this the app's largest style drift.
+
+**UnoCSS utility classNames are not this app's convention.** They belong to the standalone
+`src/modules/theme-configurator/` and to the app shell's static layout classes
+(`core/layout/components/Layout/Layout.tsx`). Do not introduce them in a feature.
+
+### Responsive layout: breakpoints come from `LayoutBreakpoints.ts`
+
+**Never write a breakpoint literal.** Every cutoff lives in `core/layout/constants/LayoutBreakpoints.ts`
+(`COMPACT_CONTROLS_BREAKPOINT`, `DESKTOP_NAV_BREAKPOINT`, `TWO_PANE_BREAKPOINT`), and its sibling test pins
+them to the Mantine theme so a theme change fails loudly instead of drifting the shell apart.
+
+Two mechanisms cover the app; copy the one that matches what has to change:
+
+- **`SimpleGrid cols={{ base, sm, lg }}`** when a card or list grid only needs to reflow. Reference:
+  `features/dashboard/pages/Dashboard.tsx`.
+- **`useWindowDimensions` compared against a named `LayoutBreakpoints` constant** when the layout swaps a
+  whole subtree (a pane becomes a Drawer). Reference:
+  `core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout.tsx`. `useMediaQuery` and Mantine's
+  `visibleFrom`/`hiddenFrom` each appear once — they are not the pattern to copy.
+
+**Wide content owns its own horizontal scroller.** The shell clips both axes (`Layout`) and `FullHeightPage`
+deliberately clips X, so a table or diagram wider than its pane must carry its own `Table.ScrollContainer` or
+`ScrollArea` — otherwise it is silently cut off, not scrollable. Reference:
+`features/mcp/components/McpServerList.tsx`.
+
+### Tests: colocated, `renderWithProviders`, role queries in new tests
+
+**Test files are colocated `*.test.tsx` beside the file under test and use `describe`/`it`** — zero
+`__tests__/` folders, zero bare `test()`.
+
+**A component test needing Mantine theme or TanStack Query context uses `renderWithProviders` from
+`src/test/RenderWithProviders.tsx`.** A hand-rolled `MantineProvider` + `QueryClientProvider` wrapper
+duplicates it; the 121 test files that still do are the drift, not the pattern.
+
+**In a new or touched test, prefer `getByRole`/`findByRole` where the element has a semantic role** and keep
+`getByTestId` for elements that genuinely have none. This is forward-looking only: existing `*ByTestId` sites
+outnumber role queries roughly twelve to one and **are not to be rewritten in bulk** — nothing lints this, and
+a loose role match fails a test silently.
+
+### No user-facing string is a literal
+
+**Every user-facing string — text node and attribute alike — goes through `useTranslation()` / `t()`.**
+Attribute strings (`label`, `placeholder`, `title`, `aria-label`) are already free of literals; JSX text nodes
+are the remaining gap. Module-scope `i18next.t()` is reserved for non-component formatters that cannot call a
+hook (`core/formatting/TimeFormatting.ts`).
+
+`<Trans>` is unused here. A string with embedded markup is currently split into separate keys — introducing
+`<Trans>` as a third pattern is a team decision, not a drive-by.
 
 ---
 

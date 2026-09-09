@@ -1,8 +1,4 @@
-import type {
-	CreateMcpServerResponse,
-	SetMcpServerEnabledResponse,
-	UpdateMcpServerResponse,
-} from "@/core/api/generated";
+import type { CreateMcpServerResponse, SetMcpServerEnabledResponse, UpdateMcpServerResponse } from "@/core/api/generated";
 import {
 	createMcpServerMutation,
 	deleteMcpServerMutation,

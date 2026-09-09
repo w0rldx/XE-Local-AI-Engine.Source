@@ -1,6 +1,7 @@
 import { Alert, Anchor, Button, Group, List, SimpleGrid, Table, Text } from "@mantine/core";
 import { IconCheck, IconExternalLink, IconInfoCircle, IconLink } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { t as translate } from "i18next";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -32,8 +33,10 @@ function statusColor(status: string): "blue" | "green" | "orange" | "red" {
 	return "blue";
 }
 
+// Module-scoped `t` (the app's i18next instance) so the fallback is localized without threading the hook's `t`
+// through every mutation callback — the same pattern ApiErrorMessage and Toast already use.
 function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected binding error");
+	return apiErrorMessage(error, translate("pages.nodeBinding.errors.unexpected", "Unexpected binding error"));
 }
 
 function formatDate(value: string): string {
@@ -78,7 +81,7 @@ export function NodeBinding() {
 				undefined as never,
 			);
 			if (!result) {
-				throw new Error("Node binding poll returned an empty response.");
+				throw new Error(t("pages.nodeBinding.errors.emptyPoll", "Node binding poll returned an empty response."));
 			}
 			return result;
 		},
@@ -87,8 +90,8 @@ export function NodeBinding() {
 			setStatus(resultStatus);
 			setMessage(
 				resultStatus.toLowerCase() === "approved"
-					? "Binding approved. Worker credentials were stored securely."
-					: `Binding ended with status '${resultStatus}'.`,
+					? t("pages.nodeBinding.status.approved", "Binding approved. Worker credentials were stored securely.")
+					: t("pages.nodeBinding.status.ended", "Binding ended with status '{{status}}'.", { status: resultStatus }),
 			);
 		},
 		onError: (pollError) => {
@@ -108,7 +111,7 @@ export function NodeBinding() {
 		onSuccess: async (startedSession: StartNodeBindingResponse) => {
 			setSession(startedSession);
 			setStatus("pending");
-			setMessage("Binding started. Approve this worker in the Central Platform.");
+			setMessage(t("pages.nodeBinding.status.started", "Binding started. Approve this worker in the Central Platform."));
 			setError(undefined);
 			pollMutation.mutate(startedSession);
 			await queryClient.invalidateQueries();
@@ -121,7 +124,7 @@ export function NodeBinding() {
 		onSettled: async () => {
 			pollAbortController.current?.abort();
 			setStatus("cancelled");
-			setMessage("Binding polling was cancelled locally.");
+			setMessage(t("pages.nodeBinding.status.cancelled", "Binding polling was cancelled locally."));
 			await queryClient.invalidateQueries();
 		},
 	});
@@ -158,18 +161,18 @@ export function NodeBinding() {
 			{error ? <InlineErrorAlert message={error} /> : null}
 
 			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
-				<SectionCard title="Device binding">
+				<SectionCard title={t("pages.nodeBinding.device.title", "Device binding")}>
 					{session ? (
 						<>
 							<Table.ScrollContainer minWidth={480}>
 								<Table withTableBorder={true} withColumnBorders={true}>
 									<Table.Tbody>
 										<Table.Tr>
-											<Table.Th>Status</Table.Th>
+											<Table.Th>{t("pages.nodeBinding.device.status", "Status")}</Table.Th>
 											<Table.Td>{status}</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>User code</Table.Th>
+											<Table.Th>{t("pages.nodeBinding.device.userCode", "User code")}</Table.Th>
 											<Table.Td>
 												<Text component="span" fw={800} size="lg">
 													{session.userCode}
@@ -177,7 +180,7 @@ export function NodeBinding() {
 											</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>Verification URL</Table.Th>
+											<Table.Th>{t("pages.nodeBinding.device.verificationUrl", "Verification URL")}</Table.Th>
 											<Table.Td>
 												<Anchor href={session.verificationUriComplete} target="_blank" rel="noreferrer">
 													{session.verificationUriComplete}
@@ -185,7 +188,7 @@ export function NodeBinding() {
 											</Table.Td>
 										</Table.Tr>
 										<Table.Tr>
-											<Table.Th>Expires</Table.Th>
+											<Table.Th>{t("pages.nodeBinding.device.expires", "Expires")}</Table.Th>
 											<Table.Td>{formatDate(session.expiresAt ?? "")}</Table.Td>
 										</Table.Tr>
 									</Table.Tbody>
@@ -193,7 +196,9 @@ export function NodeBinding() {
 							</Table.ScrollContainer>
 							<Group>
 								<Button variant="outline" onClick={handleCancel} disabled={!canCancel || cancelMutation.isPending}>
-									{cancelMutation.isPending ? "Cancelling..." : "Cancel polling"}
+									{cancelMutation.isPending
+										? t("pages.nodeBinding.device.cancelling", "Cancelling…")
+										: t("pages.nodeBinding.device.cancel", "Cancel polling")}
 								</Button>
 								<Button
 									component="a"
@@ -202,25 +207,32 @@ export function NodeBinding() {
 									rel="noreferrer"
 									rightSection={<IconExternalLink size={14} />}
 								>
-									Open approval link
+									{t("pages.nodeBinding.device.openApproval", "Open approval link")}
 								</Button>
 							</Group>
 						</>
 					) : (
 						<>
-							<Text c="dimmed">No binding request is active on this worker.</Text>
+							<Text c="dimmed">{t("pages.nodeBinding.device.empty", "No binding request is active on this worker.")}</Text>
 							<Button onClick={handleStart} loading={startMutation.isPending} disabled={isWorking}>
-								Start binding
+								{t("pages.nodeBinding.device.start", "Start binding")}
 							</Button>
 						</>
 					)}
 				</SectionCard>
 
-				<SectionCard title="How binding works">
+				<SectionCard title={t("pages.nodeBinding.how.title", "How binding works")}>
 					<List icon={<IconCheck size={16} />} spacing="sm">
-						<List.Item>Click Start binding to request a one-time user code.</List.Item>
-						<List.Item>Open the approval link and sign in to the Central Platform.</List.Item>
-						<List.Item>The worker polls at the server-provided interval and stores credentials only after approval.</List.Item>
+						<List.Item>{t("pages.nodeBinding.how.step1", "Click Start binding to request a one-time user code.")}</List.Item>
+						<List.Item>
+							{t("pages.nodeBinding.how.step2", "Open the approval link and sign in to the Central Platform.")}
+						</List.Item>
+						<List.Item>
+							{t(
+								"pages.nodeBinding.how.step3",
+								"The worker polls at the server-provided interval and stores credentials only after approval.",
+							)}
+						</List.Item>
 					</List>
 				</SectionCard>
 			</SimpleGrid>

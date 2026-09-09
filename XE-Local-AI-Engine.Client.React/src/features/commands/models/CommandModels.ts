@@ -32,12 +32,27 @@ function utf8ByteLength(value: string): number {
 }
 
 export const commandFormSchema = z.object({
-	name: z.string().trim().toLowerCase().min(1).max(COMMAND_NAME_MAX).regex(COMMAND_NAME_PATTERN, { message: "commandNameInvalid" }),
-	description: z.string().trim().max(COMMAND_DESCRIPTION_MAX).refine((value) => utf8ByteLength(value) <= COMMAND_DESCRIPTION_MAX, {
-		message: "commandDescriptionTooLong",
-	}),
+	name: z
+		.string()
+		.trim()
+		.toLowerCase()
+		.min(1)
+		.max(COMMAND_NAME_MAX)
+		.regex(COMMAND_NAME_PATTERN, { message: "commandNameInvalid" }),
+	description: z
+		.string()
+		.trim()
+		.max(COMMAND_DESCRIPTION_MAX)
+		.refine((value) => utf8ByteLength(value) <= COMMAND_DESCRIPTION_MAX, {
+			message: "commandDescriptionTooLong",
+		}),
 	actionType: z.literal("SendPrompt"),
-	prompt: z.string().trim().min(1).max(COMMAND_PROMPT_MAX).refine((value) => utf8ByteLength(value) <= COMMAND_PROMPT_MAX, {
-		message: "commandPromptTooLong",
-	}),
+	prompt: z
+		.string()
+		.trim()
+		.min(1)
+		.max(COMMAND_PROMPT_MAX)
+		.refine((value) => utf8ByteLength(value) <= COMMAND_PROMPT_MAX, {
+			message: "commandPromptTooLong",
+		}),
 });

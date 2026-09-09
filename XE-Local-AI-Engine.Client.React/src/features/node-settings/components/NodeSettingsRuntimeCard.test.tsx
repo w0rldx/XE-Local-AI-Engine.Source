@@ -8,10 +8,7 @@
 import { describe, expect, it } from "vitest";
 
 import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
-import {
-	toNodeSettingsFieldBounds,
-	toNodeSettingsFieldsForm,
-} from "@/features/node-settings/models/NodeSettingsFieldsModel";
+import { toNodeSettingsFieldBounds, toNodeSettingsFieldsForm } from "@/features/node-settings/models/NodeSettingsFieldsModel";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function renderCard(ollamaRuntimeDisabled: boolean) {

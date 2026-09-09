@@ -9,7 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/features/about/components/AboutDialog/AboutDialog", () => ({
 	AboutDialog: ({ opened, onClose }: { opened: boolean; onClose: () => void }) => (
 		<div data-testid="about-dialog-lifecycle" data-opened={String(opened)}>
-			<button type="button" onClick={onClose}>Close mocked About</button>
+			<button type="button" onClick={onClose}>
+				Close mocked About
+			</button>
 		</div>
 	),
 }));
@@ -37,7 +39,11 @@ describe("AboutDialogButton", () => {
 	});
 
 	it("lazy-loads once and keeps the update lifecycle mounted after close", async () => {
-		render(<MantineProvider><AboutDialogButton /></MantineProvider>);
+		render(
+			<MantineProvider>
+				<AboutDialogButton />
+			</MantineProvider>,
+		);
 		expect(screen.queryByTestId("about-dialog-lifecycle")).toBeNull();
 
 		fireEvent.click(screen.getByRole("button", { name: "About" }));

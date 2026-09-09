@@ -32,7 +32,14 @@ function sample(
 			systemInstructions: "You call tools.",
 			parts: [
 				{ kind: "user", sequence: 0, content: "read the readme" },
-				{ kind: "tool", sequence: 1, toolCallId: "call-1", toolName: "read_file", arguments: '{"path":"README.md"}', result: "# Title" },
+				{
+					kind: "tool",
+					sequence: 1,
+					toolCallId: "call-1",
+					toolName: "read_file",
+					arguments: '{"path":"README.md"}',
+					result: "# Title",
+				},
 				{ kind: "text", sequence: 2, content: "Here it is." },
 			],
 		},
@@ -136,7 +143,12 @@ describe("applyGenerationEvent", () => {
 	});
 
 	it("records the terminal state from a State event", () => {
-		const terminal = applyGenerationEvent(emptyProgress, { datasetId: "d", sequence: 1, kind: "State", payload: { state: "Ready" } });
+		const terminal = applyGenerationEvent(emptyProgress, {
+			datasetId: "d",
+			sequence: 1,
+			kind: "State",
+			payload: { state: "Ready" },
+		});
 
 		expect(terminal.state).toBe("Ready");
 	});

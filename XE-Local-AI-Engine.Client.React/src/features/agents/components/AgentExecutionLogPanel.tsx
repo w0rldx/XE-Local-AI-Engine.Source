@@ -108,9 +108,7 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 													{log.modelName || "—"}
 												</Text>
 											</Table.Td>
-											<Table.Td>
-												{t("pages.agents.executionLog.latencyValue", "{{ms}} ms", { ms: log.latencyMs })}
-											</Table.Td>
+											<Table.Td>{t("pages.agents.executionLog.latencyValue", "{{ms}} ms", { ms: log.latencyMs })}</Table.Td>
 											<Table.Td>{formatTokens(log.promptTokens)}</Table.Td>
 											<Table.Td>{formatTokens(log.completionTokens)}</Table.Td>
 											<Table.Td>

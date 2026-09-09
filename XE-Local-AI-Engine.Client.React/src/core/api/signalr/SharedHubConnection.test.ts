@@ -86,7 +86,12 @@ vi.mock("@microsoft/signalr", () => ({
 			return hoisted.makeConnection();
 		}
 	},
-	HubConnectionState: { Connected: "Connected", Disconnected: "Disconnected", Connecting: "Connecting", Reconnecting: "Reconnecting" },
+	HubConnectionState: {
+		Connected: "Connected",
+		Disconnected: "Disconnected",
+		Connecting: "Connecting",
+		Reconnecting: "Reconnecting",
+	},
 	LogLevel: { Warning: 3 },
 }));
 

@@ -64,9 +64,8 @@ describe("DatasetsPage export preview", () => {
 
 	it("caps the preview against the viewport instead of pinning it to a fixed height", async () => {
 		mocks.datasets = [dataset()];
-		mocks.exportMutate.mockImplementation(
-			(_variables: unknown, options: { onSuccess: (result: { content: string }) => void }) =>
-				options.onSuccess({ content: '{"messages":[]}' }),
+		mocks.exportMutate.mockImplementation((_variables: unknown, options: { onSuccess: (result: { content: string }) => void }) =>
+			options.onSuccess({ content: '{"messages":[]}' }),
 		);
 
 		renderWithProviders(<DatasetsPage />);

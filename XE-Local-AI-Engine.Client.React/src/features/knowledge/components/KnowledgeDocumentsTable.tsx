@@ -6,7 +6,11 @@ import { TablePaginationFooter } from "@/core/ui/components/TablePagination/Tabl
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
-import { type KnowledgeDocument, formatKnowledgeBytes, formatKnowledgeTimestamp } from "@/features/knowledge/models/KnowledgeModels";
+import {
+	type KnowledgeDocument,
+	formatKnowledgeBytes,
+	formatKnowledgeTimestamp,
+} from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeDocumentsTableProps {
 	readonly documents: readonly KnowledgeDocument[];
@@ -88,10 +92,7 @@ export function KnowledgeDocumentsTable({
 										<Text size="sm">{document.embeddingModel || "—"}</Text>
 										{document.staleModel ? (
 											<Tooltip
-												label={t(
-													"pages.knowledgeBase.table.staleTooltip",
-													"Embedded with an older model — reindex to refresh.",
-												)}
+												label={t("pages.knowledgeBase.table.staleTooltip", "Embedded with an older model — reindex to refresh.")}
 												withArrow={true}
 											>
 												<Badge color="orange" variant="light" size="xs">

@@ -119,7 +119,7 @@ export function parsePendingUserQuestion(event: NodeChatStreamEventDto): Pending
 	const rawQuestions = Array.isArray(parsed)
 		? parsed
 		: typeof parsed === "object" && parsed !== null && Array.isArray((parsed as { questions?: unknown }).questions)
-			? ((parsed as { questions: unknown[] }).questions)
+			? (parsed as { questions: unknown[] }).questions
 			: undefined;
 	if (!rawQuestions) {
 		return undefined;

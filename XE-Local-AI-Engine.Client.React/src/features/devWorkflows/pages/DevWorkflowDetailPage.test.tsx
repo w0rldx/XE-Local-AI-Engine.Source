@@ -71,6 +71,10 @@ function baseRoutes(overrides: { run?: unknown; nodeRun?: unknown } = {}) {
 	];
 }
 
+function setViewportWidth(width: number): void {
+	Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
+}
+
 function renderPage(selection: DevWorkflowDetailSelection = {}) {
 	const onSelectionChange = vi.fn();
 	renderWithProviders(
@@ -85,6 +89,8 @@ setupMswServer();
 
 describe("DevWorkflowDetailPage", () => {
 	beforeEach(() => {
+		// jsdom's default, and TWO_PANE_BREAKPOINT itself: the desktop layout is what every other test here assumes.
+		setViewportWidth(1024);
 		navigate.mockClear();
 	});
 
@@ -113,6 +119,26 @@ describe("DevWorkflowDetailPage", () => {
 
 		expect(grid.style.gridTemplateColumns).toBe("320px minmax(240px, 1fr) minmax(380px, 420px)");
 		expect(grid.style.overflowX).toBe("auto");
+	});
+
+	// The other side of the same switch: below the breakpoint the grid is gone entirely and BOTH side surfaces are
+	// reachable only through the header's toggles, so a missing toggle strands the operator on the centre pane with no
+	// way back to the run list. Mirrors the work-session detail page, which collapses through the identical mode.
+	it("collapses to the centre pane with two drawers below 1024px", async () => {
+		setViewportWidth(800);
+		server.use(...baseRoutes());
+		renderPage();
+
+		await screen.findByTestId("dev-workflow-centre-pane");
+		expect(screen.queryByTestId("dev-workflow-detail-grid")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-run-summary-panel")).toBeNull();
+		expect(screen.queryByTestId("dev-workflow-side-tabs")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("dev-workflow-summary-toggle"));
+		expect(await screen.findByTestId("dev-workflow-run-summary-panel")).toBeDefined();
+
+		fireEvent.click(screen.getByTestId("dev-workflow-side-toggle"));
+		expect(await screen.findByTestId("dev-workflow-side-tabs")).toBeDefined();
 	});
 
 	it("shows the artifacts and events tabs when no node is selected", async () => {

@@ -4,10 +4,7 @@ import type { ScheduledJobRun, ScheduledRunStatus } from "@/features/scheduler/m
 const refreshToastId = "model-fit-refresh";
 const notifiedRunIds = new Set<string>();
 
-export type ModelFitRefreshTerminalEventName =
-	| "scheduler.runCompleted"
-	| "scheduler.runFailed"
-	| "scheduler.runCancelled";
+export type ModelFitRefreshTerminalEventName = "scheduler.runCompleted" | "scheduler.runFailed" | "scheduler.runCancelled";
 
 type Translate = (key: string) => string;
 type TerminalRefreshRunStatus = Extract<ScheduledRunStatus, "Succeeded" | "Failed" | "Cancelled" | "TimedOut" | "Skipped">;
@@ -19,13 +16,7 @@ interface ModelFitRefreshNotification {
 }
 
 export function isTerminalRefreshRunStatus(status: ScheduledRunStatus): status is TerminalRefreshRunStatus {
-	return (
-		status === "Succeeded" ||
-		status === "Failed" ||
-		status === "Cancelled" ||
-		status === "TimedOut" ||
-		status === "Skipped"
-	);
+	return status === "Succeeded" || status === "Failed" || status === "Cancelled" || status === "TimedOut" || status === "Skipped";
 }
 
 function show(notification: ModelFitRefreshNotification, t: Translate): void {

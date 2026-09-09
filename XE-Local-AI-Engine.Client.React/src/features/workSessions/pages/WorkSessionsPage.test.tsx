@@ -101,10 +101,7 @@ describe("WorkSessionsPage", () => {
 	});
 
 	it("renders an inline alert with a retry when the list fails", async () => {
-		server.use(
-			problemDetailsRoute("get", "work-sessions", 500, { detail: "the store is unavailable" }),
-			agentsRoute(),
-		);
+		server.use(problemDetailsRoute("get", "work-sessions", 500, { detail: "the store is unavailable" }), agentsRoute());
 		renderWithProviders(<WorkSessionsPage />);
 
 		const alert = await screen.findByTestId("work-sessions-error");

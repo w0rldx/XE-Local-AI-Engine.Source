@@ -1,5 +1,4 @@
-import { Alert, Badge, Button, Code, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Button, Code, Group, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -146,30 +145,34 @@ export function DevWorkflowNodePanel({
 				{/* Failed and Blocked both need the reason. The gate panel repeats it for Blocked because that is where the
 				    intervention controls are; a Failed node has no controls, so this is its only place to say why. */}
 				{status === "Failed" && nodeRun.failureClass ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-node-failure">
-						<Stack gap={4}>
-							<Group gap="xs" wrap="wrap">
-								<Text size="sm">
-									{t(
-										`pages.devWorkflows.failureClass.${nodeRun.failureClass}`,
-										t("pages.devWorkflows.failureClass.unknown", "The node failed"),
-									)}
-								</Text>
-								{/* The same failure in the ONE vocabulary a cross-unit report groups by, so what an operator
-								    reads here and what a rollup counts are the same word. */}
-								{nodeRun.failureClassGroup ? (
-									<Badge size="xs" variant="light" color="red" data-testid="dev-workflow-node-failure-group">
-										{t(`pages.devWorkflows.node.failureGroup.${nodeRun.failureClassGroup}`, nodeRun.failureClassGroup)}
-									</Badge>
+					<InlineErrorAlert
+						variant="light"
+						data-testid="dev-workflow-node-failure"
+						message={
+							<Stack gap={4}>
+								<Group gap="xs" wrap="wrap">
+									<Text size="sm">
+										{t(
+											`pages.devWorkflows.failureClass.${nodeRun.failureClass}`,
+											t("pages.devWorkflows.failureClass.unknown", "The node failed"),
+										)}
+									</Text>
+									{/* The same failure in the ONE vocabulary a cross-unit report groups by, so what an operator
+									    reads here and what a rollup counts are the same word. */}
+									{nodeRun.failureClassGroup ? (
+										<Badge size="xs" variant="light" color="red" data-testid="dev-workflow-node-failure-group">
+											{t(`pages.devWorkflows.node.failureGroup.${nodeRun.failureClassGroup}`, nodeRun.failureClassGroup)}
+										</Badge>
+									) : null}
+								</Group>
+								{nodeRun.terminalReason ? (
+									<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
+										{nodeRun.terminalReason}
+									</Text>
 								) : null}
-							</Group>
-							{nodeRun.terminalReason ? (
-								<Text size="xs" c="dimmed" style={{ whiteSpace: "pre-wrap" }}>
-									{nodeRun.terminalReason}
-								</Text>
-							) : null}
-						</Stack>
-					</Alert>
+							</Stack>
+						}
+					/>
 				) : null}
 
 				<DevWorkflowNodeCascadeRerunNotice nodeRun={nodeRun} nodeEvents={nodeEvents} events={events} run={run} />

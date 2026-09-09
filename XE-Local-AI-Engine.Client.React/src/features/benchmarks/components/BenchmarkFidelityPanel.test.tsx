@@ -29,7 +29,14 @@ import type { BenchmarkProjectFidelity } from "@/features/benchmarks/models/Benc
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const models = [
-	{ modelName: "base.gguf", maxContextTokens: null, effectiveContextTokens: null, origin: null, modelContentFingerprint: "v1:b", supportsTools: false },
+	{
+		modelName: "base.gguf",
+		maxContextTokens: null,
+		effectiveContextTokens: null,
+		origin: null,
+		modelContentFingerprint: "v1:b",
+		supportsTools: false,
+	},
 ];
 
 // Only the members the mapper reads; the panel re-renders from the query cache, not from this.
@@ -127,7 +134,9 @@ describe("BenchmarkFidelityPanel configured state", () => {
 	afterEach(cleanup);
 
 	it("says the project is not measuring, and where to turn it on", () => {
-		renderWithProviders(<BenchmarkFidelityPanel projectId="project-1" fidelity={{ ...fidelity, enabled: false }} projectVersion={7} models={[]} />);
+		renderWithProviders(
+			<BenchmarkFidelityPanel projectId="project-1" fidelity={{ ...fidelity, enabled: false }} projectVersion={7} models={[]} />,
+		);
 		fireEvent.click(screen.getByTestId("benchmark-fidelity-toggle"));
 
 		expect(screen.getByTestId("benchmark-fidelity-state").textContent).toBe("off");
@@ -192,7 +201,12 @@ describe("BenchmarkFidelityPanel settings", () => {
 
 	const open = (overrides: Partial<BenchmarkProjectFidelity> = {}) => {
 		renderWithProviders(
-			<BenchmarkFidelityPanel projectId="project-1" fidelity={{ ...fidelity, ...overrides }} projectVersion={7} models={models} />,
+			<BenchmarkFidelityPanel
+				projectId="project-1"
+				fidelity={{ ...fidelity, ...overrides }}
+				projectVersion={7}
+				models={models}
+			/>,
 		);
 		fireEvent.click(screen.getByTestId("benchmark-fidelity-toggle"));
 	};
@@ -221,7 +235,9 @@ describe("BenchmarkFidelityPanel settings", () => {
 		fireEvent.click(screen.getByTestId("benchmark-fidelity-save"));
 
 		await waitFor(() =>
-			expect(patchMock).toHaveBeenCalledWith(expect.objectContaining({ body: expect.objectContaining({ measureExisting: true }) })),
+			expect(patchMock).toHaveBeenCalledWith(
+				expect.objectContaining({ body: expect.objectContaining({ measureExisting: true }) }),
+			),
 		);
 		await waitFor(() => expect(toastSuccessMock).toHaveBeenCalledWith(expect.stringContaining("2")));
 	});

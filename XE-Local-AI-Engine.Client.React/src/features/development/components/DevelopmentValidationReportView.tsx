@@ -1,10 +1,10 @@
-import { Alert, Badge, Code, Group, Loader, Paper, ScrollArea, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Alert, Badge, Code, Group, Loader, Stack, Text } from "@mantine/core";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
-import { Metric } from "@/features/development/components/DevelopmentMetricTile";
+import { ValidationCommandCard } from "@/core/ui/components/ValidationCommandCard/ValidationCommandCard";
 import type { DevelopmentArtifact } from "@/features/development/models/DevelopmentModels";
 import {
 	type DevelopmentTestOutcome,
@@ -65,74 +65,49 @@ function shortHash(value: string | undefined): string {
 	return typeof value === "string" && value.length > 12 ? `${value.slice(0, 12)}…` : (value ?? "—");
 }
 
-function ValidationTestOutcomeView({ outcome }: { readonly outcome: DevelopmentTestOutcome }) {
+/**
+ * The parse-failure half of a test outcome. The counts half is the shared `ValidationCommandCard`; this stays local
+ * because "no test project" is the registered-repository policy case, not a broken adapter: it reads as a reduced
+ * guarantee, whereas every other parse failure reads as a failed run.
+ */
+function ValidationTestParseFailure({ outcome }: { readonly outcome: DevelopmentTestOutcome }) {
 	const { t } = useTranslation();
-
-	if (!outcome.parsed) {
-		// "No test project" is the registered-repository policy case, not a broken adapter: it reads as a reduced
-		// guarantee, whereas every other parse failure reads as a failed run.
-		const noTests = isDevelopmentNoTestsCode(outcome.parseFailureCode);
-		const label = outcome.parseFailureCode === null ? undefined : validationParseFailureLabels[outcome.parseFailureCode];
-
-		return (
-			<Alert
-				mt="sm"
-				color={noTests ? "yellow" : "red"}
-				icon={<IconAlertTriangle size={16} />}
-				title={
-					noTests
-						? t("pages.development.validation.tests.noTestsTitle", "No tests to execute")
-						: t("pages.development.validation.tests.unparsedTitle", "Test results could not be parsed")
-				}
-				data-testid={noTests ? "development-validation-no-tests" : "development-validation-test-parse-failure"}
-			>
-				<Stack gap={4}>
-					<Text size="sm">{label ? t(label[0], label[1]) : (outcome.parseFailureCode ?? "")}</Text>
-					<Text size="xs" c="dimmed">
-						{noTests
-							? t(
-									"pages.development.validation.tests.noTestsConsequence",
-									"A green run here evidences the build only — never behaviour.",
-								)
-							: t(
-									"pages.development.validation.tests.unparsedConsequence",
-									"No executed, passed or failed count is available for this run.",
-								)}
-					</Text>
-					<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
-					{outcome.parseFailureDetail ? (
-						<Text size="xs" c="dimmed">
-							{outcome.parseFailureDetail}
-						</Text>
-					) : null}
-				</Stack>
-			</Alert>
-		);
-	}
+	const noTests = isDevelopmentNoTestsCode(outcome.parseFailureCode);
+	const label = outcome.parseFailureCode === null ? undefined : validationParseFailureLabels[outcome.parseFailureCode];
 
 	return (
-		<SimpleGrid cols={{ base: 2, sm: 4 }} mt="sm" data-testid="development-validation-test-counts">
-			<Metric
-				label={t("pages.development.validation.tests.discovered", "Tests discovered")}
-				value={outcome.discovered}
-				valueTestId="development-validation-test-discovered"
-			/>
-			<Metric
-				label={t("pages.development.validation.tests.executed", "Tests executed")}
-				value={outcome.executed}
-				valueTestId="development-validation-test-executed"
-			/>
-			<Metric
-				label={t("pages.development.validation.tests.passed", "Tests passed")}
-				value={outcome.passed}
-				valueTestId="development-validation-test-passed"
-			/>
-			<Metric
-				label={t("pages.development.validation.tests.failed", "Tests failed")}
-				value={outcome.failed}
-				valueTestId="development-validation-test-failed"
-			/>
-		</SimpleGrid>
+		<Alert
+			mt="sm"
+			color={noTests ? "yellow" : "red"}
+			icon={<IconAlertTriangle size={16} />}
+			title={
+				noTests
+					? t("pages.development.validation.tests.noTestsTitle", "No tests to execute")
+					: t("pages.development.validation.tests.unparsedTitle", "Test results could not be parsed")
+			}
+			data-testid={noTests ? "development-validation-no-tests" : "development-validation-test-parse-failure"}
+		>
+			<Stack gap={4}>
+				<Text size="sm">{label ? t(label[0], label[1]) : (outcome.parseFailureCode ?? "")}</Text>
+				<Text size="xs" c="dimmed">
+					{noTests
+						? t(
+								"pages.development.validation.tests.noTestsConsequence",
+								"A green run here evidences the build only — never behaviour.",
+							)
+						: t(
+								"pages.development.validation.tests.unparsedConsequence",
+								"No executed, passed or failed count is available for this run.",
+							)}
+				</Text>
+				<Code>{outcome.parseFailureCode ?? "unknown"}</Code>
+				{outcome.parseFailureDetail ? (
+					<Text size="xs" c="dimmed">
+						{outcome.parseFailureDetail}
+					</Text>
+				) : null}
+			</Stack>
+		</Alert>
 	);
 }
 
@@ -165,49 +140,30 @@ function ValidationFailureAlert({ code, detail }: { readonly code: string; reado
 	);
 }
 
-function ValidationCommandCard({ command }: { readonly command: DevelopmentValidationCommand }) {
+function DevelopmentValidationCommandCard({ command }: { readonly command: DevelopmentValidationCommand }) {
 	const { t } = useTranslation();
-	const failed = !command.completed || command.exitCode !== 0;
-	// Only a failing command's captured output is rendered. On a pass it is noise; on a failure it is the ONLY record
-	// of why — the live evaluation had to read the artifact blob out of the API by hand to find `errno == EROFS`,
-	// because the panel showed an exit code and nothing else. It is already sanitized server-side.
-	const capturedOutput = failed ? [command.standardError, command.standardOutput].filter((text) => !!text?.trim()) : [];
 
 	return (
-		<Paper withBorder={true} p="sm" data-testid={`development-validation-command-${command.commandId}`}>
-			<Group justify="space-between" wrap="nowrap" align="flex-start">
-				<Code>{command.commandId}</Code>
-				<Group gap="xs">
-					{command.completed ? null : (
-						<Badge color="red">{t("pages.development.validation.command.incomplete", "Did not complete")}</Badge>
-					)}
-					{command.outputTruncated ? (
-						<Badge color="yellow" variant="light">
-							{t("pages.development.validation.command.truncated", "Output truncated")}
-						</Badge>
-					) : null}
-					<Badge color={failed ? "red" : "green"} variant="light">
-						{t("pages.development.validation.command.exitCode", "exit")} {command.exitCode}
-					</Badge>
-					<Text size="xs" c="dimmed">
-						{(command.durationMilliseconds / 1000).toFixed(1)}s
-					</Text>
-				</Group>
-			</Group>
-			{command.testOutcome ? <ValidationTestOutcomeView outcome={command.testOutcome} /> : null}
-			{capturedOutput.length > 0 ? (
-				<Stack gap={4} mt="sm">
-					<Text size="xs" c="dimmed">
-						{t("pages.development.validation.command.capturedOutput", "Captured output")}
-					</Text>
-					<ScrollArea.Autosize mah={220}>
-						<Code block={true} data-testid={`development-validation-command-output-${command.commandId}`}>
-							{capturedOutput.join("\n")}
-						</Code>
-					</ScrollArea.Autosize>
-				</Stack>
-			) : null}
-		</Paper>
+		<ValidationCommandCard
+			command={command}
+			labels={{
+				incomplete: t("pages.development.validation.command.incomplete", "Did not complete"),
+				truncated: t("pages.development.validation.command.truncated", "Output truncated"),
+				exitCode: `${t("pages.development.validation.command.exitCode", "exit")} ${command.exitCode}`,
+				capturedOutput: t("pages.development.validation.command.capturedOutput", "Captured output"),
+				testDiscovered: t("pages.development.validation.tests.discovered", "Tests discovered"),
+				testExecuted: t("pages.development.validation.tests.executed", "Tests executed"),
+				testPassed: t("pages.development.validation.tests.passed", "Tests passed"),
+				testFailed: t("pages.development.validation.tests.failed", "Tests failed"),
+			}}
+			testIds={{
+				card: `development-validation-command-${command.commandId}`,
+				output: `development-validation-command-output-${command.commandId}`,
+				testCounts: "development-validation-test-counts",
+				testCountValuePrefix: "development-validation-test",
+			}}
+			unparsedOutcome={command.testOutcome ? <ValidationTestParseFailure outcome={command.testOutcome} /> : null}
+		/>
 	);
 }
 
@@ -324,7 +280,7 @@ export function ValidationReportView({ artifact }: { readonly artifact: Developm
 
 			<Stack gap="xs">
 				{report.commands.map((command) => (
-					<ValidationCommandCard key={command.commandId} command={command} />
+					<DevelopmentValidationCommandCard key={command.commandId} command={command} />
 				))}
 			</Stack>
 		</Stack>

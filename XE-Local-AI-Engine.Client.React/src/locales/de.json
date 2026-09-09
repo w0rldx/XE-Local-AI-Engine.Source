@@ -722,6 +722,9 @@
 			"loadingModel": "Modell wird geladen…",
 			"remoteViewOnlyTitle": "Remote-Unterhaltung",
 			"remoteViewOnly": "Diese Unterhaltung wurde von einem gekoppelten Client gestartet und ist auf diesem Knoten nur lesbar.",
+			"streamFailedTitle": "Der lokale Chat-Stream ist fehlgeschlagen.",
+			"historyLoadFailedTitle": "Der lokale Chat-Verlauf konnte nicht geladen werden.",
+			"unknownError": "Unbekannter Fehler",
 			"streamErrors": {
 				"epochKeyMissing": "Verschlüsselungsschlüssel werden noch synchronisiert — bitte versuche es erneut.",
 				"eventHandlerError": "Ein lokales Chat-Update ist fehlgeschlagen. Bitte versuche es erneut oder aktualisiere die Unterhaltung."
@@ -1504,7 +1507,35 @@
 				"description": "Pairing- und Bindungsabläufe werden aus der aktuellen Node-Oberfläche portiert."
 			},
 			"title": "Diesen Node mit Ihrem Central-Platform-Konto verbinden",
-			"subtitle": "Starten Sie die Bindung hier und bestätigen Sie die Anfrage anschließend in der Central Platform mit dem angezeigten Benutzercode."
+			"subtitle": "Starten Sie die Bindung hier und bestätigen Sie die Anfrage anschließend in der Central Platform mit dem angezeigten Benutzercode.",
+			"device": {
+				"title": "Geräte-Bindung",
+				"status": "Status",
+				"userCode": "Benutzercode",
+				"verificationUrl": "Verifizierungs-URL",
+				"expires": "Läuft ab",
+				"empty": "Auf diesem Worker ist keine Bindungsanfrage aktiv.",
+				"start": "Bindung starten",
+				"cancel": "Abfrage abbrechen",
+				"cancelling": "Wird abgebrochen …",
+				"openApproval": "Freigabe-Link öffnen"
+			},
+			"how": {
+				"title": "So funktioniert die Bindung",
+				"step1": "Klicken Sie auf „Bindung starten“, um einen einmaligen Benutzercode anzufordern.",
+				"step2": "Öffnen Sie den Freigabe-Link und melden Sie sich in der Central Platform an.",
+				"step3": "Der Worker fragt im vom Server vorgegebenen Intervall ab und speichert die Zugangsdaten erst nach der Freigabe."
+			},
+			"status": {
+				"started": "Bindung gestartet. Bestätigen Sie diesen Worker in der Central Platform.",
+				"approved": "Bindung bestätigt. Die Worker-Zugangsdaten wurden sicher gespeichert.",
+				"ended": "Bindung mit Status „{{status}}“ beendet.",
+				"cancelled": "Die Bindungsabfrage wurde lokal abgebrochen."
+			},
+			"errors": {
+				"unexpected": "Unerwarteter Fehler bei der Bindung",
+				"emptyPoll": "Die Abfrage der Node-Bindung lieferte eine leere Antwort."
+			}
 		},
 		"nodeSettings": {
 			"placeholder": {
@@ -2245,7 +2276,9 @@
 					"nativeReasoning": "Natives Denken"
 				},
 				"overrideLabel": "Typ überschreiben",
-				"reset": "Auf erkannt zurücksetzen"
+				"reset": "Auf erkannt zurücksetzen",
+				"resetAria": "Typ von {{name}} auf erkannt zurücksetzen",
+				"overrideAria": "Typ für {{name}} überschreiben"
 			},
 			"local": {
 				"setDefaultSuccess": "Standard-Lokalmodell auf {{name}} gesetzt.",
@@ -2255,6 +2288,22 @@
 				"loading": "Lokale Modelle werden geladen …",
 				"installedTitle": "Installierte Modelle",
 				"empty": "Keine lokalen Modelle gefunden.",
+				"columns": {
+					"name": "Name",
+					"size": "Größe",
+					"modified": "Geändert",
+					"family": "Familie",
+					"quantization": "Quantisierung",
+					"actions": "Aktionen"
+				},
+				"defaultBadge": "Standard",
+				"actions": {
+					"viewDetails": "Details anzeigen",
+					"viewDetailsAria": "Details zu {{name}} anzeigen",
+					"setDefault": "Als Standardmodell festlegen",
+					"setDefaultAria": "{{name}} als Standard festlegen",
+					"deleteAria": "{{name}} löschen"
+				},
 				"origin": {
 					"label": "Herkunft",
 					"imported": "Importiert",
@@ -2268,6 +2317,26 @@
 				"errors": {
 					"unexpected": "Unerwarteter Fehler beim lokalen Modell"
 				}
+			},
+			"details": {
+				"title": "Modelldetails",
+				"tabs": {
+					"overview": "Übersicht",
+					"license": "Lizenz & Vorlage",
+					"fit": "Passung"
+				},
+				"parameterSize": "Parametergröße: {{value}}",
+				"family": "Familie: {{value}}",
+				"quantization": "Quantisierung: {{value}}",
+				"origin": "{{label}}: {{value}}",
+				"contextLength": "Kontextlänge: {{value}}",
+				"unknown": "Unbekannt",
+				"systemPrompt": "System-Prompt: {{value}}",
+				"detected": "Erkannt: {{kind}}",
+				"template": "Vorlage",
+				"license": "Lizenz",
+				"empty": "Für dieses Modell wurden keine Lizenz und keine Vorlage angegeben.",
+				"fitDisabled": "Modell-Passungsempfehlungen sind auf diesem Node deaktiviert."
 			},
 			"gguf": {
 				"browse": {

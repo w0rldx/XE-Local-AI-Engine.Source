@@ -215,7 +215,7 @@ export function SourceBuildCard() {
 					})}
 				</List>
 				{validationError ? <Alert color="yellow">{validationError}</Alert> : null}
-				{liveError ? <Alert color="red">{liveError}</Alert> : null}
+				{liveError ? <InlineErrorAlert message={liveError} /> : null}
 				{isBuilding ? <CudaBuildLogView phase={livePhase} logLines={liveLogs} /> : null}
 				{installed?.isSourceBuild ? (
 					<Stack gap="xs">

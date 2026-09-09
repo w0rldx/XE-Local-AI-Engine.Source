@@ -1,6 +1,7 @@
 import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { t as translate } from "i18next";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -85,7 +86,9 @@ interface PendingStreamCommit {
 // wrote (e.g. the message-size rejection); anything not matching the wrapper passes through untouched. The regex
 // lives next to isNodeChatReadOnlyConflict, which discriminates on the same stripped text.
 function errorMessage(error: unknown): string {
-	const message = apiErrorMessage(error, "Unknown error");
+	// Module-scoped `t` (the app's i18next instance): this helper is called from ~25 callbacks, so threading the
+	// hook's `t` through all of them would buy nothing over the pattern ApiErrorMessage and Toast already use.
+	const message = apiErrorMessage(error, translate("pages.chat.unknownError", "Unknown error"));
 	const stripped = stripSignalRHubErrorPrefix(message);
 	return stripped.length > 0 ? stripped : message;
 }
@@ -1147,12 +1150,12 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	// was dropped. When undefined, ChatDisplayShell renders no alert.
 	const notice = streamError ? (
 		<Stack gap={2}>
-			<Text fw={700}>Local chat stream failed.</Text>
+			<Text fw={700}>{t("pages.chat.streamFailedTitle", "Local chat stream failed.")}</Text>
 			<Text size="sm">{streamError}</Text>
 		</Stack>
 	) : conversationsIsError ? (
 		<Stack gap={2}>
-			<Text fw={700}>Unable to load local chat history.</Text>
+			<Text fw={700}>{t("pages.chat.historyLoadFailedTitle", "Unable to load local chat history.")}</Text>
 			<Text size="sm">{errorMessage(conversationsError)}</Text>
 		</Stack>
 	) : isRemoteConversation ? (

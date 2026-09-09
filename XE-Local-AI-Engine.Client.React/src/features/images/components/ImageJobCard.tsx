@@ -87,11 +87,16 @@ function GenerationTimeline({ display }: { display: ImageProgressDisplay }) {
 				/>
 				<Group gap="xs" justify="space-between">
 					<Text size="xs" c="dimmed" data-testid="image-job-steps">
-						{t("pages.images.job.steps", "Step {{step}} of {{totalSteps}}", { step: display.step, totalSteps: display.totalSteps })}
+						{t("pages.images.job.steps", "Step {{step}} of {{totalSteps}}", {
+							step: display.step,
+							totalSteps: display.totalSteps,
+						})}
 					</Text>
 					{display.estimatedRemainingMs === null ? null : (
 						<Text size="xs" c="dimmed" data-testid="image-job-eta">
-							{t("pages.images.job.eta", "~{{seconds}}s left", { seconds: Math.max(1, Math.round(display.estimatedRemainingMs / 1000)) })}
+							{t("pages.images.job.eta", "~{{seconds}}s left", {
+								seconds: Math.max(1, Math.round(display.estimatedRemainingMs / 1000)),
+							})}
 						</Text>
 					)}
 				</Group>
@@ -173,9 +178,7 @@ export function ImageJobCard({ job, isCancelling, onCancel }: ImageJobCardProps)
 					</Text>
 				) : null}
 
-				{job.status === "Succeeded" && job.imageId ? (
-					<ImageResultView job={job} imageId={job.imageId} />
-				) : null}
+				{job.status === "Succeeded" && job.imageId ? <ImageResultView job={job} imageId={job.imageId} /> : null}
 			</Stack>
 		</Card>
 	);

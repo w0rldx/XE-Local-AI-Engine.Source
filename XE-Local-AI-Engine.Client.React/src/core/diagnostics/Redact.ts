@@ -207,9 +207,7 @@ export function redactBreadcrumb(crumb: Breadcrumb): Breadcrumb {
 					...crumb.error,
 					message: redactString(crumb.error.message),
 					...(crumb.error.stack === undefined ? {} : { stack: redactString(crumb.error.stack) }),
-					...(crumb.error.componentStack === undefined
-						? {}
-						: { componentStack: redactString(crumb.error.componentStack) }),
+					...(crumb.error.componentStack === undefined ? {} : { componentStack: redactString(crumb.error.componentStack) }),
 				},
 			};
 		default:

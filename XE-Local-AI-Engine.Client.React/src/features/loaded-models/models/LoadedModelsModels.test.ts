@@ -31,7 +31,12 @@ describe("toLoadedModelsSnapshot", () => {
 	});
 
 	it("maps an unavailable snapshot to isAvailable:false with an empty model list and the sanitized error", () => {
-		const snapshot = toLoadedModelsSnapshot({ isAvailable: false, ollamaConfigured: true, error: "Provider unreachable", items: [] });
+		const snapshot = toLoadedModelsSnapshot({
+			isAvailable: false,
+			ollamaConfigured: true,
+			error: "Provider unreachable",
+			items: [],
+		});
 
 		expect(snapshot.isAvailable).toBe(false);
 		expect(snapshot.ollamaConfigured).toBe(true);

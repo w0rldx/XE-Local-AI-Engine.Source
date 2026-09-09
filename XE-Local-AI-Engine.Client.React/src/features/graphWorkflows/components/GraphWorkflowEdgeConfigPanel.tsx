@@ -5,8 +5,8 @@
 // the path of its source `Condition` node, so an edge that looks pathless still validates. Showing the inherited path
 // greyed out, with the node it came from, is what stops that reading as a bug.
 
-import { Alert, Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconTrash } from "@tabler/icons-react";
+import { Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { IconTrash } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +22,8 @@ import {
 	normalizeGraphWorkflowConditionOperator,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { edgeConditionSchema, type GraphWorkflowGraphIssue } from "@/features/graphWorkflows/models/GraphWorkflowValidation";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 export interface GraphWorkflowEdgeConfigPanelProps {
 	readonly edge: GraphWorkflowCanvasEdge;
@@ -89,16 +91,20 @@ export function GraphWorkflowEdgeConfigPanel({
 			</Group>
 
 			{issues.length > 0 ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="gw-edge-config-issues">
-					<Stack gap={4}>
-						{issues.map((issue) => (
-							<Text key={`${issue.rule}:${issue.subject ?? ""}`} size="sm">
-								{issue.message ??
-									t(`pages.graphWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject ?? "" })}
-							</Text>
-						))}
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					data-testid="gw-edge-config-issues"
+					message={
+						<Stack gap={4}>
+							{issues.map((issue) => (
+								<Text key={`${issue.rule}:${issue.subject ?? ""}`} size="sm">
+									{issue.message ??
+										t(`pages.graphWorkflows.definition.issues.${issue.rule}`, issue.rule, { subject: issue.subject ?? "" })}
+								</Text>
+							))}
+						</Stack>
+					}
+				/>
 			) : null}
 
 			<Text size="xs" c="dimmed" data-testid="gw-edge-config-endpoints">

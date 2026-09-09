@@ -3,6 +3,7 @@ import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { McpEnvEditor } from "@/features/mcp/components/McpServerForm/McpEnvEditor";
 import { useMcpEnvRows } from "@/features/mcp/hooks/useMcpEnvRows";
@@ -264,11 +265,7 @@ export function McpServerForm({
 				/>
 			)}
 
-			{submitError ? (
-				<Alert color="red" data-testid="mcp-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="mcp-form-submit-error" /> : null}
 			{hideActions ? null : (
 				<Group justify="flex-end">
 					<Button

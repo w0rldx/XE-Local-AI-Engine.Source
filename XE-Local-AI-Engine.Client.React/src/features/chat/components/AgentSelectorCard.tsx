@@ -103,7 +103,13 @@ interface AgentSelectorCardProps {
 	onSelectAgent: (agentId: string) => void;
 }
 
-export function AgentSelectorCard({ agentOptions, agentModeEnabled, selectedAgentId, disabled = false, onSelectAgent }: AgentSelectorCardProps) {
+export function AgentSelectorCard({
+	agentOptions,
+	agentModeEnabled,
+	selectedAgentId,
+	disabled = false,
+	onSelectAgent,
+}: AgentSelectorCardProps) {
 	const { t } = useTranslation();
 	const [pickerOpened, setPickerOpened] = useState(false);
 	const [searchQuery, setSearchQuery] = useState("");
@@ -233,7 +239,12 @@ export function AgentSelectorCard({ agentOptions, agentModeEnabled, selectedAgen
 					<ScrollArea.Autosize mah={320} type="hover" offsetScrollbars={true}>
 						<Stack gap={2}>
 							{filtered.map((agent) => (
-								<AgentOptionItem key={agent.id} agent={agent} selected={agent.id === selectedAgentId && !isOff} onSelect={select} />
+								<AgentOptionItem
+									key={agent.id}
+									agent={agent}
+									selected={agent.id === selectedAgentId && !isOff}
+									onSelect={select}
+								/>
 							))}
 							{filtered.length === 0 ? (
 								<Text size="sm" c="dimmed" px="sm" py="xs" ta="center">

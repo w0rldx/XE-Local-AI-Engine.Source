@@ -30,10 +30,7 @@ export function CpuFallbackBanner() {
 			? profile.cpuFallbackRemediation
 				? `${profile.cpuFallbackReason} ${profile.cpuFallbackRemediation}`
 				: profile.cpuFallbackReason
-			: t(
-					"pages.modelFit.hardware.cpuFallback.message",
-					"No supported GPU detected — running on CPU. Responses will be slower.",
-				);
+			: t("pages.modelFit.hardware.cpuFallback.message", "No supported GPU detected — running on CPU. Responses will be slower.");
 
 	return (
 		<Alert

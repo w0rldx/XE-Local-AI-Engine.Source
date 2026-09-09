@@ -1,9 +1,10 @@
-import { Alert, Button, Group, MultiSelect, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
+import { Button, Group, MultiSelect, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { type DevWorkflowRuleSetResponse, devWorkflowNodeTypes } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 /**
@@ -131,9 +132,7 @@ export function DevWorkflowRuleSetDialog({
 		>
 			<Stack gap="md">
 				{errorMessage ? (
-					<Alert color="red" variant="light" data-testid="dev-workflow-rule-set-error">
-						{errorMessage}
-					</Alert>
+					<InlineErrorAlert message={errorMessage} variant="light" data-testid="dev-workflow-rule-set-error" />
 				) : null}
 				<TextInput
 					label={t("pages.devWorkflows.ruleSets.nameLabel", "Name")}
@@ -215,11 +214,15 @@ export function DevWorkflowRuleSetDialog({
 						data-testid="dev-workflow-rule-set-body"
 					/>
 					{isTooLong ? (
-						<Alert color="red" variant="light" data-testid="dev-workflow-rule-set-body-too-long">
-							{t("pages.devWorkflows.ruleSets.bodyTooLong", "The body is over the {{max}}-character limit and cannot be saved.", {
-								max: BODY_MAX,
-							})}
-						</Alert>
+						<InlineErrorAlert
+							message={t(
+								"pages.devWorkflows.ruleSets.bodyTooLong",
+								"The body is over the {{max}}-character limit and cannot be saved.",
+								{ max: BODY_MAX },
+							)}
+							variant="light"
+							data-testid="dev-workflow-rule-set-body-too-long"
+						/>
 					) : null}
 				</Stack>
 			</Stack>

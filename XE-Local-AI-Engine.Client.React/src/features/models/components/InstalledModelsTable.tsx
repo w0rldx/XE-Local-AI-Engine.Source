@@ -39,13 +39,13 @@ export function InstalledModelsTable({
 			>
 				<Table.Thead>
 					<Table.Tr>
-						<Table.Th>Name</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.name", "Name")}</Table.Th>
 						<Table.Th>{t("pages.models.type.columnHeader", "Type")}</Table.Th>
-						<Table.Th>Size</Table.Th>
-						<Table.Th>Modified</Table.Th>
-						<Table.Th>Family</Table.Th>
-						<Table.Th>Quantization</Table.Th>
-						<Table.Th>Actions</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.size", "Size")}</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.modified", "Modified")}</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.family", "Family")}</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.quantization", "Quantization")}</Table.Th>
+						<Table.Th>{t("pages.models.local.columns.actions", "Actions")}</Table.Th>
 					</Table.Tr>
 				</Table.Thead>
 				<Table.Tbody>
@@ -54,7 +54,7 @@ export function InstalledModelsTable({
 							<Table.Td>
 								<Group gap="xs" align="center" wrap="nowrap">
 									<Text fw={500}>{model.modelName}</Text>
-									{model.isSelected ? <Badge color="green">Default</Badge> : null}
+									{model.isSelected ? <Badge color="green">{t("pages.models.local.defaultBadge", "Default")}</Badge> : null}
 									{model.origin === "imported" ? (
 										<Badge color="violet" variant="light">
 											{t("pages.models.local.origin.imported", "Imported")}
@@ -71,7 +71,9 @@ export function InstalledModelsTable({
 										{model.isOverridden ? (
 											<Tooltip label={t("pages.models.type.reset", "Reset to detected")} withArrow={true}>
 												<ActionIcon
-													aria-label={`Reset ${model.modelName} type to detected`}
+													aria-label={t("pages.models.type.resetAria", "Reset {{name}} type to detected", {
+														name: model.modelName,
+													})}
 													variant="subtle"
 													color="gray"
 													disabled={isActionPending}
@@ -99,9 +101,11 @@ export function InstalledModelsTable({
 							<Table.Td>{model.quantizationLabel}</Table.Td>
 							<Table.Td>
 								<Group gap="xs">
-									<Tooltip label="View details" withArrow={true}>
+									<Tooltip label={t("pages.models.local.actions.viewDetails", "View details")} withArrow={true}>
 										<ActionIcon
-											aria-label={`View ${model.modelName} details`}
+											aria-label={t("pages.models.local.actions.viewDetailsAria", "View {{name}} details", {
+												name: model.modelName,
+											})}
 											variant="subtle"
 											data-testid={`model-details-button-${model.modelName}`}
 											onClick={() => onOpenDetails(model.modelName)}
@@ -109,9 +113,11 @@ export function InstalledModelsTable({
 											<IconEye size={16} />
 										</ActionIcon>
 									</Tooltip>
-									<Tooltip label="Set as default model" withArrow={true}>
+									<Tooltip label={t("pages.models.local.actions.setDefault", "Set as default model")} withArrow={true}>
 										<ActionIcon
-											aria-label={`Set ${model.modelName} as default`}
+											aria-label={t("pages.models.local.actions.setDefaultAria", "Set {{name}} as default", {
+												name: model.modelName,
+											})}
 											variant="subtle"
 											color="green"
 											disabled={isActionPending}
@@ -120,9 +126,9 @@ export function InstalledModelsTable({
 											<IconCheck size={16} />
 										</ActionIcon>
 									</Tooltip>
-									<Tooltip label="Delete model" withArrow={true}>
+									<Tooltip label={t("pages.models.local.delete.title", "Delete model")} withArrow={true}>
 										<ActionIcon
-											aria-label={`Delete ${model.modelName}`}
+											aria-label={t("pages.models.local.actions.deleteAria", "Delete {{name}}", { name: model.modelName })}
 											variant="subtle"
 											color="red"
 											disabled={isActionPending}

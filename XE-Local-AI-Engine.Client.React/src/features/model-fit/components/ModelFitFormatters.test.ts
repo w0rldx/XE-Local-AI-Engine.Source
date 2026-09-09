@@ -7,7 +7,7 @@ describe("formatModelFitReleaseDate", () => {
 		expect(formatModelFitReleaseDate("2025-03-12")).toBe("Mar 12, 2025");
 	});
 
-	it("keeps the calendar day stable regardless of time zone (no `new Date(\"YYYY-MM-DD\")` UTC-midnight shift)", () => {
+	it('keeps the calendar day stable regardless of time zone (no `new Date("YYYY-MM-DD")` UTC-midnight shift)', () => {
 		// Parsed from the year/month/day parts via the local Date constructor, so the day never rolls back a date.
 		expect(formatModelFitReleaseDate("2025-01-01")).toBe("Jan 1, 2025");
 	});

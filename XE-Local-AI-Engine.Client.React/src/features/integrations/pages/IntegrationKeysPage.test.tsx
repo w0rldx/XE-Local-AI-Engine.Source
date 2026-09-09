@@ -207,11 +207,7 @@ describe("IntegrationKeysPage", () => {
 			.getAllByRole("option", { hidden: true })
 			.map((option) => option.textContent ?? "")
 			.filter((text) => text.includes("—") || text === "New identity");
-		expect(identityOptions).toEqual([
-			"New identity",
-			"3f9c1a2b — sensor-hub, sensor-hub-rotation",
-			"aa11bb22 — billing-bridge",
-		]);
+		expect(identityOptions).toEqual(["New identity", "3f9c1a2b — sensor-hub, sensor-hub-rotation", "aa11bb22 — billing-bridge"]);
 	});
 
 	it("sends no principalId for the default New identity", async () => {

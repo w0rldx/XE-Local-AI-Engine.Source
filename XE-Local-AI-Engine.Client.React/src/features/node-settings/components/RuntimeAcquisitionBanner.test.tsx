@@ -111,7 +111,14 @@ describe("RuntimeAcquisitionBanner", () => {
 	it("shows the step counter only on the multi-archive path", () => {
 		// i18n is not initialized under the suite, so `t` yields the raw default template rather than interpolated copy
 		// (same caveat as LlamaCppUpdateBanner.test.tsx). Assert which segments compose the detail line, not their text.
-		hooksMock.status = status({ sequence: 4, phase: "Downloading", completedBytes: 1024, totalBytes: 4096, stepIndex: 2, stepCount: 2 });
+		hooksMock.status = status({
+			sequence: 4,
+			phase: "Downloading",
+			completedBytes: 1024,
+			totalBytes: 4096,
+			stepIndex: 2,
+			stepCount: 2,
+		});
 		renderBanner();
 		expect(screen.getByTestId("runtime-acquisition-banner-detail").textContent).toContain("Step {{index}} of {{count}}");
 

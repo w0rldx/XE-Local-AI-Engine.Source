@@ -23,12 +23,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { getAppUpdateStatus } from "@/core/api/generated/sdk.gen";
 import { createProvidersWrapper, createTestQueryClient } from "@/test/RenderWithProviders";
-import {
-	useApplyAppUpdate,
-	useAppUpdateStatus,
-	useProbeAppUpdateStatus,
-	useRefreshAppUpdateStatus,
-} from "./useAppUpdate";
+import { useApplyAppUpdate, useAppUpdateStatus, useProbeAppUpdateStatus, useRefreshAppUpdateStatus } from "./useAppUpdate";
 
 const statusMock = vi.mocked(getAppUpdateStatusOptions);
 
@@ -72,15 +67,21 @@ describe("useAppUpdateStatus", () => {
 describe("useRefreshAppUpdateStatus", () => {
 	it("forces refresh:true and seeds the default cache", async () => {
 		const refreshedSnapshot = { isDesktop: true, isConfigured: true, updateAvailable: false, currentVersion: "1.0.0" };
-		statusMock.mockImplementation((opts) => ({
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
-			queryKey: [{ _id: "getAppUpdateStatus", query: opts?.query }],
-			queryFn: async () => refreshedSnapshot,
-		}) as never);
-		vi.mocked(getAppUpdateStatusQueryKey).mockImplementation((opts) => [
-			// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
-			{ _id: "getAppUpdateStatus", query: opts?.query },
-		] as never);
+		statusMock.mockImplementation(
+			(opts) =>
+				({
+					// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
+					queryKey: [{ _id: "getAppUpdateStatus", query: opts?.query }],
+					queryFn: async () => refreshedSnapshot,
+				}) as never,
+		);
+		vi.mocked(getAppUpdateStatusQueryKey).mockImplementation(
+			(opts) =>
+				[
+					// biome-ignore lint/style/useNamingConvention: generated hey-api query-key discriminator field.
+					{ _id: "getAppUpdateStatus", query: opts?.query },
+				] as never,
+		);
 		const { wrapper, queryClient } = makeWrapper();
 		const { result } = renderHook(() => useRefreshAppUpdateStatus(), { wrapper });
 

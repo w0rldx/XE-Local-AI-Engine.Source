@@ -6,11 +6,7 @@ import { fileURLToPath } from "node:url";
 import { dedupeAndSort, isExcludedNativeBinary, normalizeLicense } from "./GenerateLicenses.mjs";
 
 test("isExcludedNativeBinary matches rollup platform binaries on every OS but nothing shipped", () => {
-	for (const platformName of [
-		"@rollup/rollup-linux-x64-gnu",
-		"@rollup/rollup-win32-x64-msvc",
-		"@rollup/rollup-darwin-arm64",
-	]) {
+	for (const platformName of ["@rollup/rollup-linux-x64-gnu", "@rollup/rollup-win32-x64-msvc", "@rollup/rollup-darwin-arm64"]) {
 		assert.equal(isExcludedNativeBinary(platformName), true);
 	}
 

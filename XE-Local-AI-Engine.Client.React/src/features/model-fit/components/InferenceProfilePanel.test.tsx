@@ -6,7 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({
-		t: (key: string, fallbackOrOptions?: string | { defaultValue?: string; [param: string]: unknown }, maybeOptions?: Record<string, unknown>) => {
+		t: (
+			key: string,
+			fallbackOrOptions?: string | { defaultValue?: string; [param: string]: unknown },
+			maybeOptions?: Record<string, unknown>,
+		) => {
 			// The panel calls t(key, fallbackString, { vars }); resolve to the fallback with {{var}} interpolation.
 			if (typeof fallbackOrOptions === "string") {
 				let text = fallbackOrOptions;
@@ -227,7 +231,17 @@ describe("InferenceProfilePanel", () => {
 
 		const text = document.body.textContent ?? "";
 		// No raw launch flags surface as primary UX.
-		for (const flag of ["-ngl", "--n-gpu-layers", "-ot", "--override-tensor", "-ts", "--tensor-split", "tensorSplit", "kvType", "flashAttn"]) {
+		for (const flag of [
+			"-ngl",
+			"--n-gpu-layers",
+			"-ot",
+			"--override-tensor",
+			"-ts",
+			"--tensor-split",
+			"tensorSplit",
+			"kvType",
+			"flashAttn",
+		]) {
 			expect(text).not.toContain(flag);
 		}
 		// No machine key / machine identifier is present (it is not on the wire DTO either).

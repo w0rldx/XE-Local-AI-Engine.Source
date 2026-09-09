@@ -106,14 +106,14 @@ export function BenchmarkJudgePanel({
 					)}
 				</Group>
 				{primaryTruncated ? (
-				<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-truncated-notice">
-					{t(
-						"pages.benchmarks.judge.truncatedPrimary",
-						"The answer this verdict graded was cut off by the token budget, so the score describes an incomplete answer and does not rank.",
-					)}
-				</Alert>
-			) : null}
-			{judge.score === null ? null : (
+					<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-judge-truncated-notice">
+						{t(
+							"pages.benchmarks.judge.truncatedPrimary",
+							"The answer this verdict graded was cut off by the token budget, so the score describes an incomplete answer and does not rank.",
+						)}
+					</Alert>
+				) : null}
+				{judge.score === null ? null : (
 					<Group gap="xs" align="baseline">
 						<Text fw={700} data-testid="benchmark-judge-score">
 							{t("pages.benchmarks.judge.score", "Judge score: {{score}} / 100", { score: judge.score })}

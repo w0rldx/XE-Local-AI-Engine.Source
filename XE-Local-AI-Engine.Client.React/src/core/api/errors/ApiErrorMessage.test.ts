@@ -14,9 +14,7 @@ describe("apiErrorMessage", () => {
 			message: "Stop or eject all running llama.cpp models before building the runtime.",
 		} as never);
 
-		expect(apiErrorMessage(error, "fallback")).toBe(
-			"Stop or eject all running llama.cpp models before building the runtime.",
-		);
+		expect(apiErrorMessage(error, "fallback")).toBe("Stop or eject all running llama.cpp models before building the runtime.");
 	});
 
 	it("prefers ProblemDetails detail on a normal API failure", () => {

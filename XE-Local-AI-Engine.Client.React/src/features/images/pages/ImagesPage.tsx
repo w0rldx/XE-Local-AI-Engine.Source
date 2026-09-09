@@ -75,7 +75,9 @@ export function ImagesPage() {
 			cancelMutation.mutate(jobId, {
 				onError: (error) => {
 					const message =
-						error instanceof ApiError && error.message ? error.message : t("pages.images.jobs.cancelError", "Could not cancel the job.");
+						error instanceof ApiError && error.message
+							? error.message
+							: t("pages.images.jobs.cancelError", "Could not cancel the job.");
 					toast.error(message);
 				},
 				onSettled: () => setCancellingJobId(null),

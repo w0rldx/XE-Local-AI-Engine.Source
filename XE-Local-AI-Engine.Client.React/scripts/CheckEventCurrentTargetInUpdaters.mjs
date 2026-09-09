@@ -164,7 +164,6 @@ function findViolations(src) {
 	return violations;
 }
 
-
 let totalViolations = 0;
 const allMessages = [];
 
@@ -190,7 +189,7 @@ if (totalViolations === 0) {
 	}
 	process.stderr.write(
 		"\nFix: capture event.currentTarget.value into a local const BEFORE the state updater:\n" +
-		"  onChange={(event) => { const value = event.currentTarget.value; setValues((c) => ({ ...c, field: value })); }}\n\n",
+			"  onChange={(event) => { const value = event.currentTarget.value; setValues((c) => ({ ...c, field: value })); }}\n\n",
 	);
 	process.exit(1);
 }

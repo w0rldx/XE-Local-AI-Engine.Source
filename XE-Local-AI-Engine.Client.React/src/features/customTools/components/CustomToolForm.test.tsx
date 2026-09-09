@@ -178,7 +178,15 @@ describe("CustomToolForm narrow-width row layout", () => {
 	});
 
 	it("lets a header/secret row wrap and gives its inputs a flex basis", () => {
-		renderForm({ http: { method: "GET", urlTemplate: "", headers: [{ name: "Authorization", value: "", isSecret: true }], bodyTemplate: "", allowedHosts: [] } });
+		renderForm({
+			http: {
+				method: "GET",
+				urlTemplate: "",
+				headers: [{ name: "Authorization", value: "", isSecret: true }],
+				bodyTemplate: "",
+				allowedHosts: [],
+			},
+		});
 
 		const row = screen.getByTestId("custom-tool-form-http-headers-row-0");
 		const [name, value] = Array.from(row.querySelectorAll<HTMLElement>(".mantine-TextInput-root"));

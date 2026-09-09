@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { graphWorkflowConflictTypes, readGraphWorkflowConflict } from "@/features/graphWorkflows/api/GraphWorkflowConflict";
 import { GRAPH_WORKFLOW_MAX_RUN_INPUT_BYTES } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { useStartGraphWorkflowRun } from "@/features/graphWorkflows/queries/useGraphWorkflows";
@@ -173,9 +174,11 @@ function StartRunForm({
 					)}
 				</Alert>
 			) : start.error ? (
-				<Alert color="red" variant="light" data-testid="graph-workflow-start-run-error">
-					{apiErrorMessage(start.error, t("pages.graphWorkflows.startRun.failed", "The run could not be started."))}
-				</Alert>
+				<InlineErrorAlert
+					message={apiErrorMessage(start.error, t("pages.graphWorkflows.startRun.failed", "The run could not be started."))}
+					variant="light"
+					data-testid="graph-workflow-start-run-error"
+				/>
 			) : null}
 
 			<Group justify="flex-end" gap="xs">

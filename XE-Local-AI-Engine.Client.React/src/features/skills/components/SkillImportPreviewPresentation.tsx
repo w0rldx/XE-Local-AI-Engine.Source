@@ -7,6 +7,7 @@ import type {
 	XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution,
 } from "@/core/api/generated";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SkillImportCandidateCard } from "@/features/skills/components/SkillImportCandidateCard";
 
 interface SkillImportOutcome {
@@ -46,41 +47,40 @@ export function SkillImportPreviewPresentation({
 
 	return (
 		<>
-			<Alert
+			<InlineErrorAlert
 				id={warningId}
-				color="red"
 				variant="light"
-				icon={<IconAlertTriangle size={16} />}
 				title={t("pages.skills.import.warning.title", "Imported skills are untrusted content")}
 				data-testid="skill-import-warning"
-			>
-				<Stack gap={6}>
-					<Text size="sm">
-						{t(
-							"pages.skills.import.warning.untrusted",
-							"Skills you import are third-party instructions. This node does not validate, scan or sandbox them. A skill's body is injected verbatim into your agent's context and can attempt to redirect the agent to do something other than what its description says.",
-						)}
-					</Text>
-					<Text size="sm" fw={700} data-testid="skill-import-warning-consequence">
-						{t(
-							"pages.skills.import.warning.consequence",
-							"An enabled skill's instructions run with your agent's tool access — including reading your knowledge base and local workspace files without a further prompt.",
-						)}
-					</Text>
-					<Text size="sm">
-						{t(
-							"pages.skills.import.warning.posture",
-							"Scripts are never imported. Everything else is shown to you exactly as it will be stored — read the full body and every resource below, then decide.",
-						)}
-					</Text>
-					<Text size="sm">
-						{t(
-							"pages.skills.import.warning.disabled",
-							"Imported skills arrive disabled. Enabling one is a separate, deliberate step.",
-						)}
-					</Text>
-				</Stack>
-			</Alert>
+				message={
+					<Stack gap={6}>
+						<Text size="sm">
+							{t(
+								"pages.skills.import.warning.untrusted",
+								"Skills you import are third-party instructions. This node does not validate, scan or sandbox them. A skill's body is injected verbatim into your agent's context and can attempt to redirect the agent to do something other than what its description says.",
+							)}
+						</Text>
+						<Text size="sm" fw={700} data-testid="skill-import-warning-consequence">
+							{t(
+								"pages.skills.import.warning.consequence",
+								"An enabled skill's instructions run with your agent's tool access — including reading your knowledge base and local workspace files without a further prompt.",
+							)}
+						</Text>
+						<Text size="sm">
+							{t(
+								"pages.skills.import.warning.posture",
+								"Scripts are never imported. Everything else is shown to you exactly as it will be stored — read the full body and every resource below, then decide.",
+							)}
+						</Text>
+						<Text size="sm">
+							{t(
+								"pages.skills.import.warning.disabled",
+								"Imported skills arrive disabled. Enabling one is a separate, deliberate step.",
+							)}
+						</Text>
+					</Stack>
+				}
+			/>
 
 			<Checkbox
 				checked={acknowledged}

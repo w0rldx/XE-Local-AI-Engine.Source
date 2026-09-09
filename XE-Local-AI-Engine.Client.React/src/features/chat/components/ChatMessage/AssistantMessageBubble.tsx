@@ -1,5 +1,5 @@
-import { Alert, Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerStop, IconPlayerTrackNext, IconSparkles } from "@tabler/icons-react";
+import { Anchor, Avatar, Badge, Box, Group, Paper, Stack, Text } from "@mantine/core";
+import { IconPlayerStop, IconPlayerTrackNext, IconSparkles } from "@tabler/icons-react";
 import { Link } from "@tanstack/react-router";
 import { AnimatePresence, m, useReducedMotion } from "framer-motion";
 import type { ReactNode } from "react";
@@ -13,6 +13,8 @@ import type { ChatMessageDisplay } from "@/features/chat/models/ChatMessageDispl
 import { hasText } from "@/features/chat/models/ChatMessageDisplay";
 import type { ChatMessageModel, ReasoningEffort } from "@/features/chat/models/ChatModels";
 import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
+
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 interface AssistantMessageBubbleProps {
 	message: ChatMessageModel;
@@ -127,35 +129,34 @@ export function AssistantMessageBubble({
 					</Group>
 				) : null}
 				{display.showErrorAlert ? (
-					<Alert
-						color="red"
+					<InlineErrorAlert
 						variant="light"
-						icon={<IconAlertTriangle size={16} />}
 						title={t("pages.chat.error.title", "Response failed")}
 						data-testid={`chat-message-error-${message.id}`}
 						style={{ borderRadius: "4px 14px 14px 14px" }}
-					>
-						<Stack gap={6}>
-							{/* A "Local runtime default" send with no installed GGUF chat model is surfaced as a friendly,
-							    actionable message (with a Models CTA) rather than the raw backend error string. Every other
-							    category keeps the backend-provided message. */}
-							<Text size="sm">
-								{failureCategory === "ModelNotInstalled"
-									? t("pages.chat.error.modelNotInstalled", "No chat model installed. Pull a GGUF model to start chatting.")
-									: display.errorText}
-							</Text>
-							{failureCategory === "ModelNotInstalled" ? (
-								<Anchor component={Link} to="/models" size="sm" data-testid={`chat-message-error-models-link-${message.id}`}>
-									{t("pages.chat.error.goToModels", "Go to Models")}
-								</Anchor>
-							) : null}
-							{hasText(failureCategory) ? (
-								<Badge color="red" size="sm" variant="light" data-testid={`chat-message-error-category-${message.id}`}>
-									{failureCategory}
-								</Badge>
-							) : null}
-						</Stack>
-					</Alert>
+						message={
+							<Stack gap={6}>
+								{/* A "Local runtime default" send with no installed GGUF chat model is surfaced as a friendly,
+								    actionable message (with a Models CTA) rather than the raw backend error string. Every other
+								    category keeps the backend-provided message. */}
+								<Text size="sm">
+									{failureCategory === "ModelNotInstalled"
+										? t("pages.chat.error.modelNotInstalled", "No chat model installed. Pull a GGUF model to start chatting.")
+										: display.errorText}
+								</Text>
+								{failureCategory === "ModelNotInstalled" ? (
+									<Anchor component={Link} to="/models" size="sm" data-testid={`chat-message-error-models-link-${message.id}`}>
+										{t("pages.chat.error.goToModels", "Go to Models")}
+									</Anchor>
+								) : null}
+								{hasText(failureCategory) ? (
+									<Badge color="red" size="sm" variant="light" data-testid={`chat-message-error-category-${message.id}`}>
+										{failureCategory}
+									</Badge>
+								) : null}
+							</Stack>
+						}
+					/>
 				) : null}
 				{assistantMessage && (display.agentDisplayName || display.time) ? (
 					// Attribution row: left side holds action icons (real empty Box when null, so space-between pins

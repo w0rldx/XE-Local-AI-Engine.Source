@@ -22,7 +22,12 @@ describe("shouldFetchLocalModelDetails", () => {
 
 	it("fetches for an available, installed GGUF (llamacpp) selection — the node serves its details as a 200", () => {
 		expect(
-			shouldFetchLocalModelDetails("Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M", option({ provider: "llamacpp", isAvailable: true }), false, true),
+			shouldFetchLocalModelDetails(
+				"Qwen2.5-0.5B-Instruct-GGUF:Q4_K_M",
+				option({ provider: "llamacpp", isAvailable: true }),
+				false,
+				true,
+			),
 		).toBe(true);
 	});
 
@@ -38,13 +43,23 @@ describe("shouldFetchLocalModelDetails", () => {
 		// The declared context window is the one detail the endpoint answers for an `ext:` id, and the context-usage
 		// meter is its only consumer — gating it on the installed list metered every external turn against "—".
 		expect(
-			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: true }), false, false),
+			shouldFetchLocalModelDetails(
+				"ext:workstation/qwen3-27b",
+				option({ provider: "external", isAvailable: true }),
+				false,
+				false,
+			),
 		).toBe(true);
 	});
 
 	it("still refuses an external selection the picker marked unavailable", () => {
 		expect(
-			shouldFetchLocalModelDetails("ext:workstation/qwen3-27b", option({ provider: "external", isAvailable: false }), false, false),
+			shouldFetchLocalModelDetails(
+				"ext:workstation/qwen3-27b",
+				option({ provider: "external", isAvailable: false }),
+				false,
+				false,
+			),
 		).toBe(false);
 	});
 

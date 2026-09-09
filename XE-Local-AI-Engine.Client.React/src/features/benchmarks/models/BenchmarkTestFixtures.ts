@@ -133,7 +133,14 @@ export function benchmarkCellFixture(overrides: Partial<BenchmarkCell> = {}): Be
 		rank: 1,
 		rankExclusionReason: null,
 		items: [
-			{ runId: "run-1", taskItemId: "item-1", taskItemIndex: 0, qualityScore: 70, primaryStopReason: "stop", rankExclusionReason: null },
+			{
+				runId: "run-1",
+				taskItemId: "item-1",
+				taskItemIndex: 0,
+				qualityScore: 70,
+				primaryStopReason: "stop",
+				rankExclusionReason: null,
+			},
 		],
 		...overrides,
 	};

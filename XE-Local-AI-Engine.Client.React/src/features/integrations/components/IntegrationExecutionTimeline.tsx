@@ -59,9 +59,7 @@ function parseDetail(detailJson: string | null): EventDetail | null {
  */
 function outputLanguage(contentType: string | undefined): string {
 	const mediaType = (contentType ?? "").split(";", 1).join("").trim().toLowerCase();
-	return mediaType === "application/json" || mediaType === "text/json" || mediaType.endsWith("+json")
-		? "json"
-		: "plaintext";
+	return mediaType === "application/json" || mediaType === "text/json" || mediaType.endsWith("+json") ? "json" : "plaintext";
 }
 
 /** Pretty-prints the caller's payload for the read-only viewer, falling back to the raw text when it will not parse. */

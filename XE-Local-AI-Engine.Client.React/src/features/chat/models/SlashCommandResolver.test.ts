@@ -12,7 +12,12 @@ const options: ChatCommandOption[] = [
 
 describe("slash command matching", () => {
 	it("ranks exact, prefix, name substring, and description substring before ordinal name", () => {
-		expect(matchSlashCommands(options, "review").map((option) => option.name)).toEqual(["review", "review-code", "preview", "audit"]);
+		expect(matchSlashCommands(options, "review").map((option) => option.name)).toEqual([
+			"review",
+			"review-code",
+			"preview",
+			"audit",
+		]);
 	});
 
 	it("sorts an empty slash query by ordinal command name", () => {
@@ -20,12 +25,24 @@ describe("slash command matching", () => {
 	});
 
 	it("only activates for an initial slash token with a collapsed caret at the end", () => {
-		expect(getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: true, isComposing: false })).toBe("rev");
-		expect(getSlashCommandQuery({ content: "say /rev", selectionStart: 8, selectionEnd: 8, interactive: true, isComposing: false })).toBeNull();
-		expect(getSlashCommandQuery({ content: "/rev", selectionStart: 2, selectionEnd: 2, interactive: true, isComposing: false })).toBeNull();
-		expect(getSlashCommandQuery({ content: "/rev", selectionStart: 1, selectionEnd: 3, interactive: true, isComposing: false })).toBeNull();
-		expect(getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: false, isComposing: false })).toBeNull();
-		expect(getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: true, isComposing: true })).toBeNull();
+		expect(
+			getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: true, isComposing: false }),
+		).toBe("rev");
+		expect(
+			getSlashCommandQuery({ content: "say /rev", selectionStart: 8, selectionEnd: 8, interactive: true, isComposing: false }),
+		).toBeNull();
+		expect(
+			getSlashCommandQuery({ content: "/rev", selectionStart: 2, selectionEnd: 2, interactive: true, isComposing: false }),
+		).toBeNull();
+		expect(
+			getSlashCommandQuery({ content: "/rev", selectionStart: 1, selectionEnd: 3, interactive: true, isComposing: false }),
+		).toBeNull();
+		expect(
+			getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: false, isComposing: false }),
+		).toBeNull();
+		expect(
+			getSlashCommandQuery({ content: "/rev", selectionStart: 4, selectionEnd: 4, interactive: true, isComposing: true }),
+		).toBeNull();
 	});
 
 	it("resolves only an exact known canonical slash command", () => {

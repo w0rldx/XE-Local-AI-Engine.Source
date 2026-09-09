@@ -259,7 +259,9 @@ describe("Chat cold-load resume", () => {
 		const loadCalls = adapter.getConversation.mock.calls.length;
 
 		// Nothing to attach to: no error banner, no cache write (same object identity), and no post-turn refetch.
-		await waitFor(() => expect(queryClient.getQueryData(nodeChatQueryKeys.conversation("conversation-1"))).toBe(loadedConversation));
+		await waitFor(() =>
+			expect(queryClient.getQueryData(nodeChatQueryKeys.conversation("conversation-1"))).toBe(loadedConversation),
+		);
 		expect(screen.queryByTestId("chat-ask-user-card")).toBeNull();
 		expect(screen.queryByText("Local chat stream failed.")).toBeNull();
 		expect(adapter.getConversation.mock.calls).toHaveLength(loadCalls);

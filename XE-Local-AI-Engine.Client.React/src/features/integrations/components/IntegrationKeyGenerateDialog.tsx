@@ -1,9 +1,10 @@
-import { Alert, Button, MultiSelect, Select, Stack, Switch, TextInput } from "@mantine/core";
+import { Button, MultiSelect, Select, Stack, Switch, TextInput } from "@mantine/core";
 import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import {
 	emptyIntegrationKeyFormValues,
@@ -76,10 +77,7 @@ export function IntegrationKeyGenerateDialog({
 		];
 	}, [keys, t]);
 
-	const triggerData = useMemo(
-		() => triggers.map((trigger) => ({ value: trigger.id, label: trigger.displayName })),
-		[triggers],
-	);
+	const triggerData = useMemo(() => triggers.map((trigger) => ({ value: trigger.id, label: trigger.displayName })), [triggers]);
 
 	const fieldError = useCallback(
 		(key: string, fallback: string): string | undefined => {
@@ -200,11 +198,7 @@ export function IntegrationKeyGenerateDialog({
 					/>
 				)}
 
-				{submitError ? (
-					<Alert color="red" data-testid="integration-key-generate-error">
-						{submitError}
-					</Alert>
-				) : null}
+				{submitError ? <InlineErrorAlert message={submitError} data-testid="integration-key-generate-error" /> : null}
 			</Stack>
 		</DialogShell>
 	);

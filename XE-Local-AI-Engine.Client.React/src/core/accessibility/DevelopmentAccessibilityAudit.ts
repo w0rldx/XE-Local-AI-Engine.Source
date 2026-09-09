@@ -37,7 +37,7 @@ export function findAccessibilityIssues(root: ParentNode = document): Accessibil
 	const issues: AccessibilityIssue[] = [];
 	for (const image of root.querySelectorAll("img:not([alt])")) {
 		if (!isHidden(image)) {
-			issues.push({ rule: "Images need an alt attribute (use alt=\"\" for decorative images).", element: image });
+			issues.push({ rule: 'Images need an alt attribute (use alt="" for decorative images).', element: image });
 		}
 	}
 

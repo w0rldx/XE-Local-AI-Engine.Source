@@ -48,11 +48,7 @@ export function IntegrationKeyList({ keys, triggers, isMutating, onRevoke }: Int
 				</Table.Thead>
 				<Table.Tbody>
 					{keys.map((key) => (
-						<Table.Tr
-							key={key.id}
-							opacity={key.revokedAtUtc === null ? 1 : 0.55}
-							data-testid={`integration-key-row-${key.id}`}
-						>
+						<Table.Tr key={key.id} opacity={key.revokedAtUtc === null ? 1 : 0.55} data-testid={`integration-key-row-${key.id}`}>
 							<Table.Td>
 								<Text size="sm" ff="monospace">
 									{`${key.keyPrefix}…`}

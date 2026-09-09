@@ -11,10 +11,7 @@ test("resolvePackageComponent reads exact installed package identity", () => {
 	const root = mkdtempSync(join(tmpdir(), "xe-component-"));
 	const packageRoot = join(root, "node_modules", "example-package");
 	mkdirSync(join(packageRoot, "dist"), { recursive: true });
-	writeFileSync(
-		join(packageRoot, "package.json"),
-		JSON.stringify({ name: "example-package", version: "1.2.3", license: "MIT" }),
-	);
+	writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ name: "example-package", version: "1.2.3", license: "MIT" }));
 	const component = resolvePackageComponent(join(packageRoot, "dist", "index.js"));
 	assert.deepEqual(component, {
 		name: "example-package",
@@ -28,10 +25,7 @@ test("resolvePackageComponent skips nested package metadata without an identity"
 	const root = mkdtempSync(join(tmpdir(), "xe-component-"));
 	const packageRoot = join(root, "node_modules", "example-package");
 	mkdirSync(join(packageRoot, "dist", "locales"), { recursive: true });
-	writeFileSync(
-		join(packageRoot, "package.json"),
-		JSON.stringify({ name: "example-package", version: "1.2.3", license: "MIT" }),
-	);
+	writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ name: "example-package", version: "1.2.3", license: "MIT" }));
 	writeFileSync(join(packageRoot, "dist", "locales", "package.json"), JSON.stringify({ type: "module" }));
 
 	const component = resolvePackageComponent(join(packageRoot, "dist", "locales", "en.js"));
@@ -49,7 +43,10 @@ test("plugin emits only rendered chunk component identities without local paths"
 	const treeShakenPackageRoot = join(root, "node_modules", "tree-shaken-package");
 	mkdirSync(join(packageRoot, "dist"), { recursive: true });
 	mkdirSync(join(treeShakenPackageRoot, "dist"), { recursive: true });
-	writeFileSync(join(packageRoot, "package.json"), JSON.stringify({ name: "@scope/example", version: "2.0.0", license: "Apache-2.0" }));
+	writeFileSync(
+		join(packageRoot, "package.json"),
+		JSON.stringify({ name: "@scope/example", version: "2.0.0", license: "Apache-2.0" }),
+	);
 	writeFileSync(
 		join(treeShakenPackageRoot, "package.json"),
 		JSON.stringify({ name: "tree-shaken-package", version: "1.0.0", license: "MIT" }),

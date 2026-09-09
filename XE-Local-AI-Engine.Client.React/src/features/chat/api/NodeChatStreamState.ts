@@ -163,7 +163,13 @@ function decomposeParts(parts: readonly ChatMessagePart[] | undefined): {
 		} else if (part.kind === "text") {
 			textSegments.push({ id: part.id, sequence: part.sequence, text: part.text });
 		} else if (part.kind === "notice") {
-			noticeEntries.push({ id: part.id, sequence: part.sequence, noticeKind: part.noticeKind, text: part.text, detail: part.detail });
+			noticeEntries.push({
+				id: part.id,
+				sequence: part.sequence,
+				noticeKind: part.noticeKind,
+				text: part.text,
+				detail: part.detail,
+			});
 		}
 	}
 

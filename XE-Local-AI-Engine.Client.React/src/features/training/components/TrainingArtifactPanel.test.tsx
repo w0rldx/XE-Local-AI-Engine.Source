@@ -33,9 +33,25 @@ vi.mock("@/features/training/queries/useTrainingArtifacts", () => ({
 }));
 
 vi.mock("@/features/training/components/ComparisonCreateDialog", () => ({
-	ComparisonCreateDialog: ({ opened, artifactId, freshEvaluations, onComparisonCreated }: { opened: boolean; artifactId?: string; freshEvaluations?: boolean; onComparisonCreated?: (id: string) => void }) =>
+	ComparisonCreateDialog: ({
+		opened,
+		artifactId,
+		freshEvaluations,
+		onComparisonCreated,
+	}: {
+		opened: boolean;
+		artifactId?: string;
+		freshEvaluations?: boolean;
+		onComparisonCreated?: (id: string) => void;
+	}) =>
 		opened ? (
-			<button data-artifact-id={artifactId} data-fresh-evaluations={String(freshEvaluations)} data-testid="mock-comparison-complete" onClick={() => onComparisonCreated?.("comparison-1")} type="button">
+			<button
+				data-artifact-id={artifactId}
+				data-fresh-evaluations={String(freshEvaluations)}
+				data-testid="mock-comparison-complete"
+				onClick={() => onComparisonCreated?.("comparison-1")}
+				type="button"
+			>
 				Complete comparison
 			</button>
 		) : null,

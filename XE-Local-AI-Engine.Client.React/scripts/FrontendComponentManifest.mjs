@@ -8,7 +8,10 @@ function normalizeModulePath(moduleId) {
 }
 
 function createNpmPurl(name, version) {
-	const encodedName = name.split("/").map((segment) => encodeURIComponent(segment)).join("/");
+	const encodedName = name
+		.split("/")
+		.map((segment) => encodeURIComponent(segment))
+		.join("/");
 	return `pkg:npm/${encodedName}@${version}`;
 }
 

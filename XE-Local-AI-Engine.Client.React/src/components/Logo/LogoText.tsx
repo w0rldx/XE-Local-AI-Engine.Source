@@ -17,10 +17,7 @@ export function LogoText({ className = "object-contain h-full w-full" }: LogoTex
 			aria-label="AI Engine"
 			style={{ color: "var(--mantine-primary-color-filled)" }}
 		>
-			<path
-				d="M 0 97 L 43 9 L 63 9 L 106 97 L 88 97 L 78 76 L 28 76 L 18 97 Z M 36 62 L 53 27 L 70 62 Z"
-				fillRule="evenodd"
-			/>
+			<path d="M 0 97 L 43 9 L 63 9 L 106 97 L 88 97 L 78 76 L 28 76 L 18 97 Z M 36 62 L 53 27 L 70 62 Z" fillRule="evenodd" />
 			<rect x="124" y="9" width="16" height="88" />
 			<path d="M 225 9 L 306 9 L 306 24 L 225 24 L 225 46 L 299 46 L 299 60 L 225 60 L 225 82 L 306 82 L 306 97 L 225 97 L 210 82 L 210 24 Z" />
 			<rect x="326" y="9" width="16" height="88" />

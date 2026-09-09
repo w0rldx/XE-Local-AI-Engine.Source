@@ -33,10 +33,7 @@ const singleSelect: PendingUserQuestion = {
 		{
 			header: "Auth",
 			question: "Which auth method?",
-			options: [
-				{ label: "OAuth device flow", description: "No secret to store", recommended: true },
-				{ label: "API key" },
-			],
+			options: [{ label: "OAuth device flow", description: "No secret to store", recommended: true }, { label: "API key" }],
 		},
 	],
 };

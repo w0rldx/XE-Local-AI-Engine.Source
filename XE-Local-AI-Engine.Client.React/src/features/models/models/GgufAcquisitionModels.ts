@@ -67,12 +67,7 @@ export function toGgufAcquisitionStatus(raw: Partial<AcquisitionWireStatus>): Gg
 		startedAtUtc: raw.startedAtUtc,
 		updatedAtUtc: raw.updatedAtUtc,
 		errorCode: raw.errorCode,
-		sanitizedMessage:
-			"sanitizedMessage" in raw
-				? raw.sanitizedMessage
-				: "sanitizedError" in raw
-					? raw.sanitizedError
-					: undefined,
+		sanitizedMessage: "sanitizedMessage" in raw ? raw.sanitizedMessage : "sanitizedError" in raw ? raw.sanitizedError : undefined,
 	};
 }
 

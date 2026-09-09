@@ -124,7 +124,9 @@ describe("BenchmarkLaunchMatrix", () => {
 	// Per-item rejections come back inside a 200, so they have nowhere to surface unless the dialog shows them.
 	it("lists the combinations the node refused", () => {
 		renderMatrix({
-			rejected: [{ modelName: "owner/Repo:Q8_0", kvCacheType: "q4_0", code: "UnsupportedKvCacheType", message: "Needs a GPU build." }],
+			rejected: [
+				{ modelName: "owner/Repo:Q8_0", kvCacheType: "q4_0", code: "UnsupportedKvCacheType", message: "Needs a GPU build." },
+			],
 		});
 
 		expect(screen.getByTestId("benchmark-matrix-rejected").textContent).toContain("owner/Repo:Q8_0 · q4_0 — Needs a GPU build.");

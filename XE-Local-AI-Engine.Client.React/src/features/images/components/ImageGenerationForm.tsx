@@ -3,6 +3,7 @@ import { IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import {
 	type ImageGenerationFormValues,
@@ -226,11 +227,7 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 				</Alert>
 			) : null}
 
-			{submitError ? (
-				<Alert color="red" data-testid="image-form-submit-error">
-					{submitError}
-				</Alert>
-			) : null}
+			{submitError ? <InlineErrorAlert message={submitError} data-testid="image-form-submit-error" /> : null}
 
 			<Group justify="flex-end">
 				<Button

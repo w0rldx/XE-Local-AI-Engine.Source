@@ -27,7 +27,10 @@ function isFiniteNumber(value: unknown): value is number {
 	return typeof value === "number" && Number.isFinite(value);
 }
 
-function parseConsumption(eventType: string | null | undefined, detailJson: string | null | undefined): StepConsumption | undefined {
+function parseConsumption(
+	eventType: string | null | undefined,
+	detailJson: string | null | undefined,
+): StepConsumption | undefined {
 	if (!eventType || !consumptionEventTypes.has(eventType) || !detailJson) {
 		return undefined;
 	}
@@ -78,7 +81,9 @@ function formatTokens(value: number, language: string, t: TFunction): string {
 		return new Intl.NumberFormat(language).format(rounded);
 	}
 
-	const thousands = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(rounded / 1000);
+	const thousands = new Intl.NumberFormat(language, { minimumFractionDigits: 1, maximumFractionDigits: 1 }).format(
+		rounded / 1000,
+	);
 	return t("pages.workSessions.events.tokensThousands", "{{value}}k", { value: thousands });
 }
 
@@ -130,12 +135,16 @@ export function WorkSessionEventsTab({ events, hasMore, canLoadMore, onLoadMore 
 			);
 		}
 
-		return t("pages.workSessions.events.consumption", "{{calls}}/{{cap}} provider calls · {{tools}} tool calls · ~{{tokens}} est. input tokens", {
-			calls: consumption.providerCalls,
-			cap: consumption.providerCallCap,
-			tools: consumption.toolCallsCompleted,
-			tokens,
-		});
+		return t(
+			"pages.workSessions.events.consumption",
+			"{{calls}}/{{cap}} provider calls · {{tools}} tool calls · ~{{tokens}} est. input tokens",
+			{
+				calls: consumption.providerCalls,
+				cap: consumption.providerCallCap,
+				tools: consumption.toolCallsCompleted,
+				tokens,
+			},
+		);
 	}
 
 	const rows = ordered.map((event) => ({ event, consumption: consumptionLine(event) }));

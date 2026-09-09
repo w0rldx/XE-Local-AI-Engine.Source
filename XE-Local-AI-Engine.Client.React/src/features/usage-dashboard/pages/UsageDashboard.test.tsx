@@ -109,7 +109,15 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 	it("renders the empty-state guidance when no usage was recorded", async () => {
 		generatedMock.summaryFn.mockResolvedValue({
 			items: [],
-			totals: { runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
+			totals: {
+				runCount: 0,
+				promptTokens: 0,
+				completionTokens: 0,
+				reasoningTokens: 0,
+				totalTokens: 0,
+				estimatedCostUsd: 0,
+				currency: "USD",
+			},
 			byProvider: [],
 			retentionDays: 30,
 		} satisfies GetAgentUsageSummaryResponse);
@@ -162,9 +170,36 @@ function createSummary(): GetAgentUsageSummaryResponse {
 			currency: "USD",
 		},
 		byProvider: [
-			{ provider: "local", runCount: 20, promptTokens: 300_000, completionTokens: 500_000, reasoningTokens: 20_000, totalTokens: 820_000, estimatedCostUsd: 0, currency: "USD" },
-			{ provider: "codex", runCount: 22, promptTokens: 200_000, completionTokens: 200_000, reasoningTokens: 14_567, totalTokens: 414_567, estimatedCostUsd: 3.5, currency: "USD" },
-			{ provider: "unknown", runCount: 0, promptTokens: 0, completionTokens: 0, reasoningTokens: 0, totalTokens: 0, estimatedCostUsd: 0, currency: "USD" },
+			{
+				provider: "local",
+				runCount: 20,
+				promptTokens: 300_000,
+				completionTokens: 500_000,
+				reasoningTokens: 20_000,
+				totalTokens: 820_000,
+				estimatedCostUsd: 0,
+				currency: "USD",
+			},
+			{
+				provider: "codex",
+				runCount: 22,
+				promptTokens: 200_000,
+				completionTokens: 200_000,
+				reasoningTokens: 14_567,
+				totalTokens: 414_567,
+				estimatedCostUsd: 3.5,
+				currency: "USD",
+			},
+			{
+				provider: "unknown",
+				runCount: 0,
+				promptTokens: 0,
+				completionTokens: 0,
+				reasoningTokens: 0,
+				totalTokens: 0,
+				estimatedCostUsd: 0,
+				currency: "USD",
+			},
 		],
 		retentionDays: 30,
 	};

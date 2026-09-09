@@ -13,12 +13,7 @@ import {
 	parseEntraSignInMethod,
 } from "@/features/cloud-settings/models/CloudSettingsModel";
 
-type EntraTextField =
-	| "entraTenantId"
-	| "entraClientId"
-	| "entraClientSecret"
-	| "entraTokenScope"
-	| "entraAuthCodeRedirectUri";
+type EntraTextField = "entraTenantId" | "entraClientId" | "entraClientSecret" | "entraTokenScope" | "entraAuthCodeRedirectUri";
 
 interface EntraConnectionFieldsProps {
 	values: CloudSettingsFormValues;
@@ -81,8 +76,14 @@ export function EntraConnectionFields({
 				label={t("pages.cloudSettings.entra.clientSecretLabel", "Client secret")}
 				description={
 					hasStoredClientSecret
-						? t("pages.cloudSettings.entra.clientSecretStoredHint", "A secret is stored. Enter a new value to replace it, or leave blank to keep it.")
-						: t("pages.cloudSettings.entra.clientSecretHint", "Leave blank to sign in interactively instead of using app-only client-credentials.")
+						? t(
+								"pages.cloudSettings.entra.clientSecretStoredHint",
+								"A secret is stored. Enter a new value to replace it, or leave blank to keep it.",
+							)
+						: t(
+								"pages.cloudSettings.entra.clientSecretHint",
+								"Leave blank to sign in interactively instead of using app-only client-credentials.",
+							)
 				}
 				value={values.entraClientSecret}
 				onChange={(event) => onFieldChange("entraClientSecret", event.currentTarget.value)}
@@ -124,7 +125,10 @@ export function EntraConnectionFields({
 							},
 							{
 								value: "AuthorizationCode",
-								label: t("pages.cloudSettings.entra.signInMethodAuthorizationCode", "Authorization code (browser + client secret)"),
+								label: t(
+									"pages.cloudSettings.entra.signInMethodAuthorizationCode",
+									"Authorization code (browser + client secret)",
+								),
 							},
 						]}
 					/>

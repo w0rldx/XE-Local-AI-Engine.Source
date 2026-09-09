@@ -18,7 +18,14 @@ import {
 import type { XeLocalAiEngineClientServicesTrainingDatasetsDatasetDefinitionBodyV1 as DatasetDefinitionBody } from "@/core/api/generated";
 import { getToolCapableModelsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { callWithResponseValidation, withResponseValidation } from "@/core/api/ResponseValidation";
-import type { SampleLabel, SampleReviewState, ToolMock, TrainingDataset, TrainingDefinition, TrainingSample } from "@/features/training/models/TrainingModels";
+import type {
+	SampleLabel,
+	SampleReviewState,
+	ToolMock,
+	TrainingDataset,
+	TrainingDefinition,
+	TrainingSample,
+} from "@/features/training/models/TrainingModels";
 import { toToolMock, toTrainingDataset, toTrainingDefinition, toTrainingSample } from "@/features/training/models/TrainingModels";
 
 // Server state for the training dataset surface. Calls the generated hey-api SDK directly through the shared
@@ -49,7 +56,8 @@ export function useTrainingDatasets() {
 	return useQuery<TrainingDataset[]>({
 		queryKey: trainingQueryKeys.datasets,
 		// A generating dataset is the only reason to poll; the hub carries the fine-grained progress.
-		refetchInterval: (query) => (query.state.data?.some((dataset) => dataset.status === "Generating") ? generatingPollIntervalMs : false),
+		refetchInterval: (query) =>
+			query.state.data?.some((dataset) => dataset.status === "Generating") ? generatingPollIntervalMs : false,
 		queryFn: async ({ signal }) => {
 			const { data } = await callWithResponseValidation(listTrainingDatasets({ signal, throwOnError: true }));
 			return (data.items ?? []).map(toTrainingDataset);
@@ -218,7 +226,12 @@ export function useCancelTrainingDataset() {
 export function useReviewTrainingSample() {
 	const queryClient = useQueryClient();
 	return useMutation({
-		mutationFn: async (input: { datasetId: string; sampleId: string; verb: "Approve" | "Reject" | "Relabel"; label?: SampleLabel }) => {
+		mutationFn: async (input: {
+			datasetId: string;
+			sampleId: string;
+			verb: "Approve" | "Reject" | "Relabel";
+			label?: SampleLabel;
+		}) => {
 			const { data } = await callWithResponseValidation(
 				reviewTrainingSample({
 					path: { datasetId: input.datasetId, sampleId: input.sampleId },

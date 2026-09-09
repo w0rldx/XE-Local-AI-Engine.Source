@@ -13,7 +13,13 @@ export function ThemeModeToggle() {
 
 	return (
 		<Tooltip label={mode === "light" ? t("theme.switchToDark") : t("theme.switchToLight")}>
-			<ActionIcon onClick={() => toggleColorMode()} variant="default" size="xl" radius="md" aria-label={t("theme.toggleColorScheme")}>
+			<ActionIcon
+				onClick={() => toggleColorMode()}
+				variant="default"
+				size="xl"
+				radius="md"
+				aria-label={t("theme.toggleColorScheme")}
+			>
 				<IconSun className={cx(classes["icon"], classes["light"])} stroke={1.5} />
 				<IconMoon className={cx(classes["icon"], classes["dark"])} stroke={1.5} />
 			</ActionIcon>

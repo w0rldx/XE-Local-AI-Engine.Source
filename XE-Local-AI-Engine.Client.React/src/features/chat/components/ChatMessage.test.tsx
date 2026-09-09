@@ -352,7 +352,11 @@ describe("ChatMessage actions", () => {
 		// The alert must render the friendly i18n message + a "Go to Models" CTA, not just the raw backend string.
 		renderWithProviders(
 			<ChatMessage
-				message={assistantMessage({ content: "", status: "failed", error: "No chat model installed. Pull a GGUF model to start chatting." })}
+				message={assistantMessage({
+					content: "",
+					status: "failed",
+					error: "No chat model installed. Pull a GGUF model to start chatting.",
+				})}
 				failureCategory="ModelNotInstalled"
 			/>,
 		);
@@ -474,9 +478,7 @@ describe("ChatMessage actions", () => {
 
 	// A user cancellation is a neutral, expected outcome — never the red "Response failed" alert.
 	it("renders a cancelled turn as a neutral 'Generation stopped' line, not the red error alert", () => {
-		renderWithProviders(
-			<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />,
-		);
+		renderWithProviders(<ChatMessage message={assistantMessage({ content: "Partial answer…", status: "cancelled" })} />);
 
 		expect(screen.getByTestId("chat-message-stopped-assistant-1")).toBeTruthy();
 		expect(screen.getByTestId("chat-message-stopped-assistant-1").textContent).toContain("Generation stopped");
@@ -498,9 +500,7 @@ describe("ChatMessage actions", () => {
 	});
 
 	it("still renders the red error alert for a genuinely failed turn (cancelled classification does not leak)", () => {
-		renderWithProviders(
-			<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />,
-		);
+		renderWithProviders(<ChatMessage message={assistantMessage({ content: "", status: "failed", error: "Stream failed." })} />);
 
 		expect(screen.getByTestId("chat-message-error-assistant-1")).toBeTruthy();
 		expect(screen.queryByTestId("chat-message-stopped-assistant-1")).toBeNull();
@@ -508,7 +508,8 @@ describe("ChatMessage actions", () => {
 
 	// Verbatim ProviderCallBudget.StepCallCapReachedMessage. If the backend constant changes, this test and the copy
 	// in ChatMessage.tsx must change with it (the backend side is pinned by ProviderCallBudgetTests).
-	const stepCapError = "This step reached its provider-call cap; the work session continues from its saved state on the next step.";
+	const stepCapError =
+		"This step reached its provider-call cap; the work session continues from its saved state on the next step.";
 
 	it("renders a work-session step that spent its call cap as a neutral notice, not the red error alert", () => {
 		renderWithProviders(

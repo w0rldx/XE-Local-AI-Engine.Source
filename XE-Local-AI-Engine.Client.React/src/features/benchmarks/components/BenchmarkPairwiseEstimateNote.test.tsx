@@ -15,7 +15,16 @@ import { formatEstimatedDuration } from "@/features/benchmarks/models/BenchmarkP
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const wire = (overrides = {}) => ({
-	data: { eligibleRuns: 12, pairedRuns: 12, cappedRuns: 0, judgeCalls: 132, estimatedSeconds: 600, warn: false, maximumRuns: 16, ...overrides },
+	data: {
+		eligibleRuns: 12,
+		pairedRuns: 12,
+		cappedRuns: 0,
+		judgeCalls: 132,
+		estimatedSeconds: 600,
+		warn: false,
+		maximumRuns: 16,
+		...overrides,
+	},
 });
 
 describe("formatEstimatedDuration", () => {

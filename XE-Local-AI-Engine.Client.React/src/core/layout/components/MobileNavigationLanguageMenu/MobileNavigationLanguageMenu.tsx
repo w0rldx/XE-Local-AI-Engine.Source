@@ -10,11 +10,7 @@ import { useUserLanguageStore } from "@/core/locales/stores/UserLanguageStore";
 import { languageData } from "@/data/language/LanguageMenuData";
 import type { IMobileNavigationLanguageMenuProperties } from "@/core/layout/components/MobileNavigationLanguageMenu/MobileNavigationLanguageMenu.types";
 
-export function MobileNavigationLanguageMenu({
-	menuItemStyle,
-	setDrawerOpen,
-	width,
-}: IMobileNavigationLanguageMenuProperties) {
+export function MobileNavigationLanguageMenu({ menuItemStyle, setDrawerOpen, width }: IMobileNavigationLanguageMenuProperties) {
 	const { t, i18n } = useTranslation();
 	const { isDrawerOpen, setIsDrawerOpen, drawerReference, menuReference, openDrawer, closeDrawer } =
 		useMobileNavigationDrawer(setDrawerOpen);
