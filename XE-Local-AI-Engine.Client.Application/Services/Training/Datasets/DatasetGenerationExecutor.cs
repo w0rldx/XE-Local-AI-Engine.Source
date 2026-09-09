@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -122,7 +123,7 @@ public sealed class DatasetGenerationExecutor(
         {
             ModelName = definition.TeacherModelName,
             ProviderName = provider.ProviderName
-        });
+        }).WithProviderTelemetry();
         using var criticClient = await CreateCriticClientAsync(definition, cancellationToken).ConfigureAwait(false);
 
         var systemInstructions = ComposeSystemInstructions(definition);
@@ -205,7 +206,7 @@ public sealed class DatasetGenerationExecutor(
         {
             ModelName = definition.CriticModelName,
             ProviderName = provider.ProviderName
-        });
+        }).WithProviderTelemetry();
     }
 
     /// <summary>Flattens the kind targets into a stable per-sample plan; the sample index into it is the seed offset.</summary>

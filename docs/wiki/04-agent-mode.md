@@ -365,8 +365,9 @@ An Agent Skill is a `SKILL.md`-shaped document (name + description + markdown bo
 bundled files) that an agent definition selects into via `AllowedSkillIds` and MAF loads on demand —
 progressive disclosure, not a static prompt prepend. The implementation conforms to the open
 [Agent Skills specification](https://agentskills.io/specification) and to the pinned
-`Microsoft.Agents.AI` **1.15.0**, not to Claude Code's product extensions (`disallowed-tools`,
-`${CLAUDE_SKILL_DIR}`, nested skills) — those are not part of the standard.
+`Microsoft.Agents.AI` version in `Directory.Packages.props`, not to Claude Code's product
+extensions (`disallowed-tools`, `${CLAUDE_SKILL_DIR}`, nested skills) — those are not part of
+the standard.
 
 ### 4.1 Data model
 
@@ -460,7 +461,7 @@ The provider injects three tools, MAF-named and not present in this repo's own t
 | `read_skill_resource` | Fetches one bundled resource by name (level 3) | **Required** |
 | `run_skill_script` | Would execute a bundled script | **Required**, but always fails closed here |
 
-**All three are approval-gated by default** since the 1.15.0 pin — a live regression this feature
+**All three are approval-gated by default** at the pin — a live regression this feature
 uncovered relative to the 1.8.0 baseline the original skills work was verified against, since neither
 construction call site set `AgentSkillsProviderOptions` or registered an auto-approval rule. A contract
 test (`AgentSkillsProviderContractTests.AgentSkillsProviderOptions_GateEverySkillToolByDefault`) pins
@@ -475,8 +476,8 @@ is never disabled, on any path, including the sub-agent waiver below.
 
 Because these three tools are injected by the context provider rather than resolved through
 `InvocationToolResolver`, they never appear in the ordinary tool catalog and would otherwise audit as
-`ToolCategory.Unknown`. `InvocationRunner` carries its own `SkillToolCategories` map
-(`InvocationRunner.cs`) — `load_skill`/`read_skill_resource → ReadLocal`, `run_skill_script →
+`ToolCategory.Unknown`. `ToolApprovalCoordinator` carries its own `SkillToolCategories` map
+(`ToolApprovalCoordinator.cs`) — `load_skill`/`read_skill_resource → ReadLocal`, `run_skill_script →
 WriteExecute` — consulted **before** the normal offer-based category lookup in
 `ResolveApprovalToolCategory`, purely so the approval audit trail can tell a skill-tool decision apart
 from a genuinely uncategorized one. This does not put the tools under `IToolApprovalPolicy` (OPP-03):
@@ -587,12 +588,12 @@ from every generated OpenAPI example.
 An assigned skill's `load_skill` call demands operator approval on every single load under MAF's
 defaults (§4.3) — tolerable once, but re-approving the same skill turn after turn is exactly the
 approval fatigue that trains an operator to click "yes" without reading. Approval now carries a scope,
-resolved in `InvocationRunner.RequestToolApprovalAsync`:
+resolved in `ToolApprovalCoordinator.RequestToolApprovalAsync`:
 
 - **`Once`** — today's behaviour, unchanged.
 - **`Session`** — remembered for the rest of the conversation, keyed by
   `ApprovalMemoKey(ConversationId, ToolName, SkillName, SkillVersion, ResourceName)`
-  (`TryResolveSessionApprovalKey`, `InvocationRunner.cs`). Every field is load-bearing:
+  (`TryResolveSessionApprovalKey`, `ToolApprovalCoordinator.cs`). Every field is load-bearing:
   - **`SkillVersion`** binds the approval to *content* — an edit, or a re-import that replaces the
     skill, bumps `agent_skills.version` (§4.1) and silently invalidates the memo rather than letting new
     content ride an old consent.

@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Inference;
@@ -145,7 +146,7 @@ public sealed class EvaluationRunExecutor(
             },
             async (session, token) =>
             {
-                using var client = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId);
+                using var client = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId).WithProviderTelemetry();
                 await ScoreWithClientAsync(running, membership, context, scored, client, token).ConfigureAwait(false);
                 return session;
             }, cancellationToken).ConfigureAwait(false);

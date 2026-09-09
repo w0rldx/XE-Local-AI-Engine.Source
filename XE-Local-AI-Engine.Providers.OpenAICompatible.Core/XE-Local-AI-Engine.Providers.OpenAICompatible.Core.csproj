@@ -9,6 +9,10 @@
        the wire layer that both Providers.LlamaServer and Providers.OpenAICompat build on. -->
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions"/>
+    <!-- The MEAI middleware package, for the embedding-generator OpenTelemetry hop applied in
+         OpenAICompatibleClientFactory.CreateEmbeddingGenerator. Still a leaf: this is a package, not a project
+         reference, and Microsoft.Extensions.AI.OpenAI brings only the Abstractions half transitively. -->
+    <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.AI.OpenAI"/>
   </ItemGroup>
 

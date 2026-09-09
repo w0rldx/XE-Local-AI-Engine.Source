@@ -42,8 +42,8 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         // with no executable tools (no real side effects, no approval pauses). The chatClient is owned by the caller
         // (a node-local client) and is intentionally NOT disposed here. Instructions are NULL on the agent — like the
         // production loop, they are delivered once by the seed system message below. The ctor argument order is
-        // (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
-        // Microsoft.Agents.AI 1.15.0; named arguments pin it.
+        // (chatClient, instructions, name, description, tools, loggerFactory, services) — verified at
+        // Microsoft.Agents.AI 1.20.0; named arguments pin it against a positional-order change at a bump.
         var agent = new ChatClientAgent(chatClient,
             instructions: null,
             name: AgentName,
@@ -61,7 +61,7 @@ internal sealed class MafPlaybookEvalAgentRunner : IPlaybookEvalAgentRunner
         ];
 
         // Threadless run (no AgentSession — the second argument's null value runs without persisted state, per the
-        // Microsoft.Agents.AI API re-verified at the pinned 1.15.0). The generation IS
+        // Microsoft.Agents.AI API re-verified at the pin, see Directory.Packages.props). The generation IS
         // pinned via run options: Temperature=0 makes the sampled text deterministic so the eval gate's pass/fail
         // reflects the injected prompt, not decoding noise — the judge (DefaultPlaybookEvalJudge) already pins its
         // own Temperature=0 independently. ChatClientAgentRunOptions.ChatOptions is the same shape

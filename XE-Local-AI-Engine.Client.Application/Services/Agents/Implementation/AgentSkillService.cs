@@ -86,10 +86,10 @@ internal sealed class AgentSkillService : IAgentSkillService
             throw new AgentSkillValidationException("Name is required.");
         }
 
-        // MAAI001: Agent Skills shipped [Experimental] in Microsoft.Agents.AI 1.8.0 and the scoped suppression remains
-        // at the pinned 1.15.0. AgentSkillFrontmatter's validators are the same ones the AgentInlineSkill constructor
-        // runs, so anything accepted here is guaranteed to build into a MAF skill. Their messages describe the rule
-        // and echo no caller content, so they are safe to surface verbatim.
+        // MAAI001: Agent Skills are still [Experimental] in Microsoft.Agents.AI and the scoped suppression remains
+        // at the pinned version (Directory.Packages.props). AgentSkillFrontmatter's validators are the same ones the
+        // AgentInlineSkill constructor runs, so anything accepted here is guaranteed to build into a MAF skill. Their
+        // messages describe the rule and echo no caller content, so they are safe to surface verbatim.
 #pragma warning disable MAAI001
         if (!AgentSkillFrontmatter.ValidateName(name, out var nameError))
         {

@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Eval.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Eval;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Agents;
@@ -127,7 +128,7 @@ internal sealed class PlaybookEvalService(
         };
 
         // One node-local client for the whole run (IChatClient is IDisposable — dispose it; never the shared singleton).
-        using var chatClient = provider.CreateChatClient(selection);
+        using var chatClient = provider.CreateChatClient(selection).WithProviderTelemetry();
 
         var caseResults = new List<PlaybookEvalCaseResult>(goldenCases.Count);
         foreach (var goldenCase in goldenCases)

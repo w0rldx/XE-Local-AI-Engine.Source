@@ -44,8 +44,8 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 /// </summary>
 internal sealed partial class SubAgentSpawnService : ISubAgentSpawnService, IMcpAgentExecutionService
 {
-    // The inner agent-as-tool exposes a single "query" input parameter (re-verified against MAF 1.15.0
-    // AIAgentExtensions.AsAIFunction); the spawn task is passed under
+    // The inner agent-as-tool exposes a single "query" input parameter (re-verified at the pinned MAF version,
+    // see Directory.Packages.props, against AIAgentExtensions.AsAIFunction); the spawn task is passed under
     // that key. AsAIFunction forwards the outer CancellationToken into the inner run (verified by
     // Spawn_PropagatesCancellationToInnerRun), so no linked CTS is needed — the parent ct flows straight through
     // InvokeAsync.

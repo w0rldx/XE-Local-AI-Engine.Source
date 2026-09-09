@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tests.DependencyInjection;
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.DependencyInjection;
@@ -339,6 +341,60 @@ public sealed class AgentToolPipelinePolicyTests
         AssertEx.Contains(inner.ReceivedToolNames[1], HiddenToolName, "list_tools must reveal the hidden authorized tool on the next round");
         AssertEx.True(inner.ReceivedToolNames.SelectMany(static names => names).All(name => tools.Any(tool => string.Equals(tool.Name, name, StringComparison.Ordinal))),
             "relevance recovery must never add a tool outside the authorized input array");
+    }
+
+    /// <summary>
+    ///     Exactly ONE span in the assembled pipeline may claim <c>gen_ai.operation.name = execute_tool</c> for a given
+    ///     tool call, and it is MEAI's: <c>FunctionInvokingChatClient</c> starts an <c>execute_tool {name}</c> activity
+    ///     on the <see cref="ActivitySource" /> it takes from the client below it (the pipeline's
+    ///     <c>OpenTelemetryChatClient</c>, source "Microsoft.Extensions.AI"). The repo's own
+    ///     <c>AgentRun.ToolCall*</c> pair observes the same call on the Agent source and must stay out of that
+    ///     convention — otherwise a backend filtering on the attribute counts every tool execution twice. The
+    ///     per-client test cannot see this: it needs the whole decorated pipeline and both sources listening.
+    /// </summary>
+    [Test]
+    public async Task ToolCall_ClaimsTheExecuteToolOperationNameExactlyOnceAcrossTheWholePipeline()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        var tool = AIFunctionFactory.Create(static () => "tool result", ToolName);
+        using var inner = new ScriptedChatClient((call, _, _) =>
+            call == 1
+                ? new ChatResponse(new ChatMessage(ChatRole.Assistant, [new FunctionCallContent(callId, ToolName)]))
+                : FinalAnswer());
+        using var provider = BuildProvider(inner);
+        var client = provider.GetRequiredService<IChatClient>();
+        // Both sources are process-static and sibling tests emit on them concurrently, so every span is selected by
+        // this test's own call id before anything is asserted about it.
+        var spans = new ConcurrentQueue<(string OperationName, string? GenAiOperationName)>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = static source => source.Name is "Microsoft.Extensions.AI" or "XE.LocalAiEngine.AI.Agent",
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (string.Equals(activity.GetTagItem("gen_ai.tool.call.id")?.ToString(), callId, StringComparison.Ordinal))
+                {
+                    spans.Enqueue((activity.OperationName, activity.GetTagItem("gen_ai.operation.name")?.ToString()));
+                }
+            }
+        };
+
+        ActivitySource.AddActivityListener(listener);
+
+        using (ProviderCallBudget.BeginScope(BudgetOptions()))
+        {
+            _ = await SendAsync(client, Options(tool), streaming: false);
+        }
+
+        AssertEx.ContainsSingle(spans, entry => string.Equals(entry.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal),
+            "the repo's own request span must be emitted — without it this test would pass vacuously.");
+        AssertEx.ContainsSingle(spans, entry => string.Equals(entry.GenAiOperationName, "execute_tool", StringComparison.Ordinal),
+            "exactly one span per tool call may claim gen_ai.operation.name = execute_tool.");
+        AssertEx.ContainsSingle(spans, entry => string.Equals(entry.OperationName, $"execute_tool {ToolName}", StringComparison.Ordinal)
+                                                && string.Equals(entry.GenAiOperationName, "execute_tool", StringComparison.Ordinal),
+            "the one execute_tool span must be MEAI's function-invocation span, not one of the repo's.");
     }
 
     private static ServiceProvider BuildProvider(ScriptedChatClient inner,

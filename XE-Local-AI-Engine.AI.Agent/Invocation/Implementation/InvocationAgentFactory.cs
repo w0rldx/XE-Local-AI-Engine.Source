@@ -216,8 +216,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
     ///     <see cref="ChatClientAgentOptions.AIContextProviders" />. The provider serves each skill's body on demand
     ///     (progressive disclosure); its skill-discovery tools are serviced by the same FunctionInvokingChatClient that
     ///     already services the agent's own tools. Constructor argument order is
-    ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified against
-    ///     Microsoft.Agents.AI 1.15.0; named arguments pin it.
+    ///     (chatClient, instructions, name, description, tools, loggerFactory, services) — verified at
+    ///     Microsoft.Agents.AI 1.20.0; named arguments pin it against a positional-order change at a bump.
     /// </summary>
     private AIAgent BuildAgent(InvocationAgentDefinition definition, IList<AITool> tools)
     {
@@ -227,7 +227,7 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         if (definition.Skills is not { Count: > 0 } skills)
         {
             // No-skills path: instructions are NULL on the agent — they are carried once by the seed system message
-            // (see BuildSeedMessages). Named arguments pin the 1.15.0 ctor order so name/description land as identity
+            // (see BuildSeedMessages). Named arguments pin the ctor order so name/description land as identity
             // and the model receives the instructions exactly once.
             return new ApprovalResponseValidatingAgent(new ChatClientAgent(_chatClient,
                 instructions: null,
@@ -239,8 +239,8 @@ internal sealed class InvocationAgentFactory : IInvocationAgentFactory
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped as [Experimental] in Microsoft.Agents.AI
-        // 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
-        // available. The surface (the full-frontmatter
+        // 1.8.0. The scoped MAAI001 suppression remains at the pinned version (Directory.Packages.props) until
+        // explicit graduation evidence is available. The surface (the full-frontmatter
         // AgentInlineSkill ctor + AgentSkill[] provider ctor) is the documented progressive-disclosure path; the
         // no-skills path above stays on the stable ctor, so the experimental surface is reached only when an agent has
         // assigned skills. Suppress is scoped to this block.

@@ -68,6 +68,12 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
     // any valid one rather than a meaningful one.
     private const string DefaultResponseSchemaName = "response";
 
+    // The gen_ai provider name the inner adapter reports once built: MEAI's OpenAI chat-completions adapter hard-codes
+    // new ChatClientMetadata("openai", ...) (Microsoft.Extensions.AI.OpenAI 10.9.0). Pinned here so the pre-init
+    // metadata GetService answers is identical to the post-init one; a drift shows up as a failing metadata test that
+    // compares the two directly.
+    private const string InnerProviderName = "openai";
+
     // The raw utf8 JSON object written at $.chat_template_kwargs. The OpenAI chat body has no typed field for it, so it
     // rides the wire through OpenAICompatibleRequestBody — MEAI's OpenAI adapter uses the request body returned by
     // ChatOptions.RawRepresentationFactory as its serialization base, patch included (verified against MEAI 10.7).
@@ -289,8 +295,28 @@ internal sealed class DeferredLlamaServerChatClient : IChatClient
             return this;
         }
 
-        // Defer to the inner adapter only once it has been constructed; before first use there is nothing to forward.
-        return Volatile.Read(ref _inner)?.GetService(serviceType, serviceKey);
+        var inner = Volatile.Read(ref _inner);
+        if (inner is not null)
+        {
+            // Once built, the adapter's own metadata wins: it carries the endpoint actually resolved.
+            return inner.GetService(serviceType, serviceKey);
+        }
+
+        // Before first use there is no inner adapter — but MEAI's OpenTelemetryChatClient snapshots
+        // ChatClientMetadata in ITS constructor and never refreshes it, so a null answered here permanently costs
+        // every span and metric emitted over this client (ProviderChatClientTelemetry.WithProviderTelemetry wraps it
+        // for the summarizer, memory-extraction, playbook-analysis and config-draft jobs, none of which set
+        // ChatOptions.ModelId) its gen_ai.request.model and gen_ai.provider.name. Answer from construction-time
+        // knowledge instead, using the same provider name the built adapter reports so the metadata is consistent
+        // before and after init.
+        if (serviceType == typeof(ChatClientMetadata) && serviceKey is null)
+        {
+            return new ChatClientMetadata(InnerProviderName,
+                _endpointBinding?.GetBoundEndpoint(_modelName, ModelRole.Chat)?.BaseAddress,
+                _modelName);
+        }
+
+        return null;
     }
 
     public void Dispose()

@@ -1,6 +1,7 @@
-// Handoff + workflow-approval probe for Microsoft.Agents.AI.Workflows 1.15.0. Fully deterministic — a scripted
-// IChatClient stands in for the model (NO Ollama, NO network). Proves the exact API shapes the
-// production handoff orchestration + IOrchestrationRunSession.RespondToApprovalAsync will copy:
+// Handoff + workflow-approval probe for Microsoft.Agents.AI.Workflows at the pinned version
+// (Directory.Packages.props). Fully deterministic — a scripted IChatClient stands in for the model (NO Ollama, NO
+// network). Proves the exact API shapes the production handoff orchestration +
+// IOrchestrationRunSession.RespondToApprovalAsync will copy:
 //   (A) 2-agent handoff routing via AgentWorkflowBuilder.CreateHandoffBuilderWith + InProcessExecution.
 //   (B) tool-approval pause/resume INSIDE a workflow run (surfacing event + resume mechanism).
 //
@@ -24,7 +25,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Deterministic probe for the MAF 1.15.0 handoff workflow + in-workflow tool approval.
+///     Deterministic probe for the MAF handoff workflow + in-workflow tool approval, at the pinned version.
 /// </summary>
 /// <remarks>
 ///     <para>
@@ -142,10 +143,10 @@ public sealed class HandoffWorkflowSpikeTests
                         AppendIfSpecialist(specialistText, are.ExecutorId, specialist.Id, are.Response.Text);
                         break;
                     case WorkflowOutputEvent woe:
-                        // Kept, NOT dead code: the payload shape here is MAF-version dependent. Since 1.13.0 (and still
-                        // at 1.15.0) it has
-                        // been observed as AgentResponseUpdate and (after resuming an approval port) ExternalResponse,
-                        // both of which fall through to the default branch; the List<ChatMessage> shape 1.8.0 yielded
+                        // Kept, NOT dead code: the payload shape here is MAF-version dependent. Since 1.13.0, and
+                        // still at the pin, it has been observed as AgentResponseUpdate and (after resuming an
+                        // approval port) ExternalResponse, both of which fall through to the default branch; the
+                        // List<ChatMessage> shape 1.8.0 yielded
                         // is still the documented terminal payload. It only ever feeds the loose `outputText` — the
                         // load-bearing assertion reads `specialistText`, which this cannot contribute to.
                         Console.WriteLine($"[handoff][A]   WorkflowOutputEvent data type={woe.Data?.GetType().Name}");
@@ -520,8 +521,9 @@ public sealed class HandoffWorkflowSpikeTests
     ///     Accumulates <paramref name="text" /> only when the emitting executor IS the specialist agent.
     ///     <para>
     ///         The original probe asserted <c>ExecutorId == specialist.Id</c>. That equality no longer holds under MAF
-    ///         1.13.0 (still true at 1.15.0), which is part of the same shape change that broke the drain loop: the handoff builder now names
-    ///         its executors after the agent's sanitized INSTRUCTIONS with the agent id appended, e.g.
+    ///         1.13.0 (still true at the pin), which is part of the same shape change that broke the drain loop: the
+    ///         handoff builder now names its executors after the agent's sanitized INSTRUCTIONS with the agent id
+    ///         appended, e.g.
     ///         <c>You_are_the_SPECIALIST_agent_Answer_the_user_s_question_directly_923ee58cc43c…</c> for an agent whose
     ///         <c>Id</c> is <c>923ee58cc43c…</c>. Matching on the id suffix restores the attribution check the equality
     ///         used to give while staying honest about the executor-id format the framework actually produces.

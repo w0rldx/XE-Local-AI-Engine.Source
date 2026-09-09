@@ -41,7 +41,7 @@ public sealed record LlamaServerGenerationTimings(
     ///     carries none. Accepts the raw representation of either a Microsoft.Extensions.AI
     ///     <c>ChatResponseUpdate</c> or an Agent-Framework <c>AgentResponseUpdate</c>: the agent update wraps the chat
     ///     update, whose own raw representation is the OpenAI SDK chunk, so both hops are followed here (verified
-    ///     against the pinned Microsoft.Agents.AI 1.17.0 / Microsoft.Extensions.AI.OpenAI 10.9.0 / OpenAI 2.12.0).
+    ///     at Microsoft.Agents.AI 1.20.0 / Microsoft.Extensions.AI.OpenAI 10.9.0 / OpenAI 2.12.0).
     ///     Non-throwing by contract — a missing or malformed field yields <see langword="null" /> members.
     /// </summary>
     public static LlamaServerGenerationTimings? TryRead(object? rawRepresentation)

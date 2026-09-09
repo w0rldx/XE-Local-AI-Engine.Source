@@ -6,6 +6,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer;
@@ -223,7 +224,11 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         CancellationToken ct)
     {
         var metricsUri = new Uri(endpoint.BaseAddress, "/metrics");
-        using var chatClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName);
+
+        // Every stopwatch below starts after this wrap, so the metadata-only span hop (Activity start/stop plus MEAI's
+        // span-end response materialization, microseconds against an LLM-scale round) is inside the measured region on
+        // both the plain and the tool path — rows frozen before this wrap landed were measured without it.
+        using var chatClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName).WithProviderTelemetry();
 
         var totalStopwatch = Stopwatch.StartNew();
         var baseline = await ScrapeMetricsAsync(metricsUri, ct).ConfigureAwait(false);
@@ -259,7 +264,7 @@ public sealed class InferenceBenchmarkHarness : IInferenceBenchmarkHarness
         };
 
         double? toolLoopMs;
-        using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName))
+        using (var toolInnerClient = _chatClientFactory.CreateChatClient(endpoint.BaseAddress, endpoint.ModelName).WithProviderTelemetry())
             using (var toolInvokingClient = toolInnerClient.AsBuilder().UseFunctionInvocation().Build())
             {
                 var toolStopwatch = Stopwatch.StartNew();

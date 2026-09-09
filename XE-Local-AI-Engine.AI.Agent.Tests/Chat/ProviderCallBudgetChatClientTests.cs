@@ -413,12 +413,12 @@ public sealed class ProviderCallBudgetChatClientTests
         // FOLLOWUPS #5 suspected options.ModelId was null at this hop for a llama.cpp turn — which would have meant the
         // calibrated divisor never applied during the two recorded overflows, a cheaper root cause than any of this.
         // It is NOT null. InvocationAgentFactory sets ChatOptions.ModelId = definition.ModelId on the per-turn run
-        // options, and MAF's ChatClientAgent CLONES those options and never clears ModelId (Microsoft.Agents.AI 1.17.0,
-        // CreateConfiguredChatOptions merges the agent-level options INTO the clone and only fills ModelId when the
-        // clone's is null). That agent hop is the only non-obvious link, so it is the one pinned here. The value that
-        // arrives is also the exact string ModelRoutingLocalChatClient keys the deferred llama.cpp client on, which is
-        // the string DeferredLlamaServerChatClient hands the calibration scheduler — so the divisor lookup and the
-        // /tokenize write share a key by construction.
+        // options, and MAF's ChatClientAgent CLONES those options and never clears ModelId (verified at
+        // Microsoft.Agents.AI 1.20.0: CreateConfiguredChatOptions merges the agent-level options INTO the clone and
+        // only fills ModelId when the clone's is null). That agent hop is the only non-obvious link, so it is the one
+        // pinned here. The value that arrives is also the exact string ModelRoutingLocalChatClient keys the deferred
+        // llama.cpp client on, which is the string DeferredLlamaServerChatClient hands the calibration scheduler — so
+        // the divisor lookup and the /tokenize write share a key by construction.
         using var inner = new CapturingChatClient();
         using var budgeted = new ProviderCallBudgetChatClient(inner, NullLogger<ProviderCallBudgetChatClient>.Instance);
         var agent = new ChatClientAgent(budgeted,

@@ -107,14 +107,23 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         // Names the model's REQUEST to call a tool (a FunctionCallContent observed on the response), NOT the tool's
         // execution: this hop sits above UseFunctionInvocation, so the delegate has not run yet and this span's
         // duration measures call DISCOVERY, not run time. Named accordingly for honesty. The paired
-        // ObserveCompleted span carries the execution outcome + request-to-result latency.
+        // ObserveCompleted span carries the execution outcome + request-to-result latency; the two are correlated by
+        // gen_ai.tool.call.id. Neither sets gen_ai.operation.name: MEAI's function-invocation hop owns the
+        // "execute_tool" span for every call (FunctionInvokingChatClient starts it on the ActivitySource it takes from
+        // the inner client — here the OpenTelemetryChatClient's "Microsoft.Extensions.AI"), so claiming that value
+        // again would show a convention-aware backend two executions per call.
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallRequested");
-        activity?.SetTag("tool.call_id", functionCall.CallId);
-        activity?.SetTag("tool.name", functionCall.Name);
+        activity?.SetTag("gen_ai.tool.call.id", functionCall.CallId);
+        activity?.SetTag("gen_ai.tool.name", functionCall.Name);
 
         var (argumentsLength, argumentsHash) = SummarizePayload(functionCall.Arguments);
         activity?.SetTag("tool.arguments_length", argumentsLength);
-        activity?.SetTag("tool.arguments_hash", argumentsHash);
+
+        // gen_ai.tool.call.arguments carries the redacted length+SHA-256-prefix digest, never the raw arguments.
+        // The convention defines this attribute as the payload itself; the bend is deliberate and recorded in
+        // docs/agent-knowledge.md §4, "The four gen_ai.tool.* attribute names track MEAI, and two of them carry a
+        // digest rather than the payload".
+        activity?.SetTag("gen_ai.tool.call.arguments", argumentsHash);
 
         _logger.LogInformation("AgentRunToolInvoked {ToolName} {CallId} ArgsLength={ArgumentsLength} ArgsHash={ArgumentsHash}",
             functionCall.Name, functionCall.CallId, argumentsLength, argumentsHash);
@@ -136,15 +145,23 @@ internal sealed class ToolInvocationObservabilityChatClient : DelegatingChatClie
         ProviderCallBudget.Current?.RecordToolCallCompleted(duration, resultLength, functionResult.Exception is not null);
 
         // The completion span sits at the same hop but fires when the FunctionResultContent flows back, so it records
-        // the actual execution outcome + request-to-result latency. Only the result length + hash are captured — never the raw result
-        // value (docs/agent-knowledge.md §4: tool telemetry must never log raw arguments or results).
+        // the actual execution outcome + request-to-result latency. Like its Requested twin it deliberately does NOT
+        // set gen_ai.operation.name: MEAI's function-invocation hop already emits the conventional "execute_tool" span
+        // for the same call, and a second one carrying that value would be counted as a second execution. The pair is
+        // this repo's own request/completion observation, correlated to MEAI's span by gen_ai.tool.call.id. Only the
+        // result length + hash are captured — never the raw result value (docs/agent-knowledge.md §4: tool telemetry
+        // must never log raw arguments or results).
         using var activity = AgentActivitySource.Instance.StartActivity("AgentRun.ToolCallCompleted");
-        activity?.SetTag("tool.call_id", functionResult.CallId);
-        activity?.SetTag("tool.name", requested.Name);
+        activity?.SetTag("gen_ai.tool.call.id", functionResult.CallId);
+        activity?.SetTag("gen_ai.tool.name", requested.Name);
         activity?.SetTag("tool.outcome", outcome);
         activity?.SetTag("tool.duration_ms", durationMs);
         activity?.SetTag("tool.result_length", resultLength);
-        activity?.SetTag("tool.result_hash", resultHash);
+
+        // gen_ai.tool.call.result carries the redacted length+SHA-256-prefix digest, never the raw result — the same
+        // deliberate bend recorded in docs/agent-knowledge.md §4, "The four gen_ai.tool.* attribute names track MEAI,
+        // and two of them carry a digest rather than the payload".
+        activity?.SetTag("gen_ai.tool.call.result", resultHash);
 
         _logger.LogInformation("AgentRunToolCompleted {ToolName} {CallId} Outcome={Outcome} DurationMs={DurationMs} ResultLength={ResultLength} ResultHash={ResultHash}",
             requested.Name, functionResult.CallId, outcome, durationMs, resultLength, resultHash);

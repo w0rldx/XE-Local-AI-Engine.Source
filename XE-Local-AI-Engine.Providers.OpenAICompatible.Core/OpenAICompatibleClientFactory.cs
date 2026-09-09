@@ -72,7 +72,21 @@ public static class OpenAICompatibleClientFactory
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
 
         var openAiClient = CreateClient(baseAddress, apiKey, networkTimeout, transport);
-        return openAiClient.GetEmbeddingClient(modelId).AsIEmbeddingGenerator();
+
+        // Metadata-only gen_ai span (model id, input/token counts, latency, dimension count) on every embedding call.
+        // The source name is pinned to the one the agent DI pipeline uses: MEAI's own default
+        // ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults wildcard
+        // AddSource("Microsoft.Extensions.AI*"), so a span emitted under it is never exported. EnableSensitiveData is
+        // hard-coded false and deliberately does not read AgentTelemetryOptions.CaptureSensitiveContent: embeddings
+        // carry conversation, memory and knowledge-base text that this node keeps on-box, and the operator's
+        // interactive-pipeline opt-in must never widen to it. Setting it explicitly also beats the ambient
+        // OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true.
+        return openAiClient.GetEmbeddingClient(modelId)
+                           .AsIEmbeddingGenerator()
+                           .AsBuilder()
+                           .UseOpenTelemetry(sourceName: "Microsoft.Extensions.AI",
+                               configure: static openTelemetryGenerator => openTelemetryGenerator.EnableSensitiveData = false)
+                           .Build();
     }
 
     /// <summary>

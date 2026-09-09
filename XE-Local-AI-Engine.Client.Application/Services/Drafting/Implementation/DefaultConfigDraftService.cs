@@ -6,6 +6,7 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
 using OllamaSharp;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -180,7 +181,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
             {
                 ModelName = request.ModelName,
                 ProviderName = provider.ProviderName
-            });
+            }).WithProviderTelemetry();
 
             List<ChatMessage> messages =
             [

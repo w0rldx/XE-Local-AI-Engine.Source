@@ -189,8 +189,8 @@ public sealed class ToolInvocationObservabilityChatClientTests
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             ActivityStopped = activity => stoppedActivities.Enqueue((
                 activity.OperationName,
-                activity.GetTagItem("tool.call_id")?.ToString(),
-                activity.GetTagItem("tool.name")?.ToString()))
+                activity.GetTagItem("gen_ai.tool.call.id")?.ToString(),
+                activity.GetTagItem("gen_ai.tool.name")?.ToString()))
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -230,7 +230,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
             Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
             SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
-            ActivityStopped = activity => stoppedActivities.Enqueue((activity.OperationName, activity.GetTagItem("tool.call_id")?.ToString()))
+            ActivityStopped = activity => stoppedActivities.Enqueue((activity.OperationName, activity.GetTagItem("gen_ai.tool.call.id")?.ToString()))
         };
 
         ActivitySource.AddActivityListener(listener);
@@ -275,7 +275,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             ActivityStopped = activity =>
             {
                 if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal)
-                    && string.Equals(activity.GetTagItem("tool.call_id")?.ToString(), callId, StringComparison.Ordinal))
+                    && string.Equals(activity.GetTagItem("gen_ai.tool.call.id")?.ToString(), callId, StringComparison.Ordinal))
                 {
                     completed.Enqueue((activity.GetTagItem("tool.outcome")?.ToString(),
                         activity.GetTagItem("tool.duration_ms") as double?));
@@ -318,7 +318,7 @@ public sealed class ToolInvocationObservabilityChatClientTests
             ActivityStopped = activity =>
             {
                 if (string.Equals(activity.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal)
-                    && string.Equals(activity.GetTagItem("tool.call_id")?.ToString(), callId, StringComparison.Ordinal))
+                    && string.Equals(activity.GetTagItem("gen_ai.tool.call.id")?.ToString(), callId, StringComparison.Ordinal))
                 {
                     completed.Enqueue(activity.GetTagItem("tool.outcome")?.ToString());
                 }
@@ -370,6 +370,120 @@ public sealed class ToolInvocationObservabilityChatClientTests
         AssertEx.True(snapshot.ToolRequestToResultMs >= 0);
         AssertEx.True(snapshot.TimeToFirstToolRequestMs is >= 0);
     }
+
+    /// <summary>
+    ///     The GenAI convention defines <c>gen_ai.tool.call.arguments</c>/<c>gen_ai.tool.call.result</c> as carrying the
+    ///     actual payloads; this node deliberately bends that and emits the redacted SHA-256 prefix instead
+    ///     (docs/agent-knowledge.md §4). This test is what stops the rename from quietly turning into a content leak.
+    /// </summary>
+    [Test]
+    public async Task GetStreamingResponseAsync_ConventionPayloadAttributes_CarryHashesNotRawContent()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        const string secretResult = "super-secret-tool-result";
+        using var innerClient = new CallThenResultChatClient(callId, "approve-job", secretResult, exception: null);
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        // Capture only this test's spans (unique CallId) into a thread-safe queue: the production ActivitySource is
+        // process-static and sibling tests stop spans concurrently on other threads.
+        var payloads = new ConcurrentQueue<(string OperationName, string? Arguments, string? Result)>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (string.Equals(activity.GetTagItem("gen_ai.tool.call.id")?.ToString(), callId, StringComparison.Ordinal))
+                {
+                    payloads.Enqueue((activity.OperationName,
+                        activity.GetTagItem("gen_ai.tool.call.arguments")?.ToString(),
+                        activity.GetTagItem("gen_ai.tool.call.result")?.ToString()));
+                }
+            }
+        };
+
+        ActivitySource.AddActivityListener(listener);
+
+        using (var probeSource = new ActivitySource("XE.LocalAiEngine.AI.Agent"))
+        {
+            using var probeActivity = probeSource.StartActivity("Probe");
+            AssertEx.NotNull(probeActivity, "Expected ActivityListener probe activity to be created.");
+        }
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        var expectedArgumentsHash = HashPrefix(JsonSerializer.Serialize(new Dictionary<string, object?>
+        {
+            ["decision"] = true
+        }));
+        var expectedResultHash = HashPrefix(JsonSerializer.Serialize(secretResult));
+
+        AssertEx.ContainsSingle(payloads, entry => string.Equals(entry.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal)
+                                                   && string.Equals(entry.Arguments, expectedArgumentsHash, StringComparison.Ordinal));
+        AssertEx.ContainsSingle(payloads, entry => string.Equals(entry.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal)
+                                                   && string.Equals(entry.Result, expectedResultHash, StringComparison.Ordinal));
+        AssertEx.True(payloads.All(entry => entry.Result?.Contains(secretResult, StringComparison.Ordinal) != true),
+            "The gen_ai.tool.call.result attribute must never carry the raw tool result.");
+    }
+
+    /// <summary>
+    ///     Neither span may carry <c>gen_ai.operation.name</c>. MEAI's function-invocation hop already emits the
+    ///     conventional <c>execute_tool</c> span for every call; this pair is the repo's own request/completion
+    ///     observation, correlated to it by <c>gen_ai.tool.call.id</c>. Claiming the value here too would show a
+    ///     convention-aware backend two executions per call (docs/agent-knowledge.md §4, "The four gen_ai.tool.*
+    ///     attribute names track MEAI...").
+    /// </summary>
+    [Test]
+    public async Task GetStreamingResponseAsync_NeitherSpan_CarriesTheExecuteToolOperationName()
+    {
+        var callId = $"call-{Guid.NewGuid():N}";
+        using var innerClient = new CallThenResultChatClient(callId, "approve-job", result: "done", exception: null);
+        using var sut = new ToolInvocationObservabilityChatClient(innerClient, new ListLogger<ToolInvocationObservabilityChatClient>());
+        // Capture only this test's spans (unique CallId) into a thread-safe queue: the production ActivitySource is
+        // process-static and sibling tests stop spans concurrently on other threads.
+        var operations = new ConcurrentQueue<(string OperationName, string? GenAiOperationName)>();
+
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == "XE.LocalAiEngine.AI.Agent",
+            Sample = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            SampleUsingParentId = static (ref _) => ActivitySamplingResult.AllDataAndRecorded,
+            ActivityStopped = activity =>
+            {
+                if (string.Equals(activity.GetTagItem("gen_ai.tool.call.id")?.ToString(), callId, StringComparison.Ordinal))
+                {
+                    operations.Enqueue((activity.OperationName, activity.GetTagItem("gen_ai.operation.name")?.ToString()));
+                }
+            }
+        };
+
+        ActivitySource.AddActivityListener(listener);
+
+        using (var probeSource = new ActivitySource("XE.LocalAiEngine.AI.Agent"))
+        {
+            using var probeActivity = probeSource.StartActivity("Probe");
+            AssertEx.NotNull(probeActivity, "Expected ActivityListener probe activity to be created.");
+        }
+
+        await foreach (var _ in sut.GetStreamingResponseAsync([new ChatMessage(ChatRole.User, "hello")]))
+        {
+            GC.KeepAlive(_);
+        }
+
+        AssertEx.ContainsSingle(operations, entry => string.Equals(entry.OperationName, "AgentRun.ToolCallRequested", StringComparison.Ordinal),
+            "the requested span must still be emitted — this test would pass vacuously if it were not.");
+        AssertEx.ContainsSingle(operations, entry => string.Equals(entry.OperationName, "AgentRun.ToolCallCompleted", StringComparison.Ordinal),
+            "the completed span must still be emitted — this test would pass vacuously if it were not.");
+        AssertEx.True(operations.All(entry => entry.GenAiOperationName is null),
+            "Neither span may carry gen_ai.operation.name: MEAI's function-invocation hop owns the execute_tool span for this call.");
+    }
+
+    private static string HashPrefix(string serialized) =>
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(serialized)))[..12];
 
     private sealed class CallThenResultChatClient : IChatClient
     {

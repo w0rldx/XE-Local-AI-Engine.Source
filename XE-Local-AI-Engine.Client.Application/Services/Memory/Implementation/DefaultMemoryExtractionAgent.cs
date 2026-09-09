@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -50,7 +51,7 @@ internal sealed class DefaultMemoryExtractionAgent(
         };
 
         // IChatClient is IDisposable — dispose the per-run node-local client.
-        using var chatClient = provider.CreateChatClient(selection);
+        using var chatClient = provider.CreateChatClient(selection).WithProviderTelemetry();
 
         List<ChatMessage> messages =
         [

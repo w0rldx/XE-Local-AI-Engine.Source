@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Training.Export;
 
 using System.Text.Json;
 using Microsoft.Extensions.AI;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Inference;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
@@ -96,7 +97,7 @@ public sealed class TrainedModelSmokeGate(
             return Failed("the loaded model reports no chat template, so it cannot serve chat or tool calls");
         }
 
-        using var chatClient = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId);
+        using var chatClient = _chatClientFactory.CreateChatClient(session.BaseAddress, session.ModelId).WithProviderTelemetry();
         var tool = AIFunctionFactory.Create((string location) => $"22C in {location}",
             ToolName,
             "Get the current weather for a location.");

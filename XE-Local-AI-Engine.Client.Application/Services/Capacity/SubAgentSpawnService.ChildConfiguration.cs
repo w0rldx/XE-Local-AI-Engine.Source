@@ -63,8 +63,8 @@ internal sealed partial class SubAgentSpawnService
         }
 
         // MAAI001: Agent Skills (AgentSkillsProvider/AgentInlineSkill) shipped [Experimental] in Microsoft.Agents.AI
-        // in 1.8.0. The scoped MAAI001 suppression remains at the pinned 1.15.0 until explicit graduation evidence is
-        // available. Reached only when the child agent has assigned skills, the
+        // in 1.8.0. The scoped MAAI001 suppression remains at the pinned version (Directory.Packages.props) until
+        // explicit graduation evidence is available. Reached only when the child agent has assigned skills, the
         // same scoped suppression InvocationAgentFactory uses.
 #pragma warning disable MAAI001
         var inlineSkills = new AgentInlineSkill[resolvedSkills.Count];

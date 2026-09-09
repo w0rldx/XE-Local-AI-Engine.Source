@@ -6,6 +6,7 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.AI.Agent.Invocation.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
@@ -100,7 +101,7 @@ internal sealed class ConversationSummarizer(
         };
 
         // IChatClient is IDisposable — dispose the per-run node-local client.
-        using var chatClient = provider.CreateChatClient(selection);
+        using var chatClient = provider.CreateChatClient(selection).WithProviderTelemetry();
 
         // Fold the span in batches bounded by the TOTAL model-facing character budget (system prompt + serialized
         // user JSON, including the running summary) so no single request overruns the model's context window. An

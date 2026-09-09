@@ -6,7 +6,8 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Pins the Microsoft.Agents.AI Agent Skills contract this node depends on. These assertions are about MAF's
 ///     behaviour, not ours: they exist because the skills feature was built and live-verified against 1.8.0, the pin
-///     later moved to 1.15.0, and nothing in the suite would have noticed a behavioural default changing underneath it.
+///     has moved several times since, and nothing in the suite would have noticed a behavioural default changing
+///     underneath it.
 ///     A failure here is not a bug in this repo — it is notice that a package bump changed a security-relevant default
 ///     and that the call sites in <c>InvocationAgentFactory</c> and <c>SubAgentSpawnService</c> must be re-reasoned.
 /// </summary>

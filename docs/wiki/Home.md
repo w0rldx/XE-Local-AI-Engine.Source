@@ -122,6 +122,7 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux-only v1, operator enablement |
 | 20 | [Benchmarks](20-benchmarks.md) | Task suites and long-context probes, freeze fan-out and cell ranking, verifiable criteria incl. `pythonTests` execution scoring, pairwise Bradley-Terry and paired-difference intervals, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), the four-kind work queue, scheduled matrices and the training hand-off, export schema 4 |
 | 21 | [Graph Workflows](21-graph-workflows.md) | Operator-authored DAGs: the graph contract and its validation rules, the run and node-run lifecycles, the eight node kinds and their documents, the route family and the `graphWorkflowChanged` hub contract, the React editor and run view, the options table, and the one-shot Open Canvas import |
+| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | Dev Workflows vs. Graph Workflows: status/decision vocabulary, approval model, restart/reconciler behavior, the cross-node fix loop, persistence and hub shape, MAF/MEAI boundary, feature flags — what was deliberately dropped and what is an unintentional gap, with convergence explicitly deferred |
 
 ## Conventions in this wiki
 

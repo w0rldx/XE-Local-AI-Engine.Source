@@ -78,7 +78,11 @@ public static class Extensions
                               .AddHttpClientInstrumentation()
                               // Downgrade a gen_ai span that failed only because a user pressed Stop (Error→Unset) so a
                               // cancelled turn doesn't read as a service fault on dashboards/alerts.
-                              .AddProcessor(new GenAiCancellationStatusProcessor());
+                              .AddProcessor(new GenAiCancellationStatusProcessor())
+                              // Strictly after the cancellation processor: that one downgrades a cancelled span to
+                              // Unset, so a cancellation never reaches this one. Redacts the provider exception
+                              // message MEAI copies into the status description (see the processor's remarks).
+                              .AddProcessor(new GenAiErrorDescriptionRedactionProcessor());
                    });
 
             builder.AddOpenTelemetryExporters();

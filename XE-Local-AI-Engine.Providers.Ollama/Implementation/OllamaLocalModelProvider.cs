@@ -220,7 +220,21 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
 
         // Mint over the shared hardened transport (see CreateChatClient) so embedding calls fail fast against an absent
         // daemon instead of hanging on the default connect timeout.
-        return _clientFactory.CreateClient(selection.ModelName);
+        // Metadata-only gen_ai span (model id, input/token counts, latency, dimension count) on every embedding call.
+        // The source name is pinned to the one the agent DI pipeline uses: MEAI's own default
+        // ("Experimental.Microsoft.Extensions.AI") does NOT match the ServiceDefaults wildcard
+        // AddSource("Microsoft.Extensions.AI*"), so a span emitted under it is never exported. EnableSensitiveData is
+        // hard-coded false and deliberately does not read AgentTelemetryOptions.CaptureSensitiveContent: embeddings
+        // carry conversation, memory and knowledge-base text that this node keeps on-box, and the operator's
+        // interactive-pipeline opt-in must never widen to it. Setting it explicitly also beats the ambient
+        // OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true.
+#pragma warning disable CA2000 // Ownership of the minted client transfers to the returned generator, which disposes it with itself.
+        return _clientFactory.CreateClient(selection.ModelName)
+                             .AsBuilder<string, Embedding<float>>()
+                             .UseOpenTelemetry(sourceName: "Microsoft.Extensions.AI",
+                                 configure: static openTelemetryGenerator => openTelemetryGenerator.EnableSensitiveData = false)
+                             .Build();
+#pragma warning restore CA2000
     }
 
     private async Task<int?> TryReadContextLengthAsync(string modelName, CancellationToken ct)

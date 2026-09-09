@@ -6,6 +6,10 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.AI.Abstractions"/>
+    <!-- Direct, not transitive-through-OllamaSharp: OllamaLocalModelProvider.CreateEmbeddingGenerator applies the
+         MEAI embedding-generator OpenTelemetry hop, and a telemetry-privacy boundary must not ride a dependency
+         edge an OllamaSharp bump could drop. Version comes from CPM, so this adds no version surface. -->
+    <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
     <PackageReference Include="OllamaSharp"/>
   </ItemGroup>
