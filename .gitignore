@@ -423,7 +423,7 @@ cloud-credentials.enc
 *.token
 
 # Local runtime artifacts (machine-specific, not for version control)
-.codegraph/daemon.pid
+.codegraph/
 CLAUDE.local.md
 # Local secrets. Tracked templates (.env.template, .env.tests) stay matched-out.
 .env

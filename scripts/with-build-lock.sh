@@ -49,10 +49,10 @@
 #
 # Re-entrancy
 #   Nesting is safe: an inner wrapper sees XE_BUILD_LOCK_HELD matching its lock file and exec's the
-#   command directly. That keeps composed scripts (project-validate.sh -> run-tests-memory-safe.sh)
-#   from deadlocking. The corollary is that a wrapped command which itself forks PARALLEL work is
+#   command directly. That keeps composed scripts (a wrapper calling run-tests-memory-safe.sh) from
+#   deadlocking. The corollary is that a wrapped command which itself forks PARALLEL work is
 #   NOT serialized internally — the lock cannot subdivide a critical section someone else created.
-#   Do not wrap .opencode/scripts/project-validate.sh as a whole; it locks its own dotnet trees.
+#   Do not wrap a runner that already takes this lock over its own dotnet trees.
 #
 # Exit codes:
 #   0-N  — the wrapped command's own exit status (passed through unchanged)

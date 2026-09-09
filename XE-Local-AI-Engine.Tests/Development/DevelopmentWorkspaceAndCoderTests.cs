@@ -68,8 +68,51 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine("../../outside", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".git/config", allowRoot: false).IsAccepted);
         AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".GIT/config", allowRoot: false).IsAccepted);
-        AssertEx.False(DevelopmentWorkspaceSecurity.Confine(".omx/ultragoal/goals.json", allowRoot: false).IsAccepted);
         AssertEx.True(DevelopmentWorkspaceSecurity.Confine("src/feature.cs", allowRoot: false).IsAccepted);
+    }
+
+    /// <summary>
+    ///     The dot-path rule and the allow-list carved out of it. These are asserted through <see cref="DevelopmentWorkspaceSecurity.IsProtected" />
+    ///     rather than <c>Confine</c> because the listing and search tools call it directly to suppress OUTPUT, so a
+    ///     <c>Confine</c>-only test would leave that half of the policy unpinned.
+    /// </summary>
+    [Test]
+    public void IsProtected_CoversEveryDotEntryExceptTheRepositoryTrackedOnes()
+    {
+        // The rule is the dot prefix, not a roster of tool names: a state directory this repository has never heard of
+        // is protected on the same terms as Git's own, which is the whole point of not naming individual tools.
+        AssertEx.True(DevelopmentWorkspaceSecurity.IsProtected(".some-unknown-tool"),
+            "an unrecognised dot-directory must be protected without the guard naming the tool that created it");
+        AssertEx.True(DevelopmentWorkspaceSecurity.IsProtected(".some-unknown-tool/state/goals.json"),
+            "protection must reach the whole tree under an unrecognised dot-directory, not just its root entry");
+        AssertEx.True(DevelopmentWorkspaceSecurity.IsProtected(".git/config"));
+        AssertEx.True(DevelopmentWorkspaceSecurity.IsProtected(".xe-dev"),
+            "the command-profile import source stays protected as a tool argument, one layer of a defence the digest re-check carries");
+
+        // The allow-list is the half most likely to regress: the repository tracks these, and Dev Mode's own job of
+        // fixing a red build means editing a workflow or an ignore rule. ".gitignore" also pins the segment-aware
+        // comparison — a prefix match against ".git" would swallow it.
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".gitignore"),
+            ".gitignore is tracked and editable, and must not be captured by the .git rule");
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".github/workflows/ci.yml"),
+            "Dev Mode must be able to fix CI");
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".editorconfig"));
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".GITHUB/workflows/ci.yml"),
+            "the allow-list is case-insensitive, matching the comparison the deny side uses");
+
+        // ".env*" is left to the secret gate, which refuses the read and the rename-from but permits the creation.
+        // Duplicating it here would take the creation away; ".envrc" is another tool's state and is NOT the same case.
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".env"),
+            ".env is the secret gate's to police, not this one's");
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(".env.example"),
+            "creating a .env.* file is ordinary work and must not be refused as a protected path");
+        AssertEx.True(DevelopmentWorkspaceSecurity.IsProtected(".envrc"),
+            "the .env carve-out extends only across a dot, so an unrelated dot-file starting with .env stays protected");
+
+        // A path with no dot segment, and the empty path a root listing names, are both unaffected.
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected("src/feature.cs"));
+        AssertEx.False(DevelopmentWorkspaceSecurity.IsProtected(string.Empty),
+            "the workspace root must stay listable");
     }
 
     [Test]
@@ -89,12 +132,12 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
                              diff --git a/README.md b/README.md
                              similarity index 100%
                              rename from README.md
-                             rename to .omx/ultragoal/VERIFIER_SENTINEL
+                             rename to .some-unknown-tool/VERIFIER_SENTINEL
                              """ + "\n";
 
         await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => tools.ApplyPatchAsync(patch));
         AssertEx.True(File.Exists(Path.Combine(session.HostWorktreePath, "README.md")));
-        AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, ".omx", "ultragoal", "VERIFIER_SENTINEL")));
+        AssertEx.False(File.Exists(Path.Combine(session.HostWorktreePath, ".some-unknown-tool", "VERIFIER_SENTINEL")));
     }
 
     [Test]
@@ -173,7 +216,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
 
     /// <summary>
     ///     Development Mode's read tools apply the same secret exclusion the AgentHome copy and the Coder reader already
-    ///     apply. Before this, path containment plus three protected prefixes were the only guard, so a registered
+    ///     apply. Before this, path containment plus the protected-path rule were the only guard, so a registered
     ///     repository's <c>.env</c> was a single <c>read_file</c> away from the attempt prompt — and Development Mode has
     ///     cloud role routing, so it would have left the machine.
     ///     <para>

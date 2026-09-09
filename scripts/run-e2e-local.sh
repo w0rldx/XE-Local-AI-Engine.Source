@@ -228,7 +228,7 @@ if [[ -n "${GUARD_STATE}" ]]; then
   fi
 fi
 
-# Vacuous-run guard — mirrors _assert_tests_ran in .opencode/scripts/project-validate.sh.
+# Vacuous-run guard.
 # Without RunE2ETests=true the project is a library, `dotnet test` finds nothing, and exit 0
 # would otherwise read as a green E2E run.
 if grep -qiE 'total:[[:space:]]*0([^0-9]|$)|zero tests ran' "${OUT_FILE}"; then

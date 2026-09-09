@@ -118,12 +118,10 @@ scripts/python-validation.sh --scope changed   # auto-detect scope from the diff
 
 Notable React scripts (from `package.json`): `test:coverage` / `test:coverage:check` (the latter sets `VITEST_COVERAGE_CHECK=true` to enforce thresholds), `openapi:check` (regenerate the hey-api client from the committed spec and fail on drift — see below), `dependencies:refresh` (frozen install followed by aggregated OpenAPI, generated-license, validation, and production-build diagnostics for dependency-update branches), `validate` (lint + knip + depcruise), `knip`, `depcruise`, `spellCheck`. The dependency refresh skips every generator when the frozen install fails and never retargets curated license evidence automatically. The lint chain is strict: type-check, a custom `currentTarget`-in-updaters guard, Biome, and Stylelint all run before the build.
 
-### Internal RC tooling
+### The canonical validation path
 
-Release readiness passes used to route through an internal `project-validate.sh` scope runner
-(`.opencode/scripts/`). That tooling was internal-only and is not part of this repository — it never
-shipped here and there is no in-repo replacement scope runner. Treat the raw commands above, plus the
-[root `AGENTS.md`](../../AGENTS.md#validation) and the standalone runners below, as the canonical
+There is no scope runner in this repository. The raw commands above, plus the
+[root `AGENTS.md`](../../AGENTS.md#validation) and the standalone runners below, are the canonical
 validation path for a fresh clone. A successful pre-merge/pre-packaging pass also needs a live
 desktop-backend OpenAPI comparison (`pnpm openapi:check:live` against a running desktop backend) and
 the frontend coverage gate described below.

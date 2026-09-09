@@ -47,4 +47,4 @@ Before changing comments that describe library behavior, check the current upstr
 2. Run the typo-sentinel search over `.cs` and Markdown files; the cleanup report intentionally spells the sentinel command in split form so the report does not self-match.
 3. Inspect `git diff -- '*.cs'` and confirm every changed source hunk is comment-only/XML-doc-only.
 4. Run `git diff --check`.
-5. Run backend restore/build/test from `.opencode/context/project-intelligence/validation-matrix.md`, or record the exact environment blocker and next-best evidence.
+5. Run the backend restore/build/test gate from [`AGENTS.md`](../AGENTS.md#validation), or record the exact environment blocker and next-best evidence.

@@ -337,37 +337,6 @@ hook (`core/formatting/TimeFormatting.ts`).
 
 ---
 
-## Relationship to the generic `.opencode` standards
-
-A local, **git-ignored** context tree at `.opencode/context/core/standards/` (`code.md`, `csharp.md`,
-`csharp-project-structure.md`, `react.md`, `typescript.md`) carries the OpenSystemBuilder house standards.
-They are **generic templates**, not part of the versioned tree — a fresh clone does not have them. This
-page is the **repo-true, committed authority**, distilled by verifying each template rule against the
-actual code; where the two disagree, this page and the code win.
-
-**Verified DIVERGENCES — do NOT import the template's version into this codebase:**
-
-| Generic template says | This repo actually does (verified) |
-|---|---|
-| Minimal APIs + **MediatR/CQRS** vertical slices (`Features/`, `ISender`, `IRequestHandler`) | **FastEndpoints**, one `*Endpoint.cs` per endpoint, calling `Client.Application` services directly — zero MediatR |
-| `using` directives **above** the namespace | `using` **inside** the file-scoped namespace (`.editorconfig` → build error otherwise) |
-| **PostgreSQL** + Npgsql, raw `DbContext` in handlers | **SQLite** + per-column AEAD, access via a `*Store` layer |
-| **xUnit + Shouldly + Moq** | **TUnit** `[Test]` + `AssertEx` + **NSubstitute** |
-| Command/Query record *is* the contract, no DTO/mapping layer | explicit `*Dtos.cs`/`*Contracts.cs` in `V1/Dtos/` + standalone mappers in `V1/Mappers/` |
-| `GlobalUsings.cs` / `global using` | none — relies on `ImplicitUsings=enable` + explicit per-file usings |
-| `Result<T>` return pattern | not used — FastEndpoints `Send.NotFoundAsync` + nullable returns |
-| Hand-written `Api/` + axios interceptor request functions | **hey-api** generated client is the single REST source; TanStack Query wraps it |
-| `@tanstack/react-form` + `zodValidator` | **manual** forms (Mantine + `useState` + Zod-on-submit) |
-| Zustand object selectors + `useShallow`; `mutations/` folder | atomic selectors (no `useShallow`); mutations in `queries/` |
-
-**Universal `code.md` rules that DO hold here** (and this page reflects): endpoints stay
-orchestration-only; match the nearest existing subsystem's folder shape before inventing one; the C#/TS
-naming families; never return persistence entities across a transport boundary; generated artifacts
-(`src/routeTree.gen.ts`, `src/core/api/generated/**`, EF migrations) are read-only — regenerate, never
-hand-edit.
-
----
-
 ## See also
 
 - [02-project-layout.md](02-project-layout.md) — project inventory, dependency graph, layering rule.

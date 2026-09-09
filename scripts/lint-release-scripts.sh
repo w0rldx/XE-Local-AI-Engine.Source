@@ -48,8 +48,7 @@ set -uo pipefail
 
 PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
 
-# Release-path shell scripts. Deliberately scoped: .opencode/ has its own validators
-# (validate-opencode.sh / validate-no-legacy.sh) and .tmp/worktrees is scratch.
+# Release-path shell scripts. Deliberately scoped: .tmp/worktrees is scratch, not release path.
 SHELL_TARGETS=(
   "install.sh"
   "publish/package-rc.sh"

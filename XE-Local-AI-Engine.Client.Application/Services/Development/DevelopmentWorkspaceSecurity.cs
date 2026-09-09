@@ -7,19 +7,23 @@ internal static class DevelopmentWorkspaceSecurity
 {
     private const char SandboxSeparator = '/';
 
-    // ".xe-dev" holds the command-profile import source. Adding it here stops the agent naming it as a path argument
-    // to a workspace tool, which is necessary but NOT sufficient: a build or test command can still write the file as
-    // a side effect, entirely outside this check. The property is actually carried by the digest re-check in
-    // DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync plus the fact that the database, not the worktree, is
-    // the source of truth for the profile. Do not treat this deny-list entry as the guard.
-    private static readonly string[] ProtectedPrefixes = [".git", ".omx/ultragoal", ".xe-dev"];
-
-    /// <summary>
-    ///     The same prefixes <see cref="IsProtected" /> enforces, exposed so the listing tool can PRUNE these trees in
-    ///     its <c>find</c> expression instead of only filtering them out afterwards. Reading the one array keeps the
-    ///     generator and the filter from drifting apart; a second, hand-maintained copy at the call site would not.
-    /// </summary>
-    public static IReadOnlyList<string> ProtectedPathPrefixes => ProtectedPrefixes;
+    // The exceptions to the dot-path rule in IsProtected, matched against a path's first segment either exactly or
+    // with a ".suffix" after them, so one ".env" entry covers ".env.example" and ".env.local" without listing every
+    // variant a repository might carry. The suffix form deliberately requires the dot: ".envrc" is another tool's
+    // state file and stays protected.
+    //
+    // All but ".env" are this repository's own tracked root dot-entries. Dev Mode exists partly to fix a red build,
+    // and a red build is usually a workflow or an ignore rule, so ".git" stays closed while ".gitignore" and
+    // ".github/" stay open. Being tracked is necessary but not sufficient: a tool's index directory that carries a
+    // tracked ".gitignore" is still a regenerable index, not source, and stays protected.
+    //
+    // ".env" is here for a different reason and must not be read as "'.env' is safe". It is governed by the SECRET
+    // gate (ISensitiveFileExclusionService), which is both stronger and more precise than this one: it refuses the
+    // read, suppresses the file from every listing, and refuses a rename whose SOURCE is a secret, while still
+    // allowing a creation — writing a fresh ".env.example" has no secret source to leak and is ordinary work.
+    // Swallowing ".env*" into this deny-list would add no protection the secret gate does not already give and would
+    // silently delete that last behaviour.
+    private static readonly string[] EditableDotPaths = [".dockerignore", ".editorconfig", ".env", ".gitattributes", ".github", ".gitignore"];
 
     public static string CanonicalRepositoryRoot(string repositoryRoot)
     {
@@ -99,9 +103,26 @@ internal static class DevelopmentWorkspaceSecurity
     }
 
     /// <summary>
-    ///     Whether a workspace-relative path sits under one of the <see cref="ProtectedPrefixes" />. <see cref="Confine" />
-    ///     uses it to refuse the path as a tool argument; the listing and search tools use it to drop the same paths
-    ///     from their OUTPUT, so the policy reads the same way whether a path is asked for or merely enumerated.
+    ///     Whether a workspace-relative path's FIRST segment is a dot-entry outside <see cref="EditableDotPaths" />.
+    ///     The first segment alone decides it, which is what makes the prune correct: <c>WorkspaceFileScanner</c> asks
+    ///     about a bare directory name before descending, so <c>.git</c> with nothing after it has to answer true.
+    ///     <see cref="Confine" /> uses it to refuse the path as a tool argument; the listing and search tools use it to
+    ///     drop the same paths from their OUTPUT, so the policy reads the same way whether a path is asked for or
+    ///     merely enumerated.
+    ///     <para>
+    ///         The rule is the dot prefix itself, not a list of names. Git internals, this engine's own
+    ///         <c>.xe-dev</c> import source and whatever state directory a contributor's editor or agent tooling drops
+    ///         in the worktree are indistinguishable to the guard and equally none of the agent's business — and a
+    ///         deny-list naming particular tools would protect nothing for a contributor who uses a different one,
+    ///         which is a guard whose strength depends on which software happens to be installed.
+    ///     </para>
+    ///     <para>
+    ///         <c>.xe-dev</c> is covered here, and it is worth saying why this is NOT the guard for it: refusing the
+    ///         path as a tool argument is necessary but not sufficient, because a build or test command can still write
+    ///         the file as a side effect, entirely outside this check. The property is actually carried by the digest
+    ///         re-check in <c>DevelopmentWorkspaceTools.EnsureWorkspaceInvariantAsync</c> plus the fact that the
+    ///         database, not the worktree, is the source of truth for the profile.
+    ///     </para>
     ///     <para>
     ///         Dropping them from listings is not cosmetic. A freshly cloned worktree's <c>.git</c> holds far more
     ///         entries than <see cref="DevelopmentOptions.MaxChangedFiles" /> allows a listing to return, so without
@@ -112,9 +133,32 @@ internal static class DevelopmentWorkspaceSecurity
     public static bool IsProtected(string relativePath)
     {
         ArgumentNullException.ThrowIfNull(relativePath);
-        return Array.Exists(ProtectedPrefixes,
-            prefix => string.Equals(relativePath, prefix, StringComparison.OrdinalIgnoreCase)
-                      || relativePath.StartsWith(prefix + "/", StringComparison.OrdinalIgnoreCase));
+
+        // Segment-aware by construction: ".gitignore" is its own first segment and never a match for ".git".
+        // Span IndexOf, because the string overload is culture-sensitive by default and CA1307 rejects it; segment
+        // splitting here must be ordinal.
+        var path = relativePath.AsSpan();
+        var separator = path.IndexOf(SandboxSeparator);
+        var firstSegment = separator < 0 ? path : path[..separator];
+
+        // The empty path is the workspace root, which a root listing has to be allowed to name.
+        if (firstSegment.IsEmpty || firstSegment[0] != '.')
+        {
+            return false;
+        }
+
+        foreach (var editable in EditableDotPaths)
+        {
+            if (firstSegment.Equals(editable, StringComparison.OrdinalIgnoreCase)
+                || (firstSegment.Length > editable.Length
+                    && firstSegment[editable.Length] == '.'
+                    && firstSegment[..editable.Length].Equals(editable, StringComparison.OrdinalIgnoreCase)))
+            {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void EnsureNoSymlinkComponents(string canonicalPath)

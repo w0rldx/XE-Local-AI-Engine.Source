@@ -520,6 +520,10 @@ public sealed class LayerDependencyTests
         }
     }
 
+    // Build output and every dot-directory. The dot rule replaces a list of specific tool directories, which only
+    // excluded whatever tooling the author of the list happened to run: a contributor with a different one had that
+    // tool's state walked instead. No repository-controlled .props or .targets lives under a dot-directory, so this
+    // widening does not shrink what the test asserts over.
     private static bool IsExcludedBuildCustomizationDirectory(string name) =>
-        name is "bin" or "obj" or ".tmp" or ".git" or ".codegraph" or ".omx" or "node_modules";
+        name is "bin" or "obj" or "node_modules" || name.StartsWith('.');
 }

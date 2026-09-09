@@ -91,10 +91,6 @@ Every step must record a verdict. `IRuntimeDeviceAudit`, not the installed varia
 
 Installed runtime metadata and effective execution disagree in both directions: a Vulkan record without an ICD can run CPU, while a CUDA path override can run GPU under a stale Vulkan record. `IRuntimeDeviceAudit` combines selected binary, hardware, and `--list-devices`; the smoke confirms outcome during generation. A failed/timeout audit is unknown and must not trigger the CPU-fallback alarm or persist as determinate state.
 
-### The `.opencode/` agent eval foundation
-
-`.opencode/` is internal-only, gitignored tooling and is absent from a public clone. Where available, behavioral rules use compliant/negative scenario triples so the negative case must fail. Do not document its commands as public-repository validation.
-
 ### `release.yml` is the intended release path — GitHub Actions must be enabled to run it
 
 - `.github/workflows/release.yml` is the tag-triggered win-x64/linux-x64 Velopack path. It reuses `build-and-test.yml` as `validate`; packaging depends on validation.
