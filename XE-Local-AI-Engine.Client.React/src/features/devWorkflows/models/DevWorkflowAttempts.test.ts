@@ -67,7 +67,9 @@ describe("devWorkflowNodeAttempts", () => {
 		// reader that takes only the new spelling reports nothing for every run that already exists.
 		const attempts = devWorkflowNodeAttempts(
 			[
-				event(9, "worksession.attached", { detailJson: JSON.stringify({ WorkSessionId: "s-legacy", Attempt: 2, SessionResumes: 0 }) }),
+				event(9, "worksession.attached", {
+					detailJson: JSON.stringify({ WorkSessionId: "s-legacy", Attempt: 2, SessionResumes: 0 }),
+				}),
 				event(10, "node.completed", { outcome: "succeeded" }),
 			],
 			2,

@@ -1,12 +1,6 @@
 import { ActionIcon, Alert, Anchor, Drawer, Group, Loader, Menu, Stack, Tabs, Text, Tooltip } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import {
-	IconAlertTriangle,
-	IconDotsVertical,
-	IconLayoutSidebar,
-	IconLayoutSidebarRight,
-	IconTrash,
-} from "@tabler/icons-react";
+import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -15,6 +9,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowDefinitionPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionPanel";
@@ -25,27 +20,8 @@ import { DevWorkflowNodeRunTable } from "@/features/devWorkflows/components/DevW
 import { DevWorkflowRunSummaryPanel } from "@/features/devWorkflows/components/DevWorkflowRunSummaryPanel";
 import { DevWorkflowRunToolbar } from "@/features/devWorkflows/components/DevWorkflowRunToolbar";
 import { DevWorkflowWorkItemStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
-import { useDevWorkflowRunHub } from "@/features/devWorkflows/hooks/useDevWorkflowRunHub";
-import {
-	type DevWorkflowDetailTab,
-	isActiveDevWorkflowRunStatus,
-	toDevWorkflowRunStatus,
-	toDevWorkflowWorkItemStatus,
-} from "@/features/devWorkflows/models/DevWorkflowModels";
-import {
-	type DevWorkflowEventsAnchor,
-	devWorkflowEventsAnchorParam,
-	useDecideDevWorkflowNodeRun,
-	useDeleteDevWorkflowWorkItem,
-	useDevWorkflowArtifacts,
-	useDevWorkflowDefinitions,
-	useDevWorkflowRun,
-	useDevWorkflowNodeRun,
-	useDevWorkflowRunEvents,
-	useDevWorkflowRunLifecycle,
-	useDevWorkflowWorkItem,
-	useStartDevWorkflowRun,
-} from "@/features/devWorkflows/queries/useDevWorkflows";
+import { useDevWorkflowDetailData } from "@/features/devWorkflows/hooks/useDevWorkflowDetailData";
+import { type DevWorkflowDetailTab, toDevWorkflowWorkItemStatus } from "@/features/devWorkflows/models/DevWorkflowModels";
 
 export interface DevWorkflowDetailSelection {
 	readonly run?: string;
@@ -76,46 +52,29 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	// Which template the operator is considering. Local rather than a search param: it is a pre-start preview, and it
 	// stops existing the moment a run does.
 	const [definitionId, setDefinitionId] = useState<string | null>(null);
-	const [eventsAnchor, setEventsAnchor] = useState<DevWorkflowEventsAnchor>("newest");
 
-	const workItemQuery = useDevWorkflowWorkItem(workItemId);
-	// Absent `?run=` means the latest run; an explicit one renders a historical run from its OWN pinned graph snapshot.
-	const runId = selection.run ?? workItemQuery.data?.latestRunId ?? undefined;
-	const live = useDevWorkflowRunHub(runId, workItemId);
-
-	// Start every feed in parallel with the work-item request, but once that authoritative request has terminally
-	// failed, stop subordinate work even if a failed hub subscription has enabled fallback polling.
-	const feedsEnabled = !workItemQuery.isError;
-	const poll = { pollIntervalMs: feedsEnabled ? live.pollIntervalMs : undefined, enabled: feedsEnabled };
-
-	const runQuery = useDevWorkflowRun(runId, poll);
-	const nodeRunQuery = useDevWorkflowNodeRun(runId, selection.node, poll);
-	// The feed opens on the newest events (R-C4) and needs the run's high-water mark to compute that cursor. `?tab=`
-	// carries no anchor: which end of a log you are reading is a scroll position, not a shareable view of the run.
-	const eventsQuery = useDevWorkflowRunEvents(runId, runQuery.data?.lastSequence, { ...poll, anchor: eventsAnchor });
-	// The same cursor the feed opened on. Passed down so the tab can say when a live run crossed a page boundary and
-	// took the older pages with it, instead of them disappearing without a word.
-	const eventsAnchorParam = devWorkflowEventsAnchorParam(runQuery.data?.lastSequence, eventsAnchor);
-	const artifactsQuery = useDevWorkflowArtifacts(runId, poll);
-	const definitionsQuery = useDevWorkflowDefinitions();
-	const lifecycle = useDevWorkflowRunLifecycle(runId, workItemId);
-	const decide = useDecideDevWorkflowNodeRun(runId, workItemId);
-	const startRun = useStartDevWorkflowRun();
-	const deleteWorkItem = useDeleteDevWorkflowWorkItem();
-
-	const run = runQuery.data;
-	// The hub snapshot paints the status before the run query lands; once it has, the query is the authority.
-	const runStatus = toDevWorkflowRunStatus(run?.status ?? live.status);
-	const nodes = run?.nodes ?? [];
-	const pendingDecisionCount = run?.pendingDecisionCount ?? live.pendingDecisionCount ?? 0;
-	const blockingGateNodeRunId = run?.blockingGateNodeRunId ?? live.blockingGateNodeRunId ?? undefined;
-	// X14: one live run per work item, so a second start is refused with a 409. The control is simply not offered — and
-	// the question is asked of the WORK ITEM's runs, not the selected one: viewing a terminal historical run under a
-	// newer live run offered a Start that could only ever 409. Same rows the summary panel lists, so what the operator
-	// sees and what the control believes cannot disagree.
-	const canStartRun = !(workItemQuery.data?.runs ?? []).some((summary) =>
-		isActiveDevWorkflowRunStatus(toDevWorkflowRunStatus(summary.status)),
-	);
+	const {
+		workItemQuery,
+		runId,
+		live,
+		nodeRunQuery,
+		eventsQuery,
+		eventsAnchor,
+		setEventsAnchor,
+		eventsAnchorParam,
+		artifactsQuery,
+		definitionsQuery,
+		lifecycle,
+		decide,
+		startRun,
+		deleteWorkItem,
+		run,
+		runStatus,
+		nodes,
+		pendingDecisionCount,
+		blockingGateNodeRunId,
+		canStartRun,
+	} = useDevWorkflowDetailData(workItemId, selection);
 
 	const select = useCallback(
 		(next: DevWorkflowDetailSelection) => onSelectionChange({ ...selection, ...next }),
@@ -157,16 +116,18 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	if (workItemQuery.isError || !workItemQuery.data) {
 		return (
 			<FullHeightPage data-testid="dev-workflow-detail-page">
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-detail-error">
-					<Stack gap="sm" align="flex-start">
-						<Text size="sm">
-							{apiErrorMessage(workItemQuery.error, t("pages.devWorkflows.detail.notFound", "This work item could not be loaded."))}
-						</Text>
-						<Anchor component={Link} to="/development-workflows" size="sm" data-testid="dev-workflow-detail-back">
-							{t("pages.devWorkflows.detail.back", "Back to workflow runs")}
-						</Anchor>
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					message={apiErrorMessage(
+						workItemQuery.error,
+						t("pages.devWorkflows.detail.notFound", "This work item could not be loaded."),
+					)}
+					data-testid="dev-workflow-detail-error"
+				>
+					<Anchor component={Link} to="/development-workflows" size="sm" data-testid="dev-workflow-detail-back">
+						{t("pages.devWorkflows.detail.back", "Back to workflow runs")}
+					</Anchor>
+				</InlineErrorAlert>
 			</FullHeightPage>
 		);
 	}
@@ -408,11 +369,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 						</Tooltip>
 					) : null}
 				</Group>
-				{deleteError ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-delete-error">
-						{deleteError}
-					</Alert>
-				) : null}
+				{deleteError ? <InlineErrorAlert variant="light" message={deleteError} data-testid="dev-workflow-delete-error" /> : null}
 				{isMobile ? (
 					<>
 						<div style={{ flex: 1, minHeight: 0 }}>{centrePane}</div>

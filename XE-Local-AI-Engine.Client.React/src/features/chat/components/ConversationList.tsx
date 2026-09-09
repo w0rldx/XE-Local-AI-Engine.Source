@@ -1,23 +1,10 @@
-import { ActionIcon, Badge, Group, Menu, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
-import {
-	IconArchive,
-	IconArchiveOff,
-	IconChevronLeft,
-	IconChevronRight,
-	IconDots,
-	IconMessage,
-	IconPencil,
-	IconPin,
-	IconPinned,
-	IconPinnedFilled,
-	IconPlus,
-	IconSearch,
-	IconTrash,
-} from "@tabler/icons-react";
-import { type KeyboardEvent, memo, type MouseEvent, useState } from "react";
+import { ActionIcon, Group, Paper, ScrollArea, Stack, Switch, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconArchive, IconChevronLeft, IconPinnedFilled, IconPlus, IconSearch } from "@tabler/icons-react";
+import { type KeyboardEvent, memo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { ConversationListCollapsedRail } from "@/features/chat/components/ConversationList/ConversationListCollapsedRail";
+import { ConversationListItem } from "@/features/chat/components/ConversationList/ConversationListItem";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 
 /* eslint-disable react-doctor/no-giant-component -- The list and its row menus share selection, mutation, and responsive-collapse state; splitting them would duplicate that coordination. */
@@ -42,33 +29,6 @@ interface ConversationListProps {
 	onTogglePin?: (conversationId: string, isPinned: boolean) => void;
 	onToggleArchive?: (conversationId: string, archived: boolean) => void;
 	onDelete?: (conversationId: string, skipConfirm: boolean) => void;
-}
-
-function formatRelative(iso?: string): string {
-	if (!iso) {
-		return "";
-	}
-
-	const date = new Date(iso);
-	if (Number.isNaN(date.getTime())) {
-		return "";
-	}
-
-	const now = new Date();
-	const diffMin = Math.round((now.getTime() - date.getTime()) / 60000);
-	if (diffMin < 1) {
-		return "now";
-	}
-	if (diffMin < 60) {
-		return `${diffMin}m`;
-	}
-
-	return formatTimestamp(date.getTime(), { month: "short", day: "numeric" });
-}
-
-function initials(title: string): string {
-	const matches = title.match(/\b\w/g) ?? [];
-	return matches.slice(0, 2).join("").toUpperCase() || title.slice(0, 2).toUpperCase();
 }
 
 function matchesQuery(conversation: ChatConversationModel, query: string): boolean {
@@ -160,55 +120,14 @@ export const ConversationList = memo(function ConversationList({
 
 	if (collapsed) {
 		return (
-			<Paper
-				withBorder={true}
-				h="100%"
-				data-testid="conversation-list"
-				style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 8 }}
-			>
-				<Tooltip label={t("pages.chat.conversationList.show", "Show conversations")} position="right">
-					<ActionIcon
-						variant="subtle"
-						onClick={onToggleCollapse}
-						aria-label={t("pages.chat.conversationList.expandAria", "Expand conversations")}
-					>
-						<IconChevronRight size={16} />
-					</ActionIcon>
-				</Tooltip>
-				<ActionIcon
-					variant="filled"
-					color="dark"
-					size={40}
-					radius="md"
-					onClick={onCreateConversation}
-					aria-label={t("pages.chat.newConversation", "New conversation")}
-				>
-					<IconPlus size={16} />
-				</ActionIcon>
-				<ScrollArea style={{ flex: 1, width: "100%", minHeight: 0 }} type="auto">
-					<Stack gap={6} align="center">
-						{conversations.map((conversation) => {
-							const label = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled");
-							return (
-								<Tooltip key={conversation.id} label={label} position="right" withArrow={true}>
-									<ActionIcon
-										variant={conversation.id === selectedConversationId ? "filled" : "light"}
-										color={conversation.id === selectedConversationId ? "primary" : "gray"}
-										size={40}
-										radius="md"
-										disabled={disabled}
-										onClick={() => onSelect(conversation.id)}
-										aria-label={label}
-										data-testid={`conversation-item-${conversation.id}`}
-									>
-										{conversation.isPinned ? initials(label) : <IconMessage size={16} />}
-									</ActionIcon>
-								</Tooltip>
-							);
-						})}
-					</Stack>
-				</ScrollArea>
-			</Paper>
+			<ConversationListCollapsedRail
+				conversations={conversations}
+				selectedConversationId={selectedConversationId}
+				disabled={disabled}
+				onCreateConversation={onCreateConversation}
+				onSelect={onSelect}
+				onToggleCollapse={onToggleCollapse}
+			/>
 		);
 	}
 
@@ -286,166 +205,26 @@ export const ConversationList = memo(function ConversationList({
 										{section.title}
 									</Text>
 								</Group>
-								{section.items.map((conversation) => {
-									const isRemote = conversation.origin === "remote";
-									const isRenaming = renamingId === conversation.id;
-									const isMutating = mutatingConversationId === conversation.id;
-									const canManage =
-										!isRemote && (Boolean(onRename) || Boolean(onTogglePin) || Boolean(onToggleArchive) || Boolean(onDelete));
-
-									return (
-										<Paper
-											key={conversation.id}
-											p="sm"
-											radius="md"
-											data-testid={`conversation-item-${conversation.id}`}
-											onClick={() => {
-												if (!disabled && !isRenaming) {
-													onSelect(conversation.id);
-												}
-											}}
-											style={{
-												cursor: disabled || isRenaming ? "default" : "pointer",
-												background:
-													conversation.id === selectedConversationId ? "var(--mantine-primary-color-light)" : "transparent",
-											}}
-										>
-											<Stack gap={4}>
-												<Group justify="space-between" wrap="nowrap" gap={8}>
-													{isRenaming ? (
-														<TextInput
-															size="xs"
-															value={renameDraft}
-															autoFocus={true}
-															onClick={(event) => event.stopPropagation()}
-															onChange={(event) => setRenameDraft(event.currentTarget.value)}
-															onKeyDown={(event) => handleRenameKeyDown(event, conversation.id)}
-															onBlur={() => commitRename(conversation.id)}
-															style={{ flex: 1 }}
-															data-testid={`conversation-rename-input-${conversation.id}`}
-															aria-label={t("pages.chat.conversationList.renameAria", "Rename conversation")}
-														/>
-													) : (
-														<Text fw={600} size="sm" lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
-															{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled")}
-														</Text>
-													)}
-													{isRenaming ? null : (
-														<Group gap={4} wrap="nowrap">
-															<Text size="xs" c="dimmed">
-																{formatRelative(conversation.lastActivity ?? conversation.updatedAt)}
-															</Text>
-															{canManage ? (
-																<Menu position="bottom-end" withinPortal={true} disabled={isMutating}>
-																	<Menu.Target>
-																		<ActionIcon
-																			variant="subtle"
-																			color="gray"
-																			size="sm"
-																			loading={isMutating}
-																			onClick={(event) => event.stopPropagation()}
-																			aria-label={t("pages.chat.conversationList.actionsAria", "Conversation actions")}
-																			data-testid={`conversation-actions-${conversation.id}`}
-																		>
-																			<IconDots size={14} />
-																		</ActionIcon>
-																	</Menu.Target>
-																	<Menu.Dropdown onClick={(event) => event.stopPropagation()}>
-																		{onRename ? (
-																			<Menu.Item
-																				leftSection={<IconPencil size={14} />}
-																				onClick={() => beginRename(conversation)}
-																				data-testid={`conversation-rename-${conversation.id}`}
-																			>
-																				{t("pages.chat.conversationList.rename", "Rename")}
-																			</Menu.Item>
-																		) : null}
-																		{onTogglePin ? (
-																			<Menu.Item
-																				leftSection={conversation.isPinned ? <IconPinned size={14} /> : <IconPin size={14} />}
-																				onClick={() => onTogglePin(conversation.id, !conversation.isPinned)}
-																				data-testid={`conversation-pin-${conversation.id}`}
-																			>
-																				{conversation.isPinned
-																					? t("pages.chat.conversationList.unpin", "Unpin")
-																					: t("pages.chat.conversationList.pin", "Pin")}
-																			</Menu.Item>
-																		) : null}
-																		{onToggleArchive ? (
-																			<Menu.Item
-																				leftSection={
-																					conversation.isArchived ? <IconArchiveOff size={14} /> : <IconArchive size={14} />
-																				}
-																				onClick={() => onToggleArchive(conversation.id, !conversation.isArchived)}
-																				data-testid={`conversation-archive-${conversation.id}`}
-																			>
-																				{conversation.isArchived
-																					? t("pages.chat.conversationList.unarchive", "Unarchive")
-																					: t("pages.chat.conversationList.archive", "Archive")}
-																			</Menu.Item>
-																		) : null}
-																		{onDelete ? (
-																			<Tooltip
-																				label={t(
-																					"pages.chat.conversationList.deleteShiftHint",
-																					"Shift-click to skip confirmation",
-																				)}
-																				position="left"
-																				withArrow={true}
-																				openDelay={300}
-																			>
-																				<Menu.Item
-																					color="red"
-																					leftSection={<IconTrash size={14} />}
-																					onClick={(event: MouseEvent<HTMLButtonElement>) =>
-																						onDelete(conversation.id, event.shiftKey)
-																					}
-																					data-testid={`conversation-delete-${conversation.id}`}
-																				>
-																					{t("pages.chat.conversationList.delete", "Delete")}
-																				</Menu.Item>
-																			</Tooltip>
-																		) : null}
-																	</Menu.Dropdown>
-																</Menu>
-															) : null}
-														</Group>
-													)}
-												</Group>
-												<Text size="xs" c="dimmed" lineClamp={1}>
-													{conversation.lastMessagePreview?.trim() || t("pages.chat.noMessages", "No messages")}
-												</Text>
-												{isRemote || conversation.isArchived ? (
-													<Group gap={4}>
-														{isRemote ? (
-															<Tooltip
-																label={t(
-																	"pages.chat.conversationList.remoteTooltip",
-																	"Started from a paired client. View-only on this node.",
-																)}
-																withArrow={true}
-															>
-																<Badge
-																	variant="light"
-																	color="blue"
-																	size="xs"
-																	data-testid={`conversation-remote-badge-${conversation.id}`}
-																>
-																	{t("pages.chat.conversationList.remote", "Remote")}
-																</Badge>
-															</Tooltip>
-														) : null}
-														{conversation.isArchived ? (
-															<Badge variant="light" color="gray" size="xs">
-																{t("pages.chat.conversationList.archived", "Archived")}
-															</Badge>
-														) : null}
-													</Group>
-												) : null}
-											</Stack>
-										</Paper>
-									);
-								})}
+								{section.items.map((conversation) => (
+									<ConversationListItem
+										key={conversation.id}
+										conversation={conversation}
+										selected={conversation.id === selectedConversationId}
+										disabled={disabled}
+										isRenaming={renamingId === conversation.id}
+										renameDraft={renameDraft}
+										isMutating={mutatingConversationId === conversation.id}
+										onSelect={onSelect}
+										onBeginRename={beginRename}
+										onRenameDraftChange={(event) => setRenameDraft(event.currentTarget.value)}
+										onRenameKeyDown={handleRenameKeyDown}
+										onCommitRename={commitRename}
+										onRename={onRename}
+										onTogglePin={onTogglePin}
+										onToggleArchive={onToggleArchive}
+										onDelete={onDelete}
+									/>
+								))}
 							</Stack>
 						),
 					)}

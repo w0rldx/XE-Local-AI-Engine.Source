@@ -1,10 +1,10 @@
 import { Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { fieldError } from "@/core/ui/forms/ZodFieldErrors";
 import type { CustomToolEditorSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
 import { CustomToolHostList } from "@/features/customTools/components/CustomToolHostList";
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
-import { errorAt } from "@/features/customTools/models/CustomToolFormErrors";
 import {
 	CUSTOM_TOOL_HTTP_METHODS,
 	type CustomToolFormValues,
@@ -47,7 +47,7 @@ export function HttpEditor({ values, errors, update }: CustomToolEditorSectionPr
 				value={http.urlTemplate}
 				required={true}
 				error={
-					errorAt(errors, "http.urlTemplate")
+					fieldError(errors, "http.urlTemplate")
 						? t("pages.customTools.form.http.urlRequired", "A URL template is required.")
 						: undefined
 				}

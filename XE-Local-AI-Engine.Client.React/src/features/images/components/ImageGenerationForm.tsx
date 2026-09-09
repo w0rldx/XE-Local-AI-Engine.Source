@@ -3,23 +3,14 @@ import { IconSparkles } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import {
-	imageFormDefaultsForModel,
 	type ImageGenerationFormValues,
-	imageGenerationFormSchema,
 	type ImageModelView,
+	imageFormDefaultsForModel,
+	imageGenerationFormSchema,
 	imageSamplers,
 } from "@/features/images/models/ImageModels";
-
-// Flatten a Zod issue path to a stable string key so per-field errors can be looked up by the input that owns them
-// (mirrors ScheduledJobForm.issueKey).
-function issueKey(path: readonly PropertyKey[]): string {
-	return path.map((segment) => String(segment)).join(".");
-}
-
-function fieldError(errors: Record<string, string>, key: string): string | undefined {
-	return errors[key];
-}
 
 interface ImageGenerationFormProps {
 	models: readonly ImageModelView[];
@@ -102,7 +93,9 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 		}
 	}, [handleModelChange, models, values.modelName]);
 
-	const selectedModel = models.some((model) => model.modelName === values.modelName) ? values.modelName : (models[0]?.modelName ?? null);
+	const selectedModel = models.some((model) => model.modelName === values.modelName)
+		? values.modelName
+		: (models[0]?.modelName ?? null);
 
 	return (
 		<Stack gap="md" data-testid="image-generation-form">
@@ -167,7 +160,9 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					step={64}
 					allowDecimal={false}
 					error={fieldError(errors, "height")}
-					onChange={(value) => setValues((current) => ({ ...current, height: typeof value === "number" ? value : current.height }))}
+					onChange={(value) =>
+						setValues((current) => ({ ...current, height: typeof value === "number" ? value : current.height }))
+					}
 					data-testid="image-form-height"
 				/>
 			</Group>
@@ -191,7 +186,9 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					step={0.5}
 					decimalScale={1}
 					error={fieldError(errors, "cfgScale")}
-					onChange={(value) => setValues((current) => ({ ...current, cfgScale: typeof value === "number" ? value : current.cfgScale }))}
+					onChange={(value) =>
+						setValues((current) => ({ ...current, cfgScale: typeof value === "number" ? value : current.cfgScale }))
+					}
 					data-testid="image-form-cfg-scale"
 				/>
 			</Group>
@@ -206,7 +203,9 @@ export function ImageGenerationForm({ models, isSubmitting, submitError, onSubmi
 					value={values.sampler}
 					allowDeselect={false}
 					error={fieldError(errors, "sampler")}
-					onChange={(value) => setValues((current) => ({ ...current, sampler: (value ?? current.sampler) as ImageGenerationFormValues["sampler"] }))}
+					onChange={(value) =>
+						setValues((current) => ({ ...current, sampler: (value ?? current.sampler) as ImageGenerationFormValues["sampler"] }))
+					}
 					data-testid="image-form-sampler"
 				/>
 				<NumberInput

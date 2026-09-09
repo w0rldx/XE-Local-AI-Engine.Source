@@ -143,7 +143,13 @@ export function GraphWorkflowDecisionPanel({
 						? t("pages.graphWorkflows.decision.commentRequired", "This node requires a comment with the decision.")
 						: t("pages.graphWorkflows.decision.commentOptional", "Optional. It is recorded with the decision.")
 				}
-				error={commentTooLong ? t("pages.graphWorkflows.decision.commentTooLong", "Keep the comment to {{max}} characters or fewer.", { max: COMMENT_MAX }) : undefined}
+				error={
+					commentTooLong
+						? t("pages.graphWorkflows.decision.commentTooLong", "Keep the comment to {{max}} characters or fewer.", {
+								max: COMMENT_MAX,
+							})
+						: undefined
+				}
 				value={comment}
 				autosize={true}
 				minRows={3}

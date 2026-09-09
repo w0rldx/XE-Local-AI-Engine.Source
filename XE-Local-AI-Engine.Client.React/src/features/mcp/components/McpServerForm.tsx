@@ -1,15 +1,16 @@
-import { ActionIcon, Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { IconDeviceFloppy, IconPlus, IconTrash, IconX } from "@tabler/icons-react";
+import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { IconDeviceFloppy, IconX } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
+import { McpEnvEditor } from "@/features/mcp/components/McpServerForm/McpEnvEditor";
+import { useMcpEnvRows } from "@/features/mcp/hooks/useMcpEnvRows";
 import {
 	type McpEnvEntry,
 	type McpServerFormValues,
 	type McpTransportKind,
 	type McpTrustTier,
-	maskedEnvValue,
 	mcpServerFormSchema,
 	mcpTransportKinds,
 	selectableMcpTrustTiers,
@@ -35,54 +36,6 @@ interface McpServerFormProps {
 	onDirtyChange?: (isDirty: boolean) => void;
 }
 
-// Form-local env row. Carries a stable client id so React can key rows across add/remove without using the
-// array index (the index would change on remove and lose input focus / component state). The id never leaves
-// the form — env is projected back to plain key/value McpEnvEntry on submit and for schema validation.
-interface McpEnvRow extends McpEnvEntry {
-	/**
-	 * This row arrived carrying the mask, i.e. it is an EXISTING variable whose stored value the API never
-	 * returns. Its box renders empty with an "unchanged" placeholder rather than showing the sentinel, and an
-	 * empty box submits the sentinel back — so clearing the field keeps the stored value instead of blanking it.
-	 * Deleting a variable stays the explicit remove button.
-	 */
-	readonly masked: boolean;
-	id: string;
-}
-
-let envRowSequence = 0;
-
-function nextEnvRowId(): string {
-	envRowSequence += 1;
-	return `env-row-${envRowSequence}`;
-}
-
-function toEnvRows(entries: readonly McpEnvEntry[]): McpEnvRow[] {
-	return entries.map((entry) => ({
-		id: nextEnvRowId(),
-		key: entry.key,
-		value: entry.value,
-		masked: entry.value === maskedEnvValue,
-	}));
-}
-
-function toEnvEntries(rows: readonly McpEnvRow[]): McpEnvEntry[] {
-	// An emptied masked row goes back as the sentinel: the operator cleared the box, which means "leave it alone",
-	// not "store an empty string" and not "delete it".
-	return rows.map((row) => ({ key: row.key, value: row.masked && row.value === "" ? maskedEnvValue : row.value }));
-}
-
-// Flatten the Zod issue path (e.g. ["env", 2, "key"]) to a stable string key so transport-conditional and
-// per-row env errors can be looked up by the inputs that own them.
-function issueKey(path: readonly PropertyKey[]): string {
-	return path.map((segment) => String(segment)).join(".");
-}
-
-// Bracket-notation lookup for the flattened error map (the strict tsconfig forbids dotted access on an index
-// signature). Returns undefined when the field has no error so it can flow straight into Mantine's `error`.
-function fieldError(errors: Record<string, string>, key: string): string | undefined {
-	return errors[key];
-}
-
 // Create/edit form for an MCP server registration. Controlled Mantine inputs validated with the shared Zod
 // schema on submit. The transport select toggles between stdio fields (command/args/env/cwd) and the http
 // field (loopback url). The enabled flag is NOT edited here — registering never auto-connects; enabling is a
@@ -99,17 +52,15 @@ export function McpServerForm({
 }: McpServerFormProps) {
 	const { t } = useTranslation();
 	const [values, setValues] = useState<McpServerFormValues>(initialValues);
-	// Env rows are held separately from `values` so each row can carry a stable id for React keys (the index
-	// would shift on remove). They are projected back into McpEnvEntry[] for validation and submit.
-	const [envRows, setEnvRows] = useState<McpEnvRow[]>(() => toEnvRows(initialValues.env));
+	const env = useMcpEnvRows(initialValues.env);
 	const [errors, setErrors] = useState<Record<string, string>>({});
 
 	// Compute and report the host's dirty state. Dirty = current values (with env projected back) differ from the
 	// initial snapshot; a JSON compare gives shallow/structural detection. Called from an effect (below), never during
 	// render, so the parent setter is only ever invoked after commit.
 	const reportDirty = useCallback(
-		(nextValues: McpServerFormValues, nextEnvRows: readonly McpEnvRow[]) => {
-			const candidate: McpServerFormValues = { ...nextValues, env: toEnvEntries(nextEnvRows) };
+		(nextValues: McpServerFormValues, nextEnv: McpEnvEntry[]) => {
+			const candidate: McpServerFormValues = { ...nextValues, env: nextEnv };
 			onDirtyChange?.(JSON.stringify(candidate) !== JSON.stringify(initialValues));
 		},
 		[initialValues, onDirtyChange],
@@ -119,15 +70,11 @@ export function McpServerForm({
 		setValues(updater);
 	}, []);
 
-	const updateEnvRows = useCallback((updater: (current: McpEnvRow[]) => McpEnvRow[]) => {
-		setEnvRows(updater);
-	}, []);
-
 	// Report dirty state to the host from an effect, so the parent setter is only ever called after commit — never
 	// during render. Fires on mount (a fresh mount is clean) and whenever the values or env rows change.
 	useEffect(() => {
-		reportDirty(values, envRows);
-	}, [values, envRows, reportDirty]);
+		reportDirty(values, env.entries);
+	}, [values, env.entries, reportDirty]);
 
 	const transportData = useMemo(
 		() =>
@@ -177,33 +124,8 @@ export function McpServerForm({
 		[updateValues],
 	);
 
-	const handleEnvKeyChange = useCallback(
-		(id: string, key: string) => {
-			updateEnvRows((current) => current.map((row) => (row.id === id ? { ...row, key } : row)));
-		},
-		[updateEnvRows],
-	);
-
-	const handleEnvValueChange = useCallback(
-		(id: string, value: string) => {
-			updateEnvRows((current) => current.map((row) => (row.id === id ? { ...row, value } : row)));
-		},
-		[updateEnvRows],
-	);
-
-	const handleAddEnv = useCallback(() => {
-		updateEnvRows((current) => [...current, { id: nextEnvRowId(), key: "", value: "", masked: false }]);
-	}, [updateEnvRows]);
-
-	const handleRemoveEnv = useCallback(
-		(id: string) => {
-			updateEnvRows((current) => current.filter((row) => row.id !== id));
-		},
-		[updateEnvRows],
-	);
-
 	const handleSubmit = useCallback(() => {
-		const candidate: McpServerFormValues = { ...values, env: toEnvEntries(envRows) };
+		const candidate: McpServerFormValues = { ...values, env: env.entries };
 		const result = mcpServerFormSchema.safeParse(candidate);
 		if (!result.success) {
 			const nextErrors: Record<string, string> = {};
@@ -216,7 +138,7 @@ export function McpServerForm({
 
 		setErrors({});
 		onSubmit(candidate);
-	}, [envRows, onSubmit, values]);
+	}, [env.entries, onSubmit, values]);
 
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
@@ -318,12 +240,12 @@ export function McpServerForm({
 						</Alert>
 					) : null}
 					<McpEnvEditor
-						rows={envRows}
+						rows={env.rows}
 						errors={errors}
-						onKeyChange={handleEnvKeyChange}
-						onValueChange={handleEnvValueChange}
-						onAdd={handleAddEnv}
-						onRemove={handleRemoveEnv}
+						onKeyChange={env.onKeyChange}
+						onValueChange={env.onValueChange}
+						onAdd={env.onAdd}
+						onRemove={env.onRemove}
 					/>
 				</Stack>
 			) : (
@@ -368,71 +290,6 @@ export function McpServerForm({
 					</Button>
 				</Group>
 			)}
-		</Stack>
-	);
-}
-
-interface McpEnvEditorProps {
-	rows: readonly McpEnvRow[];
-	errors: Record<string, string>;
-	onKeyChange: (id: string, key: string) => void;
-	onValueChange: (id: string, value: string) => void;
-	onAdd: () => void;
-	onRemove: (id: string) => void;
-}
-
-// Key/value editor for stdio environment variables. env carries secrets, so the value inputs are rendered as
-// plain text here (the user is the operator on their own node) but are encrypted at rest on save. Rows are
-// keyed by their stable client id; the position index is used only to look up the validation error (whose Zod
-// path is positional) and to build deterministic test ids. Each row wraps rather than forcing one line: the two
-// inputs plus the remove button do not fit a phone-width dialog, so they carry flex bases and break onto a second
-// line instead of overflowing.
-function McpEnvEditor({ rows, errors, onKeyChange, onValueChange, onAdd, onRemove }: McpEnvEditorProps) {
-	const { t } = useTranslation();
-
-	return (
-		<Stack gap="xs" data-testid="mcp-form-env">
-			<Group justify="space-between" align="center">
-				<Text size="sm" fw={500}>
-					{t("pages.mcp.form.env.label", "Environment variables")}
-				</Text>
-				<Button size="xs" variant="subtle" leftSection={<IconPlus size={14} />} onClick={onAdd} data-testid="mcp-form-env-add">
-					{t("pages.mcp.form.env.add", "Add variable")}
-				</Button>
-			</Group>
-			{rows.length === 0 ? <EmptyState size="xs" message={t("pages.mcp.form.env.empty", "No environment variables.")} /> : null}
-			{rows.map((row, index) => (
-				<Group key={row.id} gap="xs" align="flex-start" data-testid={`mcp-form-env-row-${index}`}>
-					<TextInput
-						placeholder={t("pages.mcp.form.env.keyPlaceholder", "KEY")}
-						value={row.key}
-						error={errors[`env.${index}.key`]}
-						onChange={(event) => onKeyChange(row.id, event.currentTarget.value)}
-						style={{ flex: "1 1 140px" }}
-						data-testid={`mcp-form-env-key-${index}`}
-					/>
-					<TextInput
-						placeholder={
-							row.masked
-								? t("pages.mcp.form.env.maskedPlaceholder", "unchanged — enter a new value to replace")
-								: t("pages.mcp.form.env.valuePlaceholder", "value")
-						}
-						value={row.value === maskedEnvValue ? "" : row.value}
-						onChange={(event) => onValueChange(row.id, event.currentTarget.value)}
-						style={{ flex: "2 1 200px" }}
-						data-testid={`mcp-form-env-value-${index}`}
-					/>
-					<ActionIcon
-						variant="subtle"
-						color="red"
-						aria-label={t("pages.mcp.form.env.remove", "Remove variable")}
-						onClick={() => onRemove(row.id)}
-						data-testid={`mcp-form-env-remove-${index}`}
-					>
-						<IconTrash size={16} />
-					</ActionIcon>
-				</Group>
-			))}
 		</Stack>
 	);
 }

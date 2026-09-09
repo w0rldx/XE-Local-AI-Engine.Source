@@ -1,11 +1,12 @@
-import { Alert, Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Button, Loader, ScrollArea, Stack, Text } from "@mantine/core";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Fragment, useEffect, useMemo, useRef } from "react";
+import { Fragment, useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
-import { ChatMessage } from "@/features/chat/components/ChatMessage";
-import { StreamingIndicator } from "@/features/chat/components/StreamingIndicator";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import type { ListRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
+import { ChatMessageRow } from "@/features/chat/components/ChatMessageList/ChatMessageRow";
+import { useStickToBottomScroll } from "@/features/chat/hooks/useStickToBottomScroll";
 import type {
 	ChatConversationModel,
 	ChatFeedbackRating,
@@ -18,9 +19,6 @@ import type {
 import { groupMessageRevisions } from "@/features/chat/models/MessageRevisionGrouping";
 
 const EMPTY_TIMELINE_ENTRIES: ChatTimelineEntry[] = [];
-// A scroll landing within this many pixels of the bottom counts as "at the bottom" and keeps auto-scroll
-// latched on; scrolling further up unlatches it so a user reading earlier output mid-generation is left alone.
-const NEAR_BOTTOM_THRESHOLD_PX = 100;
 // Above this many turns the list windows its rows (@tanstack/react-virtual) so a long thread does not keep
 // every markdown/code-block subtree mounted. At or below it the plain path renders — byte-identical DOM to the
 // pre-virtualization list — because a short thread gains nothing from windowing and the plain path keeps the
@@ -66,13 +64,6 @@ function bySortOrder(left: ChatMessageModel, right: ChatMessageModel): number {
 	return left.sortOrder - right.sortOrder || left.createdAt.localeCompare(right.createdAt);
 }
 
-type MessageRevisionGroup = ReturnType<typeof groupMessageRevisions>[number];
-
-// One rendered turn in the list: a persisted revision group, or the transient synthetic streaming turn.
-type ListRow =
-	| { readonly kind: "group"; readonly key: string; readonly group: MessageRevisionGroup }
-	| { readonly kind: "streaming"; readonly key: string };
-
 function hasText(value?: string): boolean {
 	return typeof value === "string" && value.trim().length > 0;
 }
@@ -98,14 +89,10 @@ export function ChatMessageList({
 	isWorkSessionConversation = false,
 }: ChatMessageListProps) {
 	const { t } = useTranslation();
-	const endRef = useRef<HTMLDivElement>(null);
-	// The ScrollArea viewport: a scroll listener on it drives the stick-to-bottom latch below.
+	// Owned here rather than by useStickToBottomScroll: the row virtualizer below reads the viewport ref, and the
+	// hook is deliberately called AFTER it so its re-pin effect keeps the declaration order it had before the cut.
 	const viewportRef = useRef<HTMLDivElement>(null);
-	// Whether auto-scroll should follow new content. Latched from actual scroll position (scroll listener), NOT
-	// inferred from geometry after content grows — a single large coalesced frame can add >100px in one commit,
-	// so measuring distance post-growth would wrongly disengage and strand the stream off-screen. The user
-	// scrolling up unlatches; scrolling back near the bottom re-latches. Defaults on so a fresh list sticks.
-	const stickToBottomRef = useRef(true);
+	const endRef = useRef<HTMLDivElement>(null);
 	const normalizedMessages = useMemo(
 		() =>
 			(messages ?? conversation?.messages ?? [])
@@ -181,166 +168,35 @@ export function ChatMessageList({
 		enabled: virtualize,
 	});
 	const virtualTotalSize = virtualize ? rowVirtualizer.getTotalSize() : 0;
+	useStickToBottomScroll({
+		viewportRef,
+		endRef,
+		virtualTotalSize,
+		scrollKey,
+		isStreamingActive,
+		conversationId: conversation?.id,
+		streamingTurnId,
+	});
 
-	// Virtualized path only: row heights land asynchronously (estimate → measured), growing the total size after
-	// the scrollKey-driven follow already ran. While latched, re-pin on every total-size change so the view stays
-	// at the bottom as measurements (and the streaming row's growth) arrive. "auto" — this fires per measurement,
-	// stacking smooth animations would judder.
-	useEffect(() => {
-		if (virtualTotalSize > 0 && stickToBottomRef.current) {
-			endRef.current?.scrollIntoView({ behavior: "auto", block: "end" });
-		}
-	}, [virtualTotalSize]);
-
-	// Drive the stick-to-bottom latch from real scroll events: unlatch once the user scrolls further than the
-	// threshold from the bottom, re-latch when they return near it. Our own scrollIntoView also lands near the
-	// bottom, so it keeps the latch engaged. Attached once; the viewport ref is populated by commit time.
-	useEffect(() => {
-		const viewport = viewportRef.current;
-		if (!viewport) {
-			return;
-		}
-
-		const handleScroll = (): void => {
-			const distanceFromBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-			stickToBottomRef.current = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD_PX;
-		};
-
-		viewport.addEventListener("scroll", handleScroll, { passive: true });
-		return () => viewport.removeEventListener("scroll", handleScroll);
-	}, []);
-
-	// Re-latch when the thread changes or a NEW streaming turn begins so switching conversations or sending a
-	// message returns the view to the newest content — but never when a turn CLEARS on completion, which must
-	// leave a scrolled-up reader exactly where they are (that terminal case is guarded by the latch below).
-	const previousStreamingTurnRef = useRef<string | undefined>(undefined);
-	const previousConversationIdRef = useRef<string | undefined>(undefined);
-	useEffect(() => {
-		const conversationId = conversation?.id;
-		const turnStarted = Boolean(streamingTurnId) && streamingTurnId !== previousStreamingTurnRef.current;
-		const conversationChanged = conversationId !== previousConversationIdRef.current;
-		if (turnStarted || conversationChanged) {
-			stickToBottomRef.current = true;
-		}
-		previousStreamingTurnRef.current = streamingTurnId;
-		previousConversationIdRef.current = conversationId;
-	}, [conversation?.id, streamingTurnId]);
-
-	useEffect(() => {
-		// scrollKey is the re-run trigger: it changes whenever rendered content grows (new revision group, tool
-		// entry, or streamed character), which is exactly when we may need to follow the stream. Reading it here
-		// also keeps it a declared dependency.
-		if (scrollKey.length === 0) {
-			return;
-		}
-
-		// Only follow the stream while latched (fixes both the large-frame disengage and the terminal-completion
-		// yank). Jump with "auto" during streaming so per-frame growth doesn't stack overlapping smooth-scroll
-		// animations; use "smooth" for one-off transitions (open/switch conversation, turn completion).
-		if (!stickToBottomRef.current) {
-			return;
-		}
-
-		endRef.current?.scrollIntoView({ behavior: isStreamingActive ? "auto" : "smooth", block: "end" });
-	}, [scrollKey, isStreamingActive]);
-
-	const renderGroupRow = (group: MessageRevisionGroup) => {
-		const message = group.active;
-		const isStreamingTarget = scopedStreamingMessage?.messageId === message.id && message.role === "assistant";
-		const isAssistant = message.role === "assistant";
-		const variantGroupId = message.variantGroupId;
-		const previousRevision = group.revisions[Math.max(0, group.activeIndex - 1)];
-		const nextRevision = group.revisions[Math.min(group.revisions.length - 1, group.activeIndex + 1)];
-		const revisionNav =
-			isAssistant && group.revisions.length > 1 && variantGroupId
-				? {
-						activeIndex: group.activeIndex,
-						total: group.revisions.length,
-						onPrevious: () => previousRevision && onSelectRevision?.(variantGroupId, previousRevision.id),
-						onNext: () => nextRevision && onSelectRevision?.(variantGroupId, nextRevision.id),
-					}
-				: undefined;
-
-		return (
-			<ChatMessage
-				key={message.id}
-				message={message}
-				isStreaming={
-					isStreamingTarget ? (scopedStreamingMessage?.isActive ?? false) && !scopedStreamingMessage?.isQueued : false
-				}
-				streamingParts={isStreamingTarget ? scopedStreamingMessage?.parts : undefined}
-				streamingReasoningOverflowBytes={isStreamingTarget ? scopedStreamingMessage?.reasoningOverflowBytes : undefined}
-				placeholder={isStreamingTarget ? streamingPlaceholder : undefined}
-				onRegenerate={isAssistant ? onRegenerate : undefined}
-				onBranch={isAssistant ? onBranch : undefined}
-				revisionNav={revisionNav}
-				showFeedbackControls={showFeedbackControls}
-				feedback={feedbackByMessageId?.[message.id]}
-				feedbackPending={pendingFeedbackMessageId === message.id}
-				onSubmitFeedback={onSubmitFeedback}
-				reasoningEffort={reasoningEffort}
-				isWorkSessionConversation={isWorkSessionConversation}
-				footer={
-					isStreamingTarget ? (
-						<StreamingIndicator
-							hasContent={hasStreamingContent}
-							isDelayed={scopedStreamingMessage?.isDelayed}
-							isQueued={scopedStreamingMessage?.isQueued}
-							isActive={scopedStreamingMessage?.isActive ?? false}
-							runtimePhase={scopedStreamingMessage?.runtimePhase}
-						/>
-					) : undefined
-				}
-			/>
-		);
+	// Everything a row needs beyond the row itself; identical for both render paths.
+	const rowContext = {
+		conversation,
+		scopedStreamingMessage,
+		streamingPlaceholder,
+		hasStreamingContent,
+		streamingStartedAt,
+		streamingAssistantMessage,
+		normalizedMessageCount: normalizedMessages.length,
+		onRegenerate,
+		onBranch,
+		onSelectRevision,
+		showFeedbackControls,
+		feedbackByMessageId,
+		pendingFeedbackMessageId,
+		onSubmitFeedback,
+		reasoningEffort,
+		isWorkSessionConversation,
 	};
-
-	const renderStreamingTurn = () =>
-		conversation && scopedStreamingMessage ? (
-			<ChatMessage
-				message={{
-					id: scopedStreamingMessage.messageId,
-					conversationId: conversation.id,
-					role: "assistant",
-					content: scopedStreamingMessage.content,
-					status: scopedStreamingMessage.isQueued
-						? "queued"
-						: scopedStreamingMessage.isActive
-							? "streaming"
-							: scopedStreamingMessage.error
-								? "failed"
-								: "completed",
-					// Carry the live error so the transient turn renders it once as an error block inside the
-					// bubble (the post-stream refetch then swaps in the persisted failed turn, same id).
-					error: scopedStreamingMessage.error,
-					createdAt: streamingStartedAt ?? conversation.updatedAt,
-					sortOrder: normalizedMessages.length + 1,
-					// Carry the optimistically-stamped agent attribution and reasoning effort so the live turn
-					// shows both immediately — the persisted values replace them on the post-stream refetch.
-					agentName: streamingAssistantMessage?.agentName,
-					agentDefinitionId: streamingAssistantMessage?.agentDefinitionId,
-					reasoningEffort: streamingAssistantMessage?.reasoningEffort,
-				}}
-				placeholder={streamingPlaceholder}
-				streamingParts={scopedStreamingMessage.parts}
-				streamingReasoningOverflowBytes={scopedStreamingMessage.reasoningOverflowBytes}
-				isStreaming={scopedStreamingMessage.isActive && !scopedStreamingMessage.isQueued}
-				reasoningEffort={reasoningEffort}
-				failureCategory={scopedStreamingMessage.failureCategory}
-				isWorkSessionConversation={isWorkSessionConversation}
-				footer={
-					<StreamingIndicator
-						hasContent={hasStreamingContent}
-						isDelayed={scopedStreamingMessage.isDelayed}
-						isQueued={scopedStreamingMessage.isQueued}
-						isActive={scopedStreamingMessage.isActive}
-						runtimePhase={scopedStreamingMessage.runtimePhase}
-					/>
-				}
-			/>
-		) : null;
-
-	const renderRow = (row: ListRow) => (row.kind === "group" ? renderGroupRow(row.group) : renderStreamingTurn());
 
 	return (
 		<ScrollArea type="hover" scrollbarSize={8} offsetScrollbars="y" viewportRef={viewportRef} style={{ flex: 1, minHeight: 0 }}>
@@ -364,7 +220,7 @@ export function ChatMessageList({
 									paddingBottom: VIRTUAL_ROW_GAP_PX,
 								}}
 							>
-								{renderRow(row)}
+								<ChatMessageRow row={row} {...rowContext} />
 							</div>
 						);
 					})}
@@ -372,7 +228,9 @@ export function ChatMessageList({
 			) : (
 				<Stack gap="sm">
 					{rows.map((row) => (
-						<Fragment key={row.key}>{renderRow(row)}</Fragment>
+						<Fragment key={row.key}>
+							<ChatMessageRow row={row} {...rowContext} />
+						</Fragment>
 					))}
 				</Stack>
 			)}
@@ -387,31 +245,30 @@ export function ChatMessageList({
 				    getConversation must surface an actionable error with Retry, never spin forever. Only shown when
 				    there is nothing else to display for the selection (no messages, no live stream). */}
 				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && messagesLoadFailed ? (
-					<Alert
-						role="alert"
-						color="red"
+					<InlineErrorAlert
 						variant="light"
-						icon={<IconAlertTriangle size={16} />}
 						title={t("pages.chat.loadError.title", "Couldn't load this conversation")}
+						message={t("pages.chat.loadError.body", "Something went wrong loading these messages.")}
 						data-testid="chat-messages-load-error"
 					>
-						<Stack gap="sm" align="flex-start">
-							<Text size="sm">{t("pages.chat.loadError.body", "Something went wrong loading these messages.")}</Text>
-							{messagesLoadErrorText ? (
-								<Text size="xs" c="dimmed">
-									{messagesLoadErrorText}
-								</Text>
-							) : null}
-							{onRetryLoadMessages ? (
-								<Button size="xs" variant="light" onClick={onRetryLoadMessages} data-testid="chat-messages-load-retry">
-									{t("pages.chat.loadError.retry", "Retry")}
-								</Button>
-							) : null}
-						</Stack>
-					</Alert>
+						{messagesLoadErrorText ? (
+							<Text size="xs" c="dimmed">
+								{messagesLoadErrorText}
+							</Text>
+						) : null}
+						{onRetryLoadMessages ? (
+							<Button size="xs" variant="light" onClick={onRetryLoadMessages} data-testid="chat-messages-load-retry">
+								{t("pages.chat.loadError.retry", "Retry")}
+							</Button>
+						) : null}
+					</InlineErrorAlert>
 				) : null}
 
-				{conversation && normalizedMessages.length === 0 && !scopedStreamingMessage && !messagesLoadFailed && isLoadingMessages ? (
+				{conversation &&
+				normalizedMessages.length === 0 &&
+				!scopedStreamingMessage &&
+				!messagesLoadFailed &&
+				isLoadingMessages ? (
 					<Stack align="center" py="md" gap="xs" role="status" aria-busy={true} aria-live="polite">
 						<Loader size="sm" />
 						<Text size="sm" c="dimmed">

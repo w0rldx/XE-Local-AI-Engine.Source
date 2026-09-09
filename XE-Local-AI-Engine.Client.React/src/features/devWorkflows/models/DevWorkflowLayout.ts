@@ -71,10 +71,7 @@ function compareTieBreak(left: DevWorkflowLayoutNode, right: DevWorkflowLayoutNo
  * definitions acyclic; this guard is four lines of defence in depth, because a UI that hangs is a worse failure than a
  * UI that draws a strange graph.
  */
-function rankNodes(
-	nodes: readonly DevWorkflowLayoutNode[],
-	edges: readonly DevWorkflowLayoutEdge[],
-): Map<string, number> {
+function rankNodes(nodes: readonly DevWorkflowLayoutNode[], edges: readonly DevWorkflowLayoutEdge[]): Map<string, number> {
 	const ranks = new Map<string, number>(nodes.map((node) => [node.id, 0]));
 	const successors = new Map<string, string[]>();
 	const inDegree = new Map<string, number>(nodes.map((node) => [node.id, 0]));
@@ -141,9 +138,7 @@ export function layoutDevWorkflowGraph(
 				});
 				return [
 					node.id,
-					orders.length === 0
-						? Number.POSITIVE_INFINITY
-						: orders.reduce((sum, order) => sum + order, 0) / orders.length,
+					orders.length === 0 ? Number.POSITIVE_INFINITY : orders.reduce((sum, order) => sum + order, 0) / orders.length,
 				];
 			}),
 		);
@@ -186,9 +181,7 @@ export function layoutDevWorkflowGraph(
 	// parked. Tagging is over the whole cycle rather than one chosen chord — there is no honest way to pick which edge
 	// of a cycle is "the" back edge.
 	const backEdgeKeys = new Set<string>(
-		edges
-			.filter((edge) => (ranks.get(edge.to) ?? 0) <= (ranks.get(edge.from) ?? 0))
-			.map((edge) => devWorkflowEdgeKey(edge)),
+		edges.filter((edge) => (ranks.get(edge.to) ?? 0) <= (ranks.get(edge.from) ?? 0)).map((edge) => devWorkflowEdgeKey(edge)),
 	);
 
 	return { positions, backEdgeKeys, rankCount };

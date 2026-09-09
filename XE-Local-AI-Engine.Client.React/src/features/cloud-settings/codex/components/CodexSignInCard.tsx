@@ -28,6 +28,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useCodexLogin, useCodexLogout, useCodexStatus } from "@/features/cloud-settings/codex/queries/useCodexAuth";
 
 interface CodexSignInCardProps {
@@ -227,9 +228,7 @@ export function CodexSignInCard({ onSignedInChange }: CodexSignInCardProps) {
 
 				{/* Status query error (not login error — the polling GET failed) */}
 				{statusQuery.isError && loginFlowActive ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Text size="sm">{t("pages.cloudSettings.codex.statusError")}</Text>
-					</Alert>
+					<InlineErrorAlert message={<Text size="sm">{t("pages.cloudSettings.codex.statusError")}</Text>} />
 				) : null}
 
 				{/* Sign-in button — shown when not signed in and not currently pending */}

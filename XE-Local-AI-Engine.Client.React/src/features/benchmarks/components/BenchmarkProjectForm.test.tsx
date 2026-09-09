@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { useState } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BenchmarkProjectForm } from "@/features/benchmarks/components/BenchmarkProjectForm";
@@ -36,10 +37,24 @@ const presets: BenchmarkRubricPresets = {
 	programming: rubric([{ id: "correctness", title: "Correctness", description: "Does the code run?", weight: 60 }]),
 	reasoning: rubric([{ id: "steps", title: "Steps", description: "Is the chain sound?", weight: 40 }]),
 	verifiable: rubric([
-		{ id: "answer", title: "Answer", description: "Exactly the expected answer.", weight: 100, kind: "exact", config: '{"expected":"42"}' },
+		{
+			id: "answer",
+			title: "Answer",
+			description: "Exactly the expected answer.",
+			weight: 100,
+			kind: "exact",
+			config: '{"expected":"42"}',
+		},
 	]),
 	codeExecution: rubric([
-		{ id: "tests", title: "Tests", description: "The answer's code passes the suite's tests.", weight: 100, kind: "pythonTests", config: '{"testCode":"assert True"}' },
+		{
+			id: "tests",
+			title: "Tests",
+			description: "The answer's code passes the suite's tests.",
+			weight: 100,
+			kind: "pythonTests",
+			config: '{"testCode":"assert True"}',
+		},
 	]),
 };
 
@@ -91,6 +106,28 @@ function save(container: HTMLElement): void {
 	fireEvent.submit(form as HTMLFormElement);
 }
 
+// Stands in for the page: a background refetch of the project hands the form a NEW initialValues object, and the
+// rubric presets are a second async read that lands later. Neither is a reason to re-seed the form.
+function RefetchingForm({ onSubmit }: { onSubmit: (values: BenchmarkProjectDraft) => void }) {
+	const [refetched, setRefetched] = useState(false);
+	return (
+		<>
+			<button type="button" data-testid="simulate-refetch" onClick={() => setRefetched(true)}>
+				refetch
+			</button>
+			<BenchmarkProjectForm
+				initialValues={
+					refetched ? judgingDraft({ name: "Renamed by someone else", rubric: null }) : judgingDraft({ rubric: null })
+				}
+				agents={agents}
+				models={models}
+				presets={refetched ? presets : undefined}
+				onSubmit={onSubmit}
+			/>
+		</>
+	);
+}
+
 describe("BenchmarkProjectForm", () => {
 	afterEach(cleanup);
 
@@ -124,11 +161,7 @@ describe("BenchmarkProjectForm", () => {
 			{ maxOutputTokens: 4096 },
 			"Max output tokens must be between 1 and the requested context.",
 		],
-		[
-			"a zero output budget",
-			{ maxOutputTokens: 0 },
-			"Max output tokens must be between 1 and the requested context.",
-		],
+		["a zero output budget", { maxOutputTokens: 0 }, "Max output tokens must be between 1 and the requested context."],
 		// The floor stops a typo from cancelling every run before the model warms; the ceiling stops a runaway run
 		// from owning the queue for a day.
 		[
@@ -200,9 +233,12 @@ describe("BenchmarkProjectForm", () => {
 
 	// A null rubric means "the node's default"; once judging is on the operator edits a concrete one.
 	it("materialises the default preset as the starting rubric", () => {
-		const { container, onSubmit } = renderForm(draft({ judgeEnabled: true, judgeModelName: "judge.gguf", judgeContextTokens: 8192 }), {
-			presets,
-		});
+		const { container, onSubmit } = renderForm(
+			draft({ judgeEnabled: true, judgeModelName: "judge.gguf", judgeContextTokens: 8192 }),
+			{
+				presets,
+			},
+		);
 
 		expect(screen.getByTestId("benchmark-rubric-editor")).toBeTruthy();
 		save(container);
@@ -247,15 +283,20 @@ describe("BenchmarkProjectForm", () => {
 	});
 
 	it("derives a criterion id from its title until the operator edits the id", () => {
-		const { container, onSubmit } = renderForm(judgingDraft({ rubric: rubric([{ id: "", title: "", description: "d", weight: 10 }]) }), {
-			presets,
-		});
+		const { container, onSubmit } = renderForm(
+			judgingDraft({ rubric: rubric([{ id: "", title: "", description: "d", weight: 10 }]) }),
+			{
+				presets,
+			},
+		);
 
 		fireEvent.change(screen.getByLabelText("Title"), { target: { value: "Tone of voice" } });
 		save(container);
 
 		expect(onSubmit).toHaveBeenCalledExactlyOnceWith(
-			expect.objectContaining({ rubric: rubric([{ id: "tone-of-voice", title: "Tone of voice", description: "d", weight: 10 }]) }),
+			expect.objectContaining({
+				rubric: rubric([{ id: "tone-of-voice", title: "Tone of voice", description: "d", weight: 10 }]),
+			}),
 		);
 	});
 
@@ -283,7 +324,9 @@ describe("BenchmarkProjectForm", () => {
 	// reasoning and an output budget that each look fine can still sum past the window, and the node is the only place
 	// that ever said so.
 	it("refuses a reasoning and output budget that leave no room for the prompt", () => {
-		const { container, onSubmit } = renderForm(draft({ contextTokens: 4096, maxOutputTokens: 2048, reasoningBudgetTokens: 2048 }));
+		const { container, onSubmit } = renderForm(
+			draft({ contextTokens: 4096, maxOutputTokens: 2048, reasoningBudgetTokens: 2048 }),
+		);
 
 		save(container);
 
@@ -303,9 +346,29 @@ describe("BenchmarkProjectForm", () => {
 	// The node re-checks the same rules against numbers the form cannot see. Its sentence belongs beside the fields,
 	// not only in a toast that outlives the dialog.
 	it("shows what the node refused the save with", () => {
-		renderForm(draft(), { saveError: "The reasoning token budget must be between 1 and the requested context. (InvalidRequest)" });
+		renderForm(draft(), {
+			saveError: "The reasoning token budget must be between 1 and the requested context. (InvalidRequest)",
+		});
 
 		expect(screen.getByTestId("benchmark-project-save-error").textContent).toContain("(InvalidRequest)");
 	});
-});
 
+	// The form is seeded ONCE, at mount: the caller remounts it with a `key` when it wants different values
+	// (BenchmarksPage keys the editor dialog by mode + project id). Re-seeding from every new initialValues object
+	// would wipe whatever the operator had typed since the last refetch — the bug this pins.
+	it("keeps an in-progress edit when initialValues and the presets change underneath it", () => {
+		const onSubmit = vi.fn();
+		renderWithProviders(<RefetchingForm onSubmit={onSubmit} />);
+
+		const name = screen.getByRole("textbox", { name: /Name/ }) as HTMLInputElement;
+		fireEvent.change(name, { target: { value: "What the operator typed" } });
+		// The presets have not arrived, so there is no concrete rubric to edit yet.
+		expect(screen.queryByTestId("benchmark-rubric-editor")).toBeNull();
+
+		fireEvent.click(screen.getByTestId("simulate-refetch"));
+
+		expect((screen.getByRole("textbox", { name: /Name/ }) as HTMLInputElement).value).toBe("What the operator typed");
+		// …and the late presets still stand in as the starting rubric, without an effect writing them into state.
+		expect(screen.getByTestId("benchmark-rubric-editor")).toBeTruthy();
+	});
+});

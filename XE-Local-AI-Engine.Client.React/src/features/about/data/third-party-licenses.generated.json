@@ -850,14 +850,6 @@
 			"source": "frontend"
 		},
 		{
-			"id": "frontend:dayjs@1.11.23",
-			"name": "dayjs",
-			"version": "1.11.23",
-			"license": "MIT",
-			"homepageUrl": "https://day.js.org",
-			"source": "frontend"
-		},
-		{
 			"id": "frontend:debug@4.4.3",
 			"name": "debug",
 			"version": "4.4.3",

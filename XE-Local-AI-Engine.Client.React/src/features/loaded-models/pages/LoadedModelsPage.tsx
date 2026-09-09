@@ -1,10 +1,11 @@
-import { Alert, Badge, Button, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerEject, IconServer } from "@tabler/icons-react";
+import { Badge, Button, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
+import { IconPlayerEject, IconServer } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -169,9 +170,13 @@ export function LoadedModelsPage() {
 				) : null}
 
 				{loadedModelsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="loaded-models-error">
-						{apiErrorMessage(loadedModelsQuery.error, t("pages.loadedModels.errors.load", "Could not load loaded models."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(
+							loadedModelsQuery.error,
+							t("pages.loadedModels.errors.load", "Could not load loaded models."),
+						)}
+						data-testid="loaded-models-error"
+					/>
 				) : null}
 
 				{settled && !ollamaConfigured ? (

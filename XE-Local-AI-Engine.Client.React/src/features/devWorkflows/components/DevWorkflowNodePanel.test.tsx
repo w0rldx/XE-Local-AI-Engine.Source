@@ -313,9 +313,12 @@ describe("DevWorkflowNodePanel", () => {
 
 		// The same shape while the node is still working is not missing evidence, it is work not finished yet.
 		cleanup();
-		renderPanel(devWorkflowNodeRunDetail({ status: "Running", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }), {
-			events,
-		});
+		renderPanel(
+			devWorkflowNodeRunDetail({ status: "Running", attempt: 2, maxAttempts: 3, providerCalls: 6, inputTokens: null }),
+			{
+				events,
+			},
+		);
 		expect(screen.getByTestId("dev-workflow-node-attempts-total").textContent).not.toContain("the real total is higher");
 	});
 
@@ -430,7 +433,12 @@ describe("DevWorkflowNodePanel", () => {
 
 	it("explains a failed node with its failure class and sanitized reason", () => {
 		renderPanel(
-			devWorkflowNodeRunDetail({ status: "Failed", failureClass: "Timeout", terminalReason: "no step in 900s", completedAtUtc: 2 }),
+			devWorkflowNodeRunDetail({
+				status: "Failed",
+				failureClass: "Timeout",
+				terminalReason: "no step in 900s",
+				completedAtUtc: 2,
+			}),
 		);
 
 		const failure = screen.getByTestId("dev-workflow-node-failure");
@@ -750,7 +758,9 @@ describe("DevWorkflowNodePanel", () => {
 	it("names the rule sets that were baked into this node run's objective, with the revision it used", () => {
 		renderPanel(
 			devWorkflowNodeRunDetail({
-				appliedRuleSets: [{ id: "rs-1", name: "House style", contentSha256: "abcdef1234567890", currentContentSha256: "abcdef1234567890" }],
+				appliedRuleSets: [
+					{ id: "rs-1", name: "House style", contentSha256: "abcdef1234567890", currentContentSha256: "abcdef1234567890" },
+				],
 			}),
 		);
 
@@ -868,7 +878,9 @@ describe("DevWorkflowNodePanel", () => {
 	// Nothing measured the box: a remote or Ollama model, or a model this node never loaded itself. Rows that are
 	// absent say that; a "0.0 GB" row would claim the gate saw an empty device.
 	it("draws no VRAM rows when nothing measured the box at load", () => {
-		renderPanel(devWorkflowNodeRunDetail({ status: "Succeeded", agentTurnMs: 40_000, vramFreeAtLoadBytes: null, vramAdmittedBytes: null }));
+		renderPanel(
+			devWorkflowNodeRunDetail({ status: "Succeeded", agentTurnMs: 40_000, vramFreeAtLoadBytes: null, vramAdmittedBytes: null }),
+		);
 
 		expect(screen.queryByTestId("dev-workflow-node-cost-vram-free")).toBeNull();
 		expect(screen.queryByTestId("dev-workflow-node-cost-vram-admitted")).toBeNull();
@@ -938,7 +950,9 @@ describe("DevWorkflowNodePanel", () => {
 	});
 
 	it("names the failure in the cross-unit vocabulary beside the runtime's own class", () => {
-		renderPanel(devWorkflowNodeRunDetail({ status: "Failed", failureClass: "ToolCommandFailed", failureClassGroup: "ToolOrCommand" }));
+		renderPanel(
+			devWorkflowNodeRunDetail({ status: "Failed", failureClass: "ToolCommandFailed", failureClassGroup: "ToolOrCommand" }),
+		);
 
 		expect(screen.getByTestId("dev-workflow-node-failure-group").textContent).toBe("Tool or command");
 	});
@@ -946,24 +960,24 @@ describe("DevWorkflowNodePanel", () => {
 	it("clamps the attempt maximum up to the attempt, so a server from before the widening never reads 'attempt 4 of 3'", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 3 }));
 
-		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
-			"attempt 4 of 4",
-		);
+		expect(
+			screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent,
+		).toContain("attempt 4 of 4");
 	});
 
 	it("names the declared cap and the capacity an operator added, not who started this attempt", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 4, maxAttempts: 4, operatorRetries: 1 }));
 
-		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
-			"attempt 4 of 4 (cap 3, +1 from an operator retry)",
-		);
+		expect(
+			screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent,
+		).toContain("attempt 4 of 4 (cap 3, +1 from an operator retry)");
 	});
 
 	it("sums the capacity once more than one retry widened the cap", () => {
 		renderPanel(devWorkflowNodeRunDetail({ attempt: 5, maxAttempts: 5, operatorRetries: 2 }));
 
-		expect(screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent).toContain(
-			"attempt 5 of 5 (cap 3, +2 from operator retries)",
-		);
+		expect(
+			screen.getByTestId("dev-workflow-node-panel-label").closest("[data-testid='dev-workflow-node-panel']")?.textContent,
+		).toContain("attempt 5 of 5 (cap 3, +2 from operator retries)");
 	});
 });

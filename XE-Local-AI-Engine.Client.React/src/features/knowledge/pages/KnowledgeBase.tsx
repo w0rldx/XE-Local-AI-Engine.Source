@@ -1,21 +1,22 @@
-import { Alert, Badge, Button, Divider, Group, Loader, Text, TextInput } from "@mantine/core";
+import { Badge, Button, Divider, Group, Loader, Text, TextInput } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconDatabase, IconRefresh, IconRefreshAlert } from "@tabler/icons-react";
+import { IconDatabase, IconRefresh, IconRefreshAlert } from "@tabler/icons-react";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { toast } from "@/core/ui/notifications/Toast";
+import { useDevelopmentRepositories } from "@/features/development/queries/useDevelopment";
 import { KnowledgeDocumentDrawer } from "@/features/knowledge/components/KnowledgeDocumentDrawer";
 import { KnowledgeDocumentsTable } from "@/features/knowledge/components/KnowledgeDocumentsTable";
 import { KnowledgeRepositoryImportPanel } from "@/features/knowledge/components/KnowledgeRepositoryImportPanel";
 import { KnowledgeSearchPanel } from "@/features/knowledge/components/KnowledgeSearchPanel";
 import { KnowledgeUploadPanel } from "@/features/knowledge/components/KnowledgeUploadPanel";
-import { useDevelopmentRepositories } from "@/features/development/queries/useDevelopment";
 import { useKnowledgeBaseHub } from "@/features/knowledge/hooks/useKnowledgeBaseHub";
 import {
 	KNOWLEDGE_DEFAULT_COLLECTION_ID,
@@ -52,13 +53,7 @@ export function KnowledgeBase() {
 	// Live indexing-status invalidation for the lifetime of this page.
 	useKnowledgeBaseHub();
 
-	const {
-		data: documents,
-		isLoading,
-		error,
-		refetch,
-		isFetching,
-	} = useKnowledgeDocuments(true, collectionId);
+	const { data: documents, isLoading, error, refetch, isFetching } = useKnowledgeDocuments(true, collectionId);
 	const documentList = useMemo<readonly KnowledgeDocument[]>(() => documents ?? [], [documents]);
 	const hasStaleDocuments = useMemo(() => documentList.some((document) => document.staleModel), [documentList]);
 
@@ -112,22 +107,24 @@ export function KnowledgeBase() {
 				},
 			);
 			if (result.queueCapacityReached) {
-				toast.warning(`${message} ${t("pages.knowledgeBase.repository.queueFull", "The indexing queue is full; retry to continue.")}`);
+				toast.warning(
+					`${message} ${t("pages.knowledgeBase.repository.queueFull", "The indexing queue is full; retry to continue.")}`,
+				);
 			} else {
 				toast.success(message);
 			}
 		},
 		onError: (mutationError) =>
 			toast.error(
-				knowledgeErrorMessage(
-					mutationError,
-					t("pages.knowledgeBase.repository.error", "Failed to import the repository."),
-				),
+				knowledgeErrorMessage(mutationError, t("pages.knowledgeBase.repository.error", "Failed to import the repository.")),
 			),
 	});
 
 	const isActionPending =
-		deleteMutation.isPending || reindexMutation.isPending || reindexCorpusMutation.isPending || repositoryImportMutation.isPending;
+		deleteMutation.isPending ||
+		reindexMutation.isPending ||
+		reindexCorpusMutation.isPending ||
+		repositoryImportMutation.isPending;
 
 	const applyCollection = useCallback((): void => {
 		if (!normalizedCollectionDraft || normalizedCollectionDraft === collectionId) {
@@ -211,9 +208,9 @@ export function KnowledgeBase() {
 			/>
 
 			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{knowledgeErrorMessage(error, t("pages.knowledgeBase.loadError", "Could not load the knowledge base."))}
-				</Alert>
+				<InlineErrorAlert
+					message={knowledgeErrorMessage(error, t("pages.knowledgeBase.loadError", "Could not load the knowledge base."))}
+				/>
 			) : null}
 
 			<SectionCard>

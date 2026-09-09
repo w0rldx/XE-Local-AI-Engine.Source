@@ -13,8 +13,8 @@ import { Handle, type NodeProps, Position } from "@xyflow/react";
 import { useReducedMotion } from "framer-motion";
 import { useTranslation } from "react-i18next";
 
-import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import classes from "@/features/devWorkflows/components/DevWorkflowNodes.module.css";
+import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import type {
 	DevWorkflowAnchorNode,
 	DevWorkflowCanvasNode,

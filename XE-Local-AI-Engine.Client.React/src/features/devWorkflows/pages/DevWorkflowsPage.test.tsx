@@ -1,21 +1,21 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
 import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 	devWorkflowWorkItemSummary,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
-import { DevWorkflowsPage } from "@/features/devWorkflows/pages/DevWorkflowsPage";
-import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { jsonRoute, localApiPath, problemDetailsRoute } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
 
 const navigate = vi.hoisted(() => vi.fn());
 
@@ -94,7 +94,9 @@ describe("DevWorkflowsPage", () => {
 	it("counts queued and running separately on the card, never as one 'in progress' figure", async () => {
 		server.use(
 			jsonRoute("get", "development-workflows/work-items", {
-				items: [devWorkflowWorkItemSummary({ runningNodeCount: 1, queuedNodeCount: 4, completedNodeCount: 2, totalNodeCount: 8 })],
+				items: [
+					devWorkflowWorkItemSummary({ runningNodeCount: 1, queuedNodeCount: 4, completedNodeCount: 2, totalNodeCount: 8 }),
+				],
 			}),
 			definitionsRoute(),
 			projectsRoute(),
@@ -129,7 +131,11 @@ describe("DevWorkflowsPage", () => {
 			jsonRoute("get", "development-workflows/work-items", { items: [] }),
 			definitionsRoute(),
 			projectsRoute(),
-			jsonRoute("post", "development-workflows/work-items", devWorkflowWorkItem({ status: "Draft", latestRunId: null, runs: [] })),
+			jsonRoute(
+				"post",
+				"development-workflows/work-items",
+				devWorkflowWorkItem({ status: "Draft", latestRunId: null, runs: [] }),
+			),
 			http.post(localApiPath(`development-workflows/work-items/${workItemId}/runs`), async ({ request }) => {
 				startBodies.push(await request.json());
 				return HttpResponse.json({ runId: devWorkflowTestIds.run }, { status: 202 });
@@ -166,7 +172,11 @@ describe("DevWorkflowsPage", () => {
 			jsonRoute("get", "development-workflows/work-items", { items: [] }),
 			definitionsRoute(),
 			projectsRoute(),
-			jsonRoute("post", "development-workflows/work-items", devWorkflowWorkItem({ status: "Draft", latestRunId: null, runs: [] })),
+			jsonRoute(
+				"post",
+				"development-workflows/work-items",
+				devWorkflowWorkItem({ status: "Draft", latestRunId: null, runs: [] }),
+			),
 			problemDetailsRoute("post", `development-workflows/work-items/${workItemId}/runs`, 400, {
 				detail: "this graph needs a development project",
 			}),

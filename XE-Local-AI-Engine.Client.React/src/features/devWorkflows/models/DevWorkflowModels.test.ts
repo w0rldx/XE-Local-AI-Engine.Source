@@ -204,28 +204,19 @@ describe("devWorkflowArtifactLineages", () => {
 
 	it("reads `isLatest` off the wire rather than deriving it from the highest version (Y17/C39)", () => {
 		// A deliberately inconsistent feed: the server marked v2 latest. Deriving would have answered v3.
-		const lineages = devWorkflowArtifactLineages([
-			artifact("a3", "lineage-a", 3, false),
-			artifact("a2", "lineage-a", 2, true),
-		]);
+		const lineages = devWorkflowArtifactLineages([artifact("a3", "lineage-a", 3, false), artifact("a2", "lineage-a", 2, true)]);
 
 		expect(lineages[0]?.latest.id).toBe("a2");
 	});
 
 	it("falls back to the highest version when no row claims to be the latest", () => {
-		const lineages = devWorkflowArtifactLineages([
-			artifact("a1", "lineage-a", 1, false),
-			artifact("a2", "lineage-a", 2, false),
-		]);
+		const lineages = devWorkflowArtifactLineages([artifact("a1", "lineage-a", 1, false), artifact("a2", "lineage-a", 2, false)]);
 
 		expect(lineages[0]?.latest.id).toBe("a2");
 	});
 
 	it("keeps lineages in first-appearance order and never merges two of them", () => {
-		const lineages = devWorkflowArtifactLineages([
-			artifact("b1", "lineage-b", 1, true),
-			artifact("a1", "lineage-a", 1, true),
-		]);
+		const lineages = devWorkflowArtifactLineages([artifact("b1", "lineage-b", 1, true), artifact("a1", "lineage-a", 1, true)]);
 
 		expect(lineages.map((lineage) => lineage.lineageId)).toEqual(["lineage-b", "lineage-a"]);
 	});

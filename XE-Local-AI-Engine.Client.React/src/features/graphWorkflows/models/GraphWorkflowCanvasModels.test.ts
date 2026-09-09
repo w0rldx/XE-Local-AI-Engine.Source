@@ -352,7 +352,12 @@ describe("edge conditions", () => {
 	// The other half of ruling F5-3: reading is strict JSON, writing stays lenient, so an operator who types a bare
 	// word still gets a string and one who types a number still gets a number.
 	it("saves unquoted text as a string and an unquoted number as a number", () => {
-		const canvas = graphToCanvas(conditionGraph([{ op: "Ne", value: 0 }, { op: "Ne", value: 0 }]));
+		const canvas = graphToCanvas(
+			conditionGraph([
+				{ op: "Ne", value: 0 },
+				{ op: "Ne", value: 0 },
+			]),
+		);
 		// What the operator typed into the value field, which is the only way a canvas condition value is authored.
 		const typed = canvas.edges.map((edge) => ({
 			...edge,

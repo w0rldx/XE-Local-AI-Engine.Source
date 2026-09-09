@@ -79,9 +79,7 @@ describe("GraphWorkflowRunList", () => {
 		expect(screen.getByTestId("graph-workflow-run-list-loading")).toBeDefined();
 		loading.unmount();
 
-		const failed = renderWithProviders(
-			<GraphWorkflowRunList runs={[]} error={new Error("gone")} onSelectRun={vi.fn()} />,
-		);
+		const failed = renderWithProviders(<GraphWorkflowRunList runs={[]} error={new Error("gone")} onSelectRun={vi.fn()} />);
 		expect(screen.getByTestId("graph-workflow-run-list-error")).toBeDefined();
 		failed.unmount();
 

@@ -2,11 +2,11 @@ import { ActionIcon, Button, Group, NumberInput, Stack, Text, TextInput } from "
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { fieldError } from "@/core/ui/forms/ZodFieldErrors";
 import type { CustomToolEditorSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
 import { useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
 import { CustomToolProgramLaunchSelector } from "@/features/customTools/components/CustomToolProgramLaunchSelector";
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
-import { errorAt } from "@/features/customTools/models/CustomToolFormErrors";
 import {
 	CUSTOM_TOOL_TIMEOUT_MAX,
 	type CustomToolEnvVar,
@@ -47,7 +47,7 @@ export function CommandEditor({ values, errors, update }: CustomToolEditorSectio
 			<CustomToolProgramLaunchSelector
 				value={command.executable}
 				error={
-					errorAt(errors, "command.executable")
+					fieldError(errors, "command.executable")
 						? t("pages.customTools.form.command.executableRequired", "An executable path is required.")
 						: undefined
 				}

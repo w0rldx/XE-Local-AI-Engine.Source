@@ -2,6 +2,7 @@ import { Alert, NumberInput, Select, Stack, Switch, Textarea, TextInput } from "
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { ScheduledJobScheduleFields } from "@/features/scheduler/components/ScheduledJobScheduleFields";
 import {
 	type ScheduledJobFormValues,
@@ -41,18 +42,6 @@ interface ScheduledJobFormProps {
 // plus 5 minutes of overhead for it, and treats a stored 600 (the removed template default) as blank. Only the help
 // copy depends on this, so a literal here is cheaper than plumbing the id through the template DTO.
 const runAgentTemplateId = "run-agent";
-
-// Flatten a Zod issue path to a stable string key so per-field errors can be looked up by the input that owns
-// them (mirrors the mcp form's issueKey helper).
-function issueKey(path: readonly PropertyKey[]): string {
-	return path.map((segment) => String(segment)).join(".");
-}
-
-// Bracket-notation lookup for the flattened error map (the strict tsconfig forbids dotted access on an index
-// signature). Returns undefined when the field has no error so it can flow straight into Mantine's `error`.
-function fieldError(errors: Record<string, string>, key: string): string | undefined {
-	return errors[key];
-}
 
 // Shallow dirty check: compare each top-level key of current values to initialValues.
 function computeIsDirty(current: ScheduledJobFormValues, initial: ScheduledJobFormValues): boolean {

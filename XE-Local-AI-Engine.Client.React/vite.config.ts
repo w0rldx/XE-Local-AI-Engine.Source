@@ -159,7 +159,6 @@ export default defineConfig(({ command, mode }) => {
 		},
 		optimizeDeps: {
 			exclude: ["chroma-js"],
-			include: ["@tanstack/react-form-devtools"],
 		},
 		resolve: {
 			alias: [

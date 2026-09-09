@@ -1,7 +1,9 @@
-import { Alert, Button, Card, Divider, Group, Loader, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlugConnected, IconPlugConnectedX, IconSquare, IconTrash } from "@tabler/icons-react";
+import { Button, Card, Divider, Group, Loader, Stack, Text, Title } from "@mantine/core";
+import { IconPlugConnected, IconPlugConnectedX, IconSquare, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationSeconds } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { BenchmarkJudgePanel } from "@/features/benchmarks/components/BenchmarkJudgePanel";
 import { BenchmarkLaunchBadges } from "@/features/benchmarks/components/BenchmarkLaunchBadges";
 import { BenchmarkLaunchEvidencePanel } from "@/features/benchmarks/components/BenchmarkLaunchEvidencePanel";
@@ -46,8 +48,15 @@ interface BenchmarkRunPaneProps {
 // no prefill/decode timings, and a row of dashes would read as a measurement of zero rather than as no measurement.
 function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
 	const { t } = useTranslation();
-	const { ttftMs, promptTokens, promptTokensPerSecond, generationTokens, generationTokensPerSecond, cachedPromptTokens, segmentCount } =
-		run.throughput;
+	const {
+		ttftMs,
+		promptTokens,
+		promptTokensPerSecond,
+		generationTokens,
+		generationTokensPerSecond,
+		cachedPromptTokens,
+		segmentCount,
+	} = run.throughput;
 	if (!hasThroughputBreakdown(run.throughput)) {
 		return null;
 	}
@@ -75,9 +84,13 @@ function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
 			</Group>
 			{segmentCount !== null && segmentCount > 1 ? (
 				<Text size="xs" c="dimmed" data-testid="benchmark-throughput-segments">
-					{t("pages.benchmarks.metrics.segments", "Summed over {{count}} model requests — the agent called tools, and every round prefilled again.", {
-						count: segmentCount,
-					})}
+					{t(
+						"pages.benchmarks.metrics.segments",
+						"Summed over {{count}} model requests — the agent called tools, and every round prefilled again.",
+						{
+							count: segmentCount,
+						},
+					)}
 				</Text>
 			) : null}
 			{cachedPromptTokens !== null && cachedPromptTokens > 0 ? (
@@ -91,10 +104,6 @@ function ThroughputBreakdown({ run }: { run: BenchmarkRunDetail }) {
 			) : null}
 		</Stack>
 	);
-}
-
-function formatDuration(durationMs: number | null): string {
-	return durationMs === null ? "—" : `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 export function BenchmarkRunPane({
@@ -140,7 +149,7 @@ export function BenchmarkRunPane({
 				<BenchmarkLaunchBadges launch={run.primaryLaunch} data-testid="benchmark-run-launch" />
 				<Group gap="lg">
 					<Text size="sm">
-						{t("pages.benchmarks.metrics.duration", "Duration")}: <b>{formatDuration(run.durationMs)}</b>
+						{t("pages.benchmarks.metrics.duration", "Duration")}: <b>{formatDurationSeconds(run.durationMs)}</b>
 					</Text>
 					<Text size="sm">
 						{t("pages.benchmarks.metrics.tokens", "Tokens")}: <b>{run.totalTokens ?? "—"}</b>
@@ -167,8 +176,7 @@ export function BenchmarkRunPane({
 					</Text>
 					{run.reasoningBudgetTokens === null ? null : (
 						<Text size="sm">
-							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}:{" "}
-							<b>{run.reasoningBudgetTokens}</b>
+							{t("pages.benchmarks.project.reasoningBudget", "Reasoning budget (tokens)")}: <b>{run.reasoningBudgetTokens}</b>
 							{/* A budget the runtime never applied is why the run can look as if it did nothing. Saying so
 							    beats letting the operator raise a number that was never read. */}
 							{run.reasoningBudgetApplicable === false ? (
@@ -200,9 +208,7 @@ export function BenchmarkRunPane({
 				) : null}
 				<MessageParts parts={messageParts} isStreaming={run.primaryStatus === "Running"} />
 				{run.primaryStatus === "Failed" && run.primaryErrorMessage ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{run.primaryErrorMessage}
-					</Alert>
+					<InlineErrorAlert message={run.primaryErrorMessage} />
 				) : null}
 				{active ? (
 					<Button

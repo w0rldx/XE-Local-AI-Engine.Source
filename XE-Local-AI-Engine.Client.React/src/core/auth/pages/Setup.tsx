@@ -1,5 +1,5 @@
-import { Alert, Box, Button, Card, Container, List, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCircleKey } from "@tabler/icons-react";
+import { Box, Button, Card, Container, List, PasswordInput, Stack, Text, TextInput, Title } from "@mantine/core";
+import { IconCircleKey } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
@@ -10,6 +10,7 @@ import { loginNodeAuth, setupNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import type { NodeAuthErrorResponse } from "@/core/auth/models/NodeAuthModels";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 interface SetupFormValues {
 	email: string;
@@ -146,11 +147,7 @@ export function Setup() {
 							<Text c="dimmed">{t("auth.setup.subtitle")}</Text>
 						</Stack>
 
-						{error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{error}
-							</Alert>
-						) : null}
+						{error ? <InlineErrorAlert message={error} /> : null}
 
 						<form onSubmit={handleSubmit}>
 							<Stack gap="md">

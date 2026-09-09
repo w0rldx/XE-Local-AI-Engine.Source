@@ -16,12 +16,12 @@ import { useCallback, useMemo, useState } from "react";
 
 import {
 	canvasToGraph,
+	defaultNodeData,
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasEdgeCondition,
 	type GraphWorkflowCanvasNode,
 	type GraphWorkflowCanvasNodeData,
 	type GraphWorkflowEdgeData,
-	defaultNodeData,
 	graphToCanvas,
 	graphWorkflowNodeTypeByKind,
 	graphWorkflowsEqual,
@@ -32,11 +32,11 @@ import {
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { layoutGraphWorkflow } from "@/features/graphWorkflows/models/GraphWorkflowLayout";
 import {
+	asGraphWorkflowDecisionKind,
 	GRAPH_WORKFLOW_MAX_NODES,
 	type GraphWorkflowDecisionKind,
 	type GraphWorkflowGraph,
 	type GraphWorkflowNodeKind,
-	asGraphWorkflowDecisionKind,
 	toGraphWorkflowDecisionKinds,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import {
@@ -265,17 +265,17 @@ export function useGraphWorkflowEditor(initial: GraphWorkflowGraph | undefined):
 					node.id === key
 						? // `kind` and `key` are re-pinned AFTER the patch: a panel that spreads a whole data object in must not
 							// be able to turn an Agent card into an End one, and a rename has to go through the cascade in `renameNode`.
-							{ ...node, data: { ...node.data, ...patch, kind: node.data.kind, key: node.data.key } as GraphWorkflowCanvasNodeData }
+							{
+								...node,
+								data: { ...node.data, ...patch, kind: node.data.kind, key: node.data.key } as GraphWorkflowCanvasNodeData,
+							}
 						: node,
 				),
 			);
 			// Taking a decision away from a Pause orphans the out-edge that routed it: React Flow stops DRAWING an edge
 			// whose source handle no longer exists, but the edge stays in the graph, gets saved, and still routes at run
 			// time. Pruning here is what keeps the canvas and the saved document the same graph.
-			const dropped = droppedDecisions(
-				nodes.find((node) => node.id === key)?.data,
-				patch,
-			);
+			const dropped = droppedDecisions(nodes.find((node) => node.id === key)?.data, patch);
 			if (dropped.length > 0) {
 				setEdges((current) =>
 					current.filter((edge) => edge.source !== key || !dropped.some((decision) => decision === edgeDecision(edge))),

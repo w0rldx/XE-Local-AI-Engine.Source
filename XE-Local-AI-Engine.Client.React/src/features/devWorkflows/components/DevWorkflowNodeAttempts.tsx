@@ -4,6 +4,7 @@ import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
+import { formatDurationCompact } from "@/core/formatting/TimeFormatting";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import {
 	type DevWorkflowAttemptCost,
@@ -12,7 +13,6 @@ import {
 } from "@/features/devWorkflows/models/DevWorkflowAttempts";
 import {
 	type DevWorkflowNodeRunDetailResponse,
-	formatDevWorkflowDuration,
 	isSettledDevWorkflowNodeStatus,
 	toDevWorkflowNodeStatus,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -54,7 +54,7 @@ function costSummary(t: TFunction, cost: DevWorkflowAttemptCost): string {
 	push(
 		"pages.devWorkflows.node.cost.turnTime",
 		"Agent turns",
-		cost.agentTurnMs == null ? undefined : formatDevWorkflowDuration(cost.agentTurnMs),
+		cost.agentTurnMs == null ? undefined : formatDurationCompact(cost.agentTurnMs),
 	);
 	return parts.join(" · ");
 }
@@ -133,9 +133,7 @@ export function DevWorkflowNodeAttempts({ attempts, nodeRun }: DevWorkflowNodeAt
 							component="button"
 							type="button"
 							size="xs"
-							onClick={() =>
-								navigate({ to: "/work-sessions/$sessionId", params: { sessionId: attempt.workSessionId ?? "" } })
-							}
+							onClick={() => navigate({ to: "/work-sessions/$sessionId", params: { sessionId: attempt.workSessionId ?? "" } })}
 							data-testid={`dev-workflow-node-attempt-session-${attempt.attempt}`}
 						>
 							{t("pages.devWorkflows.attempts.session", "transcript")}

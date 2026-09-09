@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsSkillsV1SkillImportCandidateResponse } from "@/core/api/generated";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SKILL_BODY_GUIDANCE_LINES } from "@/features/skills/models/SkillModels";
 
 interface SkillImportCandidateCardProps {
@@ -82,19 +83,18 @@ export function SkillImportCandidateCard({ candidate, selected, onToggle }: Skil
 				) : null}
 
 				{hasProblems ? (
-					<Alert
-						color="red"
+					<InlineErrorAlert
+						message={
+							<List size="sm" withPadding={true}>
+								{candidate.problems.map((problem) => (
+									<List.Item key={problem}>{problem}</List.Item>
+								))}
+							</List>
+						}
 						variant="light"
-						icon={<IconAlertTriangle size={16} />}
 						title={t("pages.skills.import.candidate.problemsTitle", "Cannot be imported")}
 						data-testid={`skill-import-problems-${candidate.name}`}
-					>
-						<List size="sm" withPadding={true}>
-							{candidate.problems.map((problem) => (
-								<List.Item key={problem}>{problem}</List.Item>
-							))}
-						</List>
-					</Alert>
+					/>
 				) : null}
 
 				{candidate.refusedScripts.length > 0 ? (

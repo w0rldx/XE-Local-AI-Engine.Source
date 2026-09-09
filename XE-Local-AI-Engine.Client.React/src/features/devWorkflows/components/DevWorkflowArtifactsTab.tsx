@@ -1,15 +1,15 @@
 import { Alert, Anchor, Badge, Group, Loader, NavLink, Paper, Select, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	asDevWorkflowArtifactKind,
-	decodeDevWorkflowArtifactContent,
 	type DevWorkflowArtifactResponse,
+	decodeDevWorkflowArtifactContent,
 	devWorkflowArtifactLanguage,
 	devWorkflowArtifactLineages,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -216,9 +216,14 @@ function ArtifactContent({
 
 	if (artifact.isValid === false) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-artifact-invalid">
-				{t("pages.devWorkflows.artifacts.invalidBody", "This artifact's stored content could not be read and cannot be shown.")}
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={t(
+					"pages.devWorkflows.artifacts.invalidBody",
+					"This artifact's stored content could not be read and cannot be shown.",
+				)}
+				data-testid="dev-workflow-artifact-invalid"
+			/>
 		);
 	}
 	if (contentQuery.isPending) {
@@ -226,9 +231,14 @@ function ArtifactContent({
 	}
 	if (contentQuery.isError) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-artifact-error">
-				{apiErrorMessage(contentQuery.error, t("pages.devWorkflows.artifacts.loadFailed", "Could not load this artifact."))}
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={apiErrorMessage(
+					contentQuery.error,
+					t("pages.devWorkflows.artifacts.loadFailed", "Could not load this artifact."),
+				)}
+				data-testid="dev-workflow-artifact-error"
+			/>
 		);
 	}
 

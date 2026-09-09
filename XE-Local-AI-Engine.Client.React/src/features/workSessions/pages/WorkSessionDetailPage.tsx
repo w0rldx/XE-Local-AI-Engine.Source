@@ -1,6 +1,5 @@
-import { Alert, Anchor, Loader, Stack, Text } from "@mantine/core";
+import { Anchor, Loader, Stack } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -9,6 +8,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
@@ -170,19 +170,18 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	if (sessionQuery.isError || !sessionQuery.data) {
 		return (
 			<FullHeightPage data-testid="work-session-detail-page">
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-detail-error">
-					<Stack gap="sm" align="flex-start">
-						<Text size="sm">
-							{apiErrorMessage(
-								sessionQuery.error,
-								t("pages.workSessions.detail.notFound", "This work session could not be loaded."),
-							)}
-						</Text>
-						<Anchor component={Link} to="/work-sessions" size="sm" data-testid="work-session-detail-back">
-							{t("pages.workSessions.detail.back", "Back to work sessions")}
-						</Anchor>
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					message={apiErrorMessage(
+						sessionQuery.error,
+						t("pages.workSessions.detail.notFound", "This work session could not be loaded."),
+					)}
+					variant="light"
+					data-testid="work-session-detail-error"
+				>
+					<Anchor component={Link} to="/work-sessions" size="sm" data-testid="work-session-detail-back">
+						{t("pages.workSessions.detail.back", "Back to work sessions")}
+					</Anchor>
+				</InlineErrorAlert>
 			</FullHeightPage>
 		);
 	}

@@ -1,11 +1,12 @@
-import { ActionIcon, Alert, Badge, Group, Loader, Select, Stack, Table, Text } from "@mantine/core";
-import { IconAlertTriangle, IconEye, IconX } from "@tabler/icons-react";
+import { ActionIcon, Badge, Group, Loader, Select, Stack, Table, Text } from "@mantine/core";
+import { IconEye, IconX } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
-import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
 import {
 	isActiveRunStatus,
@@ -110,11 +111,7 @@ export function ScheduledJobRunHistoryPanel({
 				</Group>
 			) : null}
 
-			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-runs-error">
-					{error}
-				</Alert>
-			) : null}
+			{error ? <InlineErrorAlert message={error} data-testid="scheduler-runs-error" /> : null}
 
 			{!isLoading && !error && runs.length === 0 ? (
 				<Text c="dimmed" data-testid="scheduler-runs-empty">

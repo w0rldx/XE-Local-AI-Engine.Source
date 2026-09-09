@@ -2,24 +2,13 @@
 // sign-in method). Rendered inside the CloudSettings page only for a saved EntraId+DeviceCode connection — the
 // start endpoint 400s without a stored tenant + client id. Mirrors CodexSignInCard's pending/poll/timeout shape.
 
-import {
-	ActionIcon,
-	Alert,
-	Button,
-	Card,
-	CopyButton,
-	Group,
-	Loader,
-	Stack,
-	Text,
-	TextInput,
-	Tooltip,
-} from "@mantine/core";
+import { ActionIcon, Alert, Button, Card, CopyButton, Group, Loader, Stack, Text, TextInput, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCheck, IconCopy, IconExternalLink, IconLogin, IconRefresh } from "@tabler/icons-react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	useEntraDeviceCodeSignIn,
@@ -188,9 +177,9 @@ export function EntraDeviceCodeSignInCard() {
 				) : null}
 
 				{statusQuery.isError && signInFlowActive ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Text size="sm">{t("pages.cloudSettings.entra.statusError", "Failed to check sign-in status.")}</Text>
-					</Alert>
+					<InlineErrorAlert
+						message={<Text size="sm">{t("pages.cloudSettings.entra.statusError", "Failed to check sign-in status.")}</Text>}
+					/>
 				) : null}
 
 				{!isPending && !timedOut && !signInMutation.isError ? (

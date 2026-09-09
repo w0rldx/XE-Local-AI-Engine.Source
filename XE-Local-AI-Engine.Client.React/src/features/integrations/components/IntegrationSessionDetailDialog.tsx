@@ -1,11 +1,11 @@
-import { Alert, Code, Divider, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Code, Divider, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import {
 	IntegrationExecutionStatusBadge,
@@ -103,9 +103,7 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 				/>
 
 				{executionsError === undefined ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-session-executions-error">
-						{executionsError}
-					</Alert>
+					<InlineErrorAlert message={executionsError} data-testid="integration-session-executions-error" />
 				)}
 
 				{executions.length === 0 ? (
@@ -136,9 +134,7 @@ export function IntegrationSessionDetailDialog({ session, onClose }: Integration
 										<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
 									</Table.Td>
 									<Table.Td>
-										<Text size="sm">
-											{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}
-										</Text>
+										<Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>
 									</Table.Td>
 								</Table.Tr>
 							))}

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { HardwareProfile } from "@/features/model-fit/models/ModelFitModels";
 
 interface HardwareProfileCardProps {
@@ -83,9 +84,10 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 				) : null}
 
 				{error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-hardware-error">
-						{apiErrorMessage(error, t("pages.modelFit.hardware.error", "Could not detect hardware."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(error, t("pages.modelFit.hardware.error", "Could not detect hardware."))}
+						data-testid="model-fit-hardware-error"
+					/>
 				) : null}
 
 				{showRuntimeAlerts && profile?.cpuFallback ? (
@@ -169,9 +171,7 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 						<Stat
 							label={t("pages.modelFit.hardware.vram", "VRAM")}
 							value={
-								profile.vramKnown
-									? formatBytesAsGb(profile.vramBytes)
-									: t("pages.modelFit.hardware.vramUnknown", "VRAM unknown")
+								profile.vramKnown ? formatBytesAsGb(profile.vramBytes) : t("pages.modelFit.hardware.vramUnknown", "VRAM unknown")
 							}
 							testId="model-fit-hardware-vram"
 						/>

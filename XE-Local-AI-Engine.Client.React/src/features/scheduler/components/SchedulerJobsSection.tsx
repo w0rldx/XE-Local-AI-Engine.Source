@@ -1,7 +1,7 @@
-import { Alert, Group, Loader, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Group, Loader, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { ScheduledJobList } from "@/features/scheduler/components/ScheduledJobList";
 import type { ScheduledJob } from "@/features/scheduler/models/SchedulerModels";
@@ -39,11 +39,7 @@ export function SchedulerJobsSection({
 					<Text c="dimmed">{t("pages.scheduler.list.loading", "Loading scheduled jobs…")}</Text>
 				</Group>
 			) : null}
-			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-list-error">
-					{error}
-				</Alert>
-			) : null}
+			{error ? <InlineErrorAlert message={error} data-testid="scheduler-list-error" /> : null}
 			{!isLoading && !error ? (
 				<ScheduledJobList
 					jobs={jobs}

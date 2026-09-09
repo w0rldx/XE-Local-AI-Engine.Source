@@ -1,8 +1,9 @@
 import { Alert, Badge, Button, Group, Loader, Table, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconBolt, IconInfoCircle, IconSnowflake, IconTrash } from "@tabler/icons-react";
+import { IconBolt, IconInfoCircle, IconSnowflake, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ProfileMetricsCard } from "@/features/model-fit/components/ProfileMetricsCard";
 import {
 	formatProfileOutcomeSummary,
@@ -53,9 +54,13 @@ export function InferenceProfileList({
 
 	if (loadState.error) {
 		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="inference-profile-error">
-				{apiErrorMessage(loadState.error, t("pages.modelFit.inferenceProfiles.error", "Could not load inference profiles."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(
+					loadState.error,
+					t("pages.modelFit.inferenceProfiles.error", "Could not load inference profiles."),
+				)}
+				data-testid="inference-profile-error"
+			/>
 		);
 	}
 

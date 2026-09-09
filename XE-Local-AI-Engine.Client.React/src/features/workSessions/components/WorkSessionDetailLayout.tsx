@@ -1,16 +1,10 @@
-import { ActionIcon, Alert, Badge, Drawer, Group, Menu, Stack, Text, Tooltip } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconDotsVertical,
-	IconLayoutSidebar,
-	IconLayoutSidebarRight,
-	IconPencil,
-	IconTrash,
-} from "@tabler/icons-react";
+import { ActionIcon, Badge, Drawer, Group, Menu, Stack, Text, Tooltip } from "@mantine/core";
+import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
 import type { ReactNode } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 interface WorkSessionDetailLayoutProps {
 	readonly title: string;
@@ -93,9 +87,7 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 					) : null}
 				</Group>
 				{props.deleteError ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-delete-error">
-						{props.deleteError}
-					</Alert>
+					<InlineErrorAlert message={props.deleteError} variant="light" data-testid="work-session-delete-error" />
 				) : null}
 				{props.editDialog}
 				{props.isMobile ? (

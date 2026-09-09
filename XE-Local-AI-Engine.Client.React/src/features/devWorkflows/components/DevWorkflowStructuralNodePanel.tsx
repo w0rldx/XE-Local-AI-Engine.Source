@@ -59,8 +59,7 @@ export function DevWorkflowStructuralNodePanel({ nodeRun, nodeType, run }: DevWo
 	// (`DevWorkflowGraph.cs:257`): under `All` a single dead edge is why the join SKIPS, under `Any` it is ignored for
 	// as long as a sibling is satisfied.
 	const joinSkipsOnDead =
-		((run?.graph?.nodes ?? []).find((node) => (node.nodeKey ?? "") === nodeKey)?.joinPolicy ?? "All").toLowerCase() !==
-		"any";
+		((run?.graph?.nodes ?? []).find((node) => (node.nodeKey ?? "") === nodeKey)?.joinPolicy ?? "All").toLowerCase() !== "any";
 
 	return (
 		<SectionCard

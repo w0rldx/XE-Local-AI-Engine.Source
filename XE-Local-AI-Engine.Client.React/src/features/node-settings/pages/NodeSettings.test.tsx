@@ -174,10 +174,17 @@ function installJsdomEnvironmentMocks(): void {
 	});
 }
 
-function renderPage(): void {
+// Returns the client so a test can drive a BACKGROUND refetch (an invalidation), which is a different contract from
+// the operator clicking Reload.
+function renderPage(cachedSettings?: unknown): QueryClient {
 	const queryClient = new QueryClient({
 		defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
 	});
+	// A pre-populated cache is the real mount shape after any earlier visit: the page paints the cached response and
+	// the mount refetch supersedes it.
+	if (cachedSettings !== undefined) {
+		queryClient.setQueryData(["getNodeSettings"], cachedSettings);
+	}
 
 	const wrapper = ({ children }: { children: ReactNode }) => (
 		<QueryClientProvider client={queryClient}>
@@ -186,6 +193,7 @@ function renderPage(): void {
 	);
 
 	render(<NodeSettings />, { wrapper });
+	return queryClient;
 }
 
 describe("NodeSettings (generated hey-api data layer)", () => {
@@ -293,6 +301,91 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		// The developer-mode test writes `xe-developer-mode`, and localStorage is one jsdom object shared by the whole
 		// file: left behind, it decides for every later test whether the developer-only cards mount.
 		localStorage.clear();
+	});
+
+	// Both draft-seeding contracts share one server: the first response is what the operator sees, every later one
+	// differs so a re-seed is unmistakable.
+	function mockSecondLoadDiffers(): void {
+		let fetches = 0;
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => {
+				fetches += 1;
+				return fetches === 1
+					? settingsResponse
+					: {
+							...settingsResponse,
+							minMessageRequestTimeoutSeconds: 7,
+							maxMessageRequestTimeoutSeconds: 900,
+							llamaMaxLoadedProcesses: 9,
+						};
+			},
+		});
+	}
+
+	// P5 regression: the editable draft used to be re-seeded by an effect on every `settings` identity, so any
+	// background refetch (window focus, the post-save invalidation) silently replaced whatever the operator had typed
+	// with the server's values.
+	it("keeps in-progress edits when a background refetch returns different server values", async () => {
+		mockSecondLoadDiffers();
+
+		const queryClient = renderPage();
+		await screen.findByDisplayValue(/600/);
+
+		const timeout = screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement;
+		const maxProcesses = screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement;
+		fireEvent.change(timeout, { target: { value: "700" } });
+		fireEvent.change(maxProcesses, { target: { value: "5" } });
+
+		await queryClient.invalidateQueries({ queryKey: ["getNodeSettings"] });
+
+		// The allowed-range description is rendered straight off the query data, so it only reads 7 once the second
+		// response has actually landed in React — which is the moment the old effect would have clobbered the draft.
+		await waitFor(() => expect(screen.getByText(/Allowed range: 7–3600 seconds\./)).toBeTruthy());
+		// The NumberInput renders its suffix inside the value.
+		expect(timeout.value).toBe("700 seconds");
+		expect(maxProcesses.value).toBe("5");
+	});
+
+	// Seeding only on the first load was wrong the other way round: mounting against a cached response latched the
+	// draft to the CACHE, so the mount refetch's fresher values never landed and a Save wrote the stale ones back.
+	it("adopts a fresher server state on mount over a stale cache while the draft is untouched", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({ ...settingsResponse, maxMessageRequestTimeoutSeconds: 900, llamaMaxLoadedProcesses: 9 }),
+		});
+
+		renderPage({ ...settingsResponse, maxMessageRequestTimeoutSeconds: 120, llamaMaxLoadedProcesses: 2 });
+
+		const maxProcesses = (await screen.findByTestId("node-settings-llama-max-processes")) as HTMLInputElement;
+		await waitFor(() => expect(maxProcesses.value).toBe("9"));
+		expect((screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement).value).toBe("900 seconds");
+
+		fireEvent.click(screen.getByRole("button", { name: /save settings/i }));
+
+		// The stale 120 would have ridden the body here, overwriting the newer server value.
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({ body: { maxMessageRequestTimeoutSeconds: 900 } }),
+		);
+	});
+
+	// The other half of the same contract: Reload is the operator asking for the server's values, so it is the one
+	// refetch that DOES discard the draft. Seeding once must not turn Reload into a no-op.
+	it("replaces the draft with the server's values when the operator clicks Reload", async () => {
+		mockSecondLoadDiffers();
+
+		renderPage();
+		await screen.findByDisplayValue(/600/);
+
+		const timeout = screen.getByLabelText(/Maximum message request timeout/) as HTMLInputElement;
+		const maxProcesses = screen.getByTestId("node-settings-llama-max-processes") as HTMLInputElement;
+		fireEvent.change(timeout, { target: { value: "700" } });
+		fireEvent.change(maxProcesses, { target: { value: "5" } });
+
+		fireEvent.click(screen.getByRole("button", { name: /reload/i }));
+
+		await waitFor(() => expect(maxProcesses.value).toBe("9"));
+		expect(timeout.value).toBe("900 seconds");
 	});
 
 	it("loads settings through the generated query options", async () => {

@@ -10,7 +10,7 @@
 
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import type { ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -97,7 +97,13 @@ function eventFeed(pages: Readonly<Record<string, FeedPage>>): string[] {
 			cursors.push(afterSeq);
 			const page = pages[afterSeq] ?? { seqs: [], replayTruncated: false };
 			return HttpResponse.json({
-				events: page.seqs.map((seq) => ({ id: eventId(seq), seq, eventType: "node.started", nodeKey: "analyze", createdAtUtc: seq })),
+				events: page.seqs.map((seq) => ({
+					id: eventId(seq),
+					seq,
+					eventType: "node.started",
+					nodeKey: "analyze",
+					createdAtUtc: seq,
+				})),
 				lastSeq: page.seqs.at(-1) ?? Number(afterSeq),
 				replayTruncated: page.replayTruncated,
 			});
@@ -226,9 +232,7 @@ describe("graph workflow read hooks", () => {
 	});
 
 	it("projects the agent definitions to picker options", async () => {
-		server.use(
-			http.get(localApiPath("agents"), () => HttpResponse.json({ items: [agentDefinition(definitionId, "Reviewer")] })),
-		);
+		server.use(http.get(localApiPath("agents"), () => HttpResponse.json({ items: [agentDefinition(definitionId, "Reviewer")] })));
 		const { wrapper } = harness();
 
 		const { result } = renderHook(() => useGraphWorkflowAgentOptions(), { wrapper });
@@ -346,7 +350,10 @@ describe("graph workflow mutations", () => {
 		// The server bumps `version` and `graphHash` on a save, so the edited row is re-read and not only the list: a
 		// stale `version` in the editor earns a 409 on the very next save.
 		await act(async () => {
-			await update.result.current.mutateAsync({ path: { definitionId }, body: { version: 1, graph: eightNodeGraph as GraphWorkflowGraph } });
+			await update.result.current.mutateAsync({
+				path: { definitionId },
+				body: { version: 1, graph: eightNodeGraph as GraphWorkflowGraph },
+			});
 		});
 		expect(invalidatedKeys(invalidate)).toEqual([
 			graphWorkflowInvalidationKey(graphWorkflowQueryIds.definitions),
@@ -357,7 +364,9 @@ describe("graph workflow mutations", () => {
 		await act(async () => {
 			await remove.result.current.mutateAsync({ path: { definitionId } });
 		});
-		expect(invalidatedKeys(invalidate)).toContainEqual(graphWorkflowInvalidationKey(graphWorkflowQueryIds.definition, { definitionId }));
+		expect(invalidatedKeys(invalidate)).toContainEqual(
+			graphWorkflowInvalidationKey(graphWorkflowQueryIds.definition, { definitionId }),
+		);
 	});
 
 	it("invalidates nothing when it only validates a graph", async () => {

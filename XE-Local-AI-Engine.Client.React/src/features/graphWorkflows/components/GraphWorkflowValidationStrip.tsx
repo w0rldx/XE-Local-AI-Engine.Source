@@ -44,7 +44,11 @@ function split(issues: readonly GraphWorkflowGraphIssue[], issueText: (issue: Gr
 	return { keyed, unkeyed };
 }
 
-export function GraphWorkflowValidationStrip({ issues, warnings: warningIssues = [], onSelectSubject }: GraphWorkflowValidationStripProps) {
+export function GraphWorkflowValidationStrip({
+	issues,
+	warnings: warningIssues = [],
+	onSelectSubject,
+}: GraphWorkflowValidationStripProps) {
 	const { t } = useTranslation();
 
 	// `serverRejected` and `serverWarned` carry the server's own sentence; every client rule's message IS its i18n key.

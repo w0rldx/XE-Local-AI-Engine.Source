@@ -177,7 +177,10 @@ export function toDevWorkflowCanvasGraph(run: DevWorkflowRunResponse | undefined
  */
 export function toDevWorkflowDefinitionCanvasGraph(graph: DevWorkflowGraph | undefined): DevWorkflowCanvasGraph {
 	const graphNodes = graph?.nodes ?? [];
-	const structuralKey = `${graphNodes.map((node) => node.nodeKey ?? "").toSorted().join(",")}|${(graph?.edges ?? [])
+	const structuralKey = `${graphNodes
+		.map((node) => node.nodeKey ?? "")
+		.toSorted()
+		.join(",")}|${(graph?.edges ?? [])
 		.map((edge) => `${edge.from ?? ""}>${edge.to ?? ""}`)
 		.toSorted()
 		.join(",")}`;

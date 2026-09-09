@@ -1,8 +1,8 @@
-import { Alert, Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
-import { type FormEvent, useEffect, useState } from "react";
+import { Button, Checkbox, Divider, Group, NumberInput, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { BenchmarkPairwiseEstimateNote } from "@/features/benchmarks/components/BenchmarkPairwiseEstimateNote";
 import { BenchmarkRubricEditor } from "@/features/benchmarks/components/BenchmarkRubricEditor";
 import type {
@@ -14,10 +14,9 @@ import type {
 import {
 	benchmarkInvocationTimeoutLimits,
 	benchmarkJudgeModes,
-	benchmarkPromptReserveTokens,
 	benchmarkRubricIssue,
-	benchmarkRubricLimits,
 } from "@/features/benchmarks/models/BenchmarkModels";
+import { validateBenchmarkProjectDraft } from "@/features/benchmarks/models/BenchmarkProjectFormValidation";
 import type { BenchmarkRubricPresets } from "@/features/benchmarks/queries/useBenchmarks";
 
 interface BenchmarkAgentOption {
@@ -26,6 +25,11 @@ interface BenchmarkAgentOption {
 }
 
 interface BenchmarkProjectFormProps {
+	/**
+	 * Seeded ONCE, at mount. A background refetch of the project hands the caller a new draft object, and re-seeding
+	 * from it would wipe whatever the operator had typed since — so the caller remounts this form with a `key` when it
+	 * wants a different project's values (`BenchmarksPage` keys it by editor mode + project id).
+	 */
 	initialValues: BenchmarkProjectDraft;
 	/** The project the judging-mode estimate is read for. Absent while creating, which has no runs to compare. */
 	projectId?: string;
@@ -59,71 +63,20 @@ export function BenchmarkProjectForm({
 	const { t } = useTranslation();
 	const [values, setValues] = useState(initialValues);
 	const [attempted, setAttempted] = useState(false);
-	useEffect(() => setValues(initialValues), [initialValues]);
 	// A null rubric means "whatever the node's default is"; once judging is on, the operator edits a concrete rubric,
-	// so the default preset is materialised as the starting point. Sending it back is identical to omitting it.
-	useEffect(() => {
-		const fallback = presets?.default;
-		if (fallback) {
-			setValues((current) => (current.judgeEnabled && current.rubric === null ? { ...current, rubric: fallback } : current));
-		}
-	}, [presets]);
+	// so the default preset stands in as the starting point. Derived rather than written into state on arrival: the
+	// presets are an async read, and an effect that seeded them would fire again on every refetch.
+	const rubric = values.judgeEnabled ? (values.rubric ?? presets?.default ?? null) : values.rubric;
 
-	const rubricIssue = values.judgeEnabled && values.rubric ? benchmarkRubricIssue(values.rubric) : null;
-	const errors = {
-		name: values.name.trim() ? undefined : t("pages.benchmarks.validation.name", "Name is required."),
-		coreTask: values.coreTask.trim() ? undefined : t("pages.benchmarks.validation.task", "Core task is required."),
-		contextTokens: values.contextTokens > 0 ? undefined : t("pages.benchmarks.validation.context", "Context must be positive."),
-		maxOutputTokens:
-			values.maxOutputTokens !== null && (values.maxOutputTokens < 1 || values.maxOutputTokens >= values.contextTokens)
-				? t("pages.benchmarks.validation.maxOutputTokens", "Max output tokens must be between 1 and the requested context.")
-				: undefined,
-		// Mirrors `BenchmarkProjectService.ValidateReasoningBudget`: bounded on its own, and additive with the output
-		// budget inside one window. A pair that sums past the context is a project whose every run is truncated.
-		reasoningBudgetTokens:
-			values.reasoningBudgetTokens === null
-				? undefined
-				: values.reasoningBudgetTokens < 1 || values.reasoningBudgetTokens >= values.contextTokens
-					? t(
-							"pages.benchmarks.validation.reasoningBudget",
-							"The reasoning budget must be between 1 and the requested context.",
-						)
-					: values.maxOutputTokens !== null &&
-							benchmarkPromptReserveTokens + values.reasoningBudgetTokens + values.maxOutputTokens > values.contextTokens
-						? t(
-								"pages.benchmarks.validation.reasoningBudgetSum",
-								"The reasoning and output budgets must leave at least {{reserve}} tokens of the context for the prompt.",
-								{ reserve: benchmarkPromptReserveTokens },
-							)
-						: undefined,
-		invocationTimeoutSeconds:
-			values.invocationTimeoutSeconds !== null &&
-			(values.invocationTimeoutSeconds < benchmarkInvocationTimeoutLimits.min ||
-				values.invocationTimeoutSeconds > benchmarkInvocationTimeoutLimits.max)
-				? t("pages.benchmarks.validation.invocationTimeout", "The generation timeout must be between 60 and 7200 seconds.")
-				: undefined,
-		agentDefinitionId: values.agentDefinitionId ? undefined : t("pages.benchmarks.validation.agent", "Select an agent."),
-		judgeModelName:
-			values.judgeEnabled && !values.judgeModelName
-				? t("pages.benchmarks.validation.judgeModel", "Select a judge model.")
-				: undefined,
-		judgeContextTokens:
-			values.judgeEnabled && (values.judgeContextTokens ?? 0) <= 0
-				? t("pages.benchmarks.validation.judgeContext", "Judge context must be positive.")
-				: undefined,
-		referenceAnswer:
-			(values.referenceAnswer?.length ?? 0) > benchmarkRubricLimits.maxReferenceAnswerLength
-				? t("pages.benchmarks.validation.referenceAnswer", "The reference answer is too long.")
-				: undefined,
-		rubric: rubricIssue ? t(`pages.benchmarks.rubric.issues.${rubricIssue.code}`, "The rubric is invalid.") : undefined,
-	};
+	const rubricIssue = values.judgeEnabled && rubric ? benchmarkRubricIssue(rubric) : null;
+	const errors = validateBenchmarkProjectDraft(values, rubricIssue, t);
 	const submit = (event: FormEvent<HTMLFormElement>): void => {
 		event.preventDefault();
 		setAttempted(true);
 		if (Object.values(errors).some(Boolean)) {
 			return;
 		}
-		onSubmit(values);
+		onSubmit({ ...values, rubric });
 	};
 	const setRubric = (rubric: BenchmarkRubric): void => setValues((current) => ({ ...current, rubric }));
 
@@ -132,11 +85,7 @@ export function BenchmarkProjectForm({
 			<Stack gap="md">
 				{/* The node validates the same rules again with the numbers the operator cannot see (the frozen project's
 				    own context). Its sentence belongs beside the fields it is about, not only in a toast. */}
-				{saveError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-project-save-error">
-						{saveError}
-					</Alert>
-				) : null}
+				{saveError ? <InlineErrorAlert message={saveError} data-testid="benchmark-project-save-error" /> : null}
 				<TextInput
 					label={t("pages.benchmarks.project.name", "Name")}
 					required={true}
@@ -256,11 +205,9 @@ export function BenchmarkProjectForm({
 					checked={values.judgeEnabled}
 					onChange={(event) => {
 						const checked = event.currentTarget.checked;
-						setValues((current) => ({
-							...current,
-							judgeEnabled: checked,
-							rubric: checked ? (current.rubric ?? presets?.default ?? null) : current.rubric,
-						}));
+						// The rubric itself is left alone: turning judging on derives the default preset above, and turning it
+						// off must not discard a rubric the operator already edited.
+						setValues((current) => ({ ...current, judgeEnabled: checked }));
 					}}
 				/>
 				{values.judgeEnabled ? (
@@ -316,9 +263,9 @@ export function BenchmarkProjectForm({
 								onChange={(value) => setValues((current) => ({ ...current, judgeContextTokens: Number(value) || null }))}
 							/>
 						</Group>
-						{values.rubric ? (
+						{rubric ? (
 							<BenchmarkRubricEditor
-								rubric={values.rubric}
+								rubric={rubric}
 								presets={presets}
 								issue={attempted ? rubricIssue : null}
 								onChange={setRubric}

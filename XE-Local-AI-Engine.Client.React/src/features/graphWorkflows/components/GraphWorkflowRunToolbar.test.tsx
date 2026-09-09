@@ -5,7 +5,7 @@
 // and a way back to the editor that changes the selection rather than the run.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";

@@ -1,31 +1,17 @@
-import { ActionIcon, Box, Button, FileButton, Group, Menu, Text, Textarea, Tooltip } from "@mantine/core";
-import {
-	IconAdjustments,
-	IconBooks,
-	IconBrain,
-	IconDeviceDesktop,
-	IconPaperclip,
-	IconPlayerStopFilled,
-	IconSend,
-} from "@tabler/icons-react";
+import { Box, Text, Textarea } from "@mantine/core";
 import { type DragEvent, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
-import { AgentSelectorCard } from "@/features/chat/components/AgentSelectorCard";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
+import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/ChatComposerToolbar";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
 import { SlashCommandAutocomplete } from "@/features/chat/components/SlashCommandAutocomplete";
-import { CompactButton } from "@/features/chat/components/CompactButton";
-import { ContextUsageBadge } from "@/features/chat/components/ContextUsageBadge";
-import { ModelSelectorCard } from "@/features/chat/components/ModelSelectorCard";
+import { useComposerToolbarHeight } from "@/features/chat/hooks/useComposerToolbarHeight";
+import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import type { ChatAttachment, PendingAttachmentUpload } from "@/features/chat/models/ChatAttachmentModels";
 import { defaultChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
-import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
-import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
-import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
-import { useSlashCommandAutocomplete } from "@/features/chat/hooks/useSlashCommandAutocomplete";
 import type {
 	AgentOption,
 	ChatUiCapabilities,
@@ -33,15 +19,10 @@ import type {
 	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
-import { VoiceComposerControls } from "@/features/voice/components/VoiceComposerControls";
+import { evaluateComposerSize, toDisplayKb } from "@/features/chat/models/ComposerSizeLimit";
+import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
+import { resolveSlashCommand } from "@/features/chat/models/SlashCommandResolver";
 
-// The composer toolbar lives inside the Textarea's native bottomSection (Mantine 9.3+), which is absolutely
-// positioned at a fixed height — it does not grow to fit its content. On wide viewports the toolbar is one
-// 36px row and a static height works, but on narrow panes the controls wrap to two or three rows (see the
-// toolbar's `wrap="wrap"` below), so the height is measured live via ResizeObserver (below) and both the
-// section height and the input's reserved bottom padding are driven from that measurement — otherwise a
-// wrapped toolbar either gets clipped or the typed text renders underneath it.
-const DEFAULT_TOOLBAR_HEIGHT_PX = 48;
 // Below this window width the context-usage badge is dropped from the toolbar entirely rather than adding yet
 // another row — it's the least essential control and the composer needs the space more on very narrow phones.
 const CONTEXT_USAGE_HIDE_WIDTH = 480;
@@ -227,38 +208,7 @@ export function ChatInputArea({
 		inputRef.current?.setSelectionRange(caret, caret);
 	}, [content]);
 
-	// Measures the toolbar's actual rendered height (it wraps to 2-3 rows on narrow panes) so the Textarea's
-	// fixed-height bottomSection and its own bottom padding can be kept in sync with however tall the toolbar
-	// really is — a static height either clips a wrapped toolbar or lets typed text render underneath it.
-	const toolbarRef = useRef<HTMLDivElement>(null);
-	const [toolbarHeight, setToolbarHeight] = useState(DEFAULT_TOOLBAR_HEIGHT_PX);
-
-	useEffect(() => {
-		const node = toolbarRef.current;
-		if (!node || typeof ResizeObserver === "undefined") {
-			return undefined;
-		}
-
-		const observer = new ResizeObserver((entries) => {
-			const measuredHeight = entries[0]?.contentRect.height;
-			if (measuredHeight) {
-				setToolbarHeight(measuredHeight);
-			}
-		});
-		observer.observe(node);
-		return () => observer.disconnect();
-	}, []);
-
-	// bottomSection is border-box: its fixed height must include its own paddingBlock (2 × xs) on top of the
-	// measured toolbar height, otherwise the last wrapped toolbar row clips past the composer's bottom edge.
-	const composerStyles = {
-		input: { paddingBottom: `calc(${toolbarHeight}px + 3 * var(--mantine-spacing-xs))` },
-		bottomSection: {
-			height: `calc(${toolbarHeight}px + 2 * var(--mantine-spacing-xs))`,
-			alignItems: "flex-start",
-			paddingBlock: "var(--mantine-spacing-xs)",
-		},
-	};
+	const { toolbarRef, composerStyles } = useComposerToolbarHeight();
 
 	const handlePickFiles = (files: File[] | null): void => {
 		if (files && files.length > 0) {
@@ -324,176 +274,47 @@ export function ChatInputArea({
 		clearDraft();
 	};
 
-	// The toolbar is hosted in the Textarea's bottomSection (rendered inside the input border, pointer-events:all —
-	// so the Stop button stays interactive even while the input element itself is disabled during a send). A
-	// single wrap="wrap" Group (rather than nowrap) lets the controls reflow onto extra rows instead of
-	// overlapping on narrow panes; the Send button carries its own auto left-margin so it always lands at the
-	// right edge of whichever row it ends up on, including a row of its own.
 	const toolbar = (
-		<Group ref={toolbarRef} align="center" wrap="wrap" gap="xs" style={{ width: "100%" }}>
-			<Group gap={4} wrap="wrap" style={{ flex: 1, minWidth: 0 }}>
-				<ModelSelectorCard
-					modelOptions={modelOptions}
-					cloudModelOptions={cloudModelOptions}
-					selectedModel={selectedModel}
-					disabled={modelSelectorDisabled || isSending || modelOptions.length === 0}
-					onModelChange={onModelChange}
-				/>
-				<Menu position="top-start" offset={8} withinPortal={true} disabled={reasoningMenuDisabled}>
-					<Menu.Target>
-						<Tooltip label={t("pages.chat.reasoningEffortLabel", "Reasoning effort")}>
-							<ActionIcon
-								size={36}
-								variant={reasoningEnabled ? "light" : "subtle"}
-								color={reasoningEnabled ? "primary" : "gray"}
-								disabled={reasoningMenuDisabled}
-								aria-label={t("pages.chat.reasoningEffortLabel", "Reasoning effort")}
-								data-testid="chat-reasoning-effort-menu-trigger"
-							>
-								<IconBrain size={15} />
-							</ActionIcon>
-						</Tooltip>
-					</Menu.Target>
-					<Menu.Dropdown>
-						<Menu.Label>{t("pages.chat.reasoningEffortLabel", "Reasoning effort")}</Menu.Label>
-						{availableReasoningEfforts.map((effort) => (
-							<Menu.Item
-								key={effort}
-								data-testid={`chat-reasoning-effort-option-${effort}`}
-								onClick={() => onReasoningEffortChange(effort)}
-								color={effort === reasoningEffort && effort !== "none" ? "primary" : undefined}
-							>
-								{t(`pages.chat.reasoningEffortOptions.${effort}`, effort)}
-							</Menu.Item>
-						))}
-					</Menu.Dropdown>
-				</Menu>
-				{showLocalToolControls ? (
-					<Tooltip
-						label={
-							toolsEnabled
-								? t("pages.chat.localToolsEnabled", "Local tools enabled")
-								: t("pages.chat.localToolsDisabled", "Local tools disabled")
-						}
-					>
-						<ActionIcon
-							size={36}
-							variant={toolsEnabled ? "light" : "subtle"}
-							color={toolsEnabled ? "primary" : "gray"}
-							disabled={disabled || isSending || !onToggleTools}
-							onClick={onToggleTools}
-							aria-label={t("pages.chat.localToolsLabel", "Local tools")}
-							aria-pressed={toolsEnabled}
-							data-testid="chat-local-tools-toggle"
-						>
-							<IconDeviceDesktop size={15} />
-						</ActionIcon>
-					</Tooltip>
-				) : null}
-				{showKnowledgeBaseControls ? (
-					<Tooltip
-						label={
-							!knowledgeBaseHasDocuments
-								? t("pages.chat.knowledgeBaseNoDocuments", "No indexed documents to search")
-								: knowledgeBaseEnabled
-									? t("pages.chat.knowledgeBaseEnabled", "Knowledge base enabled")
-									: t("pages.chat.knowledgeBaseDisabled", "Knowledge base disabled")
-						}
-					>
-						<ActionIcon
-							size={36}
-							variant={knowledgeBaseEnabled && knowledgeBaseHasDocuments ? "light" : "subtle"}
-							color={knowledgeBaseEnabled && knowledgeBaseHasDocuments ? "primary" : "gray"}
-							// Disabled with no indexed docs: grounding on an empty corpus is a no-op. The persisted
-							// enabled-preference is untouched (the store keeps it), so it re-arms once a doc is indexed.
-							disabled={disabled || isSending || !onToggleKnowledgeBase || !knowledgeBaseHasDocuments}
-							onClick={onToggleKnowledgeBase}
-							aria-label={t("pages.chat.knowledgeBaseLabel", "Use knowledge base")}
-							aria-pressed={knowledgeBaseEnabled && knowledgeBaseHasDocuments}
-							data-testid="chat-knowledge-base-toggle"
-						>
-							<IconBooks size={15} />
-						</ActionIcon>
-					</Tooltip>
-				) : null}
-				{agentControlsAvailable ? (
-					<AgentSelectorCard
-						agentOptions={agentOptions}
-						agentModeEnabled={agentModeEnabled}
-						selectedAgentId={selectedAgentId}
-						disabled={agentSelectorDisabled}
-						onSelectAgent={onSelectAgent ?? (() => undefined)}
-					/>
-				) : null}
-				{attachmentControlsAvailable ? (
-					<FileButton onChange={handlePickFiles} multiple={true} accept={attachmentAccept}>
-						{(fileButtonProps) => (
-							<Tooltip label={t("pages.chat.composer.attach", "Attach file")}>
-								<ActionIcon
-									{...fileButtonProps}
-									size={36}
-									variant="subtle"
-									color="gray"
-									disabled={attachmentControlsDisabled}
-									aria-label={t("pages.chat.composer.attach", "Attach file")}
-									data-testid="chat-attach-file-trigger"
-								>
-									<IconPaperclip size={15} />
-								</ActionIcon>
-							</Tooltip>
-						)}
-					</FileButton>
-				) : null}
-				{developerMode ? (
-					<Tooltip label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}>
-						<ActionIcon
-							size={36}
-							variant="subtle"
-							color="gray"
-							onClick={() => setSamplingDialogOpen(true)}
-							aria-label={t("pages.chat.composer.samplingOptions", "Advanced sampling options")}
-							data-testid="chat-sampling-options-trigger"
-						>
-							<IconAdjustments size={15} />
-						</ActionIcon>
-					</Tooltip>
-				) : null}
-				{showVoiceControls ? <VoiceComposerControls /> : null}
-				{showContextUsage && contextUsage ? (
-					<Group gap={4} wrap="nowrap">
-						<ContextUsageBadge {...contextUsage} />
-						<CompactButton
-							percentUsed={
-								contextUsage.usedTokens !== undefined && contextUsage.maxTokens !== undefined && contextUsage.maxTokens > 0
-									? (contextUsage.usedTokens / contextUsage.maxTokens) * 100
-									: undefined
-							}
-							// Read-only (e.g. remote) conversations reject the mutation with 409, and a live turn is already
-							// driving the local runtime — disable compaction in both cases, mirroring the composer.
-							disabled={disabled || isSending}
-						/>
-					</Group>
-				) : null}
-			</Group>
-			<Button
-				data-testid="chat-send-button"
-				onClick={() => {
-					if (isSending) {
-						onCancel();
-						return;
-					}
-					submit();
-				}}
-				disabled={sendDisabled}
-				color={isSending ? "red" : "dark"}
-				size="sm"
-				style={{ flexShrink: 0 }}
-				leftSection={isSending ? <IconPlayerStopFilled size={13} /> : <IconSend size={13} />}
-				aria-label={isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
-			>
-				{isSending ? t("pages.chat.stop", "Stop") : t("pages.chat.send", "Send")}
-			</Button>
-		</Group>
+		<ChatComposerToolbar
+			toolbarRef={toolbarRef}
+			disabled={disabled}
+			isSending={isSending}
+			modelOptions={modelOptions}
+			cloudModelOptions={cloudModelOptions}
+			selectedModel={selectedModel}
+			modelSelectorDisabled={modelSelectorDisabled}
+			onModelChange={onModelChange}
+			availableReasoningEfforts={availableReasoningEfforts}
+			reasoningEffort={reasoningEffort}
+			reasoningEnabled={reasoningEnabled}
+			reasoningMenuDisabled={reasoningMenuDisabled}
+			onReasoningEffortChange={onReasoningEffortChange}
+			showLocalToolControls={showLocalToolControls}
+			toolsEnabled={toolsEnabled}
+			onToggleTools={onToggleTools}
+			showKnowledgeBaseControls={showKnowledgeBaseControls}
+			knowledgeBaseEnabled={knowledgeBaseEnabled}
+			knowledgeBaseHasDocuments={knowledgeBaseHasDocuments}
+			onToggleKnowledgeBase={onToggleKnowledgeBase}
+			agentControlsAvailable={agentControlsAvailable}
+			agentOptions={agentOptions}
+			agentModeEnabled={agentModeEnabled}
+			selectedAgentId={selectedAgentId}
+			agentSelectorDisabled={agentSelectorDisabled}
+			onSelectAgent={onSelectAgent}
+			attachmentControlsAvailable={attachmentControlsAvailable}
+			attachmentControlsDisabled={attachmentControlsDisabled}
+			attachmentAccept={attachmentAccept}
+			onPickFiles={handlePickFiles}
+			showSamplingOptions={developerMode}
+			onOpenSamplingOptions={() => setSamplingDialogOpen(true)}
+			showVoiceControls={showVoiceControls}
+			showContextUsage={showContextUsage}
+			contextUsage={contextUsage}
+			sendDisabled={sendDisabled}
+			onCancel={onCancel}
+			onSubmit={submit}
+		/>
 	);
 
 	return (
@@ -556,44 +377,52 @@ export function ChatInputArea({
 				options={autocomplete.matches}
 				activeDescendantId={autocomplete.activeDescendantId}
 				onSelect={autocomplete.select}
-				target={<Textarea
-				ref={inputRef}
-				data-testid="chat-input"
-				placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}
-				value={content}
-				onChange={(event) => {
-					const target = event.currentTarget;
-					setContent(target.value);
-					setSelection({ start: target.selectionStart, end: target.selectionEnd });
-				}}
-				onSelect={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
-				onClick={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
-				onKeyUp={(event) => setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })}
-				onCompositionStart={() => setIsComposing(true)}
-				onCompositionEnd={(event) => {
-					setIsComposing(false);
-					setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
-				}}
-				onKeyDown={(event) => {
-					if (autocomplete.onKeyDown(event)) {
-						return;
-					}
-					if (event.key === "Enter" && !event.shiftKey) {
-						if (event.nativeEvent.isComposing || isComposing) {
-							return;
+				target={
+					<Textarea
+						ref={inputRef}
+						data-testid="chat-input"
+						placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}
+						value={content}
+						onChange={(event) => {
+							const target = event.currentTarget;
+							setContent(target.value);
+							setSelection({ start: target.selectionStart, end: target.selectionEnd });
+						}}
+						onSelect={(event) =>
+							setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })
 						}
-						event.preventDefault();
-						submit();
-					}
-				}}
-				autosize={true}
-				minRows={2}
-				maxRows={8}
-				radius="md"
-				disabled={disabled || isSending}
-				bottomSection={toolbar}
-				styles={composerStyles}
-			/>}
+						onClick={(event) =>
+							setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })
+						}
+						onKeyUp={(event) =>
+							setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd })
+						}
+						onCompositionStart={() => setIsComposing(true)}
+						onCompositionEnd={(event) => {
+							setIsComposing(false);
+							setSelection({ start: event.currentTarget.selectionStart, end: event.currentTarget.selectionEnd });
+						}}
+						onKeyDown={(event) => {
+							if (autocomplete.onKeyDown(event)) {
+								return;
+							}
+							if (event.key === "Enter" && !event.shiftKey) {
+								if (event.nativeEvent.isComposing || isComposing) {
+									return;
+								}
+								event.preventDefault();
+								submit();
+							}
+						}}
+						autosize={true}
+						minRows={2}
+						maxRows={8}
+						radius="md"
+						disabled={disabled || isSending}
+						bottomSection={toolbar}
+						styles={composerStyles}
+					/>
+				}
 			/>
 		</Box>
 	);

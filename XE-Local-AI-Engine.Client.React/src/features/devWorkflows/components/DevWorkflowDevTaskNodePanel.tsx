@@ -35,7 +35,11 @@ export function DevWorkflowDevTaskNodePanel({ nodeRun }: DevWorkflowDevTaskNodeP
 	const taskId = nodeRun.developmentTaskId;
 
 	return (
-		<SectionCard title={t("pages.devWorkflows.node.devTask", "Development task")} gap="xs" data-testid="dev-workflow-node-devtask">
+		<SectionCard
+			title={t("pages.devWorkflows.node.devTask", "Development task")}
+			gap="xs"
+			data-testid="dev-workflow-node-devtask"
+		>
 			{/* The stage is read off the node's own output document, which the executor writes when the row settles. A
 			    node still working has none, and saying "still running" beats printing a stage from a previous attempt. */}
 			{stage ? (

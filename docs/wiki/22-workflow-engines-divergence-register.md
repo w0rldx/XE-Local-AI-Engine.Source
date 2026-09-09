@@ -62,7 +62,15 @@ None of these were named as a decision in either plan set; each is a difference 
 | No `RequestChanges`-equivalent decision on a Graph Workflows `Pause` node | S | Dev Workflows' `HumanGate` supports three gate outcomes; Graph Workflows' `Pause` supports two (`Approve`/`Reject`). Not discussed in either plan as a deliberate narrowing — it may simply be that no v1 template needed the third outcome yet. |
 | Divergent hub-kind and event-log field naming conventions, independently implemented rather than sharing a contract | S | `Plans/custom-graph-workflows-2026-09-03/ASSESSMENT.md` §3 (§15 layers) already anticipated this: "the 'General Graph Concepts' layer should be a **contract**... shared by convention, not a shared assembly, until both engines are stable" — the convention exists in intent but nothing enforces it, so a future field rename in one hub has no cross-check against the other. |
 
-## 4. The agent-knowledge rule this register backs
+## 4. Deliberately shared (with authority)
+
+The register's default is separation, so anything the two engines now share is recorded here rather than assumed.
+
+| Shared | Authority |
+|---|---|
+| The compact duration formatter, `formatDurationCompact(ms)` in `XE-Local-AI-Engine.Client.React/src/core/formatting/TimeFormatting.ts`. It replaced `formatDevWorkflowDuration` in `devWorkflows/models/DevWorkflowModels.ts` and the module-local `formatDuration` in `graphWorkflows/components/GraphWorkflowNodeRunTable.tsx`, whose comment had declared it "module-local by design". | React cleanup plan (2026-09-09) lane A3, P2 shared extractions. The two bodies were byte-identical and the function is **presentation-only** — a "12s" / "4m 12s" / "1h 04m" ladder over two timestamps, carrying no status, decision or retry vocabulary from either engine — so it sits below the divergence surface this register guards. D2/D10 still hold for everything above it: nothing is shared between the two families' node panels, config panels or models. |
+
+## 5. The agent-knowledge rule this register backs
 
 `docs/agent-knowledge.md` §4, "A fix in one workflow engine is not automatically engine-local", is the durable
 rule; this page is the evidence it points at. Read that entry before changing behavior in either engine.

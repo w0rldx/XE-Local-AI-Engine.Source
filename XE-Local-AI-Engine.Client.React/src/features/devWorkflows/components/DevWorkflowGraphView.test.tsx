@@ -148,16 +148,12 @@ describe("DevWorkflowGraphView", () => {
 	it("renders a Blocked card as needs-intervention rather than as a passive wait", () => {
 		renderWithProviders(
 			<DevWorkflowGraphView
-				run={chainRun([
-					devWorkflowNodeRunSummary({ id: "node-research", nodeKey: "research", status: "Blocked", attempt: 3 }),
-				])}
+				run={chainRun([devWorkflowNodeRunSummary({ id: "node-research", nodeKey: "research", status: "Blocked", attempt: 3 })])}
 				onSelect={vi.fn()}
 			/>,
 		);
 
-		expect(screen.getByTestId("dev-workflow-graph-node-intervention-node-research").textContent).toBe(
-			"needs your intervention",
-		);
+		expect(screen.getByTestId("dev-workflow-graph-node-intervention-node-research").textContent).toBe("needs your intervention");
 		expect(hasProgressIndicator(card("node-research"))).toBe(false);
 		expect(screen.getByTestId("dev-workflow-graph-node-attempt-node-research").textContent).toBe("attempt 3 of 3");
 	});
@@ -214,12 +210,8 @@ describe("DevWorkflowGraphView", () => {
 		// Both numbers are the SERVER's: the index is already 1-based (C2) and the count is the group size the runtime
 		// computed. Adding one to the index is what made a decomposition of one read "generated · 2 of 2" on live
 		// hardware; counting rows client-side is what made a two-child clone read "of 4".
-		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe(
-			"generated · 1 of 2",
-		);
-		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-2").textContent).toBe(
-			"generated · 2 of 2",
-		);
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-1").textContent).toBe("generated · 1 of 2");
+		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-implement-2").textContent).toBe("generated · 2 of 2");
 		expect(screen.getByTestId("dev-workflow-graph-node-materialized-node-verify").textContent).toBe("generated");
 	});
 

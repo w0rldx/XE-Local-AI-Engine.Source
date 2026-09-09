@@ -1,10 +1,10 @@
 import { Alert, Badge, Group, Loader, NavLink, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	artifactEditorLanguage,
 	decodeArtifactContent,
@@ -90,9 +90,14 @@ function ArtifactBody({
 
 	if (artifact.isValid === false) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-artifact-invalid-alert">
-				{t("pages.workSessions.artifacts.invalidBody", "This artifact's stored content could not be read and cannot be shown.")}
-			</Alert>
+			<InlineErrorAlert
+				message={t(
+					"pages.workSessions.artifacts.invalidBody",
+					"This artifact's stored content could not be read and cannot be shown.",
+				)}
+				variant="light"
+				data-testid="work-session-artifact-invalid-alert"
+			/>
 		);
 	}
 	if (contentQuery.isPending) {
@@ -100,9 +105,14 @@ function ArtifactBody({
 	}
 	if (contentQuery.isError) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-artifact-error">
-				{apiErrorMessage(contentQuery.error, t("pages.workSessions.artifacts.loadFailed", "Could not load this artifact."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(
+					contentQuery.error,
+					t("pages.workSessions.artifacts.loadFailed", "Could not load this artifact."),
+				)}
+				variant="light"
+				data-testid="work-session-artifact-error"
+			/>
 		);
 	}
 

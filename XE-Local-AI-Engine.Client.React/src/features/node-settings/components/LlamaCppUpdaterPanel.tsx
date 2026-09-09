@@ -15,6 +15,7 @@ import { useTranslation } from "react-i18next";
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import {
 	type LlamaCppRuntimeStatus,
@@ -132,7 +133,9 @@ export function LlamaCppUpdaterPanel() {
 		ensureMutation.mutate(selectedVariant, {
 			onSuccess: () => toast.success(t("pages.nodeSettings.llamaCpp.ensured", "llama.cpp binary ready.")),
 			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary."))),
+				toast.error(
+					apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.ensureError", "Could not ensure the llama.cpp binary.")),
+				),
 		});
 	};
 
@@ -155,7 +158,10 @@ export function LlamaCppUpdaterPanel() {
 					}),
 				onError: (error) =>
 					toast.error(
-						apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime.")),
+						apiErrorMessage(
+							error,
+							t("pages.nodeSettings.llamaCpp.updater.toastError", "Could not update the llama.cpp runtime."),
+						),
 						{ id: UPDATE_TOAST_ID, title: t("pages.nodeSettings.llamaCpp.updater.toastErrorTitle", "Update failed") },
 					),
 			},
@@ -189,12 +195,13 @@ export function LlamaCppUpdaterPanel() {
 				) : null}
 
 				{statusQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="llamacpp-updater-error">
-						{apiErrorMessage(
+					<InlineErrorAlert
+						message={apiErrorMessage(
 							statusQuery.error,
 							t("pages.nodeSettings.llamaCpp.updater.statusError", "Could not resolve the llama.cpp runtime status."),
 						)}
-					</Alert>
+						data-testid="llamacpp-updater-error"
+					/>
 				) : null}
 
 				{status && !statusQuery.isLoading ? (

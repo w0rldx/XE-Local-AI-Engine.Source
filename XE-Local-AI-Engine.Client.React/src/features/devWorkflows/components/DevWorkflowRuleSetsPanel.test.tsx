@@ -5,7 +5,7 @@
 // retry, and a delete asks first.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have. What is under test here is the
@@ -24,7 +24,11 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { DevWorkflowRuleSetsPanel } from "@/features/devWorkflows/components/DevWorkflowRuleSetsPanel";
-import { devWorkflowRuleSet, devWorkflowRuleSetSummary, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
+import {
+	devWorkflowRuleSet,
+	devWorkflowRuleSetSummary,
+	devWorkflowTestIds,
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";

@@ -1,9 +1,10 @@
-import { Alert, Group, Loader, Select, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlug } from "@tabler/icons-react";
+import { Group, Loader, Select, Text } from "@mantine/core";
+import { IconPlug } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -21,10 +22,7 @@ import {
 	integrationPageSizeOptions,
 	integrationSessionStatuses,
 } from "@/features/integrations/models/IntegrationModels";
-import {
-	useDeleteIntegrationSession,
-	useIntegrationSessions,
-} from "@/features/integrations/queries/useIntegrationSessions";
+import { useDeleteIntegrationSession, useIntegrationSessions } from "@/features/integrations/queries/useIntegrationSessions";
 import { useIntegrationTriggers } from "@/features/integrations/queries/useIntegrationTriggers";
 import { useIntegrationsUiStore } from "@/features/integrations/stores/IntegrationsUiStore";
 
@@ -199,11 +197,7 @@ export function IntegrationSessionsPage() {
 						<Text c="dimmed">{t("pages.integrations.sessions.list.loading", "Loading sessions…")}</Text>
 					</Group>
 				) : null}
-				{loadError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-sessions-error">
-						{loadError}
-					</Alert>
-				) : null}
+				{loadError ? <InlineErrorAlert message={loadError} data-testid="integration-sessions-error" /> : null}
 				{!(sessionsQuery.isLoading || loadError) ? (
 					<>
 						<IntegrationSessionList

@@ -1,18 +1,15 @@
 import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
-import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { getLocalModelDetailsOptions, listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
-import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { useAgentDefinitions } from "@/features/agents/queries/useAgentDefinitions";
 import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import { isNodeChatReadOnlyConflict, stripSignalRHubErrorPrefix } from "@/features/chat/api/NodeChatConflict";
 import {
@@ -28,6 +25,9 @@ import {
 } from "@/features/chat/api/NodeChatStreamState";
 import { useNodeChatConnectionReadiness } from "@/features/chat/api/useNodeChatConnectionReadiness";
 import { ChatDisplayShell } from "@/features/chat/components/ChatDisplayShell";
+import { useChatAgentSelection } from "@/features/chat/hooks/useChatAgentSelection";
+import { useChatConversationSelection } from "@/features/chat/hooks/useChatConversationSelection";
+import { useChatModelSelection } from "@/features/chat/hooks/useChatModelSelection";
 import { useChatRevisionSelection } from "@/features/chat/hooks/useChatRevisionSelection";
 import { useStreamCommitScheduler } from "@/features/chat/hooks/useStreamCommitScheduler";
 import { buildChatUiCapabilities } from "@/features/chat/models/ChatCapabilityGates";
@@ -38,37 +38,21 @@ import {
 	titleFromContent,
 } from "@/features/chat/models/ChatConversationDerivations";
 import type {
-	AgentOption,
 	ChatConversationListModel,
 	ChatConversationModel,
 	ChatFeedbackRating,
-	ChatMessageFeedback,
 	ChatScope,
 	ChatStreamingState,
 	ChatTimelineEntry,
-	ModelOption,
 	ReasoningEffort,
 } from "@/features/chat/models/ChatModels";
-import { DEFAULT_ASSISTANT_NAME } from "@/features/chat/models/ChatModels";
 import { toWireSamplingOptions } from "@/features/chat/models/ChatSamplingOptions";
-import { deriveUsedContextTokens } from "@/features/chat/models/ContextUsageDerivation";
-import { deriveModelDisplay, deriveModelIdDisplay } from "@/features/chat/models/ModelDisplay";
-import { localDefaultModelValue, toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
+import { toNodeChatRequestModel } from "@/features/chat/models/NodeChatModelSelection";
 import { toChatCommandOption } from "@/features/chat/models/SlashCommandModels";
-import { resolveContextCapacityTokens, shouldFetchLocalModelDetails } from "@/features/chat/pages/ChatModelDetailsQuery";
-import {
-	hasNoLocalChatModels,
-	resolveLocalDefaultModelCapabilities,
-	resolveLocalDefaultModelName,
-	toChatModelOptions,
-} from "@/features/chat/pages/ChatModelOptions";
-import { resolveAvailableReasoningEfforts } from "@/features/chat/pages/ChatReasoningEfforts";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
-import { useCodexModelOptions } from "@/features/chat/queries/useCodexModelOptions";
-import { useExternalModelOptions } from "@/features/chat/queries/useExternalModelOptions";
 import { useConversationAttachments } from "@/features/chat/queries/useConversationAttachments";
 import { useChatSamplingPreferencesStore } from "@/features/chat/stores/ChatSamplingPreferencesStore";
-import { clampReasoningEffort, useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
 import { useCommands } from "@/features/commands/queries/useCommands";
 import { useKnowledgeDocuments } from "@/features/knowledge/queries/useKnowledgeDocuments";
 import { useVoicePlayback } from "@/features/voice/useVoicePlayback";
@@ -76,26 +60,9 @@ import { useVoiceRuntime } from "@/features/voice/VoiceRuntimeContext";
 
 /* eslint-disable react-doctor/no-giant-component, react-doctor/prefer-useReducer, react-doctor/js-combine-iterations -- This page retains the race-coupled send, stream, resume, and cancellation controller; independent transport and revision-selection lifecycles live in dedicated modules. */
 
-// Base identity for the synthetic "Local default" composer option. Capabilities are filled in dynamically inside
-// modelOptions (see below) from the concrete model the runtime will resolve, so picking "Local default" mirrors the
-// reasoning/tool controls of picking that model directly. The false capabilities here are only the pre-load default
-// (used until the local model list arrives).
-const localDefaultModelOptionBase: ModelOption = {
-	value: localDefaultModelValue,
-	label: "Local default",
-	displayName: "Local runtime default",
-	isReasoningModel: false,
-	isNativeReasoningModel: false,
-	isToolCapable: false,
-	isMultimodal: false,
-	isAvailable: true,
-	statusLabel: "Runtime-selected model",
-};
-
-const emptyConversations: ChatConversationModel[] = [];
 // Fallback for the cache updaters below when they run before the list query has landed: an empty list with no known
 // message-size limit (which simply means the composer runs no size pre-check until the real fetch arrives).
-const emptyConversationList: ChatConversationListModel = { conversations: emptyConversations };
+const emptyConversationList: ChatConversationListModel = { conversations: [] };
 
 interface ActiveChatStream {
 	conversationId: string;
@@ -147,39 +114,17 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 	}
 	// Composer selections, the last-selected conversation, and the sidebar collapsed state all persist across
 	// reloads via localStorage (NodeChatPreferencesStore), mirroring the platform ToolCallingStore. Persisted
-	// values are validated below: the model against the live model list / effort set, and the last-selected
-	// conversation against the loaded list (a stale id falls back to the first conversation).
-	const preferredModel = useNodeChatPreferencesStore((state) => state.selectedModel);
-	const reasoningEffort = useNodeChatPreferencesStore((state) => state.reasoningEffort);
+	// values are validated below: the model against the live model list / effort set (useChatModelSelection), and
+	// the last-selected conversation against the loaded list (a stale id falls back to the first conversation).
 	const toolsEnabled = useNodeChatPreferencesStore((state) => state.toolsEnabled);
 	const knowledgeBaseEnabled = useNodeChatPreferencesStore((state) => state.knowledgeBaseEnabled);
 	const requestedConversationId = useNodeChatPreferencesStore((state) => state.selectedConversationId);
 	const collapsed = useNodeChatPreferencesStore((state) => state.sidebarCollapsed);
-	const preferredAgentModeEnabled = useNodeChatPreferencesStore((state) => state.agentModeEnabled);
-	const preferredSelectedAgentId = useNodeChatPreferencesStore((state) => state.selectedAgentId);
-	// A scope that pins an agent wins over the stored composer preference: the session owns the binding.
-	const agentModeEnabled = scope?.pinnedAgentId ? true : preferredAgentModeEnabled;
-	const selectedAgentId = scope?.pinnedAgentId ?? preferredSelectedAgentId;
-	// …and so does the model that agent pins. The scoped selectors are read-only, so falling back to the operator's
-	// stored `/chat` choice would show a model label they cannot correct AND poll details for a model this session
-	// is not running. An agent that pins nothing (both seeded personas do) resolves to the local default — which is
-	// what the backend will actually pick — never to the stored preference.
-	const agentDefinitionsQuery = useAgentDefinitions();
-	const pinnedAgentModelProfile = scope?.pinnedAgentId
-		? agentDefinitionsQuery.data?.find((agent) => agent.id === scope.pinnedAgentId)?.modelProfile
-		: undefined;
-	// The pinned agent is not loaded yet, so the model it runs is still unknown.
-	const scopedModelPending = scope?.pinnedAgentId !== undefined && agentDefinitionsQuery.data === undefined;
-	const selectedModel = scope?.pinnedAgentId ? (pinnedAgentModelProfile ?? localDefaultModelValue) : preferredModel;
 	const {
-		setSelectedModel,
-		setReasoningEffort,
 		toggleTools,
 		toggleKnowledgeBase,
 		setSelectedConversationId: setSelectedConversationIdPreference,
 		toggleSidebar,
-		setAgentModeEnabled,
-		setSelectedAgentId,
 		clearSelectedAgent,
 	} = useNodeChatPreferencesStore((state) => state.actions);
 	// The preference store is GLOBAL: opening a scoped (owner-pinned) conversation must never rewrite the operator's
@@ -215,12 +160,40 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		[knowledgeDocuments],
 	);
 	const { readiness: connectionReadiness, error: connectionError, retry: retryConnection } = useNodeChatConnectionReadiness();
+	const {
+		agentModeEnabled,
+		selectedAgentId,
+		agentOptions,
+		agentControlsAvailable,
+		boundAgentMemoryEnabled,
+		pinnedAgentModelProfile,
+		scopedModelPending,
+		handleSelectAgent,
+	} = useChatAgentSelection(scope, chatUiCapabilities.showAgentControls);
+	const {
+		modelOptions,
+		cloudModelOptions,
+		selectedModel,
+		reasoningEffort,
+		availableReasoningEfforts,
+		activeModelToolCapable,
+		activeModelMultimodal,
+		showNoModelGuidance,
+		effectiveMaxContextTokens,
+		contextModelLabel,
+		setSelectedModel,
+		setReasoningEffort,
+	} = useChatModelSelection({
+		isScoped,
+		pinnedAgentId: scope?.pinnedAgentId,
+		pinnedAgentModelProfile,
+		scopedModelPending,
+	});
 	const [streamingMessage, setStreamingMessage] = useState<ChatStreamingState | undefined>();
 	// Tool-call activity entries accumulated over the current streaming turn (keyed by tool call id). Reset per turn.
 	const [timelineEntries, setTimelineEntries] = useState<ChatTimelineEntry[]>([]);
 	const [streamError, setStreamError] = useState<string | undefined>();
 	const [conversationSearchQuery, setConversationSearchQuery] = useState("");
-	const [showArchivedConversations, setShowArchivedConversations] = useState(false);
 	const [mutatingConversationId, setMutatingConversationId] = useState<string | undefined>();
 	const [pendingFeedbackMessageId, setPendingFeedbackMessageId] = useState<string | undefined>();
 	// Conversations whose first message has already promoted their title (avoids re-renaming on every send).
@@ -230,184 +203,25 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		titledConversations.current = new Set<string>();
 	}
 	const {
-		data: conversationsData,
-		isLoading: conversationsIsLoading,
-		isError: conversationsIsError,
-		error: conversationsError,
-	} = useQuery({
-		queryKey: nodeChatQueryKeys.conversationList(showArchivedConversations),
-		queryFn: ({ signal }) => nodeChatAdapter.listConversations({ includeArchived: showArchivedConversations, signal }),
-	});
-
-	const { data: localModelsData } = useQuery({
-		...withResponseValidation(listLocalModelsOptions()),
-		// Keep the prior model list while a refetch is in flight so a transient response that momentarily omits
-		// the selected model can't trip the reconcile effect and reset selectedModel to the default (which would
-		// undercut the persisted model selection restored from localStorage).
-		placeholderData: keepPreviousData,
-	});
-
-	const modelOptions = useMemo<ModelOption[]>(() => {
-		const response = localModelsData;
-		if (!response) {
-			return [localDefaultModelOptionBase];
-		}
-
-		// Mirror the resolved concrete model's capabilities onto the Local-default option so its reasoning/tool
-		// controls match picking that model directly (see resolveLocalDefaultModelCapabilities).
-		const items = response.items ?? [];
-		const localDefaultModelOption: ModelOption = {
-			...localDefaultModelOptionBase,
-			...resolveLocalDefaultModelCapabilities(items),
-		};
-		return [localDefaultModelOption, ...toChatModelOptions(items, response.isAvailable ?? false)];
-	}, [localModelsData]);
-	// Cloud (Codex + Azure) model options — empty array when signed out; non-empty only when Codex session active.
-	const codexModelOptions = useCodexModelOptions();
-	// Models served by an operator-registered external OpenAI-compatible endpoint, one per registered model.
-	const externalModelOptions = useExternalModelOptions();
-	// Everything the node can send to that its own installed-model list will never contain. Send validation, the
-	// stale-selection reconcile and the picker all treat cloud and external entries the same way, so they share one
-	// list; only the picker's grouping tells them apart (external options carry their connection identity).
-	const cloudModelOptions = useMemo(
-		() => [...codexModelOptions, ...externalModelOptions],
-		[codexModelOptions, externalModelOptions],
-	);
-	// Pre-empt the first-send ModelNotInstalled failure with inline guidance, instead of only surfacing it
-	// after a failed send (ChatMessage's error Alert). Gated on BOTH no installed local chat model AND no signed-in
-	// cloud provider — a Codex/Azure session is still a usable send path, so the guidance would be misleading there.
-	// `localModelsData !== undefined` guards the pre-load default-only modelOptions shape (before the query
-	// resolves) from being mistaken for a genuinely empty node.
-	const showNoModelGuidance =
-		localModelsData !== undefined && hasNoLocalChatModels(modelOptions) && cloudModelOptions.length === 0;
-	const selectedModelOption = useMemo(
-		() =>
-			modelOptions.find((option) => option.value === selectedModel) ??
-			cloudModelOptions.find((option) => option.value === selectedModel),
-		[cloudModelOptions, modelOptions, selectedModel],
-	);
-	// Per-model capability gating: the tool controls gate on the model's `tools` capability (combined with the
-	// node-wide gate inside ChatInputArea), image attachment on its vision projector.
-	const activeModelToolCapable = selectedModelOption?.isToolCapable ?? false;
-	const activeModelMultimodal = selectedModelOption?.isMultimodal ?? false;
-	const selectedModelIsCloud = selectedModelOption?.isCloud === true;
-	// Which effort vocabulary this model's provider actually honours — see ChatReasoningEfforts for the rule.
-	const availableReasoningEfforts = useMemo<ReasoningEffort[]>(
-		() => resolveAvailableReasoningEfforts(selectedModelOption),
-		[selectedModelOption],
-	);
-
-	// Build the live agent option list (sorted, excluding the Default Assistant by shared constant).
-	// Single derivation site — AgentSelectorCard receives this as a prop (no internal query call).
-	// Chat.tsx uses this list to gate send: a stale/deleted selectedAgentId that no longer appears here is
-	// silently dropped → the send falls back to Default Assistant (mode-off behavior).
-	const agentOptions = useMemo<AgentOption[]>(() => {
-		const definitions = agentDefinitionsQuery.data ?? [];
-		return definitions
-			.filter((agent) => agent.name.toLowerCase() !== DEFAULT_ASSISTANT_NAME.toLowerCase())
-			.map((agent) => ({
-				id: agent.id,
-				name: agent.name,
-				description: agent.description,
-				kind: agent.kind,
-				modelProfile: agent.modelProfile,
-				playbookEnabled: agent.playbookEnabled,
-			}))
-			.sort((a, b) => a.name.localeCompare(b.name));
-	}, [agentDefinitionsQuery.data]);
-	// agentControlsAvailable: capability gate AND at least one agent in the live list.
-	const agentControlsAvailable = chatUiCapabilities.showAgentControls && agentOptions.length > 0;
-	// Whether the currently bound agent (agent mode on + a selected agent that still exists) has adaptive memory
-	// enabled. Gates the temporary-chat toggle in the chat header — there is nothing to suppress unless the agent
-	// learns memory at all. Default Assistant / mode-off => no bound agent => false.
-	const boundAgentMemoryEnabled = useMemo(() => {
-		if (!agentModeEnabled || !selectedAgentId) {
-			return false;
-		}
-		return agentOptions.find((agent) => agent.id === selectedAgentId)?.playbookEnabled ?? false;
-	}, [agentModeEnabled, agentOptions, selectedAgentId]);
-	// Single merged agent control wiring: picking an agent enables agent mode and stamps it; picking the Default
-	// Assistant row (empty id) disables agent mode and clears the selection. Replaces the old separate toggle.
-	const handleSelectAgent = useCallback(
-		(agentId: string) => {
-			if (agentId) {
-				setSelectedAgentId(agentId);
-				setAgentModeEnabled(true);
-			} else {
-				setAgentModeEnabled(false);
-				setSelectedAgentId("");
-			}
-		},
-		[setAgentModeEnabled, setSelectedAgentId],
-	);
-	// Reconcile a persisted model selection against the live list: once the models query has resolved, a
-	// stored model that no longer exists (renamed/removed on the node) falls back to the local default so the
-	// composer never points at a phantom model. Guarded on loaded data so the initial default-only list
-	// (before the query settles) does not clobber a still-valid persisted concrete model.
-	// Also exempt cloud model selections — they are not in the local list and must not be evicted.
-	useEffect(() => {
-		if (!localModelsData) {
-			return;
-		}
-
-		// Under scope the displayed model comes from the pinned agent, not the store — reconciling here would
-		// rewrite the operator's own /chat preference from a session they merely opened.
-		if (isScoped) {
-			return;
-		}
-
-		const isCloudSelection = cloudModelOptions.some((option) => option.value === selectedModel);
-		if (!isCloudSelection && !modelOptions.some((option) => option.value === selectedModel)) {
-			setSelectedModel(localDefaultModelValue);
-		}
-	}, [cloudModelOptions, isScoped, localModelsData, modelOptions, selectedModel, setSelectedModel]);
-	// Keep the selected reasoning effort valid for the active model's reasoning mode so the composer never SENDS an
-	// effort the model can't honor. Graded models accept none/low/medium/high; binary models accept on/none; Codex
-	// models add minimal/xhigh. When the current effort isn't in the active model's set (a Codex "xhigh" carried onto
-	// a graded model, or a binary "on" carried onto a graded model) clampReasoningEffort maps to the nearest valid
-	// level that PRESERVES reasoning intent — xhigh→high, minimal→low, graded→"on" for binary — instead of collapsing
-	// reasoning OFF. Only "none" maps to "none". Runs on every model switch and on first load.
-	useEffect(() => {
-		const clamped = clampReasoningEffort(reasoningEffort, availableReasoningEfforts);
-		if (clamped !== reasoningEffort) {
-			setReasoningEffort(clamped);
-		}
-	}, [availableReasoningEfforts, reasoningEffort, setReasoningEffort]);
-	const selectedConcreteModelName = useMemo(() => {
-		const requestModel = toNodeChatRequestModel(selectedModel);
-		// For the "Local default" sentinel, prefer the INSTALLED model the backend resolver will actually run
-		// (resolveLocalDefaultModel mirror) over the store's selected/configured name — those may name a model whose
-		// GGUF was never downloaded (configured-but-not-installed starter model), which permanently disabled the
-		// model-details poll and left the context-usage meter capacity unknown ("N of —") even while an installed
-		// model was serving chat fine. The store names stay as fallback for the no-installed-models case, where the
-		// installed-list gate below keeps the details poll off anyway.
-		return (
-			requestModel ??
-			resolveLocalDefaultModelName(localModelsData?.items ?? []) ??
-			localModelsData?.selectedModelName ??
-			localModelsData?.configuredDefaultModelName ??
-			""
-		);
-	}, [localModelsData, selectedModel]);
-
-	// Only poll model-details when the selection can actually return them: a non-empty local (non-cloud) name whose
-	// list option, if known, is available AND whose concrete name is actually installed. Cloud (Codex) ids have no
-	// LOCAL details (the endpoint 404s for them), an unavailable model just retries a guaranteed failure, and a
-	// configured-but-not-installed default (its GGUF never downloaded) 404s forever until the install lands. GGUF
-	// (llamacpp) selections that are installed ARE polled — the details endpoint answers with a 200 carrying
-	// maxContextTokens, which the context meter needs.
-	const concreteModelInstalled = useMemo(
-		() => selectedConcreteModelName.length > 0 && modelOptions.some((option) => option.value === selectedConcreteModelName),
-		[modelOptions, selectedConcreteModelName],
-	);
-	const selectedModelDetailsEnabled =
-		// Don't poll for a name we are about to replace once the pinned agent lands.
-		!scopedModelPending &&
-		shouldFetchLocalModelDetails(selectedConcreteModelName, selectedModelOption, selectedModelIsCloud, concreteModelInstalled);
-	const { data: selectedModelDetails } = useQuery({
-		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: selectedConcreteModelName } })),
-		enabled: selectedModelDetailsEnabled,
-	});
+		conversationsIsLoading,
+		conversationsIsError,
+		conversationsError,
+		maxMessageSizeKb,
+		showArchivedConversations,
+		setShowArchivedConversations,
+		selectedConversationId,
+		selectedConversationData,
+		selectedConversationIsLoading,
+		selectedConversationIsPlaceholderData,
+		selectedConversationError,
+		selectedConversationLoadFailed,
+		isLoadingSelectedConversation,
+		handleRetryLoadMessages,
+		displayConversations,
+		isRemoteConversation,
+		feedbackByMessageId,
+		usedContextTokens,
+	} = useChatConversationSelection({ scope, requestedConversationId });
 
 	const createConversationMutation = useMutation({
 		mutationFn: () => nodeChatAdapter.createConversation({ title: "New conversation" }),
@@ -428,116 +242,9 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 		},
 	});
 
-	const conversations = conversationsData?.conversations ?? emptyConversations;
-	// The node's effective Security:MaxMessageSizeKb, reported by the conversation-list endpoint. Undefined until that
-	// first fetch lands (or on a node that omits it) — the composer then skips its pre-check and the hub enforces.
-	const maxMessageSizeKb = conversationsData?.maxMessageSizeKb;
-	const requestedConversationExists = conversations.some((conversation) => conversation.id === requestedConversationId);
-	// mergeSelectedConversation prepends the pinned conversation when the list does not contain it, so a scoped id
-	// renders correctly whatever the (still-fetched — it carries maxMessageSizeKb) conversation list returns.
-	const selectedConversationId =
-		scope?.conversationId ?? (requestedConversationExists ? requestedConversationId : (conversations[0]?.id ?? ""));
-
-	const {
-		data: selectedConversationData,
-		isLoading: selectedConversationIsLoading,
-		isFetching: selectedConversationIsFetching,
-		isPlaceholderData: selectedConversationIsPlaceholderData,
-		isError: selectedConversationIsError,
-		error: selectedConversationError,
-		refetch: refetchSelectedConversation,
-	} = useQuery({
-		queryKey: nodeChatQueryKeys.conversation(selectedConversationId),
-		queryFn: ({ signal }) => nodeChatAdapter.getConversation(selectedConversationId, { signal }),
-		enabled: selectedConversationId.length > 0,
-		// Keep the prior conversation's full payload mounted while the newly selected one loads so the message
-		// list never collapses to the summary entry (no messages) and flashes the empty-state mid-switch.
-		placeholderData: keepPreviousData,
-	});
-	// The selected conversation's full payload failed to load AND we don't already hold its payload (a background
-	// refetch failing over good data must NOT blow away the thread — that stays showing the cached messages). The
-	// query is keyed by selectedConversationId, so `isError` reflects the CURRENT selection; switching threads
-	// re-keys the query and clears this. Drives the inline error+retry state in the message list. Without it, a
-	// permanently-failing getConversation left the loading term below true forever (spinner deadlock, no error).
-	const selectedConversationLoadFailed =
-		selectedConversationId.length > 0 && selectedConversationIsError && selectedConversationData?.id !== selectedConversationId;
-	// The full payload (with messages) hasn't settled for the currently selected conversation yet: either the
-	// first load, a switch where keepPreviousData is still showing the prior thread (isPlaceholderData), or a
-	// background refetch over a cached message-less entry. isFetching is the key signal — isLoading alone is
-	// false whenever ANY cached/placeholder data exists for the id, which let the empty-state flash mid-fetch.
-	// The failure state takes precedence: once the load has errored we surface the error+retry, not a spinner
-	// that would otherwise spin forever (the id-mismatch term below never clears on a permanent failure).
-	const isLoadingSelectedConversation =
-		!selectedConversationLoadFailed &&
-		selectedConversationId.length > 0 &&
-		(selectedConversationIsLoading ||
-			selectedConversationIsFetching ||
-			selectedConversationIsPlaceholderData ||
-			selectedConversationData?.id !== selectedConversationId);
-	const handleRetryLoadMessages = useCallback(() => {
-		// Fire-and-forget refetch: any failure re-lands in the query's own isError state (which drives this same
-		// error surface), so there is nothing extra to handle here — mirror the adapter fire-and-forget convention.
-		refetchSelectedConversation().catch(() => undefined);
-	}, [refetchSelectedConversation]);
-
-	// Gate the selected conversation against the current selection before merging it into the displayed list.
-	// When the last conversation is deleted, selectedConversationId becomes "" and the query disables — but its
-	// `.data` stays STALE (it still holds the just-deleted conversation, keepPreviousData never clears it).
-	// Injecting that stale payload would render a ghost row, so only feed the merge the selected conversation when
-	// the selection is live (non-empty) AND the cached payload actually matches it.
-	const selectedConversationForMerge =
-		selectedConversationId.length > 0 && selectedConversationData?.id === selectedConversationId
-			? selectedConversationData
-			: undefined;
-	const displayConversations = useMemo(
-		() => mergeSelectedConversation(conversations, selectedConversationForMerge),
-		[conversations, selectedConversationForMerge],
-	);
-	const activeConversation = displayConversations.find((conversation) => conversation.id === selectedConversationId);
-	// Remote conversations are view-only on this node (server enforces the guard; this is the cosmetic UI hide).
-	const isRemoteConversation = activeConversation?.origin === "remote";
-
 	const loadedConversation = selectedConversationData;
 	const { activeRevisionByGroup, selectRevision } = useChatRevisionSelection(selectedConversationId, loadedConversation);
 
-	// Node-local feedback travels on each message in the loaded conversation:
-	// derive the by-message map from the conversation read instead of firing a GET per assistant turn (which
-	// 404'd and triggered a react-query retry storm before any feedback existed).
-	const feedbackByMessageId = useMemo<Record<string, ChatMessageFeedback>>(() => {
-		const byMessageId: Record<string, ChatMessageFeedback> = {};
-		for (const message of activeConversation?.messages ?? []) {
-			if (message.feedbackRating) {
-				byMessageId[message.id] = {
-					messageId: message.id,
-					conversationId: message.conversationId,
-					rating: message.feedbackRating,
-					comment: message.feedbackComment,
-					createdAt: message.createdAt,
-					updatedAt: message.updatedAt ?? message.createdAt,
-				};
-			}
-		}
-		return byMessageId;
-	}, [activeConversation?.messages]);
-	const usedContextTokens = useMemo(
-		() => deriveUsedContextTokens(activeConversation?.messages ?? []),
-		[activeConversation?.messages],
-	);
-	// Prefer the RUNNING process's effective context window (the launched -c) over the model's advertised
-	// train ceiling, so the meter shows the real capacity once the model is warm; fall back to the ceiling, then unknown.
-	const effectiveMaxContextTokens = resolveContextCapacityTokens(selectedModelDetails);
-	// The meter names the model the way the picker's trigger does — the same shortening, so the two controls sitting a
-	// few pixels apart cannot spell the same selection differently. The "Local default" sentinel keeps naming the
-	// CONCRETE model the resolver picked, which has no option of its own and so goes through the raw-id shortener.
-	const contextModelLabel = useMemo(() => {
-		if (selectedModelOption !== undefined && selectedModelOption.value !== localDefaultModelValue) {
-			return deriveModelDisplay(selectedModelOption, selectedConcreteModelName).primary;
-		}
-
-		return selectedConcreteModelName.length > 0
-			? deriveModelIdDisplay(selectedConcreteModelName).primary
-			: "Local runtime default";
-	}, [selectedConcreteModelName, selectedModelOption]);
 	const isLoadingInitialConversations = conversationsIsLoading && displayConversations.length === 0;
 	const isCreatingConversation = createConversationMutation.isPending;
 	const isSending = Boolean(streamingMessage?.isActive);
@@ -1479,24 +1186,18 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 							<Text c="dimmed">{t("pages.chat.connecting", "Connecting to local chat…")}</Text>
 						</Stack>
 					) : (
-						<Alert
-							color="red"
+						<InlineErrorAlert
 							variant="light"
-							icon={<IconAlertTriangle size={16} />}
 							title={t("pages.chat.connectionFailedTitle", "Local chat unavailable")}
+							message={connectionError ?? t("pages.chat.connectionFailed", "Could not connect to the local chat hub.")}
 						>
-							<Stack gap="sm" align="flex-start">
-								<Text size="sm">
-									{connectionError ?? t("pages.chat.connectionFailed", "Could not connect to the local chat hub.")}
-								</Text>
-								{/* Retry re-arms connect(): readiness flips error → connecting and this whole gate re-renders to
-								    the centered Loader above. Accepted as-is — no in-button spinner; the connecting state IS
-								    the feedback, and the gate swap is a clean replace, not a flicker. */}
-								<Button size="xs" variant="light" onClick={retryConnection}>
-									{t("pages.chat.retryConnection", "Retry")}
-								</Button>
-							</Stack>
-						</Alert>
+							{/* Retry re-arms connect(): readiness flips error → connecting and this whole gate re-renders to
+							    the centered Loader above. Accepted as-is — no in-button spinner; the connecting state IS
+							    the feedback, and the gate swap is a clean replace, not a flicker. */}
+							<Button size="xs" variant="light" onClick={retryConnection}>
+								{t("pages.chat.retryConnection", "Retry")}
+							</Button>
+						</InlineErrorAlert>
 					)}
 				</Center>
 			</ChatFrame>
@@ -1511,9 +1212,7 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 				</Alert>
 			) : null}
 			{createConversationMutation.isError ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} mb="md">
-					{errorMessage(createConversationMutation.error)}
-				</Alert>
+				<InlineErrorAlert variant="light" mb="md" message={errorMessage(createConversationMutation.error)} />
 			) : null}
 			<ChatDisplayShell
 				conversations={displayConversations}

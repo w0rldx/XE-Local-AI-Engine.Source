@@ -146,7 +146,6 @@ export function McpWorkspaceAllowlistPanel() {
 						color="red"
 						icon={<IconAlertTriangle size={16} />}
 						title={t("pages.nodeSettings.mcpWorkspaces.loadError", "Could not load workspace access.")}
-						role="alert"
 					>
 						<Button
 							variant="subtle"

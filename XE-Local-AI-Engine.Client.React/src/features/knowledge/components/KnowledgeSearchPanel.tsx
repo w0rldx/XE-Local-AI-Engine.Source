@@ -1,8 +1,9 @@
-import { ActionIcon, Alert, Badge, Card, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconSearch } from "@tabler/icons-react";
+import { ActionIcon, Badge, Card, Group, Loader, Stack, Text, TextInput } from "@mantine/core";
+import { IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { KnowledgeLastKnownGoodBadge } from "@/features/knowledge/components/KnowledgeLastKnownGoodBadge";
 import type { KnowledgeDocument } from "@/features/knowledge/models/KnowledgeModels";
 import { knowledgeErrorMessage } from "@/features/knowledge/queries/KnowledgeErrorMessage";
@@ -66,9 +67,12 @@ export function KnowledgeSearchPanel({ search, documents }: KnowledgeSearchPanel
 			</form>
 
 			{search.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{knowledgeErrorMessage(search.error, t("pages.knowledgeBase.search.error", "The search could not be completed."))}
-				</Alert>
+				<InlineErrorAlert
+					message={knowledgeErrorMessage(
+						search.error,
+						t("pages.knowledgeBase.search.error", "The search could not be completed."),
+					)}
+				/>
 			) : null}
 
 			{search.results.length > 0 ? (

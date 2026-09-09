@@ -12,6 +12,7 @@ import {
 	putModelLaunchArgumentsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 
 interface ModelLaunchArgumentsPanelProps {
@@ -34,8 +35,7 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 		setValue(serverValue);
 	}, [serverValue]);
 
-	const invalidate = () =>
-		queryClient.invalidateQueries({ queryKey: getModelLaunchArgumentsQueryKey({ path: { modelName } }) });
+	const invalidate = () => queryClient.invalidateQueries({ queryKey: getModelLaunchArgumentsQueryKey({ path: { modelName } }) });
 
 	const saveMutation = useMutation({
 		...withResponseValidation(putModelLaunchArgumentsMutation()),
@@ -71,11 +71,7 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 
 			{query.isLoading ? <Loader size="sm" /> : null}
 
-			{query.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{apiErrorMessage(query.error, "Failed to load launch arguments")}
-				</Alert>
-			) : null}
+			{query.error ? <InlineErrorAlert message={apiErrorMessage(query.error, "Failed to load launch arguments")} /> : null}
 
 			<Textarea
 				label={t("pages.models.launchArgs.label", "Extra llama.cpp arguments")}
@@ -83,7 +79,10 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 					<Text span={true} size="xs" c="dimmed">
 						{t("pages.models.launchArgs.description", "Space-separated flags, for example ")}
 						<Code>--top-k 40 --repeat-penalty 1.1</Code>
-						{t("pages.models.launchArgs.descriptionSuffix", ". The model path, host and port are managed by the app and cannot be set here.")}
+						{t(
+							"pages.models.launchArgs.descriptionSuffix",
+							". The model path, host and port are managed by the app and cannot be set here.",
+						)}
 					</Text>
 				}
 				placeholder="--top-k 40 --repeat-penalty 1.1"

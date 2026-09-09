@@ -1,16 +1,17 @@
-import { ActionIcon, Alert, Badge, Button, Group, Loader, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Badge, Button, Group, Loader, Paper, Stack, Text } from "@mantine/core";
+import { IconPencil, IconPlus, IconTrash } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
 import {
 	type DevWorkflowProjectOption,
-	type DevWorkflowRuleSetValues,
 	DevWorkflowRuleSetDialog,
+	type DevWorkflowRuleSetValues,
 } from "@/features/devWorkflows/components/DevWorkflowRuleSetDialog";
 import type { DevWorkflowRuleSetSummaryResponse } from "@/features/devWorkflows/models/DevWorkflowModels";
 import {
@@ -138,36 +139,28 @@ export function DevWorkflowRuleSetsPanel({ projects }: DevWorkflowRuleSetsPanelP
 			</Group>
 
 			{deleteError ? (
-				<Alert
-					color="red"
-					variant="light"
-					icon={<IconAlertTriangle size={16} />}
-					data-testid="dev-workflow-rule-sets-delete-error"
-				>
-					{deleteError}
-				</Alert>
+				<InlineErrorAlert variant="light" message={deleteError} data-testid="dev-workflow-rule-sets-delete-error" />
 			) : null}
 
 			{listQuery.isPending ? (
 				<Loader size="sm" data-testid="dev-workflow-rule-sets-loading" />
 			) : listQuery.isError ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-rule-sets-error">
-					<Stack gap="sm" align="flex-start">
-						<Text size="sm">
-							{apiErrorMessage(listQuery.error, t("pages.devWorkflows.ruleSets.loadFailed", "Could not load the rule sets."))}
-						</Text>
-						<Button
-							size="xs"
-							variant="light"
-							onClick={() => {
-								listQuery.refetch().catch(() => undefined);
-							}}
-							data-testid="dev-workflow-rule-sets-retry"
-						>
-							{t("pages.devWorkflows.retry", "Retry")}
-						</Button>
-					</Stack>
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					message={apiErrorMessage(listQuery.error, t("pages.devWorkflows.ruleSets.loadFailed", "Could not load the rule sets."))}
+					data-testid="dev-workflow-rule-sets-error"
+				>
+					<Button
+						size="xs"
+						variant="light"
+						onClick={() => {
+							listQuery.refetch().catch(() => undefined);
+						}}
+						data-testid="dev-workflow-rule-sets-retry"
+					>
+						{t("pages.devWorkflows.retry", "Retry")}
+					</Button>
+				</InlineErrorAlert>
 			) : ruleSets.length === 0 ? (
 				<EmptyState
 					message={t(

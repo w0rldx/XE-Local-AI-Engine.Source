@@ -1,15 +1,16 @@
-import { Alert, Badge, Button, Group, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconPlugConnected, IconPlus } from "@tabler/icons-react";
+import { Badge, Button, Group, Stack, Text } from "@mantine/core";
+import { IconCheck, IconPlugConnected, IconPlus } from "@tabler/icons-react";
 import { useMutation } from "@tanstack/react-query";
 import type { Dispatch } from "react";
 import { useTranslation } from "react-i18next";
 
 import { probeExternalProviderMutation } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
-	errorMessage,
 	type ExternalProviderFormAction,
 	type ExternalProviderProbeState,
+	errorMessage,
 	nextExternalRowId,
 	probeInputFingerprint,
 } from "@/features/external-providers/models/ExternalProviderFormState";
@@ -84,9 +85,7 @@ export function ExternalProviderProbePanel({
 			</Group>
 
 			{failure !== null ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="external-provider-probe-failure">
-					<Text size="sm">{failure}</Text>
-				</Alert>
+				<InlineErrorAlert message={<Text size="sm">{failure}</Text>} data-testid="external-provider-probe-failure" />
 			) : null}
 
 			{result !== null ? (

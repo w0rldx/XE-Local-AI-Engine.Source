@@ -1,10 +1,11 @@
-import { Alert, Anchor, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
+import { Anchor, Badge, Button, Card, Group, Loader, Stack, Table, Text, TextInput, Title, Tooltip } from "@mantine/core";
 import { IconAlertTriangle, IconCloudDownload, IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { GgufRepository } from "@/features/models/models/GgufModels";
 
 interface GgufBrowsePanelProps {
@@ -68,9 +69,10 @@ export function GgufBrowsePanel({
 				</form>
 
 				{error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="model-fit-browse-error">
-						{apiErrorMessage(error, t("pages.models.gguf.browse.error", "Could not search repositories."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(error, t("pages.models.gguf.browse.error", "Could not search repositories."))}
+						data-testid="model-fit-browse-error"
+					/>
 				) : null}
 
 				{isLoading ? (

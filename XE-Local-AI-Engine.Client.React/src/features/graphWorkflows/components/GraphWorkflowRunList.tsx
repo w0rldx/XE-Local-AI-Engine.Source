@@ -1,10 +1,10 @@
-import { Alert, Badge, Card, Group, Skeleton, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Card, Group, Skeleton, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { GraphWorkflowRunStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
 	type GraphWorkflowRunSummaryResponse,
@@ -34,9 +34,11 @@ export function GraphWorkflowRunList({ runs, isLoading, error, selectedRunId, on
 
 	if (error !== undefined && error !== null) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="graph-workflow-run-list-error">
-				{apiErrorMessage(error, t("pages.graphWorkflows.runs.loadFailed", "Could not load the runs of this workflow."))}
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={apiErrorMessage(error, t("pages.graphWorkflows.runs.loadFailed", "Could not load the runs of this workflow."))}
+				data-testid="graph-workflow-run-list-error"
+			/>
 		);
 	}
 

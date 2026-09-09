@@ -9,30 +9,21 @@ import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
-import { toast } from "@/core/ui/notifications/Toast";
 import { ScheduledJobForm, type ScheduledJobFormHandle } from "@/features/scheduler/components/ScheduledJobForm";
 import { SchedulerJobsSection } from "@/features/scheduler/components/SchedulerJobsSection";
 import { SchedulerRunDetailDialog } from "@/features/scheduler/components/SchedulerRunDetailDialog";
 import { SchedulerRunsSection } from "@/features/scheduler/components/SchedulerRunsSection";
 import { useSchedulerHub } from "@/features/scheduler/hooks/useSchedulerHub";
+import { useSchedulerJobMutations } from "@/features/scheduler/hooks/useSchedulerJobMutations";
 import { toSaveScheduledJobRequest } from "@/features/scheduler/models/SchedulerMappers";
-import type {
-	ScheduledJob,
-	ScheduledJobFormValues,
-	ScheduledJobRun,
-	ScheduledJobRunFilters,
-} from "@/features/scheduler/models/SchedulerModels";
+import type { ScheduledJobFormValues, ScheduledJobRunFilters } from "@/features/scheduler/models/SchedulerModels";
 import { emptySchedulerFormValues, toSchedulerFormValues } from "@/features/scheduler/pages/SchedulerPageFormMappers";
 import {
-	useCancelScheduledJobRun,
 	useCreateScheduledJob,
-	useDeleteScheduledJob,
 	useScheduledJobRun,
 	useScheduledJobRuns,
 	useScheduledJobs,
 	useScheduledJobTemplates,
-	useSetScheduledJobEnabled,
-	useTriggerScheduledJob,
 	useUpdateScheduledJob,
 } from "@/features/scheduler/queries/useScheduler";
 import { useSchedulerManagementStore } from "@/features/scheduler/stores/SchedulerManagementStore";
@@ -79,10 +70,7 @@ export function SchedulerPage() {
 
 	const createMutation = useCreateScheduledJob();
 	const updateMutation = useUpdateScheduledJob();
-	const deleteMutation = useDeleteScheduledJob();
-	const enableMutation = useSetScheduledJobEnabled();
-	const triggerMutation = useTriggerScheduledJob();
-	const cancelMutation = useCancelScheduledJobRun();
+	const jobActions = useSchedulerJobMutations();
 
 	const jobs = useMemo(() => jobsQuery.data ?? [], [jobsQuery.data]);
 	const templates = templatesQuery.data ?? [];
@@ -95,12 +83,7 @@ export function SchedulerPage() {
 		return jobs.find((job) => job.id === editorTarget.id);
 	}, [jobs, editorTarget]);
 
-	const isMutating =
-		createMutation.isPending ||
-		updateMutation.isPending ||
-		deleteMutation.isPending ||
-		enableMutation.isPending ||
-		triggerMutation.isPending;
+	const isMutating = createMutation.isPending || updateMutation.isPending || jobActions.isMutating;
 
 	const submitError =
 		createMutation.error || updateMutation.error
@@ -130,57 +113,6 @@ export function SchedulerPage() {
 			createMutation.mutate({ body }, { onSuccess: () => closeEditorClean() });
 		},
 		[closeEditorClean, createMutation, editorTarget, updateMutation],
-	);
-
-	const handleDelete = useCallback(
-		async (job: ScheduledJob) => {
-			const confirmed = await confirm({
-				title: t("pages.scheduler.delete.title", "Delete scheduled job"),
-				description: t("pages.scheduler.delete.description", "Delete '{{name}}'? This cannot be undone.", {
-					name: job.displayName,
-				}),
-				confirmationText: t("common.delete", "Delete"),
-				cancellationText: t("common.cancel", "Cancel"),
-			});
-
-			if (confirmed) {
-				deleteMutation.mutate(
-					{ path: { scheduledJobId: job.id } },
-					{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.delete", "Could not delete the scheduled job."))) },
-				);
-			}
-		},
-		[confirm, deleteMutation, t],
-	);
-
-	const handleTrigger = useCallback(
-		(job: ScheduledJob) => {
-			triggerMutation.mutate(
-				{ path: { scheduledJobId: job.id } },
-				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.trigger", "Could not trigger the job."))) },
-			);
-		},
-		[triggerMutation, t],
-	);
-
-	const handleToggleEnabled = useCallback(
-		(job: ScheduledJob, enabled: boolean) => {
-			enableMutation.mutate(
-				{ id: job.id, enabled },
-				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.enable", "Could not change the job state."))) },
-			);
-		},
-		[enableMutation, t],
-	);
-
-	const handleCancelRun = useCallback(
-		(run: ScheduledJobRun) => {
-			cancelMutation.mutate(
-				{ path: { runId: run.id } },
-				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.scheduler.errors.cancel", "Could not cancel the run."))) },
-			);
-		},
-		[cancelMutation, t],
 	);
 
 	const isEditorOpen = editorTarget !== null;
@@ -291,9 +223,9 @@ export function SchedulerPage() {
 				}
 				isMutating={isMutating}
 				onEdit={openEdit}
-				onDelete={handleDelete}
-				onTrigger={handleTrigger}
-				onToggleEnabled={handleToggleEnabled}
+				onDelete={jobActions.remove}
+				onTrigger={jobActions.trigger}
+				onToggleEnabled={jobActions.setEnabled}
 			/>
 
 			<SchedulerRunsSection
@@ -301,7 +233,7 @@ export function SchedulerPage() {
 				jobs={jobs}
 				filters={runFilters}
 				isLoading={runsQuery.isLoading}
-				isCancelling={cancelMutation.isPending}
+				isCancelling={jobActions.isCancelling}
 				error={
 					runsQuery.error
 						? apiErrorMessage(runsQuery.error, t("pages.scheduler.errors.loadRuns", "Could not load run history."))
@@ -310,7 +242,7 @@ export function SchedulerPage() {
 				selectedRunId={selectedRunId}
 				onFiltersChange={setRunFilters}
 				onSelectRun={selectRun}
-				onCancelRun={handleCancelRun}
+				onCancelRun={jobActions.cancelRun}
 			/>
 
 			{/* Run-detail dialog: read-only, separate from the editor dialog. */}

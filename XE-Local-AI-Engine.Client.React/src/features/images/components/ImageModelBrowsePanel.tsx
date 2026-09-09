@@ -1,16 +1,31 @@
-import { Alert, Anchor, Badge, Button, Checkbox, Group, Loader, Select, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import {
+	Alert,
+	Anchor,
+	Badge,
+	Button,
+	Checkbox,
+	Group,
+	Loader,
+	Select,
+	Stack,
+	Table,
+	Text,
+	TextInput,
+	Tooltip,
+} from "@mantine/core";
 import { IconAlertTriangle, IconArrowLeft, IconCloudDownload, IconExternalLink, IconSearch } from "@tabler/icons-react";
 import { type FormEvent, useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	type ImageModelFamily,
-	imageModelFamilies,
 	type ImageModelPartRole,
-	imageModelPartRoles,
 	type ImageRepositoryFileView,
+	imageModelFamilies,
+	imageModelPartRoles,
 	suggestFamilyForRepo,
 } from "@/features/images/models/ImageModels";
 import { useBrowseImageRepositories, useInspectImageRepository } from "@/features/images/queries/useImageQueries";
@@ -163,9 +178,10 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 			</form>
 
 			{browseQuery.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="image-model-browse-error">
-					{apiErrorMessage(browseQuery.error, t("pages.images.models.browse.error", "Could not search repositories."))}
-				</Alert>
+				<InlineErrorAlert
+					message={apiErrorMessage(browseQuery.error, t("pages.images.models.browse.error", "Could not search repositories."))}
+					data-testid="image-model-browse-error"
+				/>
 			) : null}
 
 			{openRepoId === null ? (
@@ -198,9 +214,13 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 							<Text c="dimmed">{t("pages.images.models.browse.files.loading", "Loading files…")}</Text>
 						</Group>
 					) : inspectQuery.error ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="image-model-browse-files-error">
-							{apiErrorMessage(inspectQuery.error, t("pages.images.models.browse.files.error", "Could not read this repository's files."))}
-						</Alert>
+						<InlineErrorAlert
+							message={apiErrorMessage(
+								inspectQuery.error,
+								t("pages.images.models.browse.files.error", "Could not read this repository's files."),
+							)}
+							data-testid="image-model-browse-files-error"
+						/>
 					) : files.length === 0 ? (
 						<Text c="dimmed" data-testid="image-model-browse-files-empty">
 							{t("pages.images.models.browse.files.empty", "This repository exposes no installable weight files.")}
@@ -273,7 +293,11 @@ export function ImageModelBrowsePanel({ installedModelNames, isInstalling, onIns
 									label={t("pages.images.models.browse.modelName.label", "Install as")}
 									placeholder={t("pages.images.models.browse.modelName.placeholder", "flux.1-schnell")}
 									value={modelName}
-									error={isNameTaken ? t("pages.images.models.browse.nameTaken", "A model with that name is already installed.") : undefined}
+									error={
+										isNameTaken
+											? t("pages.images.models.browse.nameTaken", "A model with that name is already installed.")
+											: undefined
+									}
 									onChange={(event) => setModelName(event.currentTarget.value)}
 									data-testid="image-model-browse-name"
 								/>
@@ -402,7 +426,12 @@ function RepositoryResults({ isSearching, hasSearched, repositories, onOpen }: R
 											multiline={true}
 											maw={280}
 										>
-											<Badge color="yellow" variant="light" size="sm" data-testid={`image-model-browse-gated-${repository.repoId}`}>
+											<Badge
+												color="yellow"
+												variant="light"
+												size="sm"
+												data-testid={`image-model-browse-gated-${repository.repoId}`}
+											>
 												{t("pages.images.models.browse.gated", "Gated")}
 											</Badge>
 										</Tooltip>

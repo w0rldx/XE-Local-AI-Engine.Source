@@ -95,7 +95,13 @@ function AppliedTaskCard({ task }: { readonly task: DevWorkflowAppliedTask }) {
 			</Group>
 			{task.detail ? (
 				// Sanitized server-side and rendered verbatim: on a refusal it is the only account of why.
-				<Text size="xs" c="dimmed" mt={4} style={{ whiteSpace: "pre-wrap" }} data-testid={`dev-workflow-apply-detail-${task.taskId}`}>
+				<Text
+					size="xs"
+					c="dimmed"
+					mt={4}
+					style={{ whiteSpace: "pre-wrap" }}
+					data-testid={`dev-workflow-apply-detail-${task.taskId}`}
+				>
 					{task.detail}
 				</Text>
 			) : null}

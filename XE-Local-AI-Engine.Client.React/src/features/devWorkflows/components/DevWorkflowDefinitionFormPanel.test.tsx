@@ -6,7 +6,7 @@
 // leaves the browser.
 
 import { cleanup, fireEvent, screen, waitFor, within } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
@@ -178,9 +178,7 @@ describe("DevWorkflowDefinitionFormPanel", () => {
 	it("reports a failed read instead of an empty editor", async () => {
 		server.use(
 			...optionRoutes(),
-			http.get(localApiPath(`development-workflows/definitions/${definitionId}`), () =>
-				HttpResponse.json({}, { status: 500 }),
-			),
+			http.get(localApiPath(`development-workflows/definitions/${definitionId}`), () => HttpResponse.json({}, { status: 500 })),
 		);
 		renderPanel();
 

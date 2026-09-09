@@ -1,9 +1,9 @@
-import { Alert, Badge, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Group, Loader, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { formatDurationSeconds, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { scheduledRunStatusColor } from "@/features/scheduler/components/SchedulerRunFormatters";
 import type { ScheduledJobRun } from "@/features/scheduler/models/SchedulerModels";
 
@@ -29,11 +29,7 @@ export function ScheduledJobRunDetail({ run, isLoading, error }: ScheduledJobRun
 	}
 
 	if (error) {
-		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-run-detail-error">
-				{error}
-			</Alert>
-		);
+		return <InlineErrorAlert message={error} data-testid="scheduler-run-detail-error" />;
 	}
 
 	if (!run) {
@@ -81,11 +77,7 @@ export function ScheduledJobRunDetail({ run, isLoading, error }: ScheduledJobRun
 					<Text size="sm">{run.summary}</Text>
 				</Stack>
 			) : null}
-			{run.errorMessage ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="scheduler-run-detail-error-message">
-					{run.errorMessage}
-				</Alert>
-			) : null}
+			{run.errorMessage ? <InlineErrorAlert message={run.errorMessage} data-testid="scheduler-run-detail-error-message" /> : null}
 		</Stack>
 	);
 }

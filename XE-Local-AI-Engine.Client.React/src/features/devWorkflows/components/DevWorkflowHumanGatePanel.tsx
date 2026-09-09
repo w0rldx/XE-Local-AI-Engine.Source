@@ -6,8 +6,8 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
-import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { MarkdownView } from "@/core/ui/components/MarkdownView/MarkdownView";
+import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { devWorkflowConflictTypes, readDevWorkflowConflict } from "@/features/devWorkflows/api/DevWorkflowConflict";
 import {
@@ -56,11 +56,7 @@ const COMMENT_MAX = 8000;
  * next attempt's objective; a DevTask node hands it to the next coder round, and only while the task is being reworked;
  * a Tool node never reads it. A blanket promise on a Tool retry is a lie the operator finds out about afterwards.
  */
-function commentHint(
-	allowedDecisions: readonly DevWorkflowDecisionKind[],
-	nodeType: DevWorkflowNodeType,
-	t: TFunction,
-): string {
+function commentHint(allowedDecisions: readonly DevWorkflowDecisionKind[], nodeType: DevWorkflowNodeType, t: TFunction): string {
 	if (allowedDecisions.includes("Retry")) {
 		if (nodeType === "Agent") {
 			return t(

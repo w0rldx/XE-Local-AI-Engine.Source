@@ -10,10 +10,10 @@ import { describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowEdgeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowEdgeConfigPanel";
 import {
+	defaultNodeData,
 	type GraphWorkflowCanvasEdge,
 	type GraphWorkflowCanvasEdgeCondition,
 	type GraphWorkflowCanvasNodeData,
-	defaultNodeData,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 

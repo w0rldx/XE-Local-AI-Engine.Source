@@ -1,38 +1,22 @@
-import {
-	Alert,
-	Button,
-	Group,
-	Loader,
-	Paper,
-	SegmentedControl,
-	Stack,
-	Text,
-} from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconPlus,
-	IconSparkles,
-} from "@tabler/icons-react";
-import { useMemo, useState } from "react";
+import { Alert, Button, Group, Loader, Paper, SegmentedControl, Stack, Text } from "@mantine/core";
+import { IconPlus, IconSparkles } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import {
-	MEMORY_SCOPES,
-	memoryScopeFallbacks,
-} from "@/features/agents/components/PlaybookActionDisplay";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { MEMORY_SCOPES, memoryScopeFallbacks } from "@/features/agents/components/PlaybookActionDisplay";
 import { PlaybookActionForm } from "@/features/agents/components/PlaybookActionForm";
 import { PlaybookActionRow } from "@/features/agents/components/PlaybookActionRow";
 import { usePlaybookPanelHandlers } from "@/features/agents/components/PlaybookPanelHandlers";
 import { SuggestedActionRow } from "@/features/agents/components/PlaybookSuggestedActionRow";
+import { type PlaybookEditorTarget, usePlaybookPanelDerivedState } from "@/features/agents/hooks/usePlaybookPanelDerivedState";
 import {
-	comparePlaybookActions,
 	emptyPlaybookActionForm,
 	type MemoryScope,
 	toPlaybookActionFormValues,
 } from "@/features/agents/models/PlaybookActionModels";
-import type { PlaybookMonitorItem } from "@/features/agents/models/PlaybookMonitorModels";
 import {
 	useAnalyzePlaybook,
 	useCreatePlaybookAction,
@@ -54,9 +38,6 @@ interface PlaybookPanelProps {
 	enabled: boolean;
 }
 
-// Editor target: "create" a new action or "edit" an existing one by id. null = editor closed.
-type EditorTarget = { mode: "create" } | { mode: "edit"; id: string } | null;
-
 // The scope-filter value: "all" lists every scope; otherwise a single MemoryScope filtered server-side via `?scope=`.
 type ScopeFilter = "all" | MemoryScope;
 
@@ -67,7 +48,7 @@ type ScopeFilter = "all" | MemoryScope;
 export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: PlaybookPanelProps) {
 	const { t } = useTranslation();
 
-	const [editorTarget, setEditorTarget] = useState<EditorTarget>(null);
+	const [editorTarget, setEditorTarget] = useState<PlaybookEditorTarget>(null);
 	// Adaptive-memory scope filter. "all" lists every scope; a single scope rides the server `?scope=` param so the
 	// list is filtered at the source (the Suggested/manual split below still applies to the filtered set).
 	const [scopeFilter, setScopeFilter] = useState<ScopeFilter>("all");
@@ -86,54 +67,16 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 	const rejectMutation = useRejectSuggestedAction(agentDefinitionId);
 	const runEvalMutation = useRunEval(agentDefinitionId);
 
-	// Manual governance: the existing Enabled/Disabled actions (and any unknown state that degraded to Disabled).
-	// Suggested actions are the analysis-proposed proposals awaiting human review and render in their own section.
-	const orderedActions = useMemo(
-		() => [...(actionsQuery.data ?? [])].filter((action) => action.state !== "Suggested").sort(comparePlaybookActions),
-		[actionsQuery.data],
-	);
-
-	const suggestedActions = useMemo(
-		() => [...(actionsQuery.data ?? [])].filter((action) => action.state === "Suggested").sort(comparePlaybookActions),
-		[actionsQuery.data],
-	);
-
-	const editingAction = useMemo(() => {
-		if (editorTarget?.mode !== "edit") { return undefined; }
-		// Edit can target a manual action or a Suggested proposal (operators may tweak a proposal before approving).
-		return (
-			orderedActions.find((action) => action.id === editorTarget.id) ??
-			suggestedActions.find((action) => action.id === editorTarget.id)
-		);
-	}, [editorTarget, orderedActions, suggestedActions]);
-
-	// Next priority for a brand-new action: one past the current max so it sorts at the end of the list.
-	const nextPriority = useMemo(
-		() => orderedActions.reduce((max, action) => Math.max(max, action.priority), -1) + 1,
-		[orderedActions],
-	);
-
-	// The number of currently Enabled actions (the cohort under monitoring + the count the relevance
-	// gate / cap indicator reason about). Suggested/Disabled/Archived are excluded.
-	const enabledCount = useMemo(
-		() => orderedActions.filter((action) => action.state === "Enabled").length,
-		[orderedActions],
-	);
-
-	// Index the monitoring signals by actionId so each Enabled row can join its signal in O(1). An
-	// action with no monitor item (no enable clock yet, or the read failed) simply renders the neutral "no signal".
-	const monitorByActionId = useMemo(() => {
-		const map = new Map<string, PlaybookMonitorItem>();
-		for (const item of monitorQuery.data?.items ?? []) {
-			map.set(item.actionId, item);
-		}
-		return map;
-	}, [monitorQuery.data]);
-
-	// The relevance-retrieval config. When more actions are Enabled than the threshold, injection is
-	// gated to the top-K most relevant per turn; the banner below surfaces that with the live numbers.
-	const retrieval = monitorQuery.data?.retrieval ?? null;
-	const showRelevanceBanner = retrieval !== null && enabledCount > retrieval.threshold;
+	const {
+		orderedActions,
+		suggestedActions,
+		editingAction,
+		nextPriority,
+		enabledCount,
+		monitorByActionId,
+		retrieval,
+		showRelevanceBanner,
+	} = usePlaybookPanelDerivedState(actionsQuery.data, monitorQuery.data, editorTarget);
 
 	const isMutating =
 		createMutation.isPending ||
@@ -147,32 +90,26 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 	const closeEditor = () => setEditorTarget(null);
 
-	const {
-		handleSubmit,
-		handleToggleState,
-		handleMove,
-		handleDelete,
-		handleAnalyze,
-		handlePromote,
-		handleRunEval,
-		handleReject,
-	} = usePlaybookPanelHandlers({
-		agentDefinitionId,
-		orderedActions,
-		editingAction,
-		editorTarget,
-		closeEditor,
-		createMutation,
-		updateMutation,
-		updateSuggestedMutation,
-		deleteMutation,
-		analyzeMutation,
-		promoteMutation,
-		rejectMutation,
-		runEvalMutation,
-	});
+	const { handleSubmit, handleToggleState, handleMove, handleDelete, handleAnalyze, handlePromote, handleRunEval, handleReject } =
+		usePlaybookPanelHandlers({
+			agentDefinitionId,
+			orderedActions,
+			editingAction,
+			editorTarget,
+			closeEditor,
+			createMutation,
+			updateMutation,
+			updateSuggestedMutation,
+			deleteMutation,
+			analyzeMutation,
+			promoteMutation,
+			rejectMutation,
+			runEvalMutation,
+		});
 
-	if (!enabled) { return null; }
+	if (!enabled) {
+		return null;
+	}
 
 	const isEditorOpen = editorTarget !== null;
 	const formInitialValues = editingAction ? toPlaybookActionFormValues(editingAction) : emptyPlaybookActionForm(nextPriority);
@@ -184,8 +121,7 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 
 	// "No new suggestions" notice: shown only after a completed analyze run that returned zero proposals and when
 	// there are no Suggested actions outstanding to review.
-	const showNoSuggestionsNotice =
-		analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
+	const showNoSuggestionsNotice = analyzeMutation.isSuccess && analyzeMutation.data.length === 0 && suggestedActions.length === 0;
 
 	return (
 		<Paper withBorder={true} radius="md" p="md" data-testid={`playbook-panel-${agentDefinitionId}`}>
@@ -322,9 +258,10 @@ export function PlaybookPanel({ agentDefinitionId, agentName, enabled }: Playboo
 				) : null}
 
 				{actionsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="playbook-list-error">
-						{apiErrorMessage(actionsQuery.error, t("pages.agents.playbook.errors.load", "Could not load the playbook."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(actionsQuery.error, t("pages.agents.playbook.errors.load", "Could not load the playbook."))}
+						data-testid="playbook-list-error"
+					/>
 				) : null}
 
 				{!actionsQuery.isLoading && !actionsQuery.error && orderedActions.length === 0 && !isEditorOpen ? (

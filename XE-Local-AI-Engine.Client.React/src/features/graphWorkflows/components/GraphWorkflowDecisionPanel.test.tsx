@@ -7,14 +7,11 @@
 // human act.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
-import { useState } from "react";
-import { act } from "react";
-import { afterEach, describe, expect, it } from "vitest";
-
+import { HttpResponse, http } from "msw";
+import { act, useState } from "react";
 // Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have. The payload editor's CONTENT is
 // what this file is about, not the editing surface, so the shared code editor stands in as a textarea.
-import { vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 	CodeEditor: ({
@@ -138,7 +135,9 @@ describe("GraphWorkflowDecisionPanel", () => {
 		await waitFor(() => expect(bodies).toHaveLength(1));
 		// The submit failed, so the panel re-arms and the operator clicks again. A NEW id here would make the retry a
 		// SECOND human act, which the server refuses with the standing decision instead of replaying.
-		await waitFor(() => expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() =>
+			expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(false),
+		);
 		fireEvent.click(screen.getByTestId("graph-workflow-decision-Approve"));
 		await waitFor(() => expect(bodies).toHaveLength(2));
 
@@ -155,7 +154,9 @@ describe("GraphWorkflowDecisionPanel", () => {
 		await waitFor(() => expect(bodies).toHaveLength(1));
 
 		update(pendingPauseNodeRun({ attempt: 2 }));
-		await waitFor(() => expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() =>
+			expect((screen.getByTestId("graph-workflow-decision-Approve") as HTMLButtonElement).disabled).toBe(false),
+		);
 		fireEvent.click(screen.getByTestId("graph-workflow-decision-Approve"));
 		await waitFor(() => expect(bodies).toHaveLength(2));
 

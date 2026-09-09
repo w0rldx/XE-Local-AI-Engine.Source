@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkComparison } from "@/features/benchmarks/models/BenchmarkModels";
 import { formatPairwiseScore, groupComparisonsByPair } from "@/features/benchmarks/models/BenchmarkPairwise";
@@ -81,9 +82,10 @@ export function BenchmarkPairwiseMatrix({ projectId }: { projectId: string }) {
 	}
 	if (query.error) {
 		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-pairwise-error">
-				{apiErrorMessage(query.error, t("pages.benchmarks.pairwise.loadError", "Could not load the pairwise verdicts."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(query.error, t("pages.benchmarks.pairwise.loadError", "Could not load the pairwise verdicts."))}
+				data-testid="benchmark-pairwise-error"
+			/>
 		);
 	}
 	if (!data || data.items.length === 0) {

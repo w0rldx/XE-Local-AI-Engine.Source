@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ToolCategoryBadge } from "@/features/tools/components/ToolCategoryBadge";
 import { ToolSourceBadge } from "@/features/tools/components/ToolSourceBadge";
 import { type ToolCatalogEntry, toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
@@ -88,9 +89,10 @@ export function AgentToolSelector({
 			) : null}
 
 			{catalogQuery.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-tool-catalog-error">
-					{t("pages.agents.form.tools.loadError", "Could not load the tool catalog.")}
-				</Alert>
+				<InlineErrorAlert
+					message={t("pages.agents.form.tools.loadError", "Could not load the tool catalog.")}
+					data-testid="agent-tool-catalog-error"
+				/>
 			) : null}
 
 			{!catalogQuery.isLoading && !catalogQuery.error && rows.length === 0 ? (

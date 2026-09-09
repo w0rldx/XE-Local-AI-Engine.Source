@@ -10,11 +10,9 @@ import { IconAlertTriangle, IconExternalLink, IconLogin, IconRefresh } from "@ta
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
-import {
-	useEntraAuthCodeSignIn,
-	useEntraAuthCodeStatus,
-} from "@/features/cloud-settings/entra/queries/useEntraAuthCodeAuth";
+import { useEntraAuthCodeSignIn, useEntraAuthCodeStatus } from "@/features/cloud-settings/entra/queries/useEntraAuthCodeAuth";
 
 interface PendingAttempt {
 	authorizeUrl: string;
@@ -136,9 +134,11 @@ export function EntraAuthCodeSignInCard() {
 				) : null}
 
 				{statusQuery.isError && signInFlowActive ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						<Text size="sm">{t("pages.cloudSettings.entra.authCode.statusError", "Failed to check sign-in status.")}</Text>
-					</Alert>
+					<InlineErrorAlert
+						message={
+							<Text size="sm">{t("pages.cloudSettings.entra.authCode.statusError", "Failed to check sign-in status.")}</Text>
+						}
+					/>
 				) : null}
 
 				{!isPending && !timedOut && !signInMutation.isError ? (

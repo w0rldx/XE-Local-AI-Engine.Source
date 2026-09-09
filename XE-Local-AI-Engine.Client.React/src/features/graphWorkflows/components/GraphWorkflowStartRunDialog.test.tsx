@@ -7,7 +7,7 @@
 // to run.
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have; the input's CONTENT is what this
@@ -90,9 +90,7 @@ describe("GraphWorkflowStartRunDialog", () => {
 		const bodies = recordStarts([accepted]);
 		renderDialog();
 
-		expect(screen.getByTestId("graph-workflow-start-run-version").textContent).toBe(
-			"Runs version 4 of Analyze → review → read",
-		);
+		expect(screen.getByTestId("graph-workflow-start-run-version").textContent).toBe("Runs version 4 of Analyze → review → read");
 		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
 
 		await waitFor(() => expect(bodies).toHaveLength(1));
@@ -117,7 +115,9 @@ describe("GraphWorkflowStartRunDialog", () => {
 		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
 		await waitFor(() => expect(bodies).toHaveLength(1));
 		// The dispatcher never answered; a NEW id on the retry would start a SECOND run of the same graph.
-		await waitFor(() => expect((screen.getByTestId("graph-workflow-start-run-submit") as HTMLButtonElement).disabled).toBe(false));
+		await waitFor(() =>
+			expect((screen.getByTestId("graph-workflow-start-run-submit") as HTMLButtonElement).disabled).toBe(false),
+		);
 		fireEvent.click(screen.getByTestId("graph-workflow-start-run-submit"));
 		await waitFor(() => expect(bodies).toHaveLength(2));
 

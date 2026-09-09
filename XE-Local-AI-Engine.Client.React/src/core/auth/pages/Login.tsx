@@ -1,5 +1,5 @@
-import { Alert, Box, Button, Card, Container, PasswordInput, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconLock } from "@tabler/icons-react";
+import { Box, Button, Card, Container, PasswordInput, Stack, Text, Title } from "@mantine/core";
+import { IconLock } from "@tabler/icons-react";
 import { useNavigate, useSearch } from "@tanstack/react-router";
 import { isAxiosError } from "axios";
 import type { FormEvent } from "react";
@@ -11,6 +11,7 @@ import { loginNodeAuth } from "@/core/auth/api/NodeAuthApi";
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { getSafeRedirectPath } from "@/core/auth/utils/RedirectPath";
 import { LanguageMenu } from "@/core/locales/components/LanguageMenu/LanguageMenu";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 
 // The node answers a locked account with a 401 carrying this body; a wrong password answers a body-less 401. Partial
 // of the generated contract type rather than a hand-written copy of it: a rename on the backend fails the typecheck
@@ -80,11 +81,7 @@ export function Login() {
 							<Text c="dimmed">{t("auth.login.subtitle")}</Text>
 						</Stack>
 
-						{error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{error}
-							</Alert>
-						) : null}
+						{error ? <InlineErrorAlert message={error} /> : null}
 
 						<form onSubmit={handleSubmit}>
 							<Stack gap="md">

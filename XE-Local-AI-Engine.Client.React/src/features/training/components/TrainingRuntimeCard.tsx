@@ -1,8 +1,9 @@
-import { Alert, Badge, Button, Code, Group, List, Loader, ScrollArea, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconX } from "@tabler/icons-react";
+import { Badge, Button, Code, Group, List, Loader, ScrollArea, Stack, Text } from "@mantine/core";
+import { IconCheck, IconX } from "@tabler/icons-react";
 import { useEffect, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useTrainingRuntimeHub } from "@/features/training/hooks/useTrainingRuntimeHub";
 import { isRuntimeInstalling, mergeTrainingLogs, trainingLogEntries } from "@/features/training/models/TrainingModels";
@@ -90,11 +91,7 @@ export function TrainingRuntimeCard() {
 					</Stack>
 				)}
 
-				{error == null ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} title={t("pages.training.runtime.failed", "Install failed")}>
-						{error}
-					</Alert>
-				)}
+				{error == null ? null : <InlineErrorAlert message={error} title={t("pages.training.runtime.failed", "Install failed")} />}
 
 				{prerequisites == null ? null : (
 					<Stack gap={4}>
@@ -105,7 +102,13 @@ export function TrainingRuntimeCard() {
 							{prerequisites.items.map((item) => (
 								<List.Item
 									key={item.key}
-									icon={item.satisfied ? <IconCheck color="var(--mantine-color-green-6)" size={16} /> : <IconX color="var(--mantine-color-red-6)" size={16} />}
+									icon={
+										item.satisfied ? (
+											<IconCheck color="var(--mantine-color-green-6)" size={16} />
+										) : (
+											<IconX color="var(--mantine-color-red-6)" size={16} />
+										)
+									}
 								>
 									{item.detail}
 								</List.Item>
@@ -137,7 +140,9 @@ export function TrainingRuntimeCard() {
 						onClick={() => removeMutation.mutate({})}
 						variant="light"
 					>
-						{installing ? t("pages.training.runtime.cancel", "Cancel install") : t("pages.training.runtime.remove", "Remove runtime")}
+						{installing
+							? t("pages.training.runtime.cancel", "Cancel install")
+							: t("pages.training.runtime.remove", "Remove runtime")}
 					</Button>
 				</Group>
 			</Stack>

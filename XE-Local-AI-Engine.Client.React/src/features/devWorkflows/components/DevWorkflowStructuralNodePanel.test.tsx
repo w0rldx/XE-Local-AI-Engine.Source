@@ -10,7 +10,11 @@ import { afterEach, describe, expect, it } from "vitest";
 
 import { DevWorkflowStructuralNodePanel } from "@/features/devWorkflows/components/DevWorkflowStructuralNodePanel";
 import type { DevWorkflowGraph } from "@/features/devWorkflows/models/DevWorkflowModels";
-import { devWorkflowNodeRunDetail, devWorkflowNodeRunSummary, devWorkflowRun } from "@/features/devWorkflows/test/DevWorkflowFixtures";
+import {
+	devWorkflowNodeRunDetail,
+	devWorkflowNodeRunSummary,
+	devWorkflowRun,
+} from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 /** `feature-development-v1`'s shape: a template subtree hanging off `decompose` and handed back at `join`. */
@@ -43,7 +47,9 @@ describe("DevWorkflowStructuralNodePanel", () => {
 				nodeType="Join"
 				run={devWorkflowRun({
 					graph,
-					nodes: [devWorkflowNodeRunSummary({ id: "node-decompose", nodeKey: "decompose", label: "Decompose", status: "Succeeded" })],
+					nodes: [
+						devWorkflowNodeRunSummary({ id: "node-decompose", nodeKey: "decompose", label: "Decompose", status: "Succeeded" }),
+					],
 				})}
 			/>,
 		);
@@ -86,15 +92,25 @@ describe("DevWorkflowStructuralNodePanel", () => {
 						],
 					},
 					nodes: [
-						devWorkflowNodeRunSummary({ id: "node-excused", nodeKey: "excused", label: "Excused", status: "Skipped", skipWaived: true }),
+						devWorkflowNodeRunSummary({
+							id: "node-excused",
+							nodeKey: "excused",
+							label: "Excused",
+							status: "Skipped",
+							skipWaived: true,
+						}),
 						devWorkflowNodeRunSummary({ id: "node-broken", nodeKey: "broken", label: "Broken", status: "Failed" }),
 					],
 				})}
 			/>,
 		);
 
-		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain("the join carries on if a sibling succeeded");
-		expect(screen.getByTestId("dev-workflow-node-dependency-broken").textContent).toContain("the join skips once nothing is pending");
+		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain(
+			"the join carries on if a sibling succeeded",
+		);
+		expect(screen.getByTestId("dev-workflow-node-dependency-broken").textContent).toContain(
+			"the join skips once nothing is pending",
+		);
 	});
 
 	it("badges a skip that cascaded off a failure DEAD, though the failure is nowhere in this list", () => {
@@ -116,7 +132,13 @@ describe("DevWorkflowStructuralNodePanel", () => {
 						],
 					},
 					nodes: [
-						devWorkflowNodeRunSummary({ id: "node-cascaded", nodeKey: "cascaded", label: "Cascaded", status: "Skipped", skipWaived: false }),
+						devWorkflowNodeRunSummary({
+							id: "node-cascaded",
+							nodeKey: "cascaded",
+							label: "Cascaded",
+							status: "Skipped",
+							skipWaived: false,
+						}),
 						devWorkflowNodeRunSummary({ id: "node-landed", nodeKey: "landed", label: "Landed", status: "Succeeded" }),
 					],
 				})}
@@ -176,7 +198,9 @@ describe("DevWorkflowStructuralNodePanel", () => {
 			/>,
 		);
 
-		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain("this branch will not carry the join");
+		expect(screen.getByTestId("dev-workflow-node-dependency-excused").textContent).toContain(
+			"this branch will not carry the join",
+		);
 	});
 
 	it("lists a gate's branches and the condition each one carries, verbatim", () => {

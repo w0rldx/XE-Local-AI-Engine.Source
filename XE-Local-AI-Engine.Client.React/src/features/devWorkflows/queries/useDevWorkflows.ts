@@ -9,8 +9,9 @@
 
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { listDevWorkflowRunEvents, type ListDevWorkflowRunEventsResponse } from "@/core/api/generated";
+import { type ListDevWorkflowRunEventsResponse, listDevWorkflowRunEvents } from "@/core/api/generated";
 import {
+	archiveDevWorkflowDefinitionMutation,
 	cancelDevWorkflowRunMutation,
 	createDevWorkflowRuleSetMutation,
 	createDevWorkflowWorkItemMutation,
@@ -23,7 +24,6 @@ import {
 	getDevWorkflowRuleSetOptions,
 	getDevWorkflowRunOptions,
 	getDevWorkflowWorkItemOptions,
-	archiveDevWorkflowDefinitionMutation,
 	listAgentDefinitionsOptions,
 	listDevelopmentProjectsOptions,
 	listDevWorkflowArtifactsOptions,
@@ -269,9 +269,9 @@ export function useDevWorkflowRunEvents(
 		// Sequences are strictly increasing but NOT contiguous (the counter is shared with node-runs and artifacts), so
 		// this sorts on the number rather than assuming 1..N.
 		select: (data) =>
-			[
-				...new Map(data.pages.flatMap((page) => page.items ?? []).map((event) => [event.sequence ?? 0, event])).values(),
-			].toSorted((left, right) => (left.sequence ?? 0) - (right.sequence ?? 0)),
+			[...new Map(data.pages.flatMap((page) => page.items ?? []).map((event) => [event.sequence ?? 0, event])).values()].toSorted(
+				(left, right) => (left.sequence ?? 0) - (right.sequence ?? 0),
+			),
 		...feedQuerySettings(runId, options),
 	});
 }
@@ -436,7 +436,9 @@ export function useStartDevWorkflowRun() {
 		onSuccess: async (_data, variables) => {
 			const workItemId = variables.path?.workItemId;
 			if (workItemId) {
-				await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }) });
+				await queryClient.invalidateQueries({
+					queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItem, { workItemId }),
+				});
 			}
 			await queryClient.invalidateQueries({ queryKey: devWorkflowInvalidationKey(devWorkflowQueryIds.workItems) });
 		},

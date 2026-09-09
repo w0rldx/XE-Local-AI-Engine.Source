@@ -1,10 +1,11 @@
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconTools, IconX } from "@tabler/icons-react";
+import { Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconDeviceFloppy, IconPlus, IconTools, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -157,12 +158,14 @@ export function CustomToolsPage() {
 				}
 			/>
 
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={18} />} data-testid="custom-tools-danger-banner">
-				{t(
+			<InlineErrorAlert
+				message={t(
 					"pages.customTools.dangerBanner",
 					"Custom tools run commands, call networks, and launch programs on the host machine with your access. Only enable a tool whose exact behaviour you trust — every call still asks for your approval, but the code runs here.",
 				)}
-			</Alert>
+				variant="light"
+				data-testid="custom-tools-danger-banner"
+			/>
 
 			<SectionCard>
 				{toolsQuery.isLoading ? (
@@ -172,9 +175,10 @@ export function CustomToolsPage() {
 					</Group>
 				) : null}
 				{toolsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="custom-tools-list-error">
-						{apiErrorMessage(toolsQuery.error, t("pages.customTools.errors.load", "Could not load custom tools."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(toolsQuery.error, t("pages.customTools.errors.load", "Could not load custom tools."))}
+						data-testid="custom-tools-list-error"
+					/>
 				) : null}
 				{!toolsQuery.isLoading && !toolsQuery.error ? (
 					<CustomToolList tools={tools} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
@@ -223,9 +227,10 @@ export function CustomToolsPage() {
 							<Text c="dimmed">{t("pages.customTools.editor.loading", "Loading custom tool…")}</Text>
 						</Group>
 					) : editorBodyError ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="custom-tool-editor-error">
-							{apiErrorMessage(editorBodyError, t("pages.customTools.errors.load", "Could not load custom tools."))}
-						</Alert>
+						<InlineErrorAlert
+							message={apiErrorMessage(editorBodyError, t("pages.customTools.errors.load", "Could not load custom tools."))}
+							data-testid="custom-tool-editor-error"
+						/>
 					) : (
 						<CustomToolForm
 							key={isEditing && toolQuery.data ? `${toolQuery.data.id}-${toolQuery.data.version}` : "create"}

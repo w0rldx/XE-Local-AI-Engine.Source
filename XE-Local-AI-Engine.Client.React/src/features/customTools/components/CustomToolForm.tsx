@@ -1,10 +1,11 @@
 import { Alert, Checkbox, Divider, SegmentedControl, Stack, Switch, Text, Textarea, TextInput } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
 import { type Ref, useCallback, useEffect, useImperativeHandle, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { fieldError, issueKey } from "@/core/ui/forms/ZodFieldErrors";
 import { CommandEditor, HttpEditor, ParameterBuilder } from "@/features/customTools/components/CustomToolEditors";
-import { errorAt, type FieldErrors } from "@/features/customTools/models/CustomToolFormErrors";
+import type { FieldErrors } from "@/features/customTools/models/CustomToolFormErrors";
 import {
 	CUSTOM_TOOL_NAME_PREFIX,
 	type CustomToolFormValues,
@@ -67,7 +68,7 @@ export function CustomToolForm({
 		if (!result.success) {
 			const next: FieldErrors = {};
 			for (const issue of result.error.issues) {
-				const key = issue.path.join(".");
+				const key = issueKey(issue.path);
 				if (!next[key]) {
 					next[key] = issue.message;
 				}
@@ -82,7 +83,7 @@ export function CustomToolForm({
 	useImperativeHandle(ref, () => ({ submit: handleSubmit }), [handleSubmit]);
 
 	const nameError = useMemo(() => {
-		if (!errorAt(errors, "name")) {
+		if (!fieldError(errors, "name")) {
 			return undefined;
 		}
 		return values.name.trim().length === 0
@@ -92,12 +93,14 @@ export function CustomToolForm({
 
 	return (
 		<Stack gap="md" data-testid="custom-tool-form">
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="custom-tool-form-danger-note">
-				{t(
+			<InlineErrorAlert
+				message={t(
 					"pages.customTools.form.dangerNote",
 					"Custom tools run on this machine: an HTTP tool reaches the network and a Command tool launches a program with your access. Only create and enable tools whose exact behaviour you trust.",
 				)}
-			</Alert>
+				variant="light"
+				data-testid="custom-tool-form-danger-note"
+			/>
 
 			<TextInput
 				label={t("pages.customTools.form.name.label", "Name")}
@@ -131,7 +134,7 @@ export function CustomToolForm({
 				autosize={true}
 				minRows={2}
 				error={
-					errorAt(errors, "description")
+					fieldError(errors, "description")
 						? t("pages.customTools.form.description.required", "Description is required.")
 						: undefined
 				}
@@ -178,7 +181,7 @@ export function CustomToolForm({
 							)
 						: t("pages.customTools.form.mode.fixedHint", "The tool runs verbatim with no model-supplied input.")}
 				</Text>
-				{errorAt(errors, "mode") ? (
+				{fieldError(errors, "mode") ? (
 					<Text size="xs" c="red">
 						{t(
 							"pages.customTools.form.mode.fixedNoParameters",
@@ -211,7 +214,7 @@ export function CustomToolForm({
 					update((current) => ({ ...current, acknowledged: checked }));
 				}}
 				error={
-					errorAt(errors, "acknowledged")
+					fieldError(errors, "acknowledged")
 						? t("pages.customTools.form.acknowledge.required", "You must acknowledge this to save.")
 						: undefined
 				}

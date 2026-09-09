@@ -1,12 +1,13 @@
 import { Alert, Badge, Button, Group, List, Select, Stack, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconArrowLeft, IconFileImport } from "@tabler/icons-react";
+import { IconArrowLeft, IconFileImport } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import type { XeLocalAiEngineClientEndpointsModelFitV1PreviewGgufImportResponse } from "@/core/api/generated";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
-import { formatModelSize } from "@/features/models/models/LocalModelModel";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { importErrorCodeFrom, importErrorMessage } from "@/features/models/models/GgufImportErrors";
+import { formatModelSize } from "@/features/models/models/LocalModelModel";
 import { usePreviewGgufImport, useStartGgufImport } from "@/features/models/queries/useGgufAcquisitions";
 
 interface GgufImportDialogProps {
@@ -56,9 +57,7 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 				}
 				setPreview(response);
 				setModelBaseName(response.modelBaseName);
-				setQuantization(
-					response.detectedQuantization ?? response.canonicalQuantizationChoices[0] ?? null,
-				);
+				setQuantization(response.detectedQuantization ?? response.canonicalQuantizationChoices[0] ?? null);
 			},
 		});
 	};
@@ -118,17 +117,21 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 						{t("pages.models.gguf.import.resultingName", "Installed model: {{name}}", { name: resultingModelName })}
 					</Text>
 					{preview.hasSufficientStorage === false ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-							{t("pages.models.gguf.import.storageInsufficient", "There is not enough free storage for this import.")}
-						</Alert>
+						<InlineErrorAlert
+							message={t("pages.models.gguf.import.storageInsufficient", "There is not enough free storage for this import.")}
+						/>
 					) : null}
 					{preview.hasSufficientStorage == null ? (
-						<Alert color="yellow">{t("pages.models.gguf.import.storageUnknown", "Available storage could not be verified.")}</Alert>
+						<Alert color="yellow">
+							{t("pages.models.gguf.import.storageUnknown", "Available storage could not be verified.")}
+						</Alert>
 					) : null}
 					{preview.warnings.length > 0 ? (
 						<Alert color="yellow" title={t("pages.models.gguf.import.warnings", "Warnings")}>
 							<List size="sm">
-								{preview.warnings.map((warning) => <List.Item key={warning}>{warning}</List.Item>)}
+								{preview.warnings.map((warning) => (
+									<List.Item key={warning}>{warning}</List.Item>
+								))}
 							</List>
 						</Alert>
 					) : null}
@@ -149,7 +152,9 @@ export function GgufImportDialog({ opened, onClose, onStarted }: GgufImportDialo
 				</Stack>
 			) : (
 				<Stack gap="md">
-					<Text>{t("pages.models.gguf.import.pathHelp", "Enter the absolute path to a standalone GGUF file on this computer.")}</Text>
+					<Text>
+						{t("pages.models.gguf.import.pathHelp", "Enter the absolute path to a standalone GGUF file on this computer.")}
+					</Text>
 					<TextInput
 						label={t("pages.models.gguf.import.sourcePath", "GGUF file path")}
 						placeholder={t("pages.models.gguf.import.pathPlaceholder", "/path/to/model.gguf")}

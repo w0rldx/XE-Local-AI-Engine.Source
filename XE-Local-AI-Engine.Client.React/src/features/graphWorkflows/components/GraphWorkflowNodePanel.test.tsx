@@ -7,8 +7,8 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { HttpResponse, http } from "msw";
 import { act, useState } from "react";
-import { http, HttpResponse } from "msw";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 // Monaco is ~3 MB behind a lazy import and needs a layout engine jsdom does not have; the documents' CONTENT is what
@@ -184,8 +184,6 @@ describe("GraphWorkflowNodePanel", () => {
 
 		renderPanel("analyze", "Running");
 
-		expect((await screen.findByTestId("graph-workflow-node-panel-error")).textContent).toContain(
-			"That node run does not exist.",
-		);
+		expect((await screen.findByTestId("graph-workflow-node-panel-error")).textContent).toContain("That node run does not exist.");
 	});
 });

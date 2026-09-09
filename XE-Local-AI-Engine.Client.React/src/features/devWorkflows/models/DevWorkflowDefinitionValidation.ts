@@ -489,9 +489,7 @@ function capabilityInvariants(
 		const live = augmented.filter(
 			(edge) => !dead.some((deadEdge) => (deadEdge.from ?? "") === edge.from && (deadEdge.to ?? "") === edge.to),
 		);
-		const terminals = new Set(
-			nodes.map((node) => node.nodeKey ?? "").filter((key) => !edges.some((edge) => edge.from === key)),
-		);
+		const terminals = new Set(nodes.map((node) => node.nodeKey ?? "").filter((key) => !edges.some((edge) => edge.from === key)));
 		const reachesAnEnd = new Set(terminals);
 		const pending = [...terminals];
 		while (pending.length > 0) {
@@ -513,8 +511,7 @@ function capabilityInvariants(
 			issues.push({ rule: culprits.has(stranded) ? "deadGateEdge" : "strandedBranch", subject: stranded });
 		} else {
 			const orphaned = dead.toSorted(
-				(left, right) =>
-					(left.from ?? "").localeCompare(right.from ?? "") || (left.to ?? "").localeCompare(right.to ?? ""),
+				(left, right) => (left.from ?? "").localeCompare(right.from ?? "") || (left.to ?? "").localeCompare(right.to ?? ""),
 			)[0];
 			// Its own rule, not `deadGateEdge`: that message is written about a NODE, and pushing an edge label into it
 			// reads as "'g → b' is a human gate". The server has a separate sentence here for the same reason.

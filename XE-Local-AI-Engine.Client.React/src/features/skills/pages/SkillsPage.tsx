@@ -1,10 +1,11 @@
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconDownload, IconPlus, IconSchool, IconX } from "@tabler/icons-react";
+import { Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconDeviceFloppy, IconDownload, IconPlus, IconSchool, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -187,7 +188,8 @@ export function SkillsPage() {
 				deleteMutation.mutate(
 					{ path: { skillId: skill.id } },
 					{
-						onError: (error) => toast.error(apiErrorMessage(error, t("pages.skills.errors.delete", "Could not delete the skill."))),
+						onError: (error) =>
+							toast.error(apiErrorMessage(error, t("pages.skills.errors.delete", "Could not delete the skill."))),
 					},
 				);
 			}
@@ -236,9 +238,10 @@ export function SkillsPage() {
 					</Group>
 				) : null}
 				{skillsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skills-list-error">
-						{apiErrorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(skillsQuery.error, t("pages.skills.errors.load", "Could not load skills."))}
+						data-testid="skills-list-error"
+					/>
 				) : null}
 				{!skillsQuery.isLoading && !skillsQuery.error ? (
 					<SkillList skills={skills} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />
@@ -286,9 +289,10 @@ export function SkillsPage() {
 							<Text c="dimmed">{t("pages.skills.editor.loading", "Loading skill…")}</Text>
 						</Group>
 					) : editorBodyError ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skill-editor-error">
-							{apiErrorMessage(editorBodyError, t("pages.skills.errors.load", "Could not load skills."))}
-						</Alert>
+						<InlineErrorAlert
+							message={apiErrorMessage(editorBodyError, t("pages.skills.errors.load", "Could not load skills."))}
+							data-testid="skill-editor-error"
+						/>
 					) : (
 						<SkillForm
 							// Re-key per editor target AND on the loaded version so the form rebuilds its internal state from the

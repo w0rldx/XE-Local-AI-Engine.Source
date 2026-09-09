@@ -2,6 +2,7 @@ import { Alert, Button, Card, Group, Progress, Stack, Text, Title, Tooltip } fro
 import { IconAlertTriangle, IconCheck, IconRefresh, IconScale, IconSquare, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { BenchmarkJudgeStateBadge } from "@/features/benchmarks/components/BenchmarkStatusBadge";
 import type { BenchmarkJudgeMode, BenchmarkRunJudge } from "@/features/benchmarks/models/BenchmarkModels";
@@ -177,11 +178,7 @@ export function BenchmarkJudgePanel({
 						})}
 					</Stack>
 				) : null}
-				{judge.state === "failed" && judge.errorMessage ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{judge.errorMessage}
-					</Alert>
-				) : null}
+				{judge.state === "failed" && judge.errorMessage ? <InlineErrorAlert message={judge.errorMessage} /> : null}
 				<Group gap="xs">
 					{active ? (
 						<Button

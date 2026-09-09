@@ -11,6 +11,7 @@ import {
 	saveExternalProviderConnectionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
@@ -20,9 +21,9 @@ import { ExternalProviderConnectionList } from "@/features/external-providers/co
 import {
 	connectionToFormValues,
 	createModelRowIds,
+	type ExternalProviderConnectionsDto,
 	emptyFormValues,
 	errorMessage,
-	type ExternalProviderConnectionsDto,
 	formReducer,
 	initialFormState,
 	parseConnectionsConflict,
@@ -223,11 +224,7 @@ export function ExternalProviders() {
 				</Group>
 			) : null}
 
-			{listError ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{errorMessage(listError)}
-				</Alert>
-			) : null}
+			{listError ? <InlineErrorAlert message={errorMessage(listError)} /> : null}
 
 			{conflictNotice !== null ? (
 				<Alert color="orange" icon={<IconAlertTriangle size={16} />} data-testid="external-provider-conflict">

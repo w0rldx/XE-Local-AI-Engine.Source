@@ -328,6 +328,59 @@ describe("ImageRuntimeSourceBuildCard", () => {
 		expect(state.cancel).toHaveBeenCalledWith(undefined, expect.any(Object));
 	});
 
+	// P5 regression: the draft used to be re-seeded by an effect keyed on the `managed` object, so every refetch of the
+	// runtime status — a fresh object each time — replaced whatever the operator had just typed.
+	it("keeps an in-progress draft across a status refetch and re-seeds only when a new runtime is installed", () => {
+		const managed = {
+			validity: "active",
+			desiredBackend: "cpu",
+			sourceRepository: "https://github.com/example/original.cpp",
+			sourceCommit: "a".repeat(40),
+			sourceSelection: "custom",
+			sourceRevisionMode: "enginePinned",
+			sourceRequestedCommit: null,
+			installedAtUtc: 1,
+			invalidReason: null,
+		} as const;
+		const idle = {
+			activeJobCount: 0,
+			spawnReadinessCount: 0,
+			residentProcessCount: 0,
+			mutationReserved: false,
+			evictionReserved: false,
+			isBusy: false,
+		} as const;
+		state.runtime = { managedRuntime: { ...managed }, activity: { ...idle } };
+		// A fresh element each time: React bails out of re-rendering a referentially identical one, which would make
+		// the surviving draft below prove nothing.
+		const card = () => (
+			<MantineProvider>
+				<ImageRuntimeSourceBuildCard />
+			</MantineProvider>
+		);
+		const { rerender } = render(card());
+
+		fireEvent.change(screen.getByLabelText("GitHub repository"), {
+			target: { value: "https://github.com/example/edited.cpp" },
+		});
+
+		// Same installed runtime, different payload: a status refetch, not a new install. The edit must survive.
+		state.runtime = {
+			managedRuntime: { ...managed, sourceRepository: "https://github.com/example/refetched.cpp" },
+			activity: { ...idle },
+		};
+		rerender(card());
+		expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe("https://github.com/example/edited.cpp");
+
+		// A completed build installs a new runtime (a new installedAtUtc), which IS a new server state to seed from.
+		state.runtime = {
+			managedRuntime: { ...managed, sourceRepository: "https://github.com/example/rebuilt.cpp", installedAtUtc: 2 },
+			activity: { ...idle },
+		};
+		rerender(card());
+		expect((screen.getByLabelText("GitHub repository") as HTMLInputElement).value).toBe("https://github.com/example/rebuilt.cpp");
+	});
+
 	it("shows invalid managed provenance and permits eject only when resident processes are otherwise idle", () => {
 		state.runtime = {
 			managedRuntime: {

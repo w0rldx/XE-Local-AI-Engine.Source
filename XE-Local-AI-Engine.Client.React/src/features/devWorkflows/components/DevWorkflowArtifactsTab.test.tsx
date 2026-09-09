@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { devWorkflowArtifact, devWorkflowTestIds } from "@/features/devWorkflows/test/DevWorkflowFixtures";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
 
 const { run: runId, artifact: artifactId } = devWorkflowTestIds;
 
@@ -123,7 +123,12 @@ describe("DevWorkflowArtifactsTab", () => {
 			<DevWorkflowArtifactsTab
 				runId={runId}
 				artifacts={[
-					devWorkflowArtifact({ id: artifactId, lineageId: "lineage-plan", isStale: true, staleBecauseArtifactId: supersedingId }),
+					devWorkflowArtifact({
+						id: artifactId,
+						lineageId: "lineage-plan",
+						isStale: true,
+						staleBecauseArtifactId: supersedingId,
+					}),
 					devWorkflowArtifact({ id: supersedingId, lineageId: "lineage-spec", name: "spec.md", version: 4 }),
 				]}
 			/>,
@@ -149,9 +154,11 @@ describe("DevWorkflowArtifactsTab", () => {
 
 	it("issues NO content request for an artifact whose blob is unreadable", async () => {
 		let requested = false;
-		server.use(contentRoute(() => {
-			requested = true;
-		}));
+		server.use(
+			contentRoute(() => {
+				requested = true;
+			}),
+		);
 		renderWithProviders(<DevWorkflowArtifactsTab runId={runId} artifacts={[devWorkflowArtifact({ isValid: false })]} />);
 
 		fireEvent.click(await screen.findByTestId(`dev-workflow-artifact-${artifactId}`));

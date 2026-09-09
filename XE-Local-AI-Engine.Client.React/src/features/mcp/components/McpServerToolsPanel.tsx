@@ -1,10 +1,10 @@
-import { Alert, Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Group, Loader, Paper, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { McpConnectionStatus } from "@/features/mcp/models/McpServerToolsModels";
+import { useMcpServerTools } from "@/features/mcp/queries/useMcpServers";
 import { toToolDisplayName } from "@/features/tools/models/ToolCatalogModels";
 
 interface McpServerToolsPanelProps {
@@ -64,15 +64,14 @@ export function McpServerToolsPanel({ serverId }: McpServerToolsPanelProps) {
 				) : null}
 
 				{toolsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-server-tools-error">
-						{t("pages.mcp.tools.loadError", "Could not load discovered tools.")}
-					</Alert>
+					<InlineErrorAlert
+						message={t("pages.mcp.tools.loadError", "Could not load discovered tools.")}
+						data-testid="mcp-server-tools-error"
+					/>
 				) : null}
 
 				{toolsQuery.data?.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-server-tools-connection-error">
-						{toolsQuery.data.error}
-					</Alert>
+					<InlineErrorAlert message={toolsQuery.data.error} data-testid="mcp-server-tools-connection-error" />
 				) : null}
 
 				{toolsQuery.data && !toolsQuery.data.error && toolsQuery.data.tools.length === 0 ? (

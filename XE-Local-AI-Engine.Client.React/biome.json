@@ -1,5 +1,5 @@
 {
-	"$schema": "https://biomejs.dev/schemas/2.5.8/schema.json",
+	"$schema": "https://biomejs.dev/schemas/2.5.10/schema.json",
 	"vcs": {
 		"enabled": true,
 		"clientKind": "git",
@@ -20,12 +20,7 @@
 		"bracketSpacing": true,
 		"expand": "auto",
 		"useEditorconfig": true,
-		"includes": [
-			"**",
-			"!**/package-lock.json",
-			"!**/pnpm-lock.yaml",
-			"!**/yarn.lock"
-		]
+		"includes": ["**", "!**/package-lock.json", "!**/pnpm-lock.yaml", "!**/yarn.lock"]
 	},
 	"linter": {
 		"enabled": true,
@@ -85,9 +80,7 @@
 				"useFilenamingConvention": {
 					"level": "error",
 					"options": {
-						"filenameCases": [
-							"PascalCase"
-						]
+						"filenameCases": ["PascalCase"]
 					}
 				},
 				"useForOf": "error",
@@ -234,17 +227,7 @@
 	},
 	"overrides": [
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -306,17 +289,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -380,17 +353,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"javascript": {
 				"globals": []
 			},
@@ -428,17 +391,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -463,17 +416,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"complexity": {
@@ -563,17 +506,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"javascript": {
 				"globals": [
 					"onanimationend",
@@ -714,17 +647,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"javascript": {
 				"globals": []
 			},
@@ -781,17 +704,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"javascript": {
 				"globals": []
 			},
@@ -811,17 +724,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx",
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx", "**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -835,13 +738,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"linter": {
 				"rules": {
 					"correctness": {
@@ -874,13 +771,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.ts",
-				"**/*.cts",
-				"**/*.mts",
-				"**/*.tsx",
-				"**/*.d.ts"
-			],
+			"includes": ["**/*.ts", "**/*.cts", "**/*.mts", "**/*.tsx", "**/*.d.ts"],
 			"javascript": {
 				"globals": []
 			},
@@ -936,38 +827,25 @@
 										"selector": {
 											"kind": "function"
 										},
-										"formats": [
-											"camelCase",
-											"PascalCase"
-										]
+										"formats": ["camelCase", "PascalCase"]
 									},
 									{
 										"selector": {
 											"kind": "variable"
 										},
-										"formats": [
-											"camelCase",
-											"PascalCase",
-											"CONSTANT_CASE"
-										]
+										"formats": ["camelCase", "PascalCase", "CONSTANT_CASE"]
 									},
 									{
 										"selector": {
 											"kind": "typeLike"
 										},
-										"formats": [
-											"PascalCase"
-										]
+										"formats": ["PascalCase"]
 									},
 									{
 										"selector": {
 											"kind": "objectLiteralProperty"
 										},
-										"formats": [
-											"camelCase",
-											"snake_case",
-											"PascalCase"
-										]
+										"formats": ["camelCase", "snake_case", "PascalCase"]
 									}
 								]
 							}
@@ -996,12 +874,7 @@
 			}
 		},
 		{
-			"includes": [
-				"**/*.js",
-				"**/*.cjs",
-				"**/*.mjs",
-				"**/*.jsx"
-			],
+			"includes": ["**/*.js", "**/*.cjs", "**/*.mjs", "**/*.jsx"],
 			"javascript": {
 				"globals": []
 			},
@@ -1030,18 +903,14 @@
 			}
 		},
 		{
-			"includes": [
-				"src/**/use*.{ts,tsx,js,jsx}"
-			],
+			"includes": ["src/**/use*.{ts,tsx,js,jsx}"],
 			"linter": {
 				"rules": {
 					"style": {
 						"useFilenamingConvention": {
 							"level": "error",
 							"options": {
-								"filenameCases": [
-									"camelCase"
-								]
+								"filenameCases": ["camelCase"]
 							}
 						}
 					}
@@ -1049,12 +918,7 @@
 			}
 		},
 		{
-			"includes": [
-				"src/**/routeTree.gen.ts",
-				"src/**/i18n.ts",
-				"src/**/routes/**",
-				"tests/**"
-			],
+			"includes": ["src/**/routeTree.gen.ts", "src/**/i18n.ts", "src/**/routes/**", "tests/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -1064,12 +928,7 @@
 			}
 		},
 		{
-			"includes": [
-				"vite.config.*",
-				"vitest.config.*",
-				"eslint.config.*",
-				"vite-plugins/**"
-			],
+			"includes": ["vite.config.*", "vitest.config.*", "eslint.config.*", "vite-plugins/**"],
 			"linter": {
 				"rules": {
 					"style": {
@@ -1117,13 +976,7 @@
 				"organizeImports": {
 					"level": "on",
 					"options": {
-						"groups": [
-							":PACKAGE:",
-							":BLANK_LINE:",
-							":ALIAS:",
-							":BLANK_LINE:",
-							":PATH:"
-						]
+						"groups": [":PACKAGE:", ":BLANK_LINE:", ":ALIAS:", ":BLANK_LINE:", ":PATH:"]
 					}
 				}
 			}

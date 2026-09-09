@@ -1,7 +1,8 @@
-import { Alert, Button, Card, Group, Loader, Progress, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconCloudDownload, IconX } from "@tabler/icons-react";
+import { Button, Card, Group, Loader, Progress, Stack, Text, Title } from "@mantine/core";
+import { IconCloudDownload, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useDownloadRateEstimates } from "@/features/models/hooks/useDownloadRateEstimates";
 import { formatDownloadEta, humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 import type { GgufDownloadStatus } from "@/features/models/queries/useGgufDownload";
@@ -20,12 +21,7 @@ interface DownloadProgressPanelProps {
 // falls back to an indeterminate loader when totalBytes is absent. Completed/Cancelled entries are dropped
 // from the inFlight list by the store reconciliation in useActiveGgufDownloads. Failed entries show an
 // error row with the sanitized backend message. Rendered only when there is at least one in-flight entry.
-export function DownloadProgressPanel({
-	inFlight,
-	downloadStatuses,
-	onCancel,
-	cancellingModelName,
-}: DownloadProgressPanelProps) {
+export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, cancellingModelName }: DownloadProgressPanelProps) {
 	const { t } = useTranslation();
 	// UX-11: FE-derived speed + ETA per model from successive status pushes (no timestamps ride the wire).
 	const rateEstimates = useDownloadRateEstimates(downloadStatuses);
@@ -117,14 +113,11 @@ export function DownloadProgressPanel({
 								) : null}
 
 								{isFailed && status?.sanitizedError ? (
-									<Alert
-										icon={<IconAlertTriangle size={16} />}
-										color="red"
+									<InlineErrorAlert
+										message={status.sanitizedError}
 										variant="light"
 										title={t("pages.models.gguf.download.failedTitle", "Download failed")}
-									>
-										{status.sanitizedError}
-									</Alert>
+									/>
 								) : null}
 							</Stack>
 						);

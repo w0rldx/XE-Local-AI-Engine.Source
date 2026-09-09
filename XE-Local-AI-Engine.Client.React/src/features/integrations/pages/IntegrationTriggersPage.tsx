@@ -1,10 +1,11 @@
-import { Alert, Button, Group, Loader, Text } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
+import { Button, Group, Loader, Text } from "@mantine/core";
+import { IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -59,12 +60,7 @@ export function IntegrationTriggersPage() {
 	const formRef = useRef<IntegrationTriggerFormHandle>(null);
 
 	const triggersQuery = useIntegrationTriggers();
-	const {
-		options: agents,
-		toolsByName,
-		isLoading: isCatalogLoading,
-		isError: isCatalogError,
-	} = useIntegrationAgentOptions();
+	const { options: agents, toolsByName, isLoading: isCatalogLoading, isError: isCatalogError } = useIntegrationAgentOptions();
 
 	const createMutation = useCreateIntegrationTrigger();
 	const updateMutation = useUpdateIntegrationTrigger();
@@ -86,16 +82,16 @@ export function IntegrationTriggersPage() {
 	// same click — the verb would change silently. Block the save and say why.
 	const missingTriggerError =
 		editorTarget?.mode === "edit" && editingTrigger === undefined
-			? t(
-					"pages.integrations.triggers.errors.missing",
-					"This trigger no longer exists. Close the editor and reload the list.",
-				)
+			? t("pages.integrations.triggers.errors.missing", "This trigger no longer exists. Close the editor and reload the list.")
 			: undefined;
 
 	// An empty tool catalog reads as "every tool needs approval" because the resolution is fail-closed. That is the
 	// right direction, but the operator has to be told the catalog is why.
 	const toolCatalogNotice = isCatalogLoading
-		? t("pages.integrations.triggers.form.toolCatalog.loading", "Loading the tool catalog. Tool facts are unknown until it arrives.")
+		? t(
+				"pages.integrations.triggers.form.toolCatalog.loading",
+				"Loading the tool catalog. Tool facts are unknown until it arrives.",
+			)
 		: isCatalogError
 			? t(
 					"pages.integrations.triggers.form.toolCatalog.failed",
@@ -157,7 +153,9 @@ export function IntegrationTriggersPage() {
 					{ path: { triggerId: trigger.id } },
 					{
 						onError: (error) =>
-							toast.error(apiErrorMessage(error, t("pages.integrations.triggers.errors.delete", "Could not delete the trigger."))),
+							toast.error(
+								apiErrorMessage(error, t("pages.integrations.triggers.errors.delete", "Could not delete the trigger.")),
+							),
 					},
 				);
 			}
@@ -277,11 +275,7 @@ export function IntegrationTriggersPage() {
 						<Text c="dimmed">{t("pages.integrations.triggers.list.loading", "Loading integration triggers…")}</Text>
 					</Group>
 				) : null}
-				{loadError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-triggers-error">
-						{loadError}
-					</Alert>
-				) : null}
+				{loadError ? <InlineErrorAlert message={loadError} data-testid="integration-triggers-error" /> : null}
 				{!(triggersQuery.isLoading || loadError) ? (
 					<IntegrationTriggerList
 						triggers={triggers}

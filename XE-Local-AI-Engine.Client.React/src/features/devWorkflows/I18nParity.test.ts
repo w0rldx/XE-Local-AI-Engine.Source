@@ -73,7 +73,17 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 		},
 		{
 			section: "runStatus",
-			members: ["Pending", "Running", "Pausing", "Paused", "WaitingForApproval", "Cancelling", "Completed", "Failed", "Cancelled"],
+			members: [
+				"Pending",
+				"Running",
+				"Pausing",
+				"Paused",
+				"WaitingForApproval",
+				"Cancelling",
+				"Completed",
+				"Failed",
+				"Cancelled",
+			],
 		},
 		{ section: "nodeType", members: ["Agent", "Tool", "DevTask", "HumanGate", "Gate", "Parallel", "Join"] },
 		{ section: "decision", members: ["Approve", "Reject", "RequestChanges", "Retry", "Skip", "Abandon"] },
@@ -144,7 +154,9 @@ describe("dev-workflow enum label maps are complete in every locale", () => {
 
 	it.each(vocabularies)("$section has a label for every member in en.json", ({ section, members }) => {
 		for (const member of members) {
-			expect(resolvePath(en as LocaleShape, `pages.devWorkflows.${section}.${member}`), `${section}.${member}`).toBeTypeOf("string");
+			expect(resolvePath(en as LocaleShape, `pages.devWorkflows.${section}.${member}`), `${section}.${member}`).toBeTypeOf(
+				"string",
+			);
 		}
 	});
 

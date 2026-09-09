@@ -12,6 +12,7 @@ import {
 } from "@tabler/icons-react";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -97,12 +98,12 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 							</Group>
 						) : null}
 						{projectsQuery.error ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{apiErrorMessage(
+							<InlineErrorAlert
+								message={apiErrorMessage(
 									projectsQuery.error,
 									t("pages.benchmarks.errors.projectsLoad", "Could not load benchmark projects."),
 								)}
-							</Alert>
+							/>
 						) : null}
 						{projectsQuery.data?.map((project) => (
 							<UnstyledButton

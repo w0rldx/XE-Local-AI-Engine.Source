@@ -1,8 +1,9 @@
-import { Alert, Badge, Button, Card, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerEject, IconServer2 } from "@tabler/icons-react";
+import { Badge, Button, Card, Group, Loader, Stack, Table, Text, Title } from "@mantine/core";
+import { IconPlayerEject, IconServer2 } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { RunningModel } from "@/features/loaded-models/models/RunningModelsModels";
 
 interface RunningModelsPanelProps {
@@ -45,9 +46,10 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 				) : null}
 
 				{error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="loaded-models-llamacpp-error">
-						{apiErrorMessage(error, t("pages.loadedModels.llamaCpp.error", "Could not load running models."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(error, t("pages.loadedModels.llamaCpp.error", "Could not load running models."))}
+						data-testid="loaded-models-llamacpp-error"
+					/>
 				) : null}
 
 				{!isLoading && !error && runningModels.length === 0 ? (
@@ -69,7 +71,10 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 							</Table.Thead>
 							<Table.Tbody>
 								{runningModels.map((model) => (
-									<Table.Tr key={`${model.modelName}-${model.role}`} data-testid={`loaded-models-llamacpp-row-${model.modelName}`}>
+									<Table.Tr
+										key={`${model.modelName}-${model.role}`}
+										data-testid={`loaded-models-llamacpp-row-${model.modelName}`}
+									>
 										<Table.Td>
 											<Text size="sm" fw={500}>
 												{model.modelName}

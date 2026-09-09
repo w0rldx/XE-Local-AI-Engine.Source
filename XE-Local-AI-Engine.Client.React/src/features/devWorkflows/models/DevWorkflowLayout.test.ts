@@ -36,12 +36,15 @@ describe("layoutDevWorkflowGraph", () => {
 	});
 
 	it("ranks a join after both of its branches and separates the branches in y", () => {
-		const layout = layoutDevWorkflowGraph([node("start"), node("left"), node("right"), node("join")], [
-			{ from: "start", to: "left" },
-			{ from: "start", to: "right" },
-			{ from: "left", to: "join" },
-			{ from: "right", to: "join" },
-		]);
+		const layout = layoutDevWorkflowGraph(
+			[node("start"), node("left"), node("right"), node("join")],
+			[
+				{ from: "start", to: "left" },
+				{ from: "start", to: "right" },
+				{ from: "left", to: "join" },
+				{ from: "right", to: "join" },
+			],
+		);
 
 		const left = layout.positions.get("left");
 		const right = layout.positions.get("right");
@@ -118,10 +121,7 @@ describe("layoutDevWorkflowGraph", () => {
 	});
 
 	it("terminates on a cycle, ranks every node once, and tags the edge that does not move forward", () => {
-		const layout = layoutDevWorkflowGraph(
-			[node("a"), node("b"), node("c")],
-			[...chain("a", "b", "c"), { from: "c", to: "b" }],
-		);
+		const layout = layoutDevWorkflowGraph([node("a"), node("b"), node("c")], [...chain("a", "b", "c"), { from: "c", to: "b" }]);
 
 		expect(layout.positions.size).toBe(3);
 		expect(layout.positions.get("a")?.rank).toBe(0);

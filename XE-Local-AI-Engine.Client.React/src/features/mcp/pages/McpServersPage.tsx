@@ -1,10 +1,11 @@
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
+import { Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconDeviceFloppy, IconPlug, IconPlus, IconX } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -98,7 +99,10 @@ export function McpServersPage() {
 
 	const submitError =
 		createMutation.error || updateMutation.error
-			? apiErrorMessage(createMutation.error ?? updateMutation.error, t("pages.mcp.errors.save", "Could not save the MCP server."))
+			? apiErrorMessage(
+					createMutation.error ?? updateMutation.error,
+					t("pages.mcp.errors.save", "Could not save the MCP server."),
+				)
 			: undefined;
 
 	// Closes the editor and clears the dirty flag. A successful save closes through here so the next open starts
@@ -159,7 +163,10 @@ export function McpServersPage() {
 				}
 				deleteMutation.mutate(
 					{ path: { mcpServerId: server.id } },
-					{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.mcp.errors.delete", "Could not delete the MCP server."))) },
+					{
+						onError: (error) =>
+							toast.error(apiErrorMessage(error, t("pages.mcp.errors.delete", "Could not delete the MCP server."))),
+					},
 				);
 			}
 		},
@@ -170,7 +177,10 @@ export function McpServersPage() {
 		(server: McpServerRegistration, enabled: boolean) => {
 			enableMutation.mutate(
 				{ id: server.id, enabled },
-				{ onError: (error) => toast.error(apiErrorMessage(error, t("pages.mcp.errors.enable", "Could not change the server state."))) },
+				{
+					onError: (error) =>
+						toast.error(apiErrorMessage(error, t("pages.mcp.errors.enable", "Could not change the server state."))),
+				},
 			);
 		},
 		[enableMutation, t],
@@ -203,9 +213,10 @@ export function McpServersPage() {
 					</Group>
 				) : null}
 				{serversQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="mcp-list-error">
-						{apiErrorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(serversQuery.error, t("pages.mcp.errors.load", "Could not load MCP servers."))}
+						data-testid="mcp-list-error"
+					/>
 				) : null}
 				{!serversQuery.isLoading && !serversQuery.error ? (
 					<>

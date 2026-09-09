@@ -1,10 +1,10 @@
-import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Button, Group, Select, Stack, Text } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import type { BenchmarkCell } from "@/features/benchmarks/models/BenchmarkCells";
 import { benchmarkCellLabel, benchmarkPairedDeltaFor, formatBenchmarkDelta } from "@/features/benchmarks/models/BenchmarkCells";
@@ -71,17 +71,22 @@ export function BenchmarkPairedDelta({ projectId, cells }: BenchmarkPairedDeltaP
 			) : comparison.isError ? (
 				// Checked BEFORE the absent entry below: a request that failed reports nothing about how many items the
 				// two share, and the node's own sentence plus its status is what makes the failure actionable.
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-paired-error">
-					<Stack gap="sm" align="flex-start">
-						<Text size="sm">
-							{apiErrorMessage(comparison.error, t("pages.benchmarks.paired.failed", "Could not compare these two combinations."))}
+				<InlineErrorAlert
+					message={
+						<>
+							{apiErrorMessage(
+								comparison.error,
+								t("pages.benchmarks.paired.failed", "Could not compare these two combinations."),
+							)}
 							{comparison.error instanceof ApiError ? ` (${comparison.error.statusCode})` : ""}
-						</Text>
-						<Button size="xs" variant="light" onClick={() => comparison.refetch()} data-testid="benchmark-paired-retry">
-							{t("common.retry", "Retry")}
-						</Button>
-					</Stack>
-				</Alert>
+						</>
+					}
+					data-testid="benchmark-paired-error"
+				>
+					<Button size="xs" variant="light" onClick={() => comparison.refetch()} data-testid="benchmark-paired-retry">
+						{t("common.retry", "Retry")}
+					</Button>
+				</InlineErrorAlert>
 			) : comparison.isLoading ? (
 				<Text size="sm" c="dimmed" data-testid="benchmark-paired-loading">
 					{t("pages.benchmarks.paired.loading", "Comparing…")}

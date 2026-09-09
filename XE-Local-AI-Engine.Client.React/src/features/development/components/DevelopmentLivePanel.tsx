@@ -11,12 +11,9 @@ import {
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
-import {
-	ArtifactContentView,
-	ArtifactViewButton,
-	Metric,
-	ValidationReportView,
-} from "@/features/development/components/DevelopmentLivePresenters";
+import { ArtifactContentView, ArtifactViewButton } from "@/features/development/components/DevelopmentArtifactViewers";
+import { Metric } from "@/features/development/components/DevelopmentMetricTile";
+import { ValidationReportView } from "@/features/development/components/DevelopmentValidationReportView";
 import type { DevelopmentAttemptLiveState } from "@/features/development/hooks/useDevelopmentAttemptHub";
 import type { DevelopmentArtifact, DevelopmentAttempt, DevelopmentEvent } from "@/features/development/models/DevelopmentModels";
 

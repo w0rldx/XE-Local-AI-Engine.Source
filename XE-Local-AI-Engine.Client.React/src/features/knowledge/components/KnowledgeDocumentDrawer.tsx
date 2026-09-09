@@ -1,14 +1,15 @@
-import { Alert, Badge, Box, Card, Divider, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
-import { type ReactNode, useEffect, useRef } from "react";
+import { Badge, Card, Divider, Group, Loader, Stack, Text } from "@mantine/core";
+import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
 import { KnowledgeStatusBadge } from "@/features/knowledge/components/KnowledgeStatusBadge";
 import {
-	type KnowledgeDocumentDetail,
 	formatKnowledgeBytes,
 	formatKnowledgeTimestamp,
+	type KnowledgeDocumentDetail,
 } from "@/features/knowledge/models/KnowledgeModels";
 
 interface KnowledgeDocumentDrawerProps {
@@ -26,24 +27,6 @@ interface KnowledgeDocumentDrawerProps {
 // up with the persisted chunk heading even across minor whitespace/casing drift.
 function normalizeSection(value: string | null | undefined): string {
 	return (value ?? "").trim().toLocaleLowerCase();
-}
-
-interface MetadataRowProps {
-	readonly label: string;
-	readonly children: ReactNode;
-}
-
-function MetadataRow({ label, children }: MetadataRowProps) {
-	return (
-		<Group justify="space-between" gap="md" wrap="nowrap">
-			<Text size="sm" c="dimmed">
-				{label}
-			</Text>
-			<Box fz="sm" ta="right" style={{ minWidth: 0 }}>
-				{children}
-			</Box>
-		</Group>
-	);
 }
 
 // Read-only detail drawer (DialogShell modal): document metadata + its extracted chunks (index, heading path,
@@ -80,13 +63,23 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 				{detail ? (
 					<>
 						<Stack gap="xs">
-							<MetadataRow label={t("pages.knowledgeBase.collection.label", "Collection")}>{detail.collectionId}</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.source", "Source")}>{detail.sourcePath ?? detail.sourceKind}</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.status", "Status")}>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.collection.label", "Collection")}>
+								{detail.collectionId}
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.source", "Source")}>
+								{detail.sourcePath ?? detail.sourceKind}
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.status", "Status")}>
 								<KnowledgeStatusBadge status={detail.status} />
-							</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.chunks", "Chunks")}>{detail.chunkCount}</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.embeddingModel", "Embedding model")}>
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.chunks", "Chunks")}>
+								{detail.chunkCount}
+							</LabelValueRow>
+							<LabelValueRow
+								justify="space-between"
+								gap="md"
+								label={t("pages.knowledgeBase.table.embeddingModel", "Embedding model")}
+							>
 								<Group gap={6} justify="flex-end" wrap="nowrap">
 									<Text size="sm">{detail.embeddingModel || "—"}</Text>
 									{detail.staleModel ? (
@@ -95,23 +88,19 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 										</Badge>
 									) : null}
 								</Group>
-							</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.size", "Size")}>
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.size", "Size")}>
 								{formatKnowledgeBytes(detail.sizeBytes)}
-							</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.table.created", "Created")}>
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.table.created", "Created")}>
 								{formatKnowledgeTimestamp(detail.createdAtUtc)}
-							</MetadataRow>
-							<MetadataRow label={t("pages.knowledgeBase.detail.updated", "Updated")}>
+							</LabelValueRow>
+							<LabelValueRow justify="space-between" gap="md" label={t("pages.knowledgeBase.detail.updated", "Updated")}>
 								{formatKnowledgeTimestamp(detail.updatedAtUtc)}
-							</MetadataRow>
+							</LabelValueRow>
 						</Stack>
 
-						{detail.status === "Failed" && detail.failureReason ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{detail.failureReason}
-							</Alert>
-						) : null}
+						{detail.status === "Failed" && detail.failureReason ? <InlineErrorAlert message={detail.failureReason} /> : null}
 
 						<Divider label={t("pages.knowledgeBase.detail.chunks", "Chunks")} labelPosition="left" />
 
@@ -137,7 +126,7 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 													: undefined
 											}
 										>
-										<Stack gap={6}>
+											<Stack gap={6}>
 												<Group gap="xs" justify="space-between" wrap="nowrap">
 													<Badge
 														variant={isHighlighted ? "filled" : "outline"}
@@ -151,28 +140,28 @@ export function KnowledgeDocumentDrawer({ opened, detail, isLoading, highlightSe
 															{chunk.headingPath}
 														</Text>
 													) : null}
-											</Group>
-											<Group gap="xs">
-												<Badge variant="light" color="gray" size="xs">
-													{chunk.contentKind}
-												</Badge>
-												{chunk.language ? (
-													<Badge variant="light" color="blue" size="xs">
-														{chunk.language}
+												</Group>
+												<Group gap="xs">
+													<Badge variant="light" color="gray" size="xs">
+														{chunk.contentKind}
 													</Badge>
-												) : null}
-												{chunk.symbol ? (
-													<Badge variant="outline" color="violet" size="xs">
-														{chunk.symbol}
-													</Badge>
-												) : null}
-												{chunk.pageNumber ? (
-													<Text size="xs" c="dimmed">
-														{t("pages.knowledgeBase.detail.page", "Page {{page}}", { page: chunk.pageNumber })}
-													</Text>
-												) : null}
-											</Group>
-											<Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+													{chunk.language ? (
+														<Badge variant="light" color="blue" size="xs">
+															{chunk.language}
+														</Badge>
+													) : null}
+													{chunk.symbol ? (
+														<Badge variant="outline" color="violet" size="xs">
+															{chunk.symbol}
+														</Badge>
+													) : null}
+													{chunk.pageNumber ? (
+														<Text size="xs" c="dimmed">
+															{t("pages.knowledgeBase.detail.page", "Page {{page}}", { page: chunk.pageNumber })}
+														</Text>
+													) : null}
+												</Group>
+												<Text size="sm" style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
 													{chunk.content}
 												</Text>
 											</Stack>

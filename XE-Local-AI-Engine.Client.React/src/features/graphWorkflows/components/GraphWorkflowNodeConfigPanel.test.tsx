@@ -25,7 +25,7 @@ vi.mock("@/core/ui/components/CodeEditor/CodeEditor", () => ({
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { GraphWorkflowNodeConfigPanel } from "@/features/graphWorkflows/components/GraphWorkflowNodeConfigPanel";
-import { type GraphWorkflowCanvasNodeData, defaultNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
+import { defaultNodeData, type GraphWorkflowCanvasNodeData } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import { type GraphWorkflowNodeKind, graphWorkflowNodeKinds } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { graphWorkflowTools } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 import { renderWithProviders } from "@/test/RenderWithProviders";

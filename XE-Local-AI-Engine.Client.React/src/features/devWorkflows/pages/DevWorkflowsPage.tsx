@@ -1,15 +1,16 @@
 import { Alert, Badge, Button, Card, Group, Select, SimpleGrid, Skeleton, Stack, Tabs, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlus, IconSitemap } from "@tabler/icons-react";
+import { IconPlus, IconSitemap } from "@tabler/icons-react";
 import { useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
-import { type CreateWorkItemValues, CreateWorkItemDialog } from "@/features/devWorkflows/components/CreateWorkItemDialog";
+import { CreateWorkItemDialog, type CreateWorkItemValues } from "@/features/devWorkflows/components/CreateWorkItemDialog";
 import { DevWorkflowDefinitionFormPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionFormPanel";
 import { DevWorkflowRuleSetsPanel } from "@/features/devWorkflows/components/DevWorkflowRuleSetsPanel";
 import {
@@ -104,7 +105,11 @@ export function DevWorkflowsPage() {
 				}
 			/>
 
-			<Tabs value={tab} onChange={(value) => setTab(devWorkflowsPageTabs.find((candidate) => candidate === value) ?? "runs")} data-testid="dev-workflows-tabs">
+			<Tabs
+				value={tab}
+				onChange={(value) => setTab(devWorkflowsPageTabs.find((candidate) => candidate === value) ?? "runs")}
+				data-testid="dev-workflows-tabs"
+			>
 				<Tabs.List>
 					<Tabs.Tab value="runs" data-testid="dev-workflows-tab-runs">
 						{t("pages.devWorkflows.tabs.runs", "Runs")}
@@ -125,23 +130,22 @@ export function DevWorkflowsPage() {
 								<Skeleton height={140} radius="md" />
 							</SimpleGrid>
 						) : listQuery.isError ? (
-							<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflows-error">
-								<Stack gap="sm" align="flex-start">
-									<Text size="sm">
-										{apiErrorMessage(listQuery.error, t("pages.devWorkflows.loadFailed", "Could not load the work items."))}
-									</Text>
-									<Button
-										size="xs"
-										variant="light"
-										onClick={() => {
-											listQuery.refetch().catch(() => undefined);
-										}}
-										data-testid="dev-workflows-retry"
-									>
-										{t("pages.devWorkflows.retry", "Retry")}
-									</Button>
-								</Stack>
-							</Alert>
+							<InlineErrorAlert
+								variant="light"
+								message={apiErrorMessage(listQuery.error, t("pages.devWorkflows.loadFailed", "Could not load the work items."))}
+								data-testid="dev-workflows-error"
+							>
+								<Button
+									size="xs"
+									variant="light"
+									onClick={() => {
+										listQuery.refetch().catch(() => undefined);
+									}}
+									data-testid="dev-workflows-retry"
+								>
+									{t("pages.devWorkflows.retry", "Retry")}
+								</Button>
+							</InlineErrorAlert>
 						) : workItems.length === 0 ? (
 							<Alert color="blue" variant="light" data-testid="dev-workflows-empty">
 								<Stack gap="sm" align="flex-start">
@@ -231,7 +235,9 @@ export function DevWorkflowsPage() {
 							/>
 							<DevWorkflowDefinitionFormPanel
 								definitionId={
-									definitions.some((definition) => definition.id === editedDefinitionId) ? (editedDefinitionId ?? undefined) : undefined
+									definitions.some((definition) => definition.id === editedDefinitionId)
+										? (editedDefinitionId ?? undefined)
+										: undefined
 								}
 							/>
 						</Stack>

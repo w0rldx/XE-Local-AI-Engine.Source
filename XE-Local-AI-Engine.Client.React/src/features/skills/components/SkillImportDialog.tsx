@@ -1,5 +1,5 @@
-import { Alert, Button, Group, Stack } from "@mantine/core";
-import { IconAlertTriangle, IconDownload, IconSearch, IconX } from "@tabler/icons-react";
+import { Button, Group, Stack } from "@mantine/core";
+import { IconDownload, IconSearch, IconX } from "@tabler/icons-react";
 import { useCallback, useId, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -9,6 +9,7 @@ import type {
 	XeLocalAiEngineClientServicesAgentsSkillImportConflictResolution,
 } from "@/core/api/generated";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SkillImportPreviewPresentation } from "@/features/skills/components/SkillImportPreviewPresentation";
 import { type SkillImportSourceTab, SkillImportSourceTabs } from "@/features/skills/components/SkillImportSourceTabs";
 import { useCommitSkillImport, usePreviewSkillImport } from "@/features/skills/queries/useSkillImport";
@@ -194,14 +195,19 @@ export function SkillImportDialog({ opened, onClose }: SkillImportDialogProps) {
 				) : null}
 
 				{preview.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skill-import-preview-error">
-						{apiErrorMessage(preview.error, t("pages.skills.import.errors.preview", "Could not read that source."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(preview.error, t("pages.skills.import.errors.preview", "Could not read that source."))}
+						data-testid="skill-import-preview-error"
+					/>
 				) : null}
 				{commit.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skill-import-commit-error">
-						{apiErrorMessage(commit.error, t("pages.skills.import.errors.commit", "Could not import the selected skills."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(
+							commit.error,
+							t("pages.skills.import.errors.commit", "Could not import the selected skills."),
+						)}
+						data-testid="skill-import-commit-error"
+					/>
 				) : null}
 
 				{report && !outcomes ? (

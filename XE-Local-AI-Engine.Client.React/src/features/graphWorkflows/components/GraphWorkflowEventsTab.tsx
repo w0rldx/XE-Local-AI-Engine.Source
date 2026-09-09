@@ -1,15 +1,12 @@
 import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Paper, Skeleton, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
-import {
-	asGraphWorkflowEventType,
-	graphWorkflowEventTypeLabelKey,
-} from "@/features/graphWorkflows/models/GraphWorkflowModels";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { asGraphWorkflowEventType, graphWorkflowEventTypeLabelKey } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { useGraphWorkflowRunEvents } from "@/features/graphWorkflows/queries/useGraphWorkflows";
 
 export interface GraphWorkflowEventsTabProps {
@@ -40,23 +37,22 @@ export function GraphWorkflowEventsTab({ runId }: GraphWorkflowEventsTabProps) {
 
 	if (query.isError) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="graph-workflow-events-error">
-				<Stack gap="sm" align="flex-start">
-					<Text size="sm">
-						{apiErrorMessage(query.error, t("pages.graphWorkflows.events.loadFailed", "Could not load this run's events."))}
-					</Text>
-					<Button
-						size="xs"
-						variant="light"
-						onClick={() => {
-							query.refetch().catch(() => undefined);
-						}}
-						data-testid="graph-workflow-events-retry"
-					>
-						{t("pages.graphWorkflows.events.retry", "Retry")}
-					</Button>
-				</Stack>
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={apiErrorMessage(query.error, t("pages.graphWorkflows.events.loadFailed", "Could not load this run's events."))}
+				data-testid="graph-workflow-events-error"
+			>
+				<Button
+					size="xs"
+					variant="light"
+					onClick={() => {
+						query.refetch().catch(() => undefined);
+					}}
+					data-testid="graph-workflow-events-retry"
+				>
+					{t("pages.graphWorkflows.events.retry", "Retry")}
+				</Button>
+			</InlineErrorAlert>
 		);
 	}
 

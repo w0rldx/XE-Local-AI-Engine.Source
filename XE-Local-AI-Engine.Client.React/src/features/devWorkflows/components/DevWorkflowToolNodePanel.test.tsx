@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import { cleanup, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { afterEach, describe, expect, it } from "vitest";
 
 import { DevWorkflowToolNodePanel } from "@/features/devWorkflows/components/DevWorkflowToolNodePanel";

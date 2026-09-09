@@ -3,6 +3,7 @@ import { IconAlertTriangle } from "@tabler/icons-react";
 import type { TFunction } from "i18next";
 import { useTranslation } from "react-i18next";
 
+import { formatDurationCompact } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { DevWorkflowNodeStatusBadge } from "@/features/devWorkflows/components/DevWorkflowStatusBadge";
 import {
@@ -10,7 +11,6 @@ import {
 	type DevWorkflowNodeStatus,
 	devWorkflowAttemptCounts,
 	devWorkflowAttemptLabel,
-	formatDevWorkflowDuration,
 	toDevWorkflowNodeStatus,
 	toDevWorkflowNodeType,
 } from "@/features/devWorkflows/models/DevWorkflowModels";
@@ -55,14 +55,14 @@ function statusLine(
 			return node.queuedAtUtc
 				? t("pages.devWorkflows.nodes.queuedFor", "{{reason}} · queued for {{duration}}", {
 						reason,
-						duration: formatDevWorkflowDuration(now - node.queuedAtUtc),
+						duration: formatDurationCompact(now - node.queuedAtUtc),
 					})
 				: reason;
 		}
 		case "Running":
 			return node.startedAtUtc
 				? t("pages.devWorkflows.nodes.runningFor", "running for {{duration}}", {
-						duration: formatDevWorkflowDuration(now - node.startedAtUtc),
+						duration: formatDurationCompact(now - node.startedAtUtc),
 					})
 				: t("pages.devWorkflows.nodes.running", "running");
 		case "WaitingForApproval":
@@ -75,7 +75,7 @@ function statusLine(
 		default:
 			return node.startedAtUtc && node.completedAtUtc
 				? t("pages.devWorkflows.nodes.took", "took {{duration}}", {
-						duration: formatDevWorkflowDuration(node.completedAtUtc - node.startedAtUtc),
+						duration: formatDurationCompact(node.completedAtUtc - node.startedAtUtc),
 					})
 				: t("pages.devWorkflows.nodes.finished", "finished");
 	}

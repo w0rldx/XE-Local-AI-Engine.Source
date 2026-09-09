@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { GraphWorkflowDecisionPanel } from "@/features/graphWorkflows/components/GraphWorkflowDecisionPanel";
 import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
@@ -88,15 +89,18 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 	}
 	if (error || !nodeRun) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="graph-workflow-node-panel-error">
-				{apiErrorMessage(error, t("pages.graphWorkflows.nodePanel.loadFailed", "This node could not be loaded."))}
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={apiErrorMessage(error, t("pages.graphWorkflows.nodePanel.loadFailed", "This node could not be loaded."))}
+				data-testid="graph-workflow-node-panel-error"
+			/>
 		);
 	}
 
 	const status = narrowGraphWorkflowNodeRunStatus(nodeRun.status);
 	const kind = narrowGraphWorkflowNodeKind(nodeRun.kind);
-	const failureClass = nodeRun.failureClass && nodeRun.failureClass !== "None" ? narrowGraphWorkflowFailureClass(nodeRun.failureClass) : undefined;
+	const failureClass =
+		nodeRun.failureClass && nodeRun.failureClass !== "None" ? narrowGraphWorkflowFailureClass(nodeRun.failureClass) : undefined;
 	const inner = envelopeOutput(nodeRun.output);
 	const passThrough = passThroughKey(kind);
 	// Two axes, deliberately: a node that failed stays failed once the run has routed around it and completed.
@@ -137,7 +141,12 @@ export function GraphWorkflowNodePanel({ runId, nodeKey, runStatus, pauseConfig,
 				</SectionCard>
 
 				{failureClass ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="graph-workflow-node-panel-failure">
+					<Alert
+						color="red"
+						variant="light"
+						icon={<IconAlertTriangle size={16} />}
+						data-testid="graph-workflow-node-panel-failure"
+					>
 						<Stack gap={4}>
 							<Text size="sm">{t(`pages.graphWorkflows.failureClass.${failureClass}`, failureClass)}</Text>
 							{runMovedOn ? (

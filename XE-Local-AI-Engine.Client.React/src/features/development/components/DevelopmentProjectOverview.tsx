@@ -1,7 +1,8 @@
 import { Alert, Badge, Button, Divider, Group, Loader, Select, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconLink, IconPlayerPlay, IconX } from "@tabler/icons-react";
+import { IconLink, IconPlayerPlay, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { DevelopmentProjectDetail, DevelopmentTaskDetail } from "@/features/development/models/DevelopmentModels";
 import { nextActionStatuses, statusColor } from "@/features/development/models/DevelopmentStatusModel";
@@ -102,12 +103,12 @@ export function DevelopmentProjectOverview({
 					<Text c="dimmed">{t("pages.development.loading.repositories", "Loading registered Development repositories")}</Text>
 				</Group>
 			) : !repository.ready ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{t(
+				<InlineErrorAlert
+					message={t(
 						"pages.development.repositoryUnavailableDescription",
 						"The registered repository is unavailable or no longer matches this project. Development actions are blocked.",
 					)}
-				</Alert>
+				/>
 			) : null}
 			<Group align="end">
 				{nextActionStatuses.has(task.status ?? "") ? (

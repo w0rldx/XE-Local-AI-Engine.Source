@@ -1,6 +1,5 @@
 import {
 	ActionIcon,
-	Alert,
 	Badge,
 	Button,
 	CopyButton,
@@ -13,7 +12,7 @@ import {
 	Title,
 	Tooltip,
 } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
+import { IconCheck, IconCopy, IconHistory, IconPlayerPlay, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useMemo } from "react";
@@ -23,6 +22,7 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getInvocationMonitorOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -162,11 +162,7 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 					})}
 				</Text>
 			</SimpleGrid>
-			{current.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{current.error}
-				</Alert>
-			) : null}
+			{current.error ? <InlineErrorAlert message={current.error} /> : null}
 		</SectionCard>
 	);
 }
@@ -253,11 +249,7 @@ export function Invocations() {
 				</Group>
 			) : null}
 
-			{monitorError ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{errorMessage(monitorError, t)}
-				</Alert>
-			) : null}
+			{monitorError ? <InlineErrorAlert message={errorMessage(monitorError, t)} /> : null}
 
 			<CurrentInvocation current={monitor?.current ?? null} />
 

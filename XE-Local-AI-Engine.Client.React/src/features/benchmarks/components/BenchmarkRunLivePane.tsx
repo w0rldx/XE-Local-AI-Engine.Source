@@ -1,8 +1,8 @@
-import { Alert, Loader } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Loader } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { BenchmarkRunPane } from "@/features/benchmarks/components/BenchmarkRunPane";
 import { useBenchmarkRunHub } from "@/features/benchmarks/hooks/useBenchmarkRunHub";
@@ -37,9 +37,9 @@ export function BenchmarkRunLivePane({ runId }: { runId: string }) {
 	}
 	if (!runQuery.data || runQuery.error) {
 		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-				{apiErrorMessage(runQuery.error, t("pages.benchmarks.errors.runLoad", "Could not load the run."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(runQuery.error, t("pages.benchmarks.errors.runLoad", "Could not load the run."))}
+			/>
 		);
 	}
 	// The durable snapshot stays the mutation target (its `version` is what the optimistic-concurrency writes carry);

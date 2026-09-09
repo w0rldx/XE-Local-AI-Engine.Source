@@ -1,12 +1,5 @@
-import { Alert, Badge, Button, Group, Loader, SimpleGrid, Table, Text } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconGauge,
-	IconPlugConnected,
-	IconPlugConnectedX,
-	IconRefresh,
-	IconSettingsAutomation,
-} from "@tabler/icons-react";
+import { Badge, Button, Group, Loader, SimpleGrid, Table, Text } from "@mantine/core";
+import { IconGauge, IconPlugConnected, IconPlugConnectedX, IconRefresh, IconSettingsAutomation } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 
@@ -22,6 +15,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -150,11 +144,7 @@ export function Dashboard() {
 				</Group>
 			) : null}
 
-			{statusError ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{getErrorMessage(statusError)}
-				</Alert>
-			) : null}
+			{statusError ? <InlineErrorAlert message={getErrorMessage(statusError)} /> : null}
 
 			{status ? (
 				<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
@@ -164,11 +154,7 @@ export function Dashboard() {
 					>
 						<Text c="dimmed">{getStatusSummary(status)}</Text>
 
-						{status.lastError ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{status.lastError}
-							</Alert>
-						) : null}
+						{status.lastError ? <InlineErrorAlert message={status.lastError} /> : null}
 
 						<Group>
 							<Button

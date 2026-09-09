@@ -1,11 +1,12 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
-import { http, HttpResponse } from "msw";
+import { HttpResponse, http } from "msw";
 import { useState } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
+import { DevWorkflowDetailPage, type DevWorkflowDetailSelection } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 import {
 	devWorkflowNodeRunDetail,
 	devWorkflowNodeRunSummary,
@@ -14,11 +15,10 @@ import {
 	devWorkflowTestIds,
 	devWorkflowWorkItem,
 } from "@/features/devWorkflows/test/DevWorkflowFixtures";
-import { type DevWorkflowDetailSelection, DevWorkflowDetailPage } from "@/features/devWorkflows/pages/DevWorkflowDetailPage";
 import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
-import { setupMswServer } from "@/test/UseMswServer";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
 
 const navigate = vi.hoisted(() => vi.fn());
 

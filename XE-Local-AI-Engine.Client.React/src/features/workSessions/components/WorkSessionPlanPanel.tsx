@@ -1,7 +1,8 @@
-import { Alert, Badge, Button, Group, Paper, ScrollArea, Skeleton, Stack, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerPause, IconPlayerPlay, IconPlugConnectedX, IconX } from "@tabler/icons-react";
+import { Badge, Button, Group, Paper, ScrollArea, Skeleton, Stack, Text, Tooltip } from "@mantine/core";
+import { IconPlayerPause, IconPlayerPlay, IconPlugConnectedX, IconX } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { WorkSessionStatusBadge, WorkSessionTaskStatusBadge } from "@/features/workSessions/components/WorkSessionStatusBadge";
 import {
 	isActiveWorkSessionStatus,
@@ -107,7 +108,13 @@ export function WorkSessionPlanPanel({
 	const active = isActiveWorkSessionStatus(status);
 
 	return (
-		<Paper withBorder={true} p="md" h="100%" data-testid="work-session-plan-panel" style={{ display: "flex", flexDirection: "column", minHeight: 0 }}>
+		<Paper
+			withBorder={true}
+			p="md"
+			h="100%"
+			data-testid="work-session-plan-panel"
+			style={{ display: "flex", flexDirection: "column", minHeight: 0 }}
+		>
 			<Stack gap="sm" style={{ flex: 1, minHeight: 0 }}>
 				<Group gap="xs" wrap="wrap">
 					<WorkSessionStatusBadge status={status} />
@@ -115,8 +122,19 @@ export function WorkSessionPlanPanel({
 						{t("pages.workSessions.plan.stepOf", "Step {{step}} of {{max}}", { step: stepCount, max: maxStepsPerRun })}
 					</Text>
 					{liveUpdatesUnavailable ? (
-						<Tooltip label={t("pages.workSessions.plan.liveUnavailableHint", "Live updates are unavailable; this page is polling instead.")}>
-							<Badge size="xs" variant="light" color="gray" leftSection={<IconPlugConnectedX size={10} />} data-testid="work-session-live-unavailable">
+						<Tooltip
+							label={t(
+								"pages.workSessions.plan.liveUnavailableHint",
+								"Live updates are unavailable; this page is polling instead.",
+							)}
+						>
+							<Badge
+								size="xs"
+								variant="light"
+								color="gray"
+								leftSection={<IconPlugConnectedX size={10} />}
+								data-testid="work-session-live-unavailable"
+							>
 								{t("pages.workSessions.plan.liveUnavailable", "Polling")}
 							</Badge>
 						</Tooltip>
@@ -124,14 +142,17 @@ export function WorkSessionPlanPanel({
 				</Group>
 
 				{status === "Interrupted" ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-interrupted-alert">
-						{t("pages.workSessions.plan.interrupted", "The engine restarted mid-run. Resume to continue from the last checkpoint.")}
-					</Alert>
+					<InlineErrorAlert
+						message={t(
+							"pages.workSessions.plan.interrupted",
+							"The engine restarted mid-run. Resume to continue from the last checkpoint.",
+						)}
+						variant="light"
+						data-testid="work-session-interrupted-alert"
+					/>
 				) : null}
 				{status === "Failed" && lastFailureOutcome ? (
-					<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="work-session-failed-alert">
-						{lastFailureOutcome}
-					</Alert>
+					<InlineErrorAlert message={lastFailureOutcome} variant="light" data-testid="work-session-failed-alert" />
 				) : null}
 				{status === "WaitingForApproval" ? (
 					<Text size="xs" c="orange" data-testid="work-session-waiting-approval-hint">
@@ -157,22 +178,49 @@ export function WorkSessionPlanPanel({
 
 				<Group gap="xs" wrap="wrap" data-testid="work-session-controls">
 					{status === "Draft" ? (
-						<Button size="xs" leftSection={<IconPlayerPlay size={14} />} onClick={onStart} disabled={isCommandPending} data-testid="work-session-start">
+						<Button
+							size="xs"
+							leftSection={<IconPlayerPlay size={14} />}
+							onClick={onStart}
+							disabled={isCommandPending}
+							data-testid="work-session-start"
+						>
 							{t("pages.workSessions.plan.start", "Start")}
 						</Button>
 					) : null}
 					{active ? (
-						<Button size="xs" variant="light" leftSection={<IconPlayerPause size={14} />} onClick={onPause} disabled={isCommandPending} data-testid="work-session-pause">
+						<Button
+							size="xs"
+							variant="light"
+							leftSection={<IconPlayerPause size={14} />}
+							onClick={onPause}
+							disabled={isCommandPending}
+							data-testid="work-session-pause"
+						>
 							{t("pages.workSessions.plan.pause", "Pause")}
 						</Button>
 					) : null}
 					{canResume ? (
-						<Button size="xs" leftSection={<IconPlayerPlay size={14} />} onClick={onResume} disabled={isCommandPending} data-testid="work-session-resume">
+						<Button
+							size="xs"
+							leftSection={<IconPlayerPlay size={14} />}
+							onClick={onResume}
+							disabled={isCommandPending}
+							data-testid="work-session-resume"
+						>
 							{t("pages.workSessions.plan.resume", "Resume")}
 						</Button>
 					) : null}
 					{active || status === "Paused" ? (
-						<Button size="xs" variant="subtle" color="red" leftSection={<IconX size={14} />} onClick={onCancel} disabled={isCommandPending} data-testid="work-session-cancel">
+						<Button
+							size="xs"
+							variant="subtle"
+							color="red"
+							leftSection={<IconX size={14} />}
+							onClick={onCancel}
+							disabled={isCommandPending}
+							data-testid="work-session-cancel"
+						>
 							{t("pages.workSessions.plan.cancel", "Cancel")}
 						</Button>
 					) : null}

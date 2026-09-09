@@ -138,7 +138,10 @@ describe("GraphWorkflowValidationStrip", () => {
 
 	it("renders no warning alert at all when every issue is an error", () => {
 		renderWithProviders(
-			<GraphWorkflowValidationStrip issues={[{ rule: "noStart" }, { rule: "unreachable", subject: "lookup" }]} onSelectSubject={vi.fn()} />,
+			<GraphWorkflowValidationStrip
+				issues={[{ rule: "noStart" }, { rule: "unreachable", subject: "lookup" }]}
+				onSelectSubject={vi.fn()}
+			/>,
 		);
 
 		expect(screen.queryByTestId("graph-workflow-validation-warnings")).toBeNull();

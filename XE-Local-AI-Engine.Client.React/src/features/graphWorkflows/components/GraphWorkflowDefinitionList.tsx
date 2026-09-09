@@ -2,13 +2,14 @@
 // mutation — this file only reports which row the operator picked. Same division as Preview's `WorkflowList`, which it
 // is copy-adapted from (features never import each other).
 
-import { ActionIcon, Alert, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlus, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Button, Group, Loader, Stack, Table, Text } from "@mantine/core";
+import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { GraphWorkflowDefinitionSummaryResponse } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 
 export interface GraphWorkflowDefinitionListProps {
@@ -50,9 +51,11 @@ export function GraphWorkflowDefinitionList({
 			</Group>
 
 			{error !== undefined && error !== null ? (
-				<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="gw-definition-list-error">
-					{apiErrorMessage(error, t("pages.graphWorkflows.definitions.loadFailed", "Could not load the workflow list."))}
-				</Alert>
+				<InlineErrorAlert
+					variant="light"
+					message={apiErrorMessage(error, t("pages.graphWorkflows.definitions.loadFailed", "Could not load the workflow list."))}
+					data-testid="gw-definition-list-error"
+				/>
 			) : null}
 
 			{isLoading ? <Loader size="sm" data-testid="gw-definition-list-loading" /> : null}

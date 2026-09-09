@@ -1,7 +1,7 @@
-import { Alert, Button, Group, Loader, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Button, Group, Loader, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { DevelopmentProject } from "@/features/development/models/DevelopmentModels";
 
@@ -22,11 +22,7 @@ export function DevelopmentProjectList({ error, loading, projects, selectedId, o
 					<Text c="dimmed">{t("pages.development.loading.project", "Loading Development project")}</Text>
 				</Group>
 			) : null}
-			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{error}
-				</Alert>
-			) : null}
+			{error ? <InlineErrorAlert message={error} /> : null}
 			{projects.map((project) => (
 				<Button
 					data-testid={`development-project-${project.id}`}

@@ -1,10 +1,11 @@
-import { ActionIcon, Alert, Badge, Button, Group, Progress, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
-import { IconAlertTriangle, IconPlayerStop, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Badge, Button, Group, Progress, Stack, Table, Text, TextInput, Tooltip } from "@mantine/core";
+import { IconPlayerStop, IconTrash } from "@tabler/icons-react";
 import { type FormEvent, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { ApiError } from "@/core/api/errors/ApiError";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { downloadPercent, formatBytes, isArtifactDownloading } from "@/features/training/models/TrainingModels";
 import {
@@ -95,11 +96,7 @@ export function BaseArtifactManager() {
 					</Group>
 				</form>
 
-				{submitError == null ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{submitError}
-					</Alert>
-				)}
+				{submitError == null ? null : <InlineErrorAlert message={submitError} />}
 
 				{rows.length === 0 ? (
 					<EmptyState

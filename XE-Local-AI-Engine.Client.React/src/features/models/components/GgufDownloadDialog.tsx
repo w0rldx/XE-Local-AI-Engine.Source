@@ -1,10 +1,11 @@
-import { Alert, Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
-import { IconAlertTriangle, IconCloudDownload, IconStar } from "@tabler/icons-react";
+import { Badge, Button, Group, Loader, Radio, Stack, Table, Text } from "@mantine/core";
+import { IconCloudDownload, IconStar } from "@tabler/icons-react";
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { GgufFitVerdict, GgufQuantTier, GgufRepository, GgufRepositoryFile } from "@/features/models/models/GgufModels";
 import { recommendedGgufFileName } from "@/features/models/models/GgufModels";
 import { useInspectGgufRepository } from "@/features/models/queries/useGgufDownload";
@@ -107,9 +108,10 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 				) : null}
 
 				{inspect.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="gguf-download-error">
-						{t("pages.models.gguf.download.inspectError", "Could not load this repository's files.")}
-					</Alert>
+					<InlineErrorAlert
+						message={t("pages.models.gguf.download.inspectError", "Could not load this repository's files.")}
+						data-testid="gguf-download-error"
+					/>
 				) : null}
 
 				{!inspect.isLoading && !inspect.error && files.length === 0 ? (
@@ -180,11 +182,11 @@ export function GgufDownloadDialog({ repository, onClose, onConfirm, onConfirmDe
 														</Group>
 														<Text size="xs" c="dimmed">
 															{file.isDraft
-																? t(
-																	"pages.models.gguf.download.draftHint",
-																	"Speculative-decoding drafter — not a chat model",
-																  )
-																: t(`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`, file.qualityTier)}
+																? t("pages.models.gguf.download.draftHint", "Speculative-decoding drafter — not a chat model")
+																: t(
+																		`pages.models.gguf.download.quality.${qualityTierLabelKey[file.qualityTier]}`,
+																		file.qualityTier,
+																	)}
 														</Text>
 													</Stack>
 												</Table.Td>

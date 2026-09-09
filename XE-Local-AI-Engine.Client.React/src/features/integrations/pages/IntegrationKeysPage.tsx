@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -154,9 +155,7 @@ export function IntegrationKeysPage() {
 				onClose={closeKeyDialog}
 			/>
 
-			{revealedKey !== null ? (
-				<IntegrationKeyRevealPanel apiKey={revealedKey} onDismiss={() => setRevealedKey(null)} />
-			) : null}
+			{revealedKey !== null ? <IntegrationKeyRevealPanel apiKey={revealedKey} onDismiss={() => setRevealedKey(null)} /> : null}
 
 			<SectionCard data-testid="integration-keys-card">
 				{keysQuery.isLoading ? (
@@ -165,11 +164,7 @@ export function IntegrationKeysPage() {
 						<Text c="dimmed">{t("pages.integrations.keys.list.loading", "Loading integration API keys…")}</Text>
 					</Group>
 				) : null}
-				{loadError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-keys-error">
-						{loadError}
-					</Alert>
-				) : null}
+				{loadError ? <InlineErrorAlert message={loadError} data-testid="integration-keys-error" /> : null}
 				{!(keysQuery.isLoading || loadError) ? (
 					<IntegrationKeyList keys={keys} triggers={triggers} isMutating={revokeMutation.isPending} onRevoke={handleRevoke} />
 				) : null}

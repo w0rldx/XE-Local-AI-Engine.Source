@@ -1,8 +1,8 @@
-import { Alert, Badge, Button, Checkbox, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Button, Checkbox, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import type { TrainingRunOptionsView } from "@/features/training/models/TrainingModels";
 import { formatBytes } from "@/features/training/models/TrainingModels";
@@ -31,8 +31,14 @@ export function TrainingRunWizard() {
 	const defaults = defaultsQuery.data;
 	const createMutation = useCreateTrainingRun();
 
-	const readyDatasets = useMemo(() => (datasetsQuery.data ?? []).filter((dataset) => dataset.status === "Ready"), [datasetsQuery.data]);
-	const readyArtifacts = useMemo(() => (artifactsQuery.data ?? []).filter((artifact) => artifact.status === "Ready"), [artifactsQuery.data]);
+	const readyDatasets = useMemo(
+		() => (datasetsQuery.data ?? []).filter((dataset) => dataset.status === "Ready"),
+		[datasetsQuery.data],
+	);
+	const readyArtifacts = useMemo(
+		() => (artifactsQuery.data ?? []).filter((artifact) => artifact.status === "Ready"),
+		[artifactsQuery.data],
+	);
 	const dataset = readyDatasets.find((item) => item.id === datasetId) ?? null;
 
 	// A new checkpoint means new computed options and, more importantly, different licensing — so the acknowledgement
@@ -42,8 +48,17 @@ export function TrainingRunWizard() {
 		setLicenseConfirmed(false);
 	}, [defaults?.options]);
 
-	const rejection = defaultsQuery.error != null ? t("training.runs.wizard.checkpointUnreadable", "This checkpoint cannot be sized for training.") : defaults?.rejectionReason ?? null;
-	const canStart = dataset != null && baseArtifactId != null && licenseConfirmed && options != null && defaults?.fits === true && !createMutation.isPending;
+	const rejection =
+		defaultsQuery.error != null
+			? t("training.runs.wizard.checkpointUnreadable", "This checkpoint cannot be sized for training.")
+			: (defaults?.rejectionReason ?? null);
+	const canStart =
+		dataset != null &&
+		baseArtifactId != null &&
+		licenseConfirmed &&
+		options != null &&
+		defaults?.fits === true &&
+		!createMutation.isPending;
 
 	const update = (key: keyof TrainingRunOptionsView, value: number): void => {
 		setOptions((current) => (current == null ? current : { ...current, [key]: value }));
@@ -93,9 +108,7 @@ export function TrainingRunWizard() {
 				/>
 
 				{rejection == null ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} title={t("training.runs.wizard.doesNotFit", "This run does not fit")}>
-						{rejection}
-					</Alert>
+					<InlineErrorAlert message={rejection} title={t("training.runs.wizard.doesNotFit", "This run does not fit")} />
 				)}
 
 				{defaults?.estimate == null ? null : (
@@ -103,7 +116,9 @@ export function TrainingRunWizard() {
 						<Badge variant="light">
 							{t("training.runs.wizard.estimate", "About {{estimate}} VRAM of {{available}} free", {
 								estimate: formatBytes(defaults.estimate.gpuBytes),
-								available: defaults.vramKnown ? formatBytes(defaults.availableVramBytes) : t("training.runs.wizard.vramUnknown", "unknown"),
+								available: defaults.vramKnown
+									? formatBytes(defaults.availableVramBytes)
+									: t("training.runs.wizard.vramUnknown", "unknown"),
 							})}
 						</Badge>
 						{defaults.estimate.experimental ? (
@@ -171,9 +186,9 @@ export function TrainingRunWizard() {
 				)}
 
 				{createMutation.isError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-						{t("training.runs.wizard.startFailed", "The run could not be started. Check the options and try again.")}
-					</Alert>
+					<InlineErrorAlert
+						message={t("training.runs.wizard.startFailed", "The run could not be started. Check the options and try again.")}
+					/>
 				) : null}
 
 				<Group>

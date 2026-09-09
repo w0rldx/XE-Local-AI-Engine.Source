@@ -1,10 +1,10 @@
-import { Alert, Badge, Button, Checkbox, Group, Loader, Stack, Text, Title, Tooltip } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Button, Checkbox, Group, Loader, Stack, Text, Title, Tooltip } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { type AgentTemplateSummary, isOverTokenBudget } from "@/features/agents/models/AgentTemplateModels";
 import { useAgentTemplates, useImportAgentTemplates } from "@/features/agents/queries/useAgentTemplates";
@@ -117,9 +117,13 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 				) : null}
 
 				{templatesQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-template-error">
-						{apiErrorMessage(templatesQuery.error, t("pages.agents.templates.loadError", "Could not load starter agents."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(
+							templatesQuery.error,
+							t("pages.agents.templates.loadError", "Could not load starter agents."),
+						)}
+						data-testid="agent-template-error"
+					/>
 				) : null}
 
 				{!templatesQuery.isLoading && !templatesQuery.error && templates.length === 0 ? (

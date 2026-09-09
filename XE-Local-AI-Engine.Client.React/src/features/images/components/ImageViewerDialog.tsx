@@ -3,6 +3,7 @@ import { IconCheck, IconCopy, IconDownload } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
 import { buildGeneratedImageFileName, downloadGeneratedImage } from "@/features/images/GeneratedImageDownload";
 import { useImageObjectUrl } from "@/features/images/hooks/useImageObjectUrl";
 import type { ImageJobView } from "@/features/images/models/ImageModels";
@@ -11,18 +12,6 @@ interface ImageViewerDialogProps {
 	job: ImageJobView;
 	opened: boolean;
 	onClose: () => void;
-}
-
-// One labelled metadata row. Left column is fixed-width so the values line up into a column of their own.
-function MetadataRow({ label, children }: { label: string; children: React.ReactNode }) {
-	return (
-		<Group gap="sm" align="flex-start" wrap="nowrap">
-			<Text size="xs" c="dimmed" w={110} style={{ flexShrink: 0 }}>
-				{label}
-			</Text>
-			{children}
-		</Group>
-	);
 }
 
 /**
@@ -90,21 +79,26 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 				) : null}
 
 				<Stack gap={6}>
-					<MetadataRow label={t("pages.images.form.prompt.label", "Prompt")}>
+					<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.form.prompt.label", "Prompt")}>
 						<Text size="sm" data-testid="image-viewer-prompt">
 							{job.prompt}
 						</Text>
-					</MetadataRow>
+					</LabelValueRow>
 
 					{job.negativePrompt ? (
-						<MetadataRow label={t("pages.images.form.negativePrompt.label", "Negative prompt")}>
+						<LabelValueRow
+							labelWidth={110}
+							size="xs"
+							align="flex-start"
+							label={t("pages.images.form.negativePrompt.label", "Negative prompt")}
+						>
 							<Text size="sm" data-testid="image-viewer-negative-prompt">
 								{job.negativePrompt}
 							</Text>
-						</MetadataRow>
+						</LabelValueRow>
 					) : null}
 
-					<MetadataRow label={t("pages.images.viewer.seed", "Seed")}>
+					<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.viewer.seed", "Seed")}>
 						{/*
 						 * A negative seed means the job asked the runtime to pick one and the runtime never told us which.
 						 * The pinned sd-server's job response carries no seed field at all (verified against the live
@@ -146,9 +140,9 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 								</CopyButton>
 							</Group>
 						)}
-					</MetadataRow>
+					</LabelValueRow>
 
-					<MetadataRow label={t("pages.images.viewer.settings", "Settings")}>
+					<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.viewer.settings", "Settings")}>
 						<Text size="sm" data-testid="image-viewer-settings">
 							{t(
 								"pages.images.viewer.settingsValue",
@@ -163,14 +157,14 @@ export function ImageViewerDialog({ job, opened, onClose }: ImageViewerDialogPro
 								},
 							)}
 						</Text>
-					</MetadataRow>
+					</LabelValueRow>
 
 					{job.durationMs !== null ? (
-						<MetadataRow label={t("pages.images.viewer.duration", "Duration")}>
+						<LabelValueRow labelWidth={110} size="xs" align="flex-start" label={t("pages.images.viewer.duration", "Duration")}>
 							<Text size="sm" data-testid="image-viewer-duration">
 								{t("pages.images.job.duration", "{{seconds}}s", { seconds: Math.round(job.durationMs / 1000) })}
 							</Text>
-						</MetadataRow>
+						</LabelValueRow>
 					) : null}
 				</Stack>
 			</Stack>

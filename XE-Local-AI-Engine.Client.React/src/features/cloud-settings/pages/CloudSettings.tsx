@@ -13,6 +13,7 @@ import {
 	saveCloudSettingsMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -212,11 +213,7 @@ export function CloudSettings() {
 				</Group>
 			) : null}
 
-			{settingsError ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{errorMessage(settingsError)}
-				</Alert>
-			) : null}
+			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
 
 			{/* Persistent egress banner — shown whenever a Codex session is active */}
 			{codexSignedIn ? (

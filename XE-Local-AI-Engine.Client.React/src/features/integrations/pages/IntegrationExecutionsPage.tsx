@@ -1,10 +1,11 @@
-import { Alert, Chip, Group, Loader, Select, Text } from "@mantine/core";
-import { IconAlertTriangle, IconPlug } from "@tabler/icons-react";
+import { Chip, Group, Loader, Select, Text } from "@mantine/core";
+import { IconPlug } from "@tabler/icons-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { getErrorStatus } from "@/core/api/errors/RetryClassification";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -177,14 +178,8 @@ export function IntegrationExecutionsPage() {
 						onError: (error) =>
 							toast.error(
 								getErrorStatus(error) === 409
-									? t(
-											"pages.integrations.executions.errors.cancelConflict",
-											"This execution had already finished.",
-										)
-									: apiErrorMessage(
-											error,
-											t("pages.integrations.executions.errors.cancel", "Could not cancel the execution."),
-										),
+									? t("pages.integrations.executions.errors.cancelConflict", "This execution had already finished.")
+									: apiErrorMessage(error, t("pages.integrations.executions.errors.cancel", "Could not cancel the execution.")),
 							),
 					},
 				);
@@ -194,7 +189,10 @@ export function IntegrationExecutionsPage() {
 	);
 
 	const loadError = executionsQuery.error
-		? apiErrorMessage(executionsQuery.error, t("pages.integrations.executions.errors.load", "Could not load integration executions."))
+		? apiErrorMessage(
+				executionsQuery.error,
+				t("pages.integrations.executions.errors.load", "Could not load integration executions."),
+			)
 		: undefined;
 
 	return (
@@ -210,7 +208,11 @@ export function IntegrationExecutionsPage() {
 
 			<SectionCard data-testid="integration-executions-card">
 				<Group gap="sm" align="flex-end">
-					<Chip.Group multiple={false} value={statusChipValue(filters.status)} onChange={(value) => handleStatusChange(value as string)}>
+					<Chip.Group
+						multiple={false}
+						value={statusChipValue(filters.status)}
+						onChange={(value) => handleStatusChange(value as string)}
+					>
 						<Group
 							gap={4}
 							role="group"
@@ -254,11 +256,7 @@ export function IntegrationExecutionsPage() {
 						<Text c="dimmed">{t("pages.integrations.executions.list.loading", "Loading executions…")}</Text>
 					</Group>
 				) : null}
-				{loadError ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-executions-error">
-						{loadError}
-					</Alert>
-				) : null}
+				{loadError ? <InlineErrorAlert message={loadError} data-testid="integration-executions-error" /> : null}
 				{!(executionsQuery.isLoading || loadError) ? (
 					<>
 						<IntegrationExecutionTable

@@ -13,12 +13,13 @@ import {
 	ThemeIcon,
 	Title,
 } from "@mantine/core";
-import { IconAlertTriangle, IconCircleCheck, IconCircleX, IconPlayerStop, IconReload, IconTrash } from "@tabler/icons-react";
+import { IconCircleCheck, IconCircleX, IconPlayerStop, IconReload, IconTrash } from "@tabler/icons-react";
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
 import { useSourceBuildHub } from "@/features/node-settings/hooks/useSourceBuildHub";
@@ -174,9 +175,7 @@ export function SourceBuildCard() {
 								setAcknowledged(false);
 							}}
 						/>
-						<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-							{t("pages.nodeSettings.llamaCpp.sourceBuild.riskWarning")}
-						</Alert>
+						<InlineErrorAlert message={t("pages.nodeSettings.llamaCpp.sourceBuild.riskWarning")} />
 						<Checkbox
 							checked={acknowledged}
 							onChange={(event) => setAcknowledged(event.currentTarget.checked)}
@@ -261,7 +260,8 @@ export function SourceBuildCard() {
 							disabled={isBuilding || runningProcesses > 0}
 							onClick={() =>
 								remove.mutate(undefined, {
-									onError: (error) => toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
+									onError: (error) =>
+										toast.error(apiErrorMessage(error, t("pages.nodeSettings.llamaCpp.sourceBuild.removeError"))),
 								})
 							}
 						>

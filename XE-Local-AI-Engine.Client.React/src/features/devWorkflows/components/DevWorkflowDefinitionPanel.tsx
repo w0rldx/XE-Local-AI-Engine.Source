@@ -1,10 +1,10 @@
-import { Alert, Badge, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Group, Loader, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { DevWorkflowGraphView } from "@/features/devWorkflows/components/DevWorkflowGraphView";
 import { toDevWorkflowDefinitionCanvasGraph } from "@/features/devWorkflows/models/DevWorkflowGraphModels";
 import { useDevWorkflowDefinition } from "@/features/devWorkflows/queries/useDevWorkflows";
@@ -44,9 +44,14 @@ export function DevWorkflowDefinitionPanel({ definitionId, definitionName }: Dev
 
 	if (definitionQuery.isError) {
 		return (
-			<Alert color="red" variant="light" icon={<IconAlertTriangle size={16} />} data-testid="dev-workflow-definition-error">
-				{apiErrorMessage(definitionQuery.error, t("pages.devWorkflows.definition.loadFailed", "Could not load this template."))}
-			</Alert>
+			<InlineErrorAlert
+				variant="light"
+				message={apiErrorMessage(
+					definitionQuery.error,
+					t("pages.devWorkflows.definition.loadFailed", "Could not load this template."),
+				)}
+				data-testid="dev-workflow-definition-error"
+			/>
 		);
 	}
 

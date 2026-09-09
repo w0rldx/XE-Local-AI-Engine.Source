@@ -1,5 +1,5 @@
 import { Alert, Anchor, Button, Group, List, SimpleGrid, Table, Text } from "@mantine/core";
-import { IconAlertTriangle, IconCheck, IconExternalLink, IconInfoCircle, IconLink } from "@tabler/icons-react";
+import { IconCheck, IconExternalLink, IconInfoCircle, IconLink } from "@tabler/icons-react";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,6 +13,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -154,11 +155,7 @@ export function NodeBinding() {
 					{message}
 				</Alert>
 			) : null}
-			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{error}
-				</Alert>
-			) : null}
+			{error ? <InlineErrorAlert message={error} /> : null}
 
 			<SimpleGrid cols={{ base: 1, md: 2 }} spacing="lg">
 				<SectionCard title="Device binding">

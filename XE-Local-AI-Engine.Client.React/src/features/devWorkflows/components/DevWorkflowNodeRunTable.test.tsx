@@ -94,14 +94,18 @@ describe("DevWorkflowNodeRunTable", () => {
 	});
 
 	it("renders a progress indicator for a Running row", () => {
-		renderWithProviders(<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ status: "Running" })]} onSelect={vi.fn()} />);
+		renderWithProviders(
+			<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ status: "Running" })]} onSelect={vi.fn()} />,
+		);
 
 		expect(hasProgressIndicator(statusCell(devWorkflowTestIds.nodeRun))).toBe(true);
 	});
 
 	it("renders no progress indicator for a Running row when the operator asked for reduced motion", () => {
 		reducedMotion.value = true;
-		renderWithProviders(<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ status: "Running" })]} onSelect={vi.fn()} />);
+		renderWithProviders(
+			<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ status: "Running" })]} onSelect={vi.fn()} />,
+		);
 
 		expect(hasProgressIndicator(statusCell(devWorkflowTestIds.nodeRun))).toBe(false);
 	});
@@ -178,7 +182,9 @@ describe("DevWorkflowNodeRunTable", () => {
 
 	it("puts a real focusable control in the row, because a bare row click is unreachable by keyboard", () => {
 		const onSelect = vi.fn();
-		renderWithProviders(<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ label: "Research" })]} onSelect={onSelect} />);
+		renderWithProviders(
+			<DevWorkflowNodeRunTable nodes={[devWorkflowNodeRunSummary({ label: "Research" })]} onSelect={onSelect} />,
+		);
 
 		// This table is A0's ONLY execution view, so every node has to be reachable without a pointer.
 		const control = screen.getByRole("button", { name: "Research" });
@@ -197,7 +203,9 @@ describe("DevWorkflowNodeRunTable", () => {
 			/>,
 		);
 
-		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe("1,200 / 340 tok · 7 tool calls");
+		expect(screen.getByTestId(`dev-workflow-node-cost-${devWorkflowTestIds.nodeRun}`).textContent).toBe(
+			"1,200 / 340 tok · 7 tool calls",
+		);
 	});
 
 	// One tool call is not "1 tool calls". The key is a plural family, so it needs both forms in every locale or

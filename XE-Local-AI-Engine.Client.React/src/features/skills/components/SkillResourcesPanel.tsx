@@ -1,10 +1,11 @@
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconEye, IconEyeOff } from "@tabler/icons-react";
+import { Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconEye, IconEyeOff } from "@tabler/icons-react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { CodeBlock } from "@/core/ui/components/CodeBlock/CodeBlock";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { useSkillResourceContent, useSkillResources } from "@/features/skills/queries/useSkillImport";
 
 interface SkillResourcesPanelProps {
@@ -31,9 +32,13 @@ export function SkillResourcesPanel({ skillId }: SkillResourcesPanelProps) {
 
 	if (resourcesQuery.error) {
 		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="skill-resources-error">
-				{apiErrorMessage(resourcesQuery.error, t("pages.skills.resources.error", "Could not load the bundled resources."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(
+					resourcesQuery.error,
+					t("pages.skills.resources.error", "Could not load the bundled resources."),
+				)}
+				data-testid="skill-resources-error"
+			/>
 		);
 	}
 
@@ -74,9 +79,12 @@ export function SkillResourcesPanel({ skillId }: SkillResourcesPanelProps) {
 							contentQuery.isLoading ? (
 								<Loader size="xs" />
 							) : contentQuery.error ? (
-								<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-									{apiErrorMessage(contentQuery.error, t("pages.skills.resources.error", "Could not load the bundled resources."))}
-								</Alert>
+								<InlineErrorAlert
+									message={apiErrorMessage(
+										contentQuery.error,
+										t("pages.skills.resources.error", "Could not load the bundled resources."),
+									)}
+								/>
 							) : (
 								<div data-testid={`skill-resource-content-${resource.name}`}>
 									<CodeBlock language="markdown" code={contentQuery.data?.content ?? ""} />

@@ -119,9 +119,7 @@ describe("validateDevWorkflowGraph", () => {
 
 	it("insists on exactly one entry node, naming the extra one", () => {
 		// Two roots: `plan` is reached, `research` and `stray` are not.
-		const issues = validateDevWorkflowGraph(
-			chain({ nodes: [node("research"), node("plan"), node("approval"), node("stray")] }),
-		);
+		const issues = validateDevWorkflowGraph(chain({ nodes: [node("research"), node("plan"), node("approval"), node("stray")] }));
 
 		expect(issues.map((issue) => issue.rule)).toContain("multipleEntries");
 		expect(issues.find((issue) => issue.rule === "multipleEntries")?.subject).toBe("stray");
@@ -254,7 +252,11 @@ describe("validateDevWorkflowGraph", () => {
 		expect(
 			rules(
 				templateGraph({
-					nodes: [node("start"), node("implement", { nodeType: "DevTask", isTemplate: true }), node("join", { nodeType: "Join" })],
+					nodes: [
+						node("start"),
+						node("implement", { nodeType: "DevTask", isTemplate: true }),
+						node("join", { nodeType: "Join" }),
+					],
 					edges: [
 						{ from: "start", to: "join" },
 						{ from: "implement", to: "join" },
@@ -275,9 +277,9 @@ describe("validateDevWorkflowGraph", () => {
 		expect(
 			validateDevWorkflowGraph(chain({ nodes: [node("research"), node("plan"), node("approval", { retryTarget: "plan" })] })),
 		).toEqual([]);
-		expect(
-			rules(chain({ nodes: [node("research"), node("plan", { retryTarget: "approval" }), node("approval")] })),
-		).toContain("retryTargetNotAncestor");
+		expect(rules(chain({ nodes: [node("research"), node("plan", { retryTarget: "approval" }), node("approval")] }))).toContain(
+			"retryTargetNotAncestor",
+		);
 	});
 
 	it("refuses a gate out-edge no answer would take, and names the gate that owns it", () => {
@@ -314,11 +316,7 @@ describe("validateDevWorkflowGraph", () => {
 		// that owns it is named first, or the operator is sent to fix the line that is fine.
 		const issues = validateDevWorkflowGraph({
 			schemaVersion: 1,
-			nodes: [
-				node("alpha", { nodeType: "HumanGate" }),
-				node("beta", { nodeType: "HumanGate" }),
-				node("done"),
-			],
+			nodes: [node("alpha", { nodeType: "HumanGate" }), node("beta", { nodeType: "HumanGate" }), node("done")],
 			edges: [
 				{ from: "alpha", to: "beta", condition: { path: "decision", op: "eq", value: "Approve" } },
 				{ from: "beta", to: "done", condition: { path: "decision", op: "eq", value: "Approved" } },
@@ -351,9 +349,14 @@ describe("validateDevWorkflowGraph", () => {
 		).toEqual([]);
 
 		// A DevTask writes a worktree under its own data root, not the repository, so it is not what this rule is about.
-		expect(rules(chain({ nodes: [node("research"), node("implement", { nodeType: "DevTask" })], edges: [{ from: "research", to: "implement" }] }))).not.toContain(
-			"ungatedWrite",
-		);
+		expect(
+			rules(
+				chain({
+					nodes: [node("research"), node("implement", { nodeType: "DevTask" })],
+					edges: [{ from: "research", to: "implement" }],
+				}),
+			),
+		).not.toContain("ungatedWrite");
 	});
 
 	it("refuses a template VALIDATION node no edge leaves, and only that", () => {
@@ -403,8 +406,12 @@ describe("validateDevWorkflowGraph", () => {
 					node("j1", { nodeType: "Join" }),
 					node("j2", { nodeType: "Join" }),
 					node("end", { nodeType: "Join" }),
-					node("m1", { materialization: { templateNodeKey: "t1", artifactKind: "TaskPackage", joinNodeKey: "j1", maxChildren: 2 } }),
-					node("m2", { materialization: { templateNodeKey: "t2", artifactKind: "TaskPackage", joinNodeKey: "j2", maxChildren: 2 } }),
+					node("m1", {
+						materialization: { templateNodeKey: "t1", artifactKind: "TaskPackage", joinNodeKey: "j1", maxChildren: 2 },
+					}),
+					node("m2", {
+						materialization: { templateNodeKey: "t2", artifactKind: "TaskPackage", joinNodeKey: "j2", maxChildren: 2 },
+					}),
 					node("t1", { nodeType: "DevTask" }),
 					node("t2", { nodeType: "DevTask" }),
 				],
@@ -565,9 +572,9 @@ describe("validateDevWorkflowGraph", () => {
 	});
 
 	it("insists an Any join has at least two inbound edges, since one is the same as All", () => {
-		expect(
-			rules(chain({ nodes: [node("research"), node("plan", { joinPolicy: "Any" }), node("approval")] })),
-		).toContain("joinAnyNeedsTwoInbound");
+		expect(rules(chain({ nodes: [node("research"), node("plan", { joinPolicy: "Any" }), node("approval")] }))).toContain(
+			"joinAnyNeedsTwoInbound",
+		);
 
 		// Case-insensitive, the way the server's own `Enum.TryParse(..., ignoreCase: true)` reads it.
 		expect(

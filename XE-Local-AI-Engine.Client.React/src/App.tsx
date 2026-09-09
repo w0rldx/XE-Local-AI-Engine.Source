@@ -1,6 +1,4 @@
 import { RouterProvider } from "@tanstack/react-router";
-import dayjs from "dayjs";
-import utc from "dayjs/plugin/utc";
 import { ErrorBoundary } from "react-error-boundary";
 
 import { AppErrorFallback } from "@/AppErrorFallback";
@@ -14,8 +12,6 @@ import { OnboardingProvider } from "@/features/onboarding/components/OnboardingP
 import { ClientAiRuntimeProvider } from "@/features/voice/ClientAiRuntimeProvider";
 
 export function App() {
-	dayjs.extend(utc);
-
 	return (
 		<ThemeProvider>
 			<TanStackQueryProvider>

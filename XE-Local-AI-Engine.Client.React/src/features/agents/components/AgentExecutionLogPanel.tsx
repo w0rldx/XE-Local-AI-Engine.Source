@@ -1,10 +1,10 @@
-import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { TablePaginationFooter } from "@/core/ui/components/TablePagination/TablePaginationFooter";
 import { useTablePagination } from "@/core/ui/components/TablePagination/useTablePagination";
 import type { AgentExecutionLog } from "@/features/agents/models/AgentExecutionLogModels";
@@ -60,9 +60,13 @@ export function AgentExecutionLogPanel({ agentDefinitionId, agentName, enabled }
 				) : null}
 
 				{logsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-execution-log-error">
-						{apiErrorMessage(logsQuery.error, t("pages.agents.executionLog.errors.load", "Could not load run diagnostics."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(
+							logsQuery.error,
+							t("pages.agents.executionLog.errors.load", "Could not load run diagnostics."),
+						)}
+						data-testid="agent-execution-log-error"
+					/>
 				) : null}
 
 				{!logsQuery.isLoading && !logsQuery.error && logs.length === 0 ? (

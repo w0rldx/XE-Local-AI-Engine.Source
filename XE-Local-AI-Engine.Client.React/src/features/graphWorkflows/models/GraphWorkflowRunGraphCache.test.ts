@@ -10,7 +10,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { graphToCanvas } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowGraph } from "@/features/graphWorkflows/models/GraphWorkflowModels";
 import { toGraphWorkflowRunCanvas } from "@/features/graphWorkflows/models/GraphWorkflowRunGraph";
-import { eightNodeGraph, graphWorkflowRun, graphWorkflowRunSummary, makeNodeRun } from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
+import {
+	eightNodeGraph,
+	graphWorkflowRun,
+	graphWorkflowRunSummary,
+	makeNodeRun,
+} from "@/features/graphWorkflows/test/GraphWorkflowFixtures";
 
 vi.mock("@/features/graphWorkflows/models/GraphWorkflowCanvasModels", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@/features/graphWorkflows/models/GraphWorkflowCanvasModels")>();

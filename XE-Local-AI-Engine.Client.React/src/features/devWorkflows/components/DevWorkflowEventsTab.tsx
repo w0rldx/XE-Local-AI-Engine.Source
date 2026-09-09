@@ -1,5 +1,5 @@
 import { Alert, Anchor, Badge, Button, Code, Collapse, Group, Paper, Stack, Text } from "@mantine/core";
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { formatTime } from "@/core/formatting/TimeFormatting";
@@ -49,14 +49,16 @@ export function DevWorkflowEventsTab({
 	// And only when the operator had actually PAGED BACK. The anchored page is refetched either way, so a re-anchor
 	// with nothing older loaded discards no history — announcing it would train the operator to ignore the notice for
 	// the case where a log they had walked through really did vanish.
-	const previousAnchorParam = useRef(anchorParam);
-	const olderPagesLoaded = useRef(0);
+	// State, not refs: this whole block IS a render-phase state adjustment, and a ref read during render is the one
+	// value React does not guarantee is the one this render was computed from.
+	const [previousAnchorParam, setPreviousAnchorParam] = useState(anchorParam);
+	const [hasLoadedOlder, setHasLoadedOlder] = useState(false);
 	const [wasReanchored, setWasReanchored] = useState(false);
-	if (previousAnchorParam.current !== anchorParam) {
-		const grew = previousAnchorParam.current > 0 && anchorParam > previousAnchorParam.current;
-		previousAnchorParam.current = anchorParam;
-		setWasReanchored(grew && anchor === "newest" && olderPagesLoaded.current > 0);
-		olderPagesLoaded.current = 0;
+	if (previousAnchorParam !== anchorParam) {
+		const grew = previousAnchorParam > 0 && anchorParam > previousAnchorParam;
+		setPreviousAnchorParam(anchorParam);
+		setWasReanchored(grew && anchor === "newest" && hasLoadedOlder);
+		setHasLoadedOlder(false);
 	}
 
 	/**
@@ -67,7 +69,7 @@ export function DevWorkflowEventsTab({
 	 * down in the same commit that raised it.
 	 */
 	const resetNotice = (loadedOlder: boolean): void => {
-		olderPagesLoaded.current = loadedOlder ? olderPagesLoaded.current + 1 : 0;
+		setHasLoadedOlder(loadedOlder);
 		if (wasReanchored) {
 			setWasReanchored(false);
 		}

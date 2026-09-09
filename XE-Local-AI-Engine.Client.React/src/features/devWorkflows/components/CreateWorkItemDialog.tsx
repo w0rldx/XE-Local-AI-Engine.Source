@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Select, Stack, TextInput, Textarea } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 

@@ -1,7 +1,7 @@
-import { Alert, Button, Group, Loader, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconDeviceFloppy, IconPlus, IconRobot, IconSparkles, IconX } from "@tabler/icons-react";
+import { Button, Group, Loader, Stack, Text } from "@mantine/core";
+import { IconDeviceFloppy, IconPlus, IconRobot, IconSparkles, IconX } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -9,23 +9,20 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { listLocalModelsOptions } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
-import { useUnsavedChangesGuard } from "@/core/ui/hooks/useUnsavedChangesGuard";
 import { toast } from "@/core/ui/notifications/Toast";
-import {
-	AgentDefinitionForm,
-	type AgentDefinitionFormHandle,
-	type AgentModelOption,
-} from "@/features/agents/components/AgentDefinitionForm";
+import { AgentDefinitionForm, type AgentModelOption } from "@/features/agents/components/AgentDefinitionForm";
 import { AgentDefinitionList } from "@/features/agents/components/AgentDefinitionList";
 import { AgentExecutionLogPanel } from "@/features/agents/components/AgentExecutionLogPanel";
 import { AgentTemplateGallery } from "@/features/agents/components/AgentTemplateGallery";
 import { FeedbackInsightsPanel } from "@/features/agents/components/FeedbackInsightsPanel";
 import { GoldenConversationPanel } from "@/features/agents/components/GoldenConversationPanel";
 import { PlaybookPanel } from "@/features/agents/components/PlaybookPanel";
+import { useAgentEditorDialog } from "@/features/agents/hooks/useAgentEditorDialog";
 import { toSaveAgentDefinitionRequest } from "@/features/agents/models/AgentDefinitionMappers";
 import type { AgentDefinition, AgentDefinitionFormValues } from "@/features/agents/models/AgentDefinitionModels";
 import {
@@ -39,7 +36,6 @@ import {
 	useToolCapableModels,
 	useUpdateAgentDefinition,
 } from "@/features/agents/queries/useAgentDefinitions";
-import { useAgentManagementStore } from "@/features/agents/stores/AgentManagementStore";
 import { TutorialInvitation } from "@/features/onboarding/components/TutorialInvitation";
 
 const emptyFormValues: AgentDefinitionFormValues = {
@@ -89,23 +85,7 @@ export function AgentsPage() {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 
-	const editorTarget = useAgentManagementStore((state) => state.editorTarget);
-	const openCreate = useAgentManagementStore((state) => state.actions.openCreate);
-	const openEdit = useAgentManagementStore((state) => state.actions.openEdit);
-	const closeEditor = useAgentManagementStore((state) => state.actions.closeEditor);
-
 	const [isGalleryOpen, setGalleryOpen] = useState(false);
-	// Unsaved-edits state reported by the open editor form. Drives both the dialog close-guard and the route nav-guard.
-	const [isEditorDirty, setIsEditorDirty] = useState(false);
-	// Imperative handle to the editor form so the dialog footer's Save button can trigger validate-then-submit.
-	const formRef = useRef<AgentDefinitionFormHandle>(null);
-
-	// Fix the "stuck editor" bug: the management store is a module singleton whose editorTarget survives route unmount,
-	// so navigating away and back would reopen the editor. Reset it when the page unmounts.
-	useEffect(() => closeEditor, [closeEditor]);
-
-	// Block in-app navigation / tab close while the editor has unsaved edits (prompts to discard via the shared confirm).
-	useUnsavedChangesGuard({ isDirty: isEditorDirty });
 
 	const definitionsQuery = useAgentDefinitions();
 	const toolCapableModelsQuery = useToolCapableModels();
@@ -118,17 +98,23 @@ export function AgentsPage() {
 	const definitions = useMemo(() => definitionsQuery.data ?? [], [definitionsQuery.data]);
 	const toolCapableModels = toolCapableModelsQuery.data ?? [];
 
+	const {
+		editorTarget,
+		editingDefinition,
+		isEditorOpen,
+		isEditorDirty,
+		setIsEditorDirty,
+		formRef,
+		openCreate,
+		openEdit,
+		handleCloseEditor,
+		requestCloseEditor,
+	} = useAgentEditorDialog(definitions);
+
 	const modelOptions = useMemo<AgentModelOption[]>(
 		() => (modelsData?.items ?? []).map((model) => ({ value: model.modelName ?? "", label: model.modelName ?? "" })),
 		[modelsData],
 	);
-
-	const editingDefinition = useMemo(() => {
-		if (editorTarget?.mode !== "edit") {
-			return undefined;
-		}
-		return definitions.find((definition) => definition.id === editorTarget.id);
-	}, [definitions, editorTarget]);
 
 	const isMutating = createMutation.isPending || updateMutation.isPending || deleteMutation.isPending;
 	const submitError =
@@ -138,35 +124,6 @@ export function AgentsPage() {
 					t("pages.agents.errors.save", "Could not save the agent definition."),
 				)
 			: undefined;
-
-	// Close the editor and drop the dirty flag together so a stale "dirty" never keeps blocking navigation after the
-	// dialog is dismissed. Used for the no-confirm paths (successful save — nothing left to discard).
-	const handleCloseEditor = useCallback(() => {
-		setIsEditorDirty(false);
-		closeEditor();
-	}, [closeEditor]);
-
-	// Single page-owned close path for every user-initiated dismiss (title-bar X, footer Cancel, overlay, escape). When
-	// the form has unsaved edits it prompts to discard and only closes on confirm; otherwise it closes immediately. This
-	// keeps all four dismiss affordances behaving identically (the inconsistency was: footer Cancel discarded silently
-	// while the X confirmed).
-	const requestCloseEditor = useCallback(async () => {
-		if (isEditorDirty) {
-			const confirmed = await confirm({
-				title: t("components.dialogShell.unsavedTitle", "Discard unsaved changes?"),
-				description: t(
-					"components.dialogShell.unsavedDescription",
-					"You have unsaved changes. If you leave now, they will be lost.",
-				),
-				confirmationText: t("common.discard", "Discard"),
-				cancellationText: t("common.keepEditing", "Keep editing"),
-			});
-			if (!confirmed) {
-				return;
-			}
-		}
-		handleCloseEditor();
-	}, [confirm, handleCloseEditor, isEditorDirty, t]);
 
 	const handleSubmit = useCallback(
 		(values: AgentDefinitionFormValues) => {
@@ -204,7 +161,6 @@ export function AgentsPage() {
 		[confirm, deleteMutation, t],
 	);
 
-	const isEditorOpen = editorTarget !== null;
 	const formInitialValues = editingDefinition ? toFormValues(editingDefinition) : emptyFormValues;
 
 	return (
@@ -250,9 +206,10 @@ export function AgentsPage() {
 					</Group>
 				) : null}
 				{definitionsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-list-error">
-						{apiErrorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(definitionsQuery.error, t("pages.agents.errors.load", "Could not load agent definitions."))}
+						data-testid="agent-list-error"
+					/>
 				) : null}
 				{!definitionsQuery.isLoading && !definitionsQuery.error ? (
 					<AgentDefinitionList definitions={definitions} isMutating={isMutating} onEdit={openEdit} onDelete={handleDelete} />

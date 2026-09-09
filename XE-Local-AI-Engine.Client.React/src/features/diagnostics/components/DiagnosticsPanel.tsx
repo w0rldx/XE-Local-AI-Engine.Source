@@ -20,6 +20,7 @@ import { useTranslation } from "react-i18next";
 import type { Snapshot } from "@/core/diagnostics/Diagnostics";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -120,11 +121,7 @@ export function DiagnosticsPanel() {
 				</Group>
 			)}
 
-			{isError && (
-				<Alert variant="light" color="red" icon={<IconAlertTriangle size={16} />}>
-					{t("diagnostics.loadError")}
-				</Alert>
-			)}
+			{isError && <InlineErrorAlert variant="light" message={t("diagnostics.loadError")} />}
 
 			{!isLoading && !isError && snapshots && snapshots.length === 0 && (
 				<EmptyState

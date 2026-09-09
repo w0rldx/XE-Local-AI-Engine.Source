@@ -2,8 +2,8 @@ import { ActionIcon, Button, Checkbox, Group, Select, Stack, Text, TextInput } f
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { fieldError } from "@/core/ui/forms/ZodFieldErrors";
 import { type CustomToolEditorSectionProps, useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
-import { errorAt } from "@/features/customTools/models/CustomToolFormErrors";
 import {
 	CUSTOM_TOOL_PARAMETER_TYPES,
 	type CustomToolParameter,
@@ -62,7 +62,7 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 						placeholder={t("pages.customTools.form.parameters.namePlaceholder", "city")}
 						value={parameter.name}
 						error={
-							errorAt(errors, `parameters.${index}.name`)
+							fieldError(errors, `parameters.${index}.name`)
 								? t("pages.customTools.form.parameters.nameInvalid", "Identifier only")
 								: undefined
 						}

@@ -1,8 +1,9 @@
 import { Alert, Badge, Checkbox, Group, Loader, Paper, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle, IconInfoCircle } from "@tabler/icons-react";
+import { IconInfoCircle } from "@tabler/icons-react";
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { SkillSummary } from "@/features/skills/models/SkillModels";
 import { useSkills } from "@/features/skills/queries/useSkills";
 
@@ -80,9 +81,10 @@ export function AgentSkillSelector({ selectedSkillIds, onToggleSkill }: AgentSki
 			) : null}
 
 			{skillsQuery.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="agent-skill-error">
-					{t("pages.agents.form.skills.loadError", "Could not load the skill library.")}
-				</Alert>
+				<InlineErrorAlert
+					message={t("pages.agents.form.skills.loadError", "Could not load the skill library.")}
+					data-testid="agent-skill-error"
+				/>
 			) : null}
 
 			{!skillsQuery.isLoading && !skillsQuery.error && rows.length === 0 ? (

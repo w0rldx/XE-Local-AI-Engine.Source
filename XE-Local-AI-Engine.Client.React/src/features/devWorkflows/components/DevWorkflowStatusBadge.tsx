@@ -87,7 +87,5 @@ export function DevWorkflowNodeStatusBadge({ status, testId }: { status: DevWork
 export function DevWorkflowWorkItemStatusBadge({ status, testId }: { status: DevWorkflowWorkItemStatus; testId?: string }) {
 	const { t } = useTranslation();
 	const label = t(`pages.devWorkflows.workItemStatus.${status}`, status);
-	return (
-		<StatusBadge color={workItemStatusColors[status]} label={label} aria-label={label} data-testid={testId} />
-	);
+	return <StatusBadge color={workItemStatusColors[status]} label={label} aria-label={label} data-testid={testId} />;
 }

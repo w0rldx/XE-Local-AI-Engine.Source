@@ -488,8 +488,7 @@ export function serverWarningsToIssues(
  * disagree in both directions: `\s` misses U+0085 (a path the server refuses would be green here) and adds U+FEFF (a
  * path the server accepts would block the save). Neither is a set this client may narrow or widen on its own.
  */
-const GRAPH_WORKFLOW_PATH_FORBIDDEN =
-	/[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000[\]*()]/;
+const GRAPH_WORKFLOW_PATH_FORBIDDEN = /[\t\n\v\f\r \u0085\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000[\]*()]/;
 
 /** `IsDotPath` itself: every dot-separated segment non-empty and free of the characters above. */
 function isGraphWorkflowDotPath(path: string): boolean {

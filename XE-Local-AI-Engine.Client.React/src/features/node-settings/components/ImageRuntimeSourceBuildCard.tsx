@@ -13,20 +13,13 @@ import {
 	ThemeIcon,
 	Title,
 } from "@mantine/core";
-import {
-	IconAlertTriangle,
-	IconCircleCheck,
-	IconCircleX,
-	IconPlayerEject,
-	IconPlayerStop,
-	IconReload,
-	IconTrash,
-} from "@tabler/icons-react";
-import { useEffect, useState } from "react";
+import { IconCircleCheck, IconCircleX, IconPlayerEject, IconPlayerStop, IconReload, IconTrash } from "@tabler/icons-react";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { toast } from "@/core/ui/notifications/Toast";
 import { CudaBuildLogView } from "@/features/node-settings/components/CudaBuildLogView";
 import { useImageRuntimeSourceBuildHub } from "@/features/node-settings/hooks/useImageRuntimeSourceBuildHub";
@@ -74,10 +67,15 @@ export function ImageRuntimeSourceBuildCard() {
 	const hub = useImageRuntimeSourceBuildHub(developerMode);
 
 	const managed = runtime.data?.managedRuntime;
-	useEffect(() => {
-		if (managed == null) {
-			return;
-		}
+	// The installed runtime's identity. `installedAtUtc` moves only when a build actually installs a new runtime, so a
+	// refetch of this status (a new object every time, and this query is refetched around every build and eject) leaves
+	// it unchanged. Seeding the draft off the object identity instead — which is what an effect keyed on `managed` did —
+	// wiped whatever backend, repository or commit the operator had just typed on the next refetch. Adjusted during
+	// render rather than in an effect so the seeded values are on the first paint, not one paint later.
+	const managedIdentity = managed?.installedAtUtc ?? null;
+	const [seededIdentity, setSeededIdentity] = useState<number | null>(null);
+	if (managed != null && managedIdentity !== seededIdentity) {
+		setSeededIdentity(managedIdentity);
 		setBackend(managed.desiredBackend);
 		setSource(managed.sourceSelection);
 		setRepository(managed.sourceSelection === "custom" ? managed.sourceRepository : "");
@@ -87,7 +85,7 @@ export function ImageRuntimeSourceBuildCard() {
 				: "",
 		);
 		setAcknowledged(false);
-	}, [managed]);
+	}
 
 	const recoveryOnly = !developerMode && managed?.validity === "invalid";
 	if (!developerMode && !recoveryOnly) {
@@ -222,9 +220,7 @@ export function ImageRuntimeSourceBuildCard() {
 									value={commit}
 									onChange={(event) => setCommit(event.currentTarget.value)}
 								/>
-								<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-									{t("pages.nodeSettings.imageRuntime.sourceBuild.riskWarning")}
-								</Alert>
+								<InlineErrorAlert message={t("pages.nodeSettings.imageRuntime.sourceBuild.riskWarning")} />
 								<Checkbox
 									checked={acknowledged}
 									onChange={(event) => setAcknowledged(event.currentTarget.checked)}
@@ -281,9 +277,7 @@ export function ImageRuntimeSourceBuildCard() {
 							{t(`pages.nodeSettings.imageRuntime.sourceBuild.revisions.${managed.sourceRevisionMode}`)}
 						</Text>
 						{managed.validity === "invalid" && managed.invalidReason ? (
-							<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-								{managed.invalidReason}
-							</Alert>
+							<InlineErrorAlert message={managed.invalidReason} />
 						) : null}
 					</Stack>
 				) : null}

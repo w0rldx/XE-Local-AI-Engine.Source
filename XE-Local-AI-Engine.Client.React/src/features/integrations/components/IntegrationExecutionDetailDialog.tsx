@@ -1,23 +1,21 @@
-import { Alert, Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
-import { useRef } from "react";
+import { Code, Divider, Group, Loader, Stack, Text, Tooltip } from "@mantine/core";
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { DialogShell } from "@/core/ui/components/DialogShell/DialogShell";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { LabelValueRow } from "@/core/ui/components/LabelValueRow/LabelValueRow";
+import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
 import { formatIntegrationDuration, shortPrincipalId } from "@/features/integrations/components/IntegrationFormatters";
 import { IntegrationExecutionStatusBadge } from "@/features/integrations/components/IntegrationStatusBadge";
-import { IntegrationExecutionTimeline } from "@/features/integrations/components/IntegrationExecutionTimeline";
 import {
 	type IntegrationExecution,
 	type IntegrationExecutionStatus,
 	isActiveExecutionStatus,
 } from "@/features/integrations/models/IntegrationModels";
-import {
-	useIntegrationExecution,
-	useIntegrationExecutionEvents,
-} from "@/features/integrations/queries/useIntegrationExecutions";
+import { useIntegrationExecution, useIntegrationExecutionEvents } from "@/features/integrations/queries/useIntegrationExecutions";
 
 interface IntegrationExecutionDetailDialogProps {
 	/** The selected id — what the dialog is keyed and mounted on, never a row object. */
@@ -27,18 +25,6 @@ interface IntegrationExecutionDetailDialogProps {
 	onClose: () => void;
 }
 
-/** One labelled fact of the execution record. */
-function DetailRow({ label, children }: { label: string; children: React.ReactNode }) {
-	return (
-		<Group gap="sm" wrap="nowrap">
-			<Text size="sm" c="dimmed" w={160}>
-				{label}
-			</Text>
-			{children}
-		</Group>
-	);
-}
-
 /**
  * The execution record plus its persisted timeline. The dialog owns both reads, so mounting starts the 5000 ms poll
  * and closing unmounts the queries and stops it — no effect has to remember to tear anything down.
@@ -46,17 +32,16 @@ function DetailRow({ label, children }: { label: string; children: React.ReactNo
  * What it renders comes from the PER-EXECUTION read wherever that read has answered, so a list poll returning a window
  * that no longer contains the row leaves the open dialog alone instead of closing it mid-read.
  */
-export function IntegrationExecutionDetailDialog({
-	executionId,
-	listExecution,
-	onClose,
-}: IntegrationExecutionDetailDialogProps) {
+export function IntegrationExecutionDetailDialog({ executionId, listExecution, onClose }: IntegrationExecutionDetailDialogProps) {
 	const { t } = useTranslation();
 
 	// The detail poll's interval has to be decided BEFORE the read it governs, so the status behind it comes from the
-	// list row while there is one and otherwise from whatever the previous render resolved.
-	const lastKnownStatus = useRef<IntegrationExecutionStatus | null>(listExecution?.status ?? null);
-	const pollStatus = listExecution?.status ?? lastKnownStatus.current;
+	// list row while there is one and otherwise from the last status either read resolved. State adjusted during render
+	// (see below), not a ref: React re-runs this component before committing, so the interval the detail read is given
+	// already reflects the status that render resolved. A ref would hold the new status without re-rendering and an
+	// effect would leave the poll one render behind.
+	const [lastKnownStatus, setLastKnownStatus] = useState<IntegrationExecutionStatus | null>(listExecution?.status ?? null);
+	const pollStatus = listExecution?.status ?? lastKnownStatus;
 
 	// `outputBytes` keeps growing while the run writes outputs, so an active run's audit block polls beside the
 	// timeline rather than staying frozen at the value it had when the dialog opened.
@@ -67,8 +52,15 @@ export function IntegrationExecutionDetailDialog({
 
 	const detail = detailQuery.data;
 	const execution = detail?.execution ?? listExecution;
-	lastKnownStatus.current = execution?.status ?? lastKnownStatus.current;
 	const events = eventsQuery.data ?? [];
+
+	// Remember the resolved status so the interval survives the list window scrolling past this row. Never cleared:
+	// losing the row is precisely the case the remembered status exists for. Adjusting state during render is the
+	// documented way to derive from changed inputs; the equality guard makes it terminate.
+	const resolvedStatus = execution?.status;
+	if (resolvedStatus !== undefined && resolvedStatus !== lastKnownStatus) {
+		setLastKnownStatus(resolvedStatus);
+	}
 
 	const detailError = detailQuery.error
 		? apiErrorMessage(
@@ -77,7 +69,10 @@ export function IntegrationExecutionDetailDialog({
 			)
 		: undefined;
 	const eventsError = eventsQuery.error
-		? apiErrorMessage(eventsQuery.error, t("pages.integrations.executions.errors.events", "Could not load the execution timeline."))
+		? apiErrorMessage(
+				eventsQuery.error,
+				t("pages.integrations.executions.errors.events", "Could not load the execution timeline."),
+			)
 		: undefined;
 
 	return (
@@ -96,30 +91,30 @@ export function IntegrationExecutionDetailDialog({
 					</Group>
 				) : (
 					<>
-						<DetailRow label={t("pages.integrations.executions.list.columns.status", "Status")}>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.status", "Status")}>
 							<IntegrationExecutionStatusBadge status={execution.status} />
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.execution", "Execution")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.execution", "Execution")}>
 							<Code>{execution.id}</Code>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.session", "Session")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.session", "Session")}>
 							<Code>{execution.sessionId}</Code>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.received", "Received")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.received", "Received")}>
 							<Text size="sm">{formatTimestamp(execution.receivedAtUtc)}</Text>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.started", "Started")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.started", "Started")}>
 							<Text size="sm">{formatTimestamp(execution.startedAtUtc)}</Text>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.ended", "Ended")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.ended", "Ended")}>
 							<Text size="sm">{formatTimestamp(execution.endedAtUtc)}</Text>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.duration", "Duration")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.duration", "Duration")}>
 							<Text size="sm">{formatIntegrationDuration(execution.startedAtUtc, execution.endedAtUtc)}</Text>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.list.columns.outputs", "Outputs")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.list.columns.outputs", "Outputs")}>
 							<Text size="sm">{execution.outputCount}</Text>
-						</DetailRow>
+						</LabelValueRow>
 					</>
 				)}
 
@@ -127,56 +122,51 @@ export function IntegrationExecutionDetailDialog({
 				    run, and the keys page is where that identity maps back to a credential. A failed read has to say
 				    so — this dialog is the operator's only path to that identity, so silence would look like slowness. */}
 				{detailError === undefined ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-execution-detail-error">
-						{detailError}
-					</Alert>
+					<InlineErrorAlert message={detailError} data-testid="integration-execution-detail-error" />
 				)}
 
 				{detail === undefined ? null : (
 					<>
-						<DetailRow label={t("pages.integrations.executions.detail.principal", "Principal")}>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.principal", "Principal")}>
 							<Tooltip label={detail.principalId}>
 								<Code title={detail.principalId} data-testid="integration-execution-principal">
 									{shortPrincipalId(detail.principalId)}
 								</Code>
 							</Tooltip>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.detail.requestId", "Request id")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.requestId", "Request id")}>
 							<Code data-testid="integration-execution-request-id">{detail.requestId}</Code>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.detail.keyPrefix", "Key")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.keyPrefix", "Key")}>
 							<Code>{`${detail.keyPrefix}…`}</Code>
-						</DetailRow>
-						<DetailRow label={t("pages.integrations.executions.detail.outputBytes", "Output bytes")}>
+						</LabelValueRow>
+						<LabelValueRow labelWidth={160} label={t("pages.integrations.executions.detail.outputBytes", "Output bytes")}>
 							<Text size="sm">{detail.outputBytes}</Text>
-						</DetailRow>
+						</LabelValueRow>
 					</>
 				)}
 
 				{execution === null || (execution.failureCategory === null && execution.failureSummary === null) ? null : (
-					<Alert
-						color="red"
-						icon={<IconAlertTriangle size={16} />}
+					<InlineErrorAlert
+						message={
+							<Stack gap={2}>
+								{execution.failureCategory === null ? null : (
+									<Text size="sm">
+										{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${execution.failureCategory}`}
+									</Text>
+								)}
+								{execution.failureSummary === null ? null : <Text size="sm">{execution.failureSummary}</Text>}
+							</Stack>
+						}
 						title={t("pages.integrations.executions.detail.failureTitle", "Failure")}
 						data-testid="integration-execution-failure"
-					>
-						<Stack gap={2}>
-							{execution.failureCategory === null ? null : (
-								<Text size="sm">
-									{`${t("pages.integrations.executions.detail.failureCategory", "Failure category")}: ${execution.failureCategory}`}
-								</Text>
-							)}
-							{execution.failureSummary === null ? null : <Text size="sm">{execution.failureSummary}</Text>}
-						</Stack>
-					</Alert>
+					/>
 				)}
 
 				<Divider label={t("pages.integrations.executions.detail.timelineTitle", "Timeline")} labelPosition="left" />
 
 				{eventsError === undefined ? null : (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="integration-execution-events-error">
-						{eventsError}
-					</Alert>
+					<InlineErrorAlert message={eventsError} data-testid="integration-execution-events-error" />
 				)}
 
 				<IntegrationExecutionTimeline events={events} isLoading={eventsQuery.isLoading} />

@@ -157,7 +157,10 @@ function StartRunForm({
 			) : null}
 			{isDirty ? (
 				<Text size="xs" c="dimmed" data-testid="graph-workflow-start-run-dirty">
-					{t("pages.graphWorkflows.startRun.saveFirst", "Save the graph first — a run executes the saved definition, not the canvas.")}
+					{t(
+						"pages.graphWorkflows.startRun.saveFirst",
+						"Save the graph first — a run executes the saved definition, not the canvas.",
+					)}
 				</Text>
 			) : null}
 

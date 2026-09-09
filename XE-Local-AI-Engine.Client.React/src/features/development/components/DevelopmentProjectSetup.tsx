@@ -1,8 +1,8 @@
-import { Accordion, Alert, Group, Loader, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Accordion, Group, Loader, Text } from "@mantine/core";
 import type { ComponentProps } from "react";
 import { useTranslation } from "react-i18next";
 
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { DevelopmentProjectForm } from "@/features/development/components/DevelopmentProjectForm";
 
@@ -33,11 +33,7 @@ export function DevelopmentProjectSetup({ form, projects }: DevelopmentProjectSe
 					<Text c="dimmed">{t("pages.development.loading.projects", "Loading Development projects")}</Text>
 				</Group>
 			) : null}
-			{projects.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{projects.error}
-				</Alert>
-			) : null}
+			{projects.error ? <InlineErrorAlert message={projects.error} /> : null}
 			{projects.count === 0 && !projects.loading ? (
 				<SectionCard data-testid="development-empty-state" gap="xs">
 					<Text fw={600}>{t("pages.development.empty.title", "No Development projects yet")}</Text>

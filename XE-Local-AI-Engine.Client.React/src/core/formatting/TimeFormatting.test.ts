@@ -8,7 +8,7 @@
 import i18next from "i18next";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { formatDurationSeconds, formatTime, formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatDurationCompact, formatDurationSeconds, formatTime, formatTimestamp } from "@/core/formatting/TimeFormatting";
 
 const instant = Date.UTC(2025, 2, 12, 13, 0, 0);
 
@@ -161,5 +161,20 @@ describe("formatDurationSeconds", () => {
 	it("renders a dash for an absent duration and one decimal otherwise", () => {
 		expect(formatDurationSeconds(null)).toBe("—");
 		expect(formatDurationSeconds(1500)).toBe("1.5s");
+	});
+});
+
+describe("formatDurationCompact", () => {
+	it("steps from seconds to m/s to h/m, zero-padding the trailing unit", () => {
+		expect(formatDurationCompact(12_000)).toBe("12s");
+		expect(formatDurationCompact(59_400)).toBe("59s");
+		expect(formatDurationCompact(60_000)).toBe("1m 00s");
+		expect(formatDurationCompact(252_000)).toBe("4m 12s");
+		expect(formatDurationCompact(3_840_000)).toBe("1h 04m");
+	});
+
+	// A completedAt before a startedAt is a clock skew, not a negative duration to render with a minus sign.
+	it("clamps a negative duration to zero", () => {
+		expect(formatDurationCompact(-5_000)).toBe("0s");
 	});
 });

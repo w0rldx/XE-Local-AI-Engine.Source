@@ -1,5 +1,5 @@
-import { Alert, Button, Card, Skeleton, Stack, Text, Title } from "@mantine/core";
-import { IconAlertTriangle, IconChartBar, IconChartHistogram, IconRefresh } from "@tabler/icons-react";
+import { Button, Card, Skeleton, Stack, Text, Title } from "@mantine/core";
+import { IconChartBar, IconChartHistogram, IconRefresh } from "@tabler/icons-react";
 import { useQuery } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -11,6 +11,7 @@ import {
 	listExternalProviderConnectionsOptions,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { UsageDailyChart } from "@/features/usage-dashboard/components/UsageDailyChart";
@@ -74,14 +75,11 @@ function UsageEmptyState() {
 export function UsageDashboard() {
 	const { t } = useTranslation();
 
-	// Freeze "now" at mount so the range math (defaults, retention floor, clamping) is stable across renders.
-	// Lazy-initialized once at mount: useRef ignores all but its first argument, so passing Date.now() directly would
-	// re-evaluate it on every render and throw the result away. Initialize to null and stamp "now" once.
-	const nowRef = useRef<number | null>(null);
-	if (nowRef.current === null) {
-		nowRef.current = Date.now();
-	}
-	const [range, setRange] = useState<UsageDateRange>(() => defaultDateRange(nowRef.current ?? Date.now()));
+	// Freeze "now" at mount so the range math (defaults, retention floor, clamping) is stable across renders. State with
+	// a lazy initializer stamps it exactly once, on the committed mount — a ref written during render would restamp on a
+	// render React discards.
+	const [now] = useState(Date.now);
+	const [range, setRange] = useState<UsageDateRange>(() => defaultDateRange(now));
 	const userAdjustedRef = useRef(false);
 	const retentionAppliedRef = useRef(false);
 
@@ -108,13 +106,14 @@ export function UsageDashboard() {
 		}
 		retentionAppliedRef.current = true;
 		if (summary.retentionDays < FALLBACK_RETENTION_DAYS) {
-			setRange(defaultDateRange(nowRef.current ?? Date.now(), summary.retentionDays));
+			setRange(defaultDateRange(now, summary.retentionDays));
 		}
-	}, [summary]);
+		// `now` is stamped once at mount and never changes, so it cannot re-run this one-shot effect.
+	}, [now, summary]);
 
 	const handleRangeChange = (next: UsageDateRange): void => {
 		userAdjustedRef.current = true;
-		setRange(clampDateRange(next, nowRef.current ?? Date.now(), retentionDays));
+		setRange(clampDateRange(next, now, retentionDays));
 	};
 
 	// Usage rows record external turns as `external:{connectionId}` — the id, never the name, because the ledger holds
@@ -148,16 +147,12 @@ export function UsageDashboard() {
 
 			<UsageDateRangeControl
 				range={range}
-				minMs={retentionFloorMs(nowRef.current ?? Date.now(), retentionDays)}
-				maxMs={startOfUtcDay(nowRef.current ?? Date.now())}
+				minMs={retentionFloorMs(now, retentionDays)}
+				maxMs={startOfUtcDay(now)}
 				onChange={handleRangeChange}
 			/>
 
-			{error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="usage-error">
-					{errorMessage(error, t)}
-				</Alert>
-			) : null}
+			{error ? <InlineErrorAlert message={errorMessage(error, t)} data-testid="usage-error" /> : null}
 
 			{isLoading ? <UsageSkeleton /> : null}
 

@@ -3,7 +3,12 @@ import { IconAlertTriangle, IconCheck, IconCloudDownload } from "@tabler/icons-r
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { catalogEntryRepoCount, type ImageModelCatalogEntryView, type ImageModelFitVerdict } from "@/features/images/models/ImageModels";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import {
+	catalogEntryRepoCount,
+	type ImageModelCatalogEntryView,
+	type ImageModelFitVerdict,
+} from "@/features/images/models/ImageModels";
 import { humanizeBytes } from "@/features/models/models/DownloadRateEstimate";
 
 interface ImageModelCatalogPanelProps {
@@ -55,9 +60,10 @@ export function ImageModelCatalogPanel({ entries, isLoading, error, busyEntryIds
 
 	if (error) {
 		return (
-			<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="image-model-catalog-error">
-				{apiErrorMessage(error, t("pages.images.models.catalog.error", "Could not load the model catalog."))}
-			</Alert>
+			<InlineErrorAlert
+				message={apiErrorMessage(error, t("pages.images.models.catalog.error", "Could not load the model catalog."))}
+				data-testid="image-model-catalog-error"
+			/>
 		);
 	}
 
@@ -123,7 +129,12 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 						</Text>
 					</Stack>
 					{entry.isInstalled ? (
-						<Badge color="green" variant="light" leftSection={<IconCheck size={12} />} data-testid={`image-model-catalog-installed-${entry.id}`}>
+						<Badge
+							color="green"
+							variant="light"
+							leftSection={<IconCheck size={12} />}
+							data-testid={`image-model-catalog-installed-${entry.id}`}
+						>
 							{t("pages.images.models.catalog.installed", "Installed")}
 						</Badge>
 					) : (
@@ -150,7 +161,12 @@ function CatalogRow({ entry, isBusy, onInstall }: CatalogRowProps) {
 					</Badge>
 					<Badge variant="light">{t(`pages.images.models.families.${entry.family}`, entry.family)}</Badge>
 					<Tooltip label={fitHint} multiline={true} maw={300}>
-						<Badge color={fitColors[entry.fitVerdict]} variant="light" size="sm" data-testid={`image-model-catalog-fit-${entry.id}`}>
+						<Badge
+							color={fitColors[entry.fitVerdict]}
+							variant="light"
+							size="sm"
+							data-testid={`image-model-catalog-fit-${entry.id}`}
+						>
 							{t(`pages.images.models.catalog.fit.${entry.fitVerdict}`, fitLabels[entry.fitVerdict])}
 						</Badge>
 					</Tooltip>

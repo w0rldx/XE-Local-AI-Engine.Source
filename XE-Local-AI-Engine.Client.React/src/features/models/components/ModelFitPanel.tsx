@@ -1,10 +1,10 @@
-import { Alert, Badge, Group, Loader, Select, SimpleGrid, Stack, Text } from "@mantine/core";
-import { IconAlertTriangle } from "@tabler/icons-react";
+import { Badge, Group, Loader, Select, SimpleGrid, Stack, Text } from "@mantine/core";
 import { type ReactNode, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import {
 	fitLevelColor,
 	formatContextTokens,
@@ -112,11 +112,7 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 				</Group>
 			) : null}
 
-			{recommendationsQuery.error ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{errorMessage(recommendationsQuery.error)}
-				</Alert>
-			) : null}
+			{recommendationsQuery.error ? <InlineErrorAlert message={errorMessage(recommendationsQuery.error)} /> : null}
 
 			{!recommendationsQuery.isFetching && !recommendationsQuery.error && latest && !latest.hasCache ? (
 				<Text c="dimmed" data-testid="model-fit-no-cache">

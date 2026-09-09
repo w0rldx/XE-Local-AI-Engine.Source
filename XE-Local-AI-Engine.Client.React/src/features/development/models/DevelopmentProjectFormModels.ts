@@ -40,3 +40,17 @@ export interface DevelopmentProjectFormValues {
 	readonly commandProfileId?: string;
 	readonly buildTarget?: string;
 }
+
+/** Option shape for the form's repository / template `Select`s (Mantine's `data` entries). */
+export interface DevelopmentFormSelectOption {
+	readonly value: string;
+	readonly label: string;
+	readonly disabled: boolean;
+}
+
+/** The "create repository from template" dialog draft. Becomes a `CreateDevelopmentRepositoryFromTemplateValues` on submit. */
+export interface TemplateCreationValues {
+	readonly templateId: string;
+	readonly destinationPath: string;
+	readonly alias: string;
+}

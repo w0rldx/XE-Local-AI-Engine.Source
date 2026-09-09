@@ -4,8 +4,9 @@ import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { formatBytesAsGb } from "@/core/formatting/BytesFormatting";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { StatusBadge } from "@/core/ui/components/StatusBadge/StatusBadge";
 import { toast } from "@/core/ui/notifications/Toast";
 import type {
 	BenchmarkEligibleModel,
@@ -210,12 +211,13 @@ export function BenchmarkFidelityPanel({ projectId, fidelity, projectVersion, mo
 						</Group>
 					) : null}
 					{estimateQuery.error ? (
-						<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="benchmark-fidelity-estimate-error">
-							{apiErrorMessage(
+						<InlineErrorAlert
+							message={apiErrorMessage(
 								estimateQuery.error,
 								t("pages.benchmarks.fidelity.estimateError", "Could not estimate the KL-divergence cache size."),
 							)}
-						</Alert>
+							data-testid="benchmark-fidelity-estimate-error"
+						/>
 					) : null}
 					{estimate ? (
 						<Stack gap={4} data-testid="benchmark-kld-estimate">

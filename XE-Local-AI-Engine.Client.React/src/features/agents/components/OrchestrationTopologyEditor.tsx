@@ -1,11 +1,19 @@
-import { ActionIcon, Alert, Group, MultiSelect, NumberInput, Paper, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
-import { IconAlertTriangle, IconPlus, IconTrash } from "@tabler/icons-react";
+import { ActionIcon, Alert, Group, MultiSelect, NumberInput, Stack, Switch, Text } from "@mantine/core";
+import { IconAlertTriangle, IconPlus } from "@tabler/icons-react";
 import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
+import { OrchestrationHandoffRow } from "@/features/agents/components/OrchestrationTopologyEditor/OrchestrationHandoffRow";
 import type { AgentDefinition } from "@/features/agents/models/AgentDefinitionModels";
+import {
+	incapableOrchestrationModels,
+	orchestrationDefinitionsById,
+	orchestrationEndpointOptions,
+	orchestrationParticipantOptions,
+	resolveOrchestrationEndpoint,
+	toOrchestrationEndpointValue,
+} from "@/features/agents/models/OrchestrationTopologyEditorDerivations";
 import type { OrchestrationHandoff, OrchestrationTopology } from "@/features/agents/models/OrchestrationTopologyModels";
-import { isModelToolCapable } from "@/features/agents/models/ToolCapability";
 
 interface OrchestrationTopologyEditorProps {
 	// The current structured topology (specialists + edges + knobs). Owned by the parent form.
@@ -26,8 +34,6 @@ interface OrchestrationTopologyEditorProps {
 	onChange: (topology: OrchestrationTopology) => void;
 }
 
-const TRIAGE_OPTION_VALUE = "__triage__";
-
 // Topology authoring section shown when kind=Orchestrator (orchestration). The orchestrator definition itself is the
 // triage; the user picks specialist participants, optionally draws handoff edges between them (empty = mesh auto),
 // and sets the turn cap / return-to-previous knob. A prominent warning surfaces if the orchestrator or any selected
@@ -44,64 +50,32 @@ export function OrchestrationTopologyEditor({
 }: OrchestrationTopologyEditorProps) {
 	const { t } = useTranslation();
 
-	// Specialist candidates exclude self (the orchestrator is the triage, never its own specialist).
-	const participantOptions = useMemo(() => {
-		const options: { value: string; label: string }[] = [];
-		for (const definition of candidateDefinitions) {
-			if (definition.id !== selfId) {
-				options.push({ value: definition.id, label: definition.name });
-			}
-		}
-		return options;
-	}, [candidateDefinitions, selfId]);
+	const participantOptions = useMemo(
+		() => orchestrationParticipantOptions(candidateDefinitions, selfId),
+		[candidateDefinitions, selfId],
+	);
+	const definitionsById = useMemo(() => orchestrationDefinitionsById(candidateDefinitions), [candidateDefinitions]);
 
-	const definitionsById = useMemo(() => {
-		const map = new Map<string, AgentDefinition>();
-		for (const definition of candidateDefinitions) {
-			map.set(definition.id, definition);
-		}
-		return map;
-	}, [candidateDefinitions]);
-
-	// Edge endpoint options = the triage (this definition) plus every selected specialist. The triage uses a stable
-	// sentinel value that serializes back to selfId so edges can reference the orchestrator before it has an id.
 	const edgeEndpointData = useMemo(() => {
 		const triageLabel = t("pages.agents.form.orchestration.triageOptionLabel", "{{name}} (triage)", {
 			name: triageName.trim().length > 0 ? triageName.trim() : t("pages.agents.form.orchestration.thisAgent", "This agent"),
 		});
-		const specialists = topology.participantAgentDefinitionIds.map((id) => ({
-			value: id,
-			label: definitionsById.get(id)?.name ?? id,
-		}));
-		return [{ value: TRIAGE_OPTION_VALUE, label: triageLabel }, ...specialists];
+		return orchestrationEndpointOptions(triageLabel, topology.participantAgentDefinitionIds, definitionsById);
 	}, [definitionsById, t, topology.participantAgentDefinitionIds, triageName]);
 
-	// Resolve an edge endpoint value (sentinel or specialist id) to the stored id (selfId for the triage sentinel).
-	const resolveEndpoint = useCallback((value: string) => (value === TRIAGE_OPTION_VALUE ? selfId : value), [selfId]);
+	const resolveEndpoint = useCallback((value: string) => resolveOrchestrationEndpoint(value, selfId), [selfId]);
+	const toEndpointValue = useCallback((id: string) => toOrchestrationEndpointValue(id, selfId), [selfId]);
 
-	// Resolve a stored endpoint id back to the dropdown value (the triage/self id maps to the sentinel).
-	const toEndpointValue = useCallback(
-		(id: string) => (id === selfId || id === "" ? TRIAGE_OPTION_VALUE : id),
-		[selfId],
+	const incapableModels = useMemo(
+		() =>
+			incapableOrchestrationModels(
+				orchestratorModelProfile,
+				topology.participantAgentDefinitionIds,
+				definitionsById,
+				toolCapableModels,
+			),
+		[definitionsById, orchestratorModelProfile, toolCapableModels, topology.participantAgentDefinitionIds],
 	);
-
-	// Models in play: the orchestrator's own + every selected participant's. Any incapable model degrades the run.
-	const incapableModels = useMemo(() => {
-		if (toolCapableModels.length === 0) {
-			return [] as string[];
-		}
-		const offenders: string[] = [];
-		if (!isModelToolCapable(orchestratorModelProfile, toolCapableModels)) {
-			offenders.push(orchestratorModelProfile ?? "");
-		}
-		for (const id of topology.participantAgentDefinitionIds) {
-			const model = definitionsById.get(id)?.modelProfile ?? null;
-			if (!isModelToolCapable(model, toolCapableModels) && model !== null) {
-				offenders.push(model);
-			}
-		}
-		return Array.from(new Set(offenders.filter((model) => model.length > 0)));
-	}, [definitionsById, orchestratorModelProfile, toolCapableModels, topology.participantAgentDefinitionIds]);
 
 	const handleParticipantsChange = useCallback(
 		(ids: string[]) => {
@@ -156,11 +130,7 @@ export function OrchestrationTopologyEditor({
 			</Text>
 
 			{incapableModels.length > 0 ? (
-				<Alert
-					color="yellow"
-					icon={<IconAlertTriangle size={16} />}
-					data-testid="orchestration-capability-warning"
-				>
+				<Alert color="yellow" icon={<IconAlertTriangle size={16} />} data-testid="orchestration-capability-warning">
 					{t(
 						"pages.agents.form.orchestration.degradeWarning",
 						"One or more models in this orchestration are not tool-capable ({{models}}). Orchestration routing requires tool calling, so this definition will run as a single agent instead.",
@@ -223,59 +193,16 @@ export function OrchestrationTopologyEditor({
 				{topology.handoffs.map((edge, index) => (
 					// Content-derived key: handoff routes are unique by (from, to), so this is stable across reorders
 					// and edits without needing a server id, and avoids index-as-key state-shift bugs on removal.
-					<Paper
-						withBorder={true}
-						p="xs"
+					<OrchestrationHandoffRow
 						key={`${edge.fromAgentDefinitionId}->${edge.toAgentDefinitionId}`}
-						data-testid={`orchestration-handoff-row-${index}`}
-					>
-						<Group align="flex-end" wrap="wrap" gap="xs">
-							<Select
-								label={t("pages.agents.form.orchestration.handoffs.from", "From")}
-								data={edgeEndpointData}
-								value={toEndpointValue(edge.fromAgentDefinitionId)}
-								allowDeselect={false}
-								onChange={(value) =>
-									value !== null
-										? handleEdgeChange(index, { fromAgentDefinitionId: resolveEndpoint(value) })
-										: undefined
-								}
-								data-testid={`orchestration-handoff-from-${index}`}
-							/>
-							<Select
-								label={t("pages.agents.form.orchestration.handoffs.to", "To")}
-								data={edgeEndpointData}
-								value={toEndpointValue(edge.toAgentDefinitionId)}
-								allowDeselect={false}
-								onChange={(value) =>
-									value !== null
-										? handleEdgeChange(index, { toAgentDefinitionId: resolveEndpoint(value) })
-										: undefined
-								}
-								data-testid={`orchestration-handoff-to-${index}`}
-							/>
-							<TextInput
-								label={t("pages.agents.form.orchestration.handoffs.reason", "Reason (optional)")}
-								value={edge.reason ?? ""}
-								style={{ flex: 1, minWidth: 160 }}
-								onChange={(event) =>
-									handleEdgeChange(index, {
-										reason: event.currentTarget.value.length > 0 ? event.currentTarget.value : null,
-									})
-								}
-								data-testid={`orchestration-handoff-reason-${index}`}
-							/>
-							<ActionIcon
-								variant="subtle"
-								color="red"
-								aria-label={t("pages.agents.form.orchestration.handoffs.remove", "Remove handoff")}
-								onClick={() => handleRemoveHandoff(index)}
-								data-testid={`orchestration-handoff-remove-${index}`}
-							>
-								<IconTrash size={16} />
-							</ActionIcon>
-						</Group>
-					</Paper>
+						edge={edge}
+						index={index}
+						endpointOptions={edgeEndpointData}
+						toEndpointValue={toEndpointValue}
+						resolveEndpoint={resolveEndpoint}
+						onChange={handleEdgeChange}
+						onRemove={handleRemoveHandoff}
+					/>
 				))}
 			</Stack>
 

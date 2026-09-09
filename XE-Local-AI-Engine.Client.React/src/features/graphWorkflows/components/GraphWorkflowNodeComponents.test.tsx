@@ -10,8 +10,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { GraphWorkflowNodeCard } from "@/features/graphWorkflows/components/GraphWorkflowNodeComponents";
 import {
-	type GraphWorkflowCanvasNodeData,
 	defaultNodeData,
+	type GraphWorkflowCanvasNodeData,
 	graphWorkflowNodeTypeByKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowCanvasModels";
 import type { GraphWorkflowNodeKind } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -35,11 +35,7 @@ vi.mock("@xyflow/react", () => ({
 }));
 
 /** A node's defaults with a few members overridden. The data type is a union, so one cast beats eight builders. */
-function nodeData(
-	kind: GraphWorkflowNodeKind,
-	key: string,
-	extra: Record<string, unknown> = {},
-): GraphWorkflowCanvasNodeData {
+function nodeData(kind: GraphWorkflowNodeKind, key: string, extra: Record<string, unknown> = {}): GraphWorkflowCanvasNodeData {
 	return { ...defaultNodeData(kind, key), ...extra } as GraphWorkflowCanvasNodeData;
 }
 

@@ -1,7 +1,7 @@
 import { Anchor, Badge, Group, Stack, Table, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import { formatTimestamp } from "@/core/formatting/TimeFormatting";
+import { formatDurationCompact, formatTimestamp } from "@/core/formatting/TimeFormatting";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
 import { GraphWorkflowNodeStatusBadge } from "@/features/graphWorkflows/components/GraphWorkflowStatusBadge";
 import {
@@ -10,19 +10,6 @@ import {
 	narrowGraphWorkflowFailureClass,
 	narrowGraphWorkflowNodeKind,
 } from "@/features/graphWorkflows/models/GraphWorkflowModels";
-
-/** Same scale as `formatDevWorkflowDuration`: seconds under a minute, then m/s, then h/m. Module-local by design. */
-function formatDuration(milliseconds: number): string {
-	const totalSeconds = Math.max(0, Math.round(milliseconds / 1000));
-	if (totalSeconds < 60) {
-		return `${totalSeconds}s`;
-	}
-	const minutes = Math.floor(totalSeconds / 60);
-	if (minutes < 60) {
-		return `${minutes}m ${String(totalSeconds % 60).padStart(2, "0")}s`;
-	}
-	return `${Math.floor(minutes / 60)}h ${String(minutes % 60).padStart(2, "0")}m`;
-}
 
 export interface GraphWorkflowNodeRunTableProps {
 	readonly nodeRuns: readonly GraphWorkflowNodeRunSummaryResponse[];
@@ -77,7 +64,7 @@ export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectN
 						const pending = asGraphWorkflowDecisionKind(nodeRun.pendingDecisionKind);
 						const duration =
 							nodeRun.startedAtUtc != null && nodeRun.completedAtUtc != null
-								? formatDuration(nodeRun.completedAtUtc - nodeRun.startedAtUtc)
+								? formatDurationCompact(nodeRun.completedAtUtc - nodeRun.startedAtUtc)
 								: "—";
 						return (
 							<Table.Tr
@@ -110,10 +97,7 @@ export function GraphWorkflowNodeRunTable({ nodeRuns, selectedNodeKey, onSelectN
 								</Table.Td>
 								<Table.Td>
 									<Stack gap={2} align="flex-start">
-										<GraphWorkflowNodeStatusBadge
-											status={nodeRun.status}
-											data-testid={`graph-workflow-node-status-${nodeKey}`}
-										/>
+										<GraphWorkflowNodeStatusBadge status={nodeRun.status} data-testid={`graph-workflow-node-status-${nodeKey}`} />
 										<Group gap={4} wrap="wrap">
 											{/* `None` is "nothing went wrong" — rendering it would put a failure word on every row. */}
 											{failureClass !== "None" ? (

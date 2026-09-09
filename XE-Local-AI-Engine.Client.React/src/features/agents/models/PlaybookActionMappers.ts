@@ -175,11 +175,13 @@ const HTTP_CONFLICT = 409;
 // machine status + the human-readable reason from the conflict body so the panel renders the precise reason (needs
 // eval / regressed / stale / cap reached) rather than a generic "could not update" message.
 export class PromoteConflictError extends Error {
-	constructor(
-		readonly status: PromoteConflictStatus,
-		reason: string,
-	) {
+	// Assigned in the body rather than declared as a constructor parameter property: `erasableSyntaxOnly` bans
+	// parameter properties because they are not erasable ECMAScript syntax.
+	readonly status: PromoteConflictStatus;
+
+	constructor(status: PromoteConflictStatus, reason: string) {
 		super(reason);
+		this.status = status;
 		this.name = "PromoteConflictError";
 	}
 }

@@ -1,9 +1,10 @@
-import { Alert, Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine/core";
-import { IconAlertTriangle, IconThumbDown, IconThumbUp } from "@tabler/icons-react";
+import { Badge, Group, Loader, Paper, Stack, Table, Text } from "@mantine/core";
+import { IconThumbDown, IconThumbUp } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import type { FeedbackExemplar, OverallFeedback, ToolFeedbackBreakdown } from "@/features/agents/models/FeedbackInsightsModels";
 import { useFeedbackInsights } from "@/features/agents/queries/useFeedbackInsights";
 
@@ -61,9 +62,13 @@ export function FeedbackInsightsPanel({ agentDefinitionId, agentName, enabled }:
 				) : null}
 
 				{insightsQuery.error ? (
-					<Alert color="red" icon={<IconAlertTriangle size={16} />} data-testid="feedback-insights-error">
-						{apiErrorMessage(insightsQuery.error, t("pages.agents.insights.errors.load", "Could not load feedback insights."))}
-					</Alert>
+					<InlineErrorAlert
+						message={apiErrorMessage(
+							insightsQuery.error,
+							t("pages.agents.insights.errors.load", "Could not load feedback insights."),
+						)}
+						data-testid="feedback-insights-error"
+					/>
 				) : null}
 
 				{insights ? (

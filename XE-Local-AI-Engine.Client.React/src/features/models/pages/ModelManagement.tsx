@@ -1,9 +1,8 @@
-import { Alert, Button, Group, Loader, Text } from "@mantine/core";
-import { useDisclosure } from "@mantine/hooks";
-import { IconAlertTriangle, IconBoxMultiple, IconFileImport, IconRefresh, IconRobot } from "@tabler/icons-react";
+import { Button, Group, Loader, Text } from "@mantine/core";
+import { IconBoxMultiple, IconFileImport, IconRefresh, IconRobot } from "@tabler/icons-react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { TFunction } from "i18next";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeCapabilities } from "@/capabilities/NodeCapabilities";
@@ -11,7 +10,6 @@ import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
 import {
 	deleteLocalModelMutation,
 	deleteModelKindMutation,
-	getLocalModelDetailsOptions,
 	getLocalModelDetailsQueryKey,
 	listLocalModelsOptions,
 	listLocalModelsQueryKey,
@@ -20,6 +18,7 @@ import {
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
 import { EmptyState } from "@/core/ui/components/EmptyState/EmptyState";
+import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
@@ -32,20 +31,9 @@ import { GgufImportDialog } from "@/features/models/components/GgufImportDialog"
 import { ImportProgressPanel } from "@/features/models/components/ImportProgressPanel";
 import { InstalledModelsTable } from "@/features/models/components/InstalledModelsTable";
 import { ModelDetailsDialog } from "@/features/models/components/ModelDetailsDialog";
-import { defaultGgufQuant, type GgufRepository, type GgufRepositoryFile } from "@/features/models/models/GgufModels";
+import { useGgufAcquisitionFlow } from "@/features/models/hooks/useGgufAcquisitionFlow";
+import { useModelDetailsDialog } from "@/features/models/hooks/useModelDetailsDialog";
 import { isInstalledLocalModel, toLocalModelViewModel } from "@/features/models/models/LocalModelMappers";
-import {
-	useActiveGgufAcquisitions,
-	useCancelGgufImport,
-	useGgufImportCapability,
-} from "@/features/models/queries/useGgufAcquisitions";
-import {
-	useActiveGgufDownloads,
-	useBrowseGgufRepositories,
-	useCancelGgufDownload,
-	useStartGgufDownload,
-} from "@/features/models/queries/useGgufDownload";
-import { useGgufBrowseStore } from "@/features/models/stores/GgufBrowseStore";
 
 /* eslint-disable react-doctor/no-event-handler, react-doctor/no-chain-state-updates -- Model mutations intentionally coordinate selection, dialogs, and result notifications in their user-event callbacks. */
 
@@ -57,45 +45,19 @@ export function ModelManagement() {
 	const { t } = useTranslation();
 	const queryClient = useQueryClient();
 	const { confirm } = useConfirm();
-	// The model whose details dialog is open (also the only model whose details endpoint is fetched).
-	const [detailsModelName, setDetailsModelName] = useState<string | undefined>();
-	const [detailsModalOpened, { open: openDetailsModal, close: closeDetailsModal }] = useDisclosure(false);
-	const [importModalOpened, { open: openImportModal, close: closeImportModal }] = useDisclosure(false);
-
-	// GGUF browse + download flow (relocated from the model-fit advisor — it is a model-acquisition action). The
-	// committed browse term + the in-flight download set live in a shared store so they survive a remount AND so a
-	// download handed off from the advisor's recommendation row becomes visible + cancellable here. The open-quant-
-	// picker repo is page-local. useActiveGgufDownloads polls the backend for byte-level progress and reconciles
-	// the store so downloads survive navigation/refresh — the backend list is the authoritative source of truth.
-	const browseQuery = useGgufBrowseStore((state) => state.browseQuery);
-	const setBrowseQuery = useGgufBrowseStore((state) => state.actions.setBrowseQuery);
-	const inFlightDownloads = useGgufBrowseStore((state) => state.inFlightDownloads);
-	const markInFlight = useGgufBrowseStore((state) => state.actions.markInFlight);
-	const removeInFlight = useGgufBrowseStore((state) => state.actions.removeInFlight);
-	// Polls GET /downloads every second while any download is Running. Reconciles the store so entries started before
-	// a page refresh rehydrate, and terminal entries (Completed/Cancelled/Failed) are removed from the store.
-	const downloadStatuses = useActiveGgufDownloads();
-	const acquisitionStatuses = useActiveGgufAcquisitions();
-	const importStatuses = useMemo(
-		() => [...acquisitionStatuses.values()].filter((status) => status.operationKind === "Import"),
-		[acquisitionStatuses],
-	);
-	const importCapability = useGgufImportCapability();
-	const cancelGgufImportMutation = useCancelGgufImport();
-	// The repo whose quant picker dialog is open (null = closed). Selecting a browse row opens the dialog so the
-	// operator picks the exact quant (incl. Unsloth Dynamic UD- quants) instead of always pulling the default Q4_K_M.
-	const [downloadRepo, setDownloadRepo] = useState<GgufRepository | null>(null);
-
-	const browseQueryResult = useBrowseGgufRepositories(browseQuery, true);
-	const startGgufDownloadMutation = useStartGgufDownload();
-	const cancelGgufDownloadMutation = useCancelGgufDownload();
 
 	// Reads run through the generated hey-api `*Options()` (which wire the shared axios instance + TanStack Query
 	// AbortSignal automatically), wrapped in withResponseValidation so a zod response-shape failure surfaces as an
 	// ApiError. The list query keeps the generated response envelope (isAvailable / selectedModelName / error) and
 	// maps its optional-field items to the strict view-models in a memo. Invalidation uses the generated query-key
 	// factories so every cached variant of an endpoint refetches.
-	const { data: modelsResponse, isLoading: modelsIsLoading, error: modelsError, refetch: modelsRefetch, isFetching: modelsIsFetching } = useQuery(withResponseValidation(listLocalModelsOptions()));
+	const {
+		data: modelsResponse,
+		isLoading: modelsIsLoading,
+		error: modelsError,
+		refetch: modelsRefetch,
+		isFetching: modelsIsFetching,
+	} = useQuery(withResponseValidation(listLocalModelsOptions()));
 	// External-provider registrations ride the same list so the chat picker can offer them, but this page is the model
 	// STORE: its table hands out Set default / Delete / Reset, none of which mean anything for a remote endpoint (the
 	// delete endpoint answers 409, and D10 puts their whole lifecycle on the External providers page). Filtered out
@@ -103,12 +65,10 @@ export function ModelManagement() {
 	const modelItems = useMemo(() => (modelsResponse?.items ?? []).filter(isInstalledLocalModel), [modelsResponse]);
 	const modelViewModels = useMemo(() => modelItems.map(toLocalModelViewModel), [modelItems]);
 
-	// Details are fetched only while a model's dialog is open — there is no longer a persistent details card.
-	const { data: detailsData, isFetching: detailsIsFetching } = useQuery({
-		...withResponseValidation(getLocalModelDetailsOptions({ path: { modelName: detailsModelName ?? "" } })),
-		enabled: Boolean(detailsModalOpened && detailsModelName && modelsResponse?.isAvailable),
-	});
+	const detailsDialog = useModelDetailsDialog(modelsResponse?.isAvailable ?? false);
+	const acquisition = useGgufAcquisitionFlow();
 
+	const detailsModelName = detailsDialog.modelName;
 	const invalidateList = useCallback(() => queryClient.invalidateQueries({ queryKey: listLocalModelsQueryKey() }), [queryClient]);
 	const invalidateListAndDetails = useCallback(
 		() =>
@@ -134,8 +94,7 @@ export function ModelManagement() {
 		...withResponseValidation(deleteLocalModelMutation()),
 		onSuccess: async (response) => {
 			toast.success(t("pages.models.local.deleteSuccess", { name: response.modelName ?? "" }));
-			closeDetailsModal();
-			setDetailsModelName(undefined);
+			detailsDialog.clear();
 			await invalidateListAndDetails();
 		},
 		onError: (error) => toast.error(errorMessage(error, t)),
@@ -165,14 +124,6 @@ export function ModelManagement() {
 		selectMutation.isPending || deleteMutation.isPending || setKindMutation.isPending || resetKindMutation.isPending;
 	const detailsModel = modelViewModels.find((model) => model.modelName === detailsModelName);
 
-	const openDetails = useCallback(
-		(modelName: string) => {
-			setDetailsModelName(modelName);
-			openDetailsModal();
-		},
-		[openDetailsModal],
-	);
-
 	const confirmDelete = useCallback(
 		async (modelName: string) => {
 			const confirmed = await confirm({
@@ -193,67 +144,6 @@ export function ModelManagement() {
 		[confirm, deleteMutation, t],
 	);
 
-	// Starts a GGUF download by repo id (the model name the backend resolves rides the response). On success the model
-	// is tracked as in-flight (in the shared store); alreadyInFlight responses are surfaced too (already running).
-	const startGgufDownload = useCallback(
-		(repoId: string, fileName?: string, quant?: string): void => {
-			startGgufDownloadMutation.mutate(
-				{ repoId, fileName, quant },
-				{
-					onSuccess: (response) => {
-						const modelName = response?.modelName ?? repoId;
-						markInFlight(modelName);
-						if (response?.alreadyInFlight) {
-							toast.info(t("pages.models.gguf.download.alreadyInFlight", "That download is already in progress."));
-						} else {
-							toast.success(t("pages.models.gguf.download.started", "Download started."));
-						}
-					},
-					onError: (error) =>
-						toast.error(apiErrorMessage(error, t("pages.models.gguf.download.error", "Could not start the download."))),
-				},
-			);
-		},
-		[startGgufDownloadMutation, markInFlight, t],
-	);
-
-	// Opens the quant picker for a browse row instead of immediately pulling the default quant.
-	const handleBrowseDownload = (repository: GgufRepository): void => {
-		setDownloadRepo(repository);
-	};
-
-	// Confirms a specific quant from the picker: downloads the exact chosen file (fileName is resolved verbatim by the
-	// backend, so a Dynamic UD- quant downloads unambiguously) and closes the dialog.
-	const handleConfirmQuantDownload = (repoId: string, file: GgufRepositoryFile): void => {
-		startGgufDownload(repoId, file.fileName, file.quant);
-		setDownloadRepo(null);
-	};
-
-	// Fallback used when the picker has no files to offer (degraded/unreachable inspection): download the default quant
-	// by repo id only, restoring the pre-picker one-click capability so a degraded inspect never blocks downloading.
-	const handleConfirmDefaultDownload = (repoId: string): void => {
-		startGgufDownload(repoId, undefined, defaultGgufQuant);
-		setDownloadRepo(null);
-	};
-
-	const handleCancelDownload = (modelName: string): void => {
-		cancelGgufDownloadMutation.mutate(modelName, {
-			onSuccess: () => {
-				removeInFlight(modelName);
-				toast.success(t("pages.models.gguf.download.cancelled", "Download cancelled."));
-			},
-			onError: (error) =>
-				toast.error(apiErrorMessage(error, t("pages.models.gguf.download.cancelError", "Could not cancel the download."))),
-		});
-	};
-
-	const downloadingRepoId = startGgufDownloadMutation.isPending ? (startGgufDownloadMutation.variables?.repoId ?? null) : null;
-	const handleCancelImport = (operationId: string): void => {
-		cancelGgufImportMutation.mutate(operationId, {
-			onError: () => toast.error(t("pages.models.gguf.import.cancelError", "Could not cancel the import.")),
-		});
-	};
-
 	return (
 		<PageShell>
 			<PageHeader
@@ -263,8 +153,8 @@ export function ModelManagement() {
 				data-tour="models-overview"
 				actions={
 					<>
-						{importCapability.data?.available ? (
-							<Button variant="light" leftSection={<IconFileImport size={16} />} onClick={openImportModal}>
+						{acquisition.importCapability.data?.available ? (
+							<Button variant="light" leftSection={<IconFileImport size={16} />} onClick={acquisition.openImportModal}>
 								{t("pages.models.gguf.import.action", "Import model")}
 							</Button>
 						) : null}
@@ -287,17 +177,13 @@ export function ModelManagement() {
 				</Group>
 			) : null}
 
-			{modelsError ? (
-				<Alert color="red" icon={<IconAlertTriangle size={16} />}>
-					{errorMessage(modelsError, t)}
-				</Alert>
-			) : null}
+			{modelsError ? <InlineErrorAlert message={errorMessage(modelsError, t)} /> : null}
 
 			<SectionCard title={t("pages.models.local.installedTitle", "Installed models")} icon={<IconRobot size={22} />}>
 				<InstalledModelsTable
 					models={modelViewModels}
 					isActionPending={isActionPending}
-					onOpenDetails={openDetails}
+					onOpenDetails={detailsDialog.open}
 					onSetDefault={(modelName) => selectMutation.mutate({ body: { modelName } })}
 					onDelete={confirmDelete}
 					onResetKind={(modelName) => resetKindMutation.mutate({ path: { modelName } })}
@@ -306,34 +192,34 @@ export function ModelManagement() {
 			</SectionCard>
 
 			<DownloadProgressPanel
-				inFlight={inFlightDownloads}
-				downloadStatuses={downloadStatuses}
-				onCancel={handleCancelDownload}
-				cancellingModelName={cancelGgufDownloadMutation.isPending ? (cancelGgufDownloadMutation.variables ?? null) : null}
+				inFlight={acquisition.inFlightDownloads}
+				downloadStatuses={acquisition.downloadStatuses}
+				onCancel={acquisition.handleCancelDownload}
+				cancellingModelName={acquisition.cancellingModelName}
 			/>
 
 			<ImportProgressPanel
-				operations={importStatuses}
-				onCancel={handleCancelImport}
-				cancellingOperationId={cancelGgufImportMutation.isPending ? (cancelGgufImportMutation.variables ?? null) : null}
+				operations={acquisition.importStatuses}
+				onCancel={acquisition.handleCancelImport}
+				cancellingOperationId={acquisition.cancellingOperationId}
 			/>
 
 			<GgufBrowsePanel
-				repositories={browseQueryResult.data ?? []}
-				isLoading={browseQueryResult.isLoading && browseQuery.trim().length > 0}
-				error={browseQueryResult.error}
-				hasSearched={browseQuery.trim().length > 0}
-				onSearch={setBrowseQuery}
-				onDownload={handleBrowseDownload}
-				downloadingRepoId={downloadingRepoId}
+				repositories={acquisition.browseQueryResult.data ?? []}
+				isLoading={acquisition.browseQueryResult.isLoading && acquisition.browseQuery.trim().length > 0}
+				error={acquisition.browseQueryResult.error}
+				hasSearched={acquisition.browseQuery.trim().length > 0}
+				onSearch={acquisition.setBrowseQuery}
+				onDownload={acquisition.handleBrowseDownload}
+				downloadingRepoId={acquisition.downloadingRepoId}
 			/>
 
 			<ModelDetailsDialog
-				opened={detailsModalOpened}
-				onClose={closeDetailsModal}
+				opened={detailsDialog.opened}
+				onClose={detailsDialog.close}
 				model={detailsModel}
-				details={detailsData}
-				detailsLoading={detailsIsFetching}
+				details={detailsDialog.details}
+				detailsLoading={detailsDialog.isFetching}
 				isActionPending={isActionPending}
 				modelFitEnabled={nodeCapabilities.modelFit}
 				onSetKind={(modelName, kind) => setKindMutation.mutate({ path: { modelName }, body: { kind } })}
@@ -341,16 +227,16 @@ export function ModelManagement() {
 			/>
 
 			<GgufDownloadDialog
-				repository={downloadRepo}
-				onClose={() => setDownloadRepo(null)}
-				onConfirm={handleConfirmQuantDownload}
-				onConfirmDefault={handleConfirmDefaultDownload}
-				isDownloading={startGgufDownloadMutation.isPending}
+				repository={acquisition.downloadRepo}
+				onClose={acquisition.closeQuantPicker}
+				onConfirm={acquisition.handleConfirmQuantDownload}
+				onConfirmDefault={acquisition.handleConfirmDefaultDownload}
+				isDownloading={acquisition.isDownloadStarting}
 			/>
 
 			<GgufImportDialog
-				opened={importModalOpened}
-				onClose={closeImportModal}
+				opened={acquisition.importModalOpened}
+				onClose={acquisition.closeImportModal}
 				onStarted={() => toast.success(t("pages.models.gguf.import.started", "Import started."))}
 			/>
 		</PageShell>

@@ -34,6 +34,7 @@
 		"strictFunctionTypes": true,
 		"noImplicitAny": true,
 		"strictPropertyInitialization": true,
+		"erasableSyntaxOnly": true,
 
 		"paths": {
 			"@/*": ["./src/*"],
