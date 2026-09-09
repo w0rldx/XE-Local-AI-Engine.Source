@@ -32,7 +32,7 @@
     "useGitignore": true,
     "useDotIgnore": true,
     "useDefaultPatterns": true,
-    "customPatterns": ["**/*.omc/**", "**/.claude/**", "**/.opencode/**", "**/.tmp/**"]
+    "customPatterns": ["**/.tmp/**"]
   },
   "security": {
     "enableSecurityCheck": true
