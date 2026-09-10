@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows.Implementation;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

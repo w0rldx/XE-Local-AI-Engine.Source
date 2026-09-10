@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>

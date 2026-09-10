@@ -85,7 +85,11 @@ public sealed class SeedAssemblyContractTests
     {
         AssertEx.Equal(expected: 2, chatClient.Calls.Count, "each site must have reached the provider once per run.");
 
-        var expectedTurns = new[] { FirstTurn, SecondTurn };
+        var expectedTurns = new[]
+        {
+            FirstTurn,
+            SecondTurn
+        };
         for (var index = 0; index < chatClient.Calls.Count; index++)
         {
             var (messages, options) = chatClient.Calls[index];

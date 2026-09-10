@@ -15,7 +15,6 @@ using XE_Local_AI_Engine.Client.Services.Persistence;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Tutorial;
 using XE_Local_AI_Engine.Client.Services.Tutorial.Implementation;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 
 internal static class AddNodeAuthAndConnectionExtensions
 {

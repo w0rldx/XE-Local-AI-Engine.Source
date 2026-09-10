@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Integrations;
 
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
-using System.Text.Json;
 using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Tools;

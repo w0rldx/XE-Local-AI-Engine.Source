@@ -21,6 +21,5 @@ internal static class FastEndpointsProblemBody
 {
     private const string GeneralErrorsField = "GeneralErrors";
 
-    public static string GeneralErrorsName =>
-        new Config().Serializer.Options.PropertyNamingPolicy?.ConvertName(GeneralErrorsField) ?? GeneralErrorsField;
+    public static string GeneralErrorsName => new Config().Serializer.Options.PropertyNamingPolicy?.ConvertName(GeneralErrorsField) ?? GeneralErrorsField;
 }

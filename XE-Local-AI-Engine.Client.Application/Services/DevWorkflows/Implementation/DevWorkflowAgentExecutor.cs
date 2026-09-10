@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Common;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Client.Services.WorkSessions.Implementation;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 /// <summary>
 ///     The agent lane: one work session per agent node-run attempt, driven by the run that owns it.

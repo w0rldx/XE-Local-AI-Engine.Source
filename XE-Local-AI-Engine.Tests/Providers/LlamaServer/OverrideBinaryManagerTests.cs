@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
+using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Tests.Testing;
 using OS = TUnit.Core.Enums.OS;
 

@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Training.Comparisons.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Comparison;
-using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 
 public sealed class CreateComparisonEndpoint(IComparisonReportService comparisons) : Endpoint<CreateComparisonRequest, ComparisonResponse>
 {

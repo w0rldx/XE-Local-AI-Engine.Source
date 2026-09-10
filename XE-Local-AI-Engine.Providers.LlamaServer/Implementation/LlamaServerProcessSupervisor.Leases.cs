@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Providers.LlamaServer.Implementation;
 
-using System.Diagnostics;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;

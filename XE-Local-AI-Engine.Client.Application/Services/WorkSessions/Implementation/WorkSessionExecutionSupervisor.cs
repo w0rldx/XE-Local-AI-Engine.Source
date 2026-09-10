@@ -10,7 +10,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Invocation.Implementation;
-using XE_Local_AI_Engine.Client.Services.WorkSessions.Tools.Implementation;
 
 /// <summary>
 ///     Runs a work session as a bounded sequence of steps, each one an ordinary chat turn on the session's owned

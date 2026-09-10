@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.DevWorkflows;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>How a node with more than one inbound edge waits. The whole of the join semantics.</summary>
 internal enum DevWorkflowJoinPolicy

@@ -119,7 +119,10 @@ public sealed class GenAiErrorDescriptionRedactionProcessorTests
         using var client = provider.WithProviderTelemetry();
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() =>
-                client.GetResponseAsync([new ChatMessage(ChatRole.User, secret)], new ChatOptions { ModelId = modelId }),
+                client.GetResponseAsync([new ChatMessage(ChatRole.User, secret)], new ChatOptions
+                {
+                    ModelId = modelId
+                }),
             "the fake provider must surface its failure through the telemetry hop.");
 
         var activity = SpanFor(recorded, modelId);

@@ -40,7 +40,8 @@ internal sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolde
 ///         bound waits forever.
 ///     </para>
 /// </summary>
-internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt,
+internal sealed class FakeTrainingProcessHandle(
+    TrainingLaunchReceipt receipt,
     IReadOnlyList<string> lines,
     int exitCode,
     bool exitsOnStreamClose = true)

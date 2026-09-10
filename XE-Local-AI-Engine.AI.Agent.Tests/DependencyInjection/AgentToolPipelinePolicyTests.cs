@@ -18,6 +18,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class AgentToolPipelinePolicyTests
 {
     private const string ToolName = "harmless_tool";
+
     // real-timer: failure deadline for an in-memory controlled-gate deadlock; ordering is asserted through the gates.
     private static readonly TimeSpan CompletionTimeout = TimeSpan.FromSeconds(10);
 
@@ -219,10 +220,10 @@ public sealed class AgentToolPipelinePolicyTests
         using var inner = new ScriptedChatClient((call, _, _) =>
             call == 1
                 ? new ChatResponse(new ChatMessage(ChatRole.Assistant,
-                    [
-                        new FunctionCallContent("call-first", first.Name),
-                        new FunctionCallContent("call-second", second.Name)
-                    ]))
+                [
+                    new FunctionCallContent("call-first", first.Name),
+                    new FunctionCallContent("call-second", second.Name)
+                ]))
                 : FinalAnswer());
         using var provider = BuildProvider(inner);
         var client = provider.GetRequiredService<IChatClient>();
@@ -310,10 +311,10 @@ public sealed class AgentToolPipelinePolicyTests
 
         var selector = Substitute.For<IToolRelevanceSelector>();
         selector.SelectAsync(Arg.Any<string?>(),
-                Arg.Any<IReadOnlyList<ToolRelevanceCandidate>>(),
-                Arg.Any<int>(),
-                Arg.Any<CancellationToken>())
-            .Returns(Task.FromResult(new ToolRelevanceSelection([ListToolsFunction.ToolName], [HiddenToolName])));
+                    Arg.Any<IReadOnlyList<ToolRelevanceCandidate>>(),
+                    Arg.Any<int>(),
+                    Arg.Any<CancellationToken>())
+                .Returns(Task.FromResult(new ToolRelevanceSelection([ListToolsFunction.ToolName], [HiddenToolName])));
         using var inner = new ScriptedChatClient((call, _, _) => call switch
         {
             1 => FunctionCall(ListToolsFunction.ToolName, call),
@@ -326,11 +327,14 @@ public sealed class AgentToolPipelinePolicyTests
         ChatResponse response;
 
         using (ProviderCallBudget.BeginScope(BudgetOptions()))
-        using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
-        {
-            response = await SendAsync(client, new ChatOptions { Tools = tools }, streaming);
-            snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
-        }
+            using (ToolRelevanceScope.BeginScope(active: true, new HashSet<string>(StringComparer.Ordinal)))
+            {
+                response = await SendAsync(client, new ChatOptions
+                {
+                    Tools = tools
+                }, streaming);
+                snapshot = ProviderCallBudget.Current!.CaptureEfficiencySnapshot();
+            }
 
         AssertEx.Equal("done", response.Text);
         AssertEx.Equal(expected: 1, executions, "the revealed authorized tool must execute exactly once");
@@ -458,8 +462,7 @@ public sealed class AgentToolPipelinePolicyTests
         return new ChatResponse(new ChatMessage(ChatRole.Assistant, "done"));
     }
 
-    private sealed class ScriptedChatClient(
-        Func<int, IReadOnlyList<ChatMessage>, ChatOptions?, ChatResponse> response) : IChatClient
+    private sealed class ScriptedChatClient(Func<int, IReadOnlyList<ChatMessage>, ChatOptions?, ChatResponse> response) : IChatClient
     {
         private int _callCount;
 

@@ -700,8 +700,8 @@ public sealed class OrchestrationAgentFactoryTests
                                                    && (message.Text?.Contains("AUDITOR agent", StringComparison.Ordinal) ?? false));
             var handoffTool = options?.Tools?.FirstOrDefault(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal));
             var handoffDeclarations = options?.Tools?
-                                                     .Where(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal))
-                                                     .ToList()
+                                             .Where(tool => tool.Name.StartsWith("handoff_to_", StringComparison.Ordinal))
+                                             .ToList()
                                       ?? [];
 
             if (isTriage)

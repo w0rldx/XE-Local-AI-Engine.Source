@@ -6,7 +6,6 @@ using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
-using XE_Local_AI_Engine.Client.Services.Workspace;
 
 /// <summary>Starts bounded background indexing for a previously registered local Git repository.</summary>
 public sealed class ImportKnowledgeRepositoryEndpoint(IServiceScopeFactory scopeFactory, IOptions<DevelopmentOptions> options)

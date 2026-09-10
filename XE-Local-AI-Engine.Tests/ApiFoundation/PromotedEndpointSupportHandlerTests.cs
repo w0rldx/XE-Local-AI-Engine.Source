@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Tests.ApiFoundation;
 using System.Text.Json;
 using Microsoft.AspNetCore.Http;
 using XE_Local_AI_Engine.Client.ExceptionHandling;
-using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.ModelFit;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Tests.Testing;
 

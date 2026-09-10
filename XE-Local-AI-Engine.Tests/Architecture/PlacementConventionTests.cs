@@ -85,9 +85,8 @@ public sealed class PlacementConventionTests
         {
             var rootNamespace = RootNamespaceOf(assembly);
 
-            AssertNoViolations(
-                Interfaces().That().ArePublic().And().ResideInAssembly(assembly)
-                            .Should().ResideInNamespace($"{rootNamespace}.Contracts").WithoutRequiringPositiveResults(),
+            AssertNoViolations(Interfaces().That().ArePublic().And().ResideInAssembly(assembly)
+                                           .Should().ResideInNamespace($"{rootNamespace}.Contracts").WithoutRequiringPositiveResults(),
                 $"Public interfaces in '{assembly.GetName().Name}' are the seam other layers bind to and must live in "
                 + $"'{rootNamespace}.Contracts', not next to the implementation that happens to satisfy them today.");
         }
@@ -106,9 +105,8 @@ public sealed class PlacementConventionTests
         {
             var rootNamespace = RootNamespaceOf(assembly);
 
-            AssertNoViolations(
-                Classes().That().ArePublic().And().ResideInAssembly(assembly).And().HaveNameEndingWith("Options")
-                         .Should().ResideInNamespace($"{rootNamespace}.Options").WithoutRequiringPositiveResults(),
+            AssertNoViolations(Classes().That().ArePublic().And().ResideInAssembly(assembly).And().HaveNameEndingWith("Options")
+                                        .Should().ResideInNamespace($"{rootNamespace}.Options").WithoutRequiringPositiveResults(),
                 $"Bound configuration in '{assembly.GetName().Name}' must live in '{rootNamespace}.Options' so the "
                 + "full set a provider binds is enumerable from one folder.");
         }
@@ -125,21 +123,18 @@ public sealed class PlacementConventionTests
         AssertEx.True(endpoints >= 300 && mappers >= 40 && validators >= 55,
             $"Expected the host's known endpoint surface; found {endpoints} endpoints, {mappers} mappers, {validators} validators. The scan is broken.");
 
-        AssertNoViolations(
-            Classes().That().AreAssignableTo(typeof(BaseEndpoint)).And().ResideInAssembly(ClientAssembly)
-                     .Should().ResideInNamespaceMatching(@"^.*\.V1$").WithoutRequiringPositiveResults(),
+        AssertNoViolations(Classes().That().AreAssignableTo(typeof(BaseEndpoint)).And().ResideInAssembly(ClientAssembly)
+                                    .Should().ResideInNamespaceMatching(@"^.*\.V1$").WithoutRequiringPositiveResults(),
             "Every FastEndpoints endpoint in the host is part of the versioned local API and must sit in a '.V1' "
             + "namespace; an unversioned endpoint namespace is a route whose contract nothing pins.");
 
-        AssertNoViolations(
-            Classes().That().HaveNameEndingWith("Mapper").And().ResideInAssembly(ClientAssembly)
-                     .Should().ResideInNamespaceMatching(@"^.*\.V1\.Mappers$").WithoutRequiringPositiveResults(),
+        AssertNoViolations(Classes().That().HaveNameEndingWith("Mapper").And().ResideInAssembly(ClientAssembly)
+                                    .Should().ResideInNamespaceMatching(@"^.*\.V1\.Mappers$").WithoutRequiringPositiveResults(),
             "Endpoint DTO mappers belong in '<area>.V1.Mappers'. Keeping them out of the endpoint file is what stops "
             + "the mapping from being re-derived per endpoint.");
 
-        AssertNoViolations(
-            Classes().That().AreAssignableTo(typeof(IValidator)).And().ResideInAssembly(ClientAssembly)
-                     .Should().ResideInNamespaceMatching(@"^.*\.V1\.Validators$").WithoutRequiringPositiveResults(),
+        AssertNoViolations(Classes().That().AreAssignableTo(typeof(IValidator)).And().ResideInAssembly(ClientAssembly)
+                                    .Should().ResideInNamespaceMatching(@"^.*\.V1\.Validators$").WithoutRequiringPositiveResults(),
             "Request validators belong in '<area>.V1.Validators'. FastEndpoints resolves them by convention, so a "
             + "validator filed elsewhere is found by the framework and by nobody reading the folder.");
     }

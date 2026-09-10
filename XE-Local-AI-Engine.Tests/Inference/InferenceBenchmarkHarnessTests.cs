@@ -331,11 +331,13 @@ public sealed class InferenceBenchmarkHarnessTests
             [TimingUpdate(cached: 99, evaluated: 1, text: string.Empty)],
             [TimingUpdate(cached: 0, evaluated: 10, text: string.Empty)],
             [PlainUpdate(string.Empty)],
-            [RawUpdate("""
-                       {"id":"chunk","object":"chat.completion.chunk","created":1,"model":"m",
-                        "choices":[{"index":0,"finish_reason":"stop","delta":{}}],
-                        "timings":{"cache_n":2,"prompt_n":"bad","predicted_n":1}}
-                       """, string.Empty)],
+            [
+                RawUpdate("""
+                          {"id":"chunk","object":"chat.completion.chunk","created":1,"model":"m",
+                           "choices":[{"index":0,"finish_reason":"stop","delta":{}}],
+                           "timings":{"cache_n":2,"prompt_n":"bad","predicted_n":1}}
+                          """, string.Empty)
+            ],
             [TimingUpdate(cached: -1, evaluated: -1, text: string.Empty)],
             [TimingUpdate(cached: 0, evaluated: 0, text: string.Empty)],
             [TimingUpdate(cached: int.MaxValue, evaluated: int.MaxValue, text: string.Empty)]
@@ -497,13 +499,17 @@ public sealed class InferenceBenchmarkHarnessTests
         return RawUpdate(json, text);
     }
 
-    private static ChatResponseUpdate PlainUpdate(string text) => new(ChatRole.Assistant, text);
+    private static ChatResponseUpdate PlainUpdate(string text) =>
+        new(ChatRole.Assistant, text);
 
     private static ChatResponseUpdate RawUpdate(string json, string text)
     {
         var chunk = ModelReaderWriter.Read<StreamingChatCompletionUpdate>(BinaryData.FromString(json))
                     ?? throw new InvalidOperationException("The chunk fixture did not deserialize.");
-        return new ChatResponseUpdate(ChatRole.Assistant, text) { RawRepresentation = chunk };
+        return new ChatResponseUpdate(ChatRole.Assistant, text)
+        {
+            RawRepresentation = chunk
+        };
     }
 
     private static HardwareProfile NvidiaProfile(long? availableVramBytes)
@@ -563,7 +569,8 @@ public sealed class InferenceBenchmarkHarnessTests
         }
     }
 
-    private sealed class TimedBenchmarkChatClient(IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> warmStreams,
+    private sealed class TimedBenchmarkChatClient(
+        IReadOnlyList<IReadOnlyList<ChatResponseUpdate>> warmStreams,
         ChatResponseUpdate? coldUpdate = null) : IChatClient
     {
         private int _streamCall;
@@ -575,7 +582,8 @@ public sealed class InferenceBenchmarkHarnessTests
 
         public async IAsyncEnumerable<ChatResponseUpdate> GetStreamingResponseAsync(IEnumerable<ChatMessage> messages,
             ChatOptions? options = null,
-            [EnumeratorCancellation] CancellationToken cancellationToken = default)
+            [EnumeratorCancellation]
+            CancellationToken cancellationToken = default)
         {
             var call = Interlocked.Increment(ref _streamCall);
             if (call % 2 == 1)
