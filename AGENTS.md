@@ -14,8 +14,19 @@ false. `docs/wiki/` is the code-grounded architecture reference; start at `docs/
 - Do not edit files, run mutating commands, or clean up before a plan is approved.
 - On a failure, stop and report the failing command and its output before attempting a fix.
 - Parallel work goes in git worktrees under `.tmp/worktrees/`; never let two tasks claim the same file.
-- Branch from and target `develop`. Commit messages follow Conventional Commits (`fix(scope): …`).
+- Agents sharing one worktree share one git index: never `git add` there. Commit through a private
+  `GIT_INDEX_FILE` (`git read-tree HEAD` immediately before `write-tree`, `update-ref` in the three-argument
+  form), then `git read-tree HEAD` the shared index once `git diff --cached` is empty.
+- Branch from and target `develop`. Nothing lands on `develop` without the operator's explicit approval: never
+  merge into, reset or "repair" `develop` mid-task; a feature branch absorbs `develop`, never the reverse. Report
+  the branch and integration steps, then stop.
+- Commit messages follow Conventional Commits (`fix(scope): …`), body only: no session-tracking, co-author or
+  AI trailers. Never set git identity (`git -c user.*`, `git config user.*`, `GIT_AUTHOR_*`/`GIT_COMMITTER_*`);
+  a plain `git commit` inherits the repo config.
 - Never commit secrets or runtime state: `node.key`, `*.sqlite`, `.env`, `dp-keys/`, `*.enc`.
+- The repo never depends on optional per-user agent or editor tooling: no tool names in product code, gates,
+  tests or instructions; express the intent as a rule (dot-prefixed, hidden directory). `.gitignore` is the one
+  exception. Shipped product surface (installers, MCP client runbooks, cloud providers) is not tooling.
 - Never hand-edit generated output: the hey-api client under `src/core/api/generated/`, `routeTree.gen.ts`,
   EF migration designer files. Regenerate and commit the result.
 - Cite `file` + symbol, never `file:line`, for code that is being edited (lines drift, symbols survive).
@@ -53,12 +64,29 @@ Never run `aspire stop --all` or `pkill -f <substring>`: both cross worktree bou
 checkouts' instances. Kill by PID. Run one instance per data directory. Details: `scripts/README-dev-stop.md`,
 `docs/agent-knowledge.md` §2.
 
+- Kill-by-PID applies to anything you background, load generators included: collect the PIDs (or `setsid` a
+  process group), put the kill in a `trap … EXIT`, and confirm with `ps` before ending the turn. A `kill $SPIN`
+  that never reached its subshells left 23 spinners burning a core each for nine hours.
+- The app origin serves the SPA bundle that was last **built**, not the working tree. After a frontend change,
+  validate UI on the `client-react` Vite origin (`scripts/dev-status.sh --json` lists both) or run `pnpm run build`
+  before `dev-start`, and record which origin the evidence came from.
+- A scratch or fresh-DB host must not touch the user-level `~/.local/share/XE-Local-AI-Engine` (it rewrites the
+  shared `installed-runtime.json`): point `XDG_DATA_HOME` at a scratch dir, or source the BYO llama-server
+  override before `dev-start.sh` for GPU rounds.
+
 ## Validation
 
 A change is done when these pass. **`--configuration Release` is load-bearing**: Debug skips the analyzers
 (Meziantou, BannedApiAnalyzers, `IDExxxx`, the no-bare-`TODO` rule). Iterate in Debug, finish in Release;
 `XE_FULL_ANALYSIS=1` forces the analyzers in Debug. A ~1 s incremental build that compiled nothing proves
-nothing; use `--no-incremental` when the evidence matters.
+nothing; use `--no-incremental` when the evidence matters. The sharper form: a deliberate-break proof is void
+unless the Release build reported `0 Error(s)` — a build the analyzers failed runs the **previous** binary and
+reports the old green. Keep break scaffolding analyzer-clean and restore it through a shell trap.
+
+Before a gate chain: `dotnet build-server shutdown`, then export `MSBUILDDISABLENODEREUSE=1` and
+`NUGET_PACKAGES=$HOME/.nuget/packages` for every `dotnet build`/`dotnet test` in the chain — stale MSBuild
+worker nodes carry a deleted `NUGET_PACKAGES` across worktrees (NU5037 / CS0006 on a branch that is fine).
+Never queue a gate on a worktree a writer is still editing; the result is void and no guard catches source edits.
 
 Backend (repo root):
 

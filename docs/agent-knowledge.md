@@ -384,7 +384,10 @@ Distinct `[ParallelGroup]` Order values prove non-overlap but not execution dire
 ### Frontend lint
 
 - `pnpm run lint` is the frontend typecheck. E2E uses `build:e2e` (Vite only), so E2E green does not prove TypeScript correctness.
-- Lint does not run Biome formatting. Do not format whole directories to repair one file.
+- `pnpm run lint` runs `biome format src scripts` as a gate (since 2026-09-09). `biome.json` excludes `**/.omc/**`,
+  `src/routeTree.gen.ts` and `src/core/api/generated/**`, and Biome's CSS formatter is off (stylelint owns CSS). If
+  the format gate fails on a file you did not write, look for gitignored runtime state under `src/` before touching
+  source; runtime state lands in `<cwd>/.omc` whenever a tool runs from the React dir.
 - react-doctor config is `doctor.config.jsonc`; `deslop` ignores need the `deslop/` prefix.
 
 ### Frontend tests: an `await import()` inside `it()` is charged to `testTimeout`
@@ -412,12 +415,11 @@ Official packaging validates the selected update-policy file, not only publish e
 
 One Kestrel process serves API and UI via `UseStaticFiles` and `MapFallbackToFile("index.html")`. Do not add a second bundled Node/static server.
 
-### Codex companion review needs an explicit `--base develop`
+### Review tooling that auto-detects the default branch fails here — pass the base explicitly
 
-The remote here is `public`, not `origin` (§0), so the Codex companion's default-branch detection fails —
-`/codex:review` reports "Unable to detect the repository default branch". Always run `adversarial-review --base
-develop` (or the equivalent explicit `--base develop` on other Codex review commands); do not add an `origin`
-remote alias to work around it. Operator ruling 2026-09-05.
+The remote here is `public`, not `origin` (§0), so any review or diff tool that infers the default branch from
+`origin` reports that it cannot detect one. Pass the base branch explicitly (`--base develop` or the tool's
+equivalent); do not add an `origin` remote alias to work around it. Operator ruling 2026-09-05.
 
 ---
 
