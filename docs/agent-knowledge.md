@@ -183,6 +183,20 @@ If the operation can fault before publishing the awaited signal, inspect/await t
 
 **Rule:** do not rely on Sonar S2699 ("Tests should include assertions") to catch a vacuous backend test; it cannot fire here at any severity. State the property in an `AssertEx`/`Assert.That` call rather than letting "nothing threw" or "nothing timed out" stand as the result; an assertion-less `[Test]` is caught by review alone. Failure prevented: a test that exercises code and checks nothing reporting green (two such tests lived in `XE-Local-AI-Engine.Client.Persistence.Tests`, `ModelRecommendationScheduleSeederTests` and `ModelCoordinationTests`, until 2026-09-05). Authority: sonar-dotnet source, `IMethodSymbol.IsTestMethod` recognises only the MSTest, NUnit and xUnit attribute lists (`SonarAnalyzer.Core/Semantics/KnownType.cs`, `.../Extensions/IMethodSymbolExtensions.cs`); `TUnit.Core.TestAttribute` is matched by full name and is in none of them. A live pilot on 2026-09-05 (assertion-less `[Test]` in Persistence.Tests, `S2699` at warning, Release build) reported nothing while a bare-TODO control on the same file fired S1135. TUnit itself ships no such analyzer (`src/TUnit.Analyzers/DiagnosticIds.cs`). The Vitest suite has the equivalent guard in `XE-Local-AI-Engine.Client.React/scripts/CheckTestsHaveAssertions.mjs`.
 
+### `FastEndpoints.Config.SerOpts` is process-global, so a bare-context test sees whoever booted a host first
+
+**Rule:** a test that drives a handler with a bare `DefaultHttpContext` must not hardcode the wire casing of a
+FastEndpoints `errors[]` entry; derive it from the same global the writer reads, via
+`XE-Local-AI-Engine.Tests/Testing/FastEndpointsProblemBody.GeneralErrorsName`. Host-based route tests keep asserting
+the literal `"generalErrors"`, because a real host always has the policy set and that is the wire contract.
+**Prevents:** an order dependency disguised as a flake. `Config.SerOpts` is a static; `Program.CreateAppAsync` seeds
+it with the camelCase DI options when the first host boots (`TestServerWebAppFactory.EnsureApp`, lazily), and a
+process that has not booted one yet serializes `"GeneralErrors"`. Under `--maximum-parallel-tests 1` the bare-context
+test deterministically loses the race; at default parallelism it deterministically wins. A second trap found on the
+same hunt: `AssertEx.Equal`'s `message` argument REPLACES the expected/actual text, so passing a type name as the
+message hides the very values you need. **Authority:** `AssertEx.Equal` in `Tests/Testing/AssertEx.cs`; FastEndpoints
+8.3.0 `ProblemDetails` proven standalone; ten of the twenty `ApiFoundation/` classes boot a host.
+
 ### Sleep-then-assert-the-negative can only fail when the code gets slower
 
 **Rule:** never `Task.Delay`/`Thread.Sleep`/`setTimeout` to rule an event out. Drive the code to an observable blocking point through a gate the test controls, assert the negative there, then release the gate and assert the positive. Prevents a regression that fires the event *late* from reading green — the pass found 89 finite `Task.Delay`/`Thread.Sleep` sites in `XE-Local-AI-Engine.Tests`, removed 46 (converted through `AssertEx.SettleAsync` / `StaysIncompleteAsync` / `CompletesAsync`, new members of `XE-Local-AI-Engine.Tests/Testing/AssertEx.cs`, folded into a bounded poll, or deleted with the shape they served) and kept 43, each a bounded poll with a deadline, a positive wait with a real budget, or a `// real-timer:` site. A real timer is legitimate when the subject is a real OS process or the delay is the subject's own input; mark it with a `// real-timer:` comment naming why. Authority: test-principles audit 2026-09-05; `docs/wiki/17-writing-tests.md` §4.
@@ -487,6 +501,25 @@ A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always suppl
 - `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
 - `DevWorkflowOptions.Section` defaults to disabled and `GraphWorkflowOptions.Section` defaults to ENABLED; only `WorkSessions:Enabled` ships `true` in `appsettings.json`, and no `GraphWorkflows` section exists in any `appsettings*.json` (it binds to the property defaults). One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
 - Prevents burning a live round on a "wrong route": each gate is a request-path middleware registered ahead of `LocalApiSecurityMiddleware` in `Program.cs`, deliberately so the switch cannot be probed by status code — which also means a disabled feature and a mistyped path are indistinguishable from the response alone.
+
+### A live round in a worktree starts from a FRESH isolated DB, and a scratch host never touches the user data dir
+
+**Rule:** never copy the main checkout's dev DB or keys into a worktree; it holds only the operator's real account, so
+the demo admin login 401s and `POST auth/setup` short-circuits with `AlreadyInitialized`. Use a fresh isolated DB per
+worktree, `POST auth/setup` a throwaway admin, then log in; access tokens expire after ~15 min, so a long seed driver
+re-logs in. Persist `defaultModelName` and `maxMessageRequestTimeoutSeconds=1800` in node settings. The GGUF import
+endpoints are `IDesktopOnlyEndpoint` and unmapped in a dev run, and desktop mode would resolve the USER data dir and
+destroy the isolation — so extra models come from a worktree-private models dir (symlinks + a generated `index.json`),
+never by writing into the shared one. Point `XDG_DATA_HOME` at a scratch dir for any throwaway host, or source the BYO
+llama-server override (§ llama.cpp binaries) before `dev-start.sh` for a GPU round, so the instance never rewrites the
+user-level `installed-runtime.json`. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously
+(observed ~45 min later) — read the table, do not poll once; and `dev_workflow_*` run ids are stored UPPER-CASE while
+SQLite text `IN` is case-sensitive, so a lower-case id returns zero rows silently. **Prevents:** a wasted or voided
+live round on every item above — each one cost one during the AI-trends wave — and, before `75e0f7b60`, a fresh-DB
+start deleting the operator's managed CUDA build through the shared runtime record (the product now never deletes a
+build the record does not name, so the remaining stake is isolation, not data loss). **Authority:** the AI-trends
+live rounds 2026-09-03/04; `LlamaCppSourceBuildService.ReconcileActiveAndBackupAsync`; `DesktopBootstrap` data-dir
+resolution.
 
 ### Locked runtime decisions — do not "helpfully" reintroduce
 
@@ -1562,6 +1595,21 @@ Caller-fixable bound/unavailable failures use `KnowledgeRepositoryImportRejected
 
 `DomainValidationExceptionHandler` emits the same FastEndpoints error shape as the removed local catches: `errors[{name:"generalErrors",reason}]`, matching detail, request path, and trace ID. `GraphWorkflowValidationException` remains local because it carries a `GraphWorkflowValidationResult` — a LIST of `(key, message)` pairs, keyed to the node or edge each failure belongs to (null for a whole-document failure) — and the four Graph Workflow endpoints replay them one by one so the editor can draw each on its own element; collapsing them into the global handler's single sentence would lose the keys the canvas renders. `SelectedFolderValidationException` mixes 400/404/409, so it is split by `SelectedFolderExceptionHandler` rather than folded into the single-message 400. `SlashCommandConflictException` stays 409 and stays local: it is built as `Results.Problem(409, title: message)`, and `ConflictExceptionHandler`'s envelope puts the message in `detail` with `title` "Conflict" plus a `conflictType` member — moving it is a wire change needing a regenerated client, not a relocation.
 
+### Before deleting a `.Produces<T>(status)`, trace every exception family the route can raise
+
+**Rule:** a never-constructed `*BlockedResponse` DTO can go, but its `.Produces<>(409)` only goes once you have
+grepped the route's whole call chain for every exception type and checked which handlers `ConfigureServices`
+registers for them; then pin the declared statuses in `OpenApiDocumentTests` with its `AssertResponses(paths, path,
+verb, [...])` idiom. **Prevents:** turning a wrongly-typed declaration into an undeclared one, which is worse — no
+typed SPA handler can be written for a status the spec does not mention. On `CreateTrainingRunEndpoint`
+`TrainingRunBlockedResponse` was dead, so the DTO and the 409 went together; but `TrainingRunStore.CreateAndEnqueueAsync`
+still throws `TrainingConflictException`, which the global `TrainingExceptionHandler` maps to a `TrainingErrorResponse`
+409. ADR 0009's prose ("the route answers with a 400, so the 409 could not occur") was false before the change and was
+believed by the implementer, the brief and the diff review; an independent review in a separate lane caught it.
+`pnpm run openapi:check` structurally cannot: it regenerates the client FROM the committed spec and agrees with a
+wrong spec happily, and behaviour tests pin the throw and the envelope, not the declaration. **Authority:**
+`TrainingExceptionHandler`, `OpenApiDocumentTests`; 2026-09-10 cleanup review.
+
 ### A declared 413 is thrown by Kestrel inside model binding, so it needs a handler, not an early exit
 
 **Rule:** `IRequestSizeLimitMetadata` on a route is enforced by Kestrel **as it reads the body**, which happens inside FastEndpoints model binding — before `HandleAsync` runs. The refusal is a `BadHttpRequestException` carrying status 413, so the handler-side `IsOversized` Content-Length check never fires on a real connection; it only covers a client that declares its size honestly. `RequestBodyTooLargeExceptionHandler` maps that exception to the declared problem body, discriminating on the **status** rather than the type, because `BadHttpRequestException` is also how the host reports a malformed request line, a bad chunk and an over-long header — all 400s belonging to other handlers. It is registered immediately before `DefaultExceptionHandler` (order pinned by `ExceptionHandlerRegistrationOrderTests`). **Prevents:** shipping a route that declares 413, answers 500 on the only refusal path a real connection takes, and passes every in-process test — the in-memory host does not honour the metadata, so nothing below a real Kestrel can see it. Until S7 both capped families did exactly that, the graph-workflow four at 1 MiB and the development-workflow two at 2 MiB. **Authority:** `RequestBodyTooLargeExceptionHandler`, its registration in `ConfigureServices`, `RequestBodyTooLargeExceptionHandlerTests` and `ExceptionHandlerRegistrationOrderTests`; the path itself is only observable in `RequestBodyLimitE2ETests` (opt-in E2E project), and the S7 live round, 2026-09-07 §C, is what found it.
@@ -1580,6 +1628,22 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
+
+### A test that asserts a translated string must render through `renderWithProviders` or import `@/i18n`
+
+**Rule:** `src/test/RenderWithProviders.tsx` imports `@/i18n` on purpose — `i18n.ts` calls `.use(initReactI18next)`,
+which registers the instance as react-i18next's default, so `useTranslation()` resolves against the real `en` bundle
+with no provider in the tree. A test file that hand-rolls its own Mantine/Query wrapper and never imports `@/i18n`
+gets react-i18next's uninitialised fallback: it echoes each `defaultValue` verbatim and does not interpolate, so the
+assertion is pinned to the in-code literal, not to what the operator sees. The one legitimate carve-out is a file that
+`vi.mock("react-i18next")`s wholesale (the mock leaves `initReactI18next` undefined and `i18next.use(undefined)`
+throws at import). **Prevents:** a green test over a string the app renders differently. As of 2026-09-09, 124 files
+hand-roll a wrapper and 44 `t("key", "default")` sites disagree with `en.json` (mostly `pages.chat.*`; one code default
+dropped its `{{name}}` placeholder) — fix a drifted default before migrating its test's wrapper, each is already wrong
+in one of the two places. Related: the `"New conversation"` literal in `Chat.tsx` must NOT be translated; it is
+persisted and compared by exact string, so localising it breaks the untitled-conversation check across a language
+switch until the contract carries an `isUntitled` flag. **Authority:** `RenderWithProviders.tsx` and its header
+comment; the `ModelManagement.test.tsx` breakage that surfaced it, 2026-09-09.
 
 ### A date goes through `formatTimestamp` or `formatTime`, never through a bare `toLocaleString()`
 
