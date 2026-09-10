@@ -19,6 +19,31 @@
 #   A bare `dotnet build` in another terminal bypasses it entirely. That is what
 #   scripts/assembly-guard.sh (DETECTION) is for — the two layers are independent by design.
 #
+# SCOPE: ONE LOCK FOR THE WHOLE REPOSITORY, WORKTREES INCLUDED
+#   "Repo-wide" above is literal, and it takes deliberate work to be true. The obvious way to find
+#   the repo root — `git rev-parse --show-toplevel` — returns the LINKED WORKTREE's own path when
+#   you are inside one, so every worktree would get its own .tmp/build.lock and parallel lanes would
+#   not serialize against each other at all. This script therefore resolves the root through
+#   `--git-common-dir`, which points at the MAIN checkout's .git from inside every worktree.
+#
+#   That is not the shape you would guess from the corruption story above. Each worktree has its own
+#   bin/ and obj/, so one worktree's build cannot rewrite another's assemblies, and assembly safety
+#   alone would be satisfied by a per-worktree lock. The reason the lock is shared anyway is the
+#   MACHINE: several lanes each holding a test host at ~15 GB RSS will exhaust RAM, and a run that
+#   dies to the OOM killer — or merely swaps through a timing-sensitive test — is contaminated in a
+#   way the assembly guard cannot see. Cross-worktree builds therefore serialize BY DESIGN.
+#
+#   Three sibling scripts already resolved the lock this way — run-agent-framework-validation.sh,
+#   run-agent-framework-hardware-compat.sh and capture-agent-framework-dependencies.sh all compute
+#   SHARED_REPO_ROOT from --git-common-dir. This script was the odd one out, so the four disagreed
+#   about where the lock file lives; they now agree.
+#
+#   To get per-worktree parallelism back on purpose, point each lane at its own file:
+#
+#     export BUILD_LOCK_FILE="$(git rev-parse --show-toplevel)/.tmp/build.lock"
+#
+#   BUILD_LOCK_FILE (and --lock-file) remain the override and are unchanged by any of this.
+#
 # THE FD-INHERITANCE TRAP (this bit us once already)
 #   flock's lock lives on an open file descriptor, and file descriptors are INHERITED across fork
 #   and exec. `dotnet build` leaves MSBuild node-reuse daemons and VBCSCompiler running for ~15
@@ -37,12 +62,13 @@
 #   --timeout <seconds>   Max time to wait for the lock (default: ${BUILD_LOCK_TIMEOUT:-1800}).
 #                         A full Release build + solution test run legitimately takes many minutes,
 #                         so the default is deliberately generous. It is bounded, never infinite.
-#   --lock-file <path>    Lock file to use (default: .tmp/build.lock, which is gitignored).
+#   --lock-file <path>    Lock file to use (default: the SHARED .tmp/build.lock in the main
+#                         checkout, which is gitignored — see SCOPE above).
 #   --help                Show this message.
 #
 # Env knobs:
 #   BUILD_LOCK_TIMEOUT    Same as --timeout.
-#   BUILD_LOCK_FILE       Same as --lock-file.
+#   BUILD_LOCK_FILE       Same as --lock-file. The supported way to opt OUT of the shared lock.
 #   XE_BUILD_LOCK_HELD    Set BY this script for the command it runs. If it already names the same
 #                         lock file, the wrapper is a pass-through instead of deadlocking on itself.
 #                         Do not set it by hand — doing so disables locking for that subtree.
@@ -60,9 +86,25 @@
 #   2    — usage error
 set -uo pipefail
 
-PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || (cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd))"
+# --git-common-dir, NOT --show-toplevel: see "SCOPE" above for why the lock is shared. Two mechanics
+# worth knowing before editing this. The query is anchored with `git -C` at THIS SCRIPT's directory,
+# never the caller's CWD: from a CWD outside any repository the query would fail and fall through to
+# the else-arm, which inside a linked worktree resolves to that worktree's own root — a silently
+# unshared lock, exactly the bug this resolution exists to prevent; from a CWD inside a DIFFERENT
+# repository the lock would land under that repository instead. git prints the common dir relative
+# to the -C directory when it is inside it, so a relative answer is joined back onto that same
+# directory before realpath sees it. The else-arm is the pre-existing fallback for a source tree
+# with no git metadata; keep it.
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if GIT_COMMON_DIR="$(git -C "${SCRIPT_DIR}" rev-parse --git-common-dir 2>/dev/null)" && [[ -n "${GIT_COMMON_DIR}" ]]; then
+  [[ "${GIT_COMMON_DIR}" == /* ]] || GIT_COMMON_DIR="${SCRIPT_DIR}/${GIT_COMMON_DIR}"
+  SHARED_REPO_ROOT="$(dirname "$(realpath "${GIT_COMMON_DIR}")")"
+else
+  SHARED_REPO_ROOT="$(dirname "${SCRIPT_DIR}")"
+fi
+SHARED_BUILD_LOCK="${SHARED_REPO_ROOT}/.tmp/build.lock"
 
-LOCK_FILE="${BUILD_LOCK_FILE:-${PROJECT_ROOT}/.tmp/build.lock}"
+LOCK_FILE="${BUILD_LOCK_FILE:-${SHARED_BUILD_LOCK}}"
 TIMEOUT="${BUILD_LOCK_TIMEOUT:-1800}"
 
 # Fixed fd rather than bash's `{var}>` form: the child redirection that closes it (`9>&-`) needs a

@@ -142,9 +142,3 @@ public sealed class TrainingRunLinkedModelResponse
     public required string RepoId { get; init; }
     public string? ContentFingerprint { get; init; }
 }
-
-public sealed class TrainingRunBlockedResponse
-{
-    public required string Reason { get; init; }
-    public required string Message { get; init; }
-}

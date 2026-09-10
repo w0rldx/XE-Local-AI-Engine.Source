@@ -1,12 +1,12 @@
 # Backend commentary map
 
-Last reviewed: 2026-07-24
+Last reviewed: 2026-09-10
 
 Use this map when updating backend comments, XML docs, or AI-agent retrieval notes. It replaces historical implementation-increment labels with stable source terms that match the current runtime.
 
 ## Cleanup rule
 
-Source comments should describe current invariants, ownership, security boundaries, and external-library seams. Do not reintroduce historical delivery labels such as Playbook P*, Loop P*, Marker *, lane numbers, or plan-section references into `.cs` comments. The same ban applies to frontend `.ts`/`.tsx` comments (including JSX `{/* … */}` comments): name the runtime concept (e.g. "playbook governance", "eval gate", "relevance retrieval", "cohort monitoring") and drop the delivery-increment suffix. If an old label still captures useful rationale, rewrite it using one of the stable terms below and link to this map or `docs/ai-runtime.md` from Markdown, not from every source hunk.
+Source comments should describe current invariants, ownership, security boundaries, and external-library seams. Do not reintroduce historical delivery labels such as Playbook P*, Loop P*, Marker *, lane numbers, or plan-section references into `.cs` comments. **The ban now has a swept tree behind it.** Commit `73155c8a3` (2026-09-10) drained the labels as part of a comments/structure/dead-code pass over 458 files, 321 of them `.cs`. Treat what remains as a re-introduction check rather than a backlog. That commit is also why this document had gone stale: it is the widest comment sweep the repository has had since the previous review date above, and it never checked itself against this map — if you run another sweep of that size, update this file in the same change. The same ban applies to frontend `.ts`/`.tsx` comments (including JSX `{/* … */}` comments): name the runtime concept (e.g. "playbook governance", "eval gate", "relevance retrieval", "cohort monitoring") and drop the delivery-increment suffix. If an old label still captures useful rationale, rewrite it using one of the stable terms below and link to this map or `docs/ai-runtime.md` from Markdown, not from every source hunk.
 
 ## Stable backend anchors
 

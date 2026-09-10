@@ -1,7 +1,6 @@
 ﻿namespace XE_Local_AI_Engine.Tests.CodexOAuth;
 
 using System.Net;
-using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -23,6 +22,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class CodexAuthServiceTests : IDisposable
 {
     private readonly List<IDisposable> _disposables = [];
+
+    /// <summary>A login whose loopback port is bound: the options that name it, and the handle it produced.</summary>
+    private sealed record BoundLogin(CodexOptions Options, CodexLoginHandle Handle);
 
     public void Dispose()
     {
@@ -68,9 +70,8 @@ public sealed class CodexAuthServiceTests : IDisposable
     {
         using var handler = new CapturingHttpMessageHandler();
         // Short timeout so the background completion ends promptly and the loopback listener is released.
-        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out var options, TimeSpan.FromMilliseconds(150));
+        var (options, handle) = await BeginLoginAsync(handler, Substitute.For<ICodexTokenStore>(), TimeSpan.FromMilliseconds(150));
 
-        var handle = service.BeginLogin();
         var query = ParseQuery(handle.AuthorizeUrl.Query);
 
         AssertEx.Equal("S256", query["code_challenge_method"]);
@@ -100,9 +101,8 @@ public sealed class CodexAuthServiceTests : IDisposable
         var access = CodexTestHelpers.BuildAccountJwt();
         handler.EnqueueJson(HttpStatusCode.OK, CodexTestHelpers.BuildTokenResponse(access, "refresh-1"));
         var tokenStore = Substitute.For<ICodexTokenStore>();
-        var service = CreateService(handler, tokenStore, out var options);
+        var (options, handle) = await BeginLoginAsync(handler, tokenStore);
 
-        var handle = service.BeginLogin();
         var query = ParseQuery(handle.AuthorizeUrl.Query);
         var state = query["state"];
         var challenge = query["code_challenge"];
@@ -128,9 +128,7 @@ public sealed class CodexAuthServiceTests : IDisposable
     public async Task BeginLogin_WhenCallbackStateDoesNotMatch_FailsLogin()
     {
         using var handler = new CapturingHttpMessageHandler();
-        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out var options);
-
-        var handle = service.BeginLogin();
+        var (options, handle) = await BeginLoginAsync(handler, Substitute.For<ICodexTokenStore>());
 
         await DeliverCallbackAsync(options, "code=auth-code-xyz&state=not-the-expected-state");
 
@@ -141,9 +139,9 @@ public sealed class CodexAuthServiceTests : IDisposable
     public async Task BeginLogin_WhenNoCallbackArrivesBeforeTimeout_FailsWithCancellation()
     {
         using var handler = new CapturingHttpMessageHandler();
-        var service = CreateService(handler, Substitute.For<ICodexTokenStore>(), out _, TimeSpan.FromMilliseconds(150));
-
-        var handle = service.BeginLogin();
+        // real-timer: the login timeout IS the subject's own input — the service arms it with
+        // CancellationTokenSource.CancelAfter, which takes no TimeProvider, and the assertion is that it fires.
+        var (_, handle) = await BeginLoginAsync(handler, Substitute.For<ICodexTokenStore>(), TimeSpan.FromMilliseconds(150));
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => handle.Completion);
     }
@@ -163,17 +161,43 @@ public sealed class CodexAuthServiceTests : IDisposable
         AssertEx.False(logger.AllText.Contains("secret-refresh-def", StringComparison.Ordinal), "refresh token must never be logged");
     }
 
+    /// <summary>
+    ///     Begins a login on a loopback port that is a <b>candidate</b> until <c>BeginLogin</c> has actually bound it.
+    ///     The bind is retried on the service's own in-use signal — <see cref="CodexAuthException" /> out of
+    ///     <c>listener.Start()</c> — so a port another process claimed inside the reserve/bind window is answered by
+    ///     taking a different one rather than by failing the test or, worse, by two listeners sharing the port and the
+    ///     callback landing on the wrong one.
+    /// </summary>
+    private Task<BoundLogin> BeginLoginAsync(CapturingHttpMessageHandler handler,
+        ICodexTokenStore tokenStore,
+        TimeSpan? loginTimeout = null) =>
+        LoopbackPort.BindWithRetryAsync<BoundLogin>(port =>
+        {
+            var service = CreateService(handler, tokenStore, out var options, loginTimeout, port: port);
+            try
+            {
+                return Task.FromResult<BoundLogin?>(new BoundLogin(options, service.BeginLogin()));
+            }
+            catch (CodexAuthException)
+            {
+                return Task.FromResult<BoundLogin?>(null);
+            }
+        });
+
     private CodexAuthService CreateService(CapturingHttpMessageHandler handler,
         ICodexTokenStore tokenStore,
         out CodexOptions options,
         TimeSpan? loginTimeout = null,
-        ILogger<CodexAuthService>? logger = null)
+        ILogger<CodexAuthService>? logger = null,
+        int? port = null)
     {
         options = new CodexOptions
         {
-            CallbackPort = GetFreeLoopbackPort(),
-            LoginTimeout = loginTimeout ?? TimeSpan.FromSeconds(10),
-            TokenRequestTimeout = TimeSpan.FromSeconds(10)
+            CallbackPort = port ?? LoopbackPort.Reserve(),
+            // Failure deadlines, not sleeps: a green run never reaches them, and a contended runner must not be able
+            // to starve a loopback round trip past a bound sized for an idle box.
+            LoginTimeout = loginTimeout ?? TestBudgets.Contended,
+            TokenRequestTimeout = TestBudgets.Contended
         };
 
         // The test owns the handler (via `using`); this client must not dispose it.
@@ -202,36 +226,21 @@ public sealed class CodexAuthServiceTests : IDisposable
         return result;
     }
 
+    /// <summary>
+    ///     Poses as the OAuth provider redirecting to the loopback callback. No retry and no sleep: <c>BeginLogin</c>
+    ///     starts the listener synchronously before it returns the authorize URL, so by the time a caller can reach
+    ///     this method the port is bound and the OS queues the connection. A refusal here is a real defect, and
+    ///     retrying past it would only hide which one.
+    /// </summary>
     private static async Task DeliverCallbackAsync(CodexOptions options, string queryString)
     {
         using var client = new HttpClient
         {
-            Timeout = TimeSpan.FromSeconds(5)
+            // A failure deadline for a loopback round trip, sized for a contended runner rather than an idle box.
+            Timeout = TestBudgets.Contended
         };
         var callbackUri = new Uri($"http://localhost:{options.CallbackPort}{options.CallbackPath}?{queryString}");
-
-        // Retry briefly: the loopback listener may still be coming up when the callback fires.
-        for (var attempt = 0; attempt < 50; attempt++)
-        {
-            try
-            {
-                using var response = await client.GetAsync(callbackUri);
-                return;
-            }
-            catch (HttpRequestException)
-            {
-                await Task.Delay(20);
-            }
-        }
-    }
-
-    private static int GetFreeLoopbackPort()
-    {
-        using var listener = new TcpListener(IPAddress.Loopback, port: 0);
-        listener.Start();
-        var port = ((IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
+        using var response = await client.GetAsync(callbackUri);
     }
 
     private static string ExtractJsonString(string json, string propertyName)

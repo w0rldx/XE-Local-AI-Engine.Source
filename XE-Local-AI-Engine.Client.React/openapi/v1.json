@@ -1471,7 +1471,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse"
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse"
                 }
               }
             }
@@ -22513,21 +22513,45 @@
           }
         }
       },
-      "XE_Local_AI_EngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse": {
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse": {
         "type": "object",
         "additionalProperties": false,
         "required": [
-          "reason",
+          "code",
           "message"
         ],
         "properties": {
-          "reason": {
-            "type": "string"
+          "code": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode"
           },
           "message": {
             "type": "string"
           }
         }
+      },
+      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "NotFound",
+          "InvalidRequest",
+          "VersionConflict",
+          "GenerationActive",
+          "DefinitionReferenced",
+          "DatasetReferenced",
+          "TrainingBusy",
+          "InvalidLifecycleTransition"
+        ],
+        "enum": [
+          "NotFound",
+          "InvalidRequest",
+          "VersionConflict",
+          "GenerationActive",
+          "DefinitionReferenced",
+          "DatasetReferenced",
+          "TrainingBusy",
+          "InvalidLifecycleTransition"
+        ]
       },
       "XE_Local_AI_EngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest": {
         "type": "object",
@@ -23508,46 +23532,6 @@
       "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1ListEvaluationsRequest": {
         "type": "object",
         "additionalProperties": false
-      },
-      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorResponse": {
-        "type": "object",
-        "additionalProperties": false,
-        "required": [
-          "code",
-          "message"
-        ],
-        "properties": {
-          "code": {
-            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode"
-          },
-          "message": {
-            "type": "string"
-          }
-        }
-      },
-      "XE_Local_AI_EngineClientEndpointsTrainingV1TrainingErrorCode": {
-        "type": "string",
-        "description": "",
-        "x-enumNames": [
-          "NotFound",
-          "InvalidRequest",
-          "VersionConflict",
-          "GenerationActive",
-          "DefinitionReferenced",
-          "DatasetReferenced",
-          "TrainingBusy",
-          "InvalidLifecycleTransition"
-        ],
-        "enum": [
-          "NotFound",
-          "InvalidRequest",
-          "VersionConflict",
-          "GenerationActive",
-          "DefinitionReferenced",
-          "DatasetReferenced",
-          "TrainingBusy",
-          "InvalidLifecycleTransition"
-        ]
       },
       "XE_Local_AI_EngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest": {
         "type": "object",

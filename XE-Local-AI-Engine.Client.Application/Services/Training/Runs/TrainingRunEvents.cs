@@ -221,4 +221,18 @@ public sealed class TrainingRunQueueOptions
 
     /// <summary>Absolute ceiling on one run, so a pathological configuration cannot hold the GPU forever.</summary>
     public TimeSpan MaxRunDuration { get; init; } = TimeSpan.FromHours(24);
+
+    /// <summary>
+    ///     How long a trainer that has already closed its output may take to actually exit before its process group
+    ///     is killed.
+    ///     <para>
+    ///         A bound of its own rather than a reuse of <see cref="InactivityTimeout" />: silence <i>during</i> a run
+    ///         can be a wedged CUDA call and is worth minutes, but a closed stream means the process is already tearing
+    ///         down, and the only things left to wait for are the CUDA context releasing and the kernel reaping it and
+    ///         any child that still holds the pipe. Seconds, not minutes. Keeping them separate also means an operator
+    ///         who shortens the silence tolerance for a chatty trainer does not thereby start killing a slow one
+    ///         mid-teardown, and it lets the two be told apart when either fires.
+    ///     </para>
+    /// </summary>
+    public TimeSpan ExitGracePeriod { get; init; } = TimeSpan.FromSeconds(30);
 }

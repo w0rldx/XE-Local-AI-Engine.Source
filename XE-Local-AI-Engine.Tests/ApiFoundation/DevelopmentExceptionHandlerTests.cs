@@ -125,9 +125,11 @@ public sealed class DevelopmentExceptionHandlerTests
         AssertEx.Equal(expected: 1, root.GetProperty("errors").GetArrayLength());
         AssertEx.Equal(exception.Message, root.GetProperty("errors")[0].GetProperty("reason").GetString());
 
-        // The field name is "GeneralErrors" over a bare context and "generalErrors" on the wire: the camel-casing is
-        // FastEndpoints' global Config.Serializer naming policy, which only the real host configures.
-        AssertEx.Equal("GeneralErrors", root.GetProperty("errors")[0].GetProperty("name").GetString());
+        // The field name goes through FastEndpoints' naming policy the way the writer applies it — see
+        // FastEndpointsProblemBody. Config.Serializer is process-global, so over a bare context this is the raw
+        // constant alone and camel-cased once any host in the process has run UseFastEndpoints; either literal would
+        // assert test order rather than the writer.
+        AssertEx.Equal(FastEndpointsProblemBody.GeneralErrorsName, root.GetProperty("errors")[0].GetProperty("name").GetString());
 
         // It must NOT have become the ConflictProblemDetails envelope: that body carries a conflictType discriminator
         // and puts "Conflict" in title, which is a wire change the SPA and the generated client have not been told about.

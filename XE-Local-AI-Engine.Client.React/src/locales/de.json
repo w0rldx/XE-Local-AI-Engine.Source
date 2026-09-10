@@ -3236,7 +3236,10 @@
 			"panel": {
 				"loading": "Modell-Eignungsdaten werden geladen…",
 				"cached": "Zwischengespeichert {{timestamp}}",
-				"noCache": "Für den Anwendungsfall {{useCase}} sind keine zwischengespeicherten llmfit-Empfehlungen vorhanden. Aktualisieren Sie sie auf der Seite Modellempfehlungen, um sie zu befüllen."
+				"noCache": "Für den Anwendungsfall {{useCase}} sind keine zwischengespeicherten llmfit-Empfehlungen vorhanden. Aktualisieren Sie sie auf der Seite Modellempfehlungen, um sie zu befüllen.",
+				"noMatch": "{{model}} ist nicht in den neuesten Empfehlungen für {{useCase}} enthalten.",
+				"quantization": "Quantisierung",
+				"rank": "Rang #{{rank}}"
 			},
 			"recommendations": {
 				"title": "Lokaler Modell-Advisor",

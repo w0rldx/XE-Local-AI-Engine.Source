@@ -242,14 +242,3 @@ public sealed class ArtifactPromotionService(
             baseModelName);
     }
 }
-
-public sealed class ArtifactPromotionCompensationException(
-    GgufImportCommitReceipt commitReceipt,
-    Exception persistenceFailure,
-    Exception rollbackFailure)
-    : AggregateException("The promoted registry entry could not be recorded or rolled back; recovery receipt evidence is attached.",
-        persistenceFailure,
-        rollbackFailure)
-{
-    public GgufImportCommitReceipt CommitReceipt { get; } = commitReceipt;
-}

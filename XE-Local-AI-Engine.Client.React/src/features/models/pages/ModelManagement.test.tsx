@@ -482,6 +482,13 @@ describe("ModelManagement", () => {
 		const result = await within(dialog).findByTestId("model-fit-result");
 		expect(result.textContent).toContain("8.4");
 		expect(within(dialog).getByText("Good")).toBeTruthy();
+		// The rank badge and the metric labels resolve through i18n (this file initializes it), so a missing key would
+		// surface the raw `pages.modelFit....` path here instead of the bundle text.
+		expect(result.textContent).toContain("Rank #1");
+		expect(result.textContent).toContain("Req. RAM");
+		// Panel-scoped, deliberately not the table column's "Quant" abbreviation.
+		expect(result.textContent).toContain("Quantization");
+		expect(result.textContent).not.toContain("pages.modelFit");
 	});
 
 	// GGUF browse + download flow (relocated from the model-fit advisor; it is the model-acquisition path on this page).

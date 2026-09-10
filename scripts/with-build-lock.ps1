@@ -1,8 +1,8 @@
 ﻿#Requires -Version 7.0
 <#
 .SYNOPSIS
-    Run a command holding the repo-wide, cross-process build lock. Windows port of
-    scripts/with-build-lock.sh.
+    Run a command holding the repo-wide, cross-process build lock — shared by every worktree.
+    Windows port of scripts/with-build-lock.sh.
 
 .DESCRIPTION
     Why this exists
@@ -31,8 +31,10 @@
       so an MSBuild daemon spawned under this wrapper cannot acquire, hold, or leak the lock. Node
       reuse and shared compilation therefore stay ENABLED and there is no build-speed cost.
 
-      The mutex is named from a hash of the CANONICAL lock-file path, so it is scoped to a checkout
-      exactly as the bash lock file is, and two worktrees do not contend. The name uses the session
+      The mutex is named from a hash of the CANONICAL lock-file path, so it is scoped exactly as the
+      bash lock file is. That path is now resolved through --git-common-dir, so every worktree of the
+      repository maps to ONE mutex and cross-worktree builds serialize by design; see SCOPE in
+      scripts/with-build-lock.sh for why the machine, not assembly safety, is the reason. The name uses the session
       ("Local\") namespace deliberately: the "Global\" namespace needs SeCreateGlobalPrivilege,
       which an unelevated agent shell does not have, and cooperating shells on this box share a
       session.
@@ -48,8 +50,8 @@
                            1800. A full Release build plus a solution test run legitimately takes
                            many minutes, so the default is deliberately generous. It is bounded,
                            never infinite.
-      -LockFile <path>     Lock file to use. Default: $env:BUILD_LOCK_FILE, else
-                           <repo>/.tmp/build.lock (gitignored).
+      -LockFile <path>     Lock file to use. Default: $env:BUILD_LOCK_FILE, else the SHARED
+                           <main checkout>/.tmp/build.lock (gitignored).
       --                   End of options. Everything after it is the command and its arguments.
 
     Why param() is empty
@@ -62,7 +64,7 @@
 
     Env knobs:
       BUILD_LOCK_TIMEOUT   Same as -TimeoutSeconds.
-      BUILD_LOCK_FILE      Same as -LockFile.
+      BUILD_LOCK_FILE      Same as -LockFile. The way to opt OUT of the shared lock.
       XE_BUILD_LOCK_HELD   Set BY this script for the command it runs. If it already names the same
                            lock file, the wrapper is a pass-through instead of deadlocking on
                            itself. Do not set it by hand — doing so disables locking for that
@@ -93,9 +95,18 @@ $LockBusyExit = 69
 function Write-LockLog { param([string] $Message) [Console]::Error.WriteLine("[build-lock] $Message") }
 function Exit-Usage { param([string] $Message) [Console]::Error.WriteLine("[build-lock] $Message"); exit 2 }
 
-$projectRoot = & git -C $PSScriptRoot rev-parse --show-toplevel 2>$null
-if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($projectRoot)) {
+# SHARED across every worktree, matching scripts/with-build-lock.sh: --show-toplevel would return the
+# linked worktree's own path and give each worktree its own lock, while --git-common-dir resolves to
+# the main checkout's .git from inside every one. The mutex below is named from the canonical lock
+# path, so this is what makes a Windows agent and the bash original contend over the same lock.
+# GetFullPath(path, basePath) resolves the relative form git prints against the -C directory and
+# returns an already-rooted path unchanged, which is exactly the two cases git can emit.
+$gitCommonDir = & git -C $PSScriptRoot rev-parse --git-common-dir 2>$null
+if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($gitCommonDir)) {
     $projectRoot = Split-Path -Parent $PSScriptRoot
+}
+else {
+    $projectRoot = Split-Path -Parent ([System.IO.Path]::GetFullPath($gitCommonDir.Trim(), $PSScriptRoot))
 }
 $projectRoot = (Resolve-Path -LiteralPath $projectRoot).Path
 

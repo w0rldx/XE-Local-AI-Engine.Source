@@ -29,7 +29,9 @@ public interface ITrainingRunExecutor
 ///         Two independent bounds sit over the stream. The inactivity watchdog kills the process group when nothing
 ///         parseable arrives for its configured window: a trainer that is wedged on a CUDA call prints nothing at all,
 ///         and the heartbeat event exists precisely so a long silent phase can be told apart from a dead one. The
-///         max-duration bound is the backstop for a configuration that is merely pathological rather than stuck.
+///         max-duration bound is the backstop for a configuration that is merely pathological rather than stuck. A
+///         third bound sits after the stream: a trainer that closes its output and then never exits is killed rather
+///         than waited on, because waiting holds the run's capacity reservation open indefinitely.
 ///     </para>
 ///     <para>
 ///         Cancellation is cooperative: the operator's cancel signals the process GROUP with SIGTERM, <c>train.py</c>
@@ -53,6 +55,13 @@ public sealed class TrainingRunExecutor(
 {
     /// <summary>The exit status <c>train.py</c> uses for a cooperative stop, so a cancel is never read as a failure.</summary>
     public const int CancelledExitCode = 3;
+
+    /// <summary>
+    ///     Stands in for the status of a trainer that had to be killed because it would not exit. The conventional
+    ///     shell encoding of SIGKILL (128 + 9), named rather than left as a bare literal. It is never read:
+    ///     <c>CompleteAsync</c> answers a set <see cref="StreamState.WatchdogReason" /> before it looks at the status.
+    /// </summary>
+    private const int KilledExitCode = 137;
 
     /// <summary>How often progress and the log tail are flushed. A trainer logs every step; the database does not need to.</summary>
     private static readonly TimeSpan PersistInterval = TimeSpan.FromSeconds(1);
@@ -170,10 +179,14 @@ public sealed class TrainingRunExecutor(
         // The registration is disposed before the handle is: an operator cancel that lands after the stream has closed
         // would otherwise signal a process this method no longer owns.
         var stopOnCancel = cancellation.Token.Register(handle.RequestStop);
+        // The watchdog sleeps a whole poll interval between looks, so "the stream ended" has to reach it as a signal
+        // rather than as a flag it only notices on its next wake — otherwise every run, and every test, pays up to one
+        // interval of dead wall clock at the end for a process that has already exited.
+        using var watchdogStop = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
         Task? watchdog = null;
         try
         {
-            watchdog = WatchdogAsync(handle.KillGroup, state, stoppingToken);
+            watchdog = WatchdogAsync(handle.KillGroup, state, watchdogStop.Token);
             await ConsumeAsync(run.Id, handle, state, stoppingToken).ConfigureAwait(false);
         }
         finally
@@ -181,6 +194,7 @@ public sealed class TrainingRunExecutor(
             // The watchdog holds the handle, so it is joined here rather than on the happy path only: a throwing
             // consume must not leave it running against a process this method is about to dispose.
             state.Finished = true;
+            await watchdogStop.CancelAsync().ConfigureAwait(false);
             if (watchdog is not null)
             {
                 await watchdog.ConfigureAwait(false);
@@ -189,7 +203,7 @@ public sealed class TrainingRunExecutor(
             await stopOnCancel.DisposeAsync().ConfigureAwait(false);
         }
 
-        var exitCode = await handle.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
+        var exitCode = await WaitForExitOrEscalateAsync(handle, state).ConfigureAwait(false);
         await FlushAsync(run.Id, state, force: true).ConfigureAwait(false);
         await CompleteAsync(run.Id, state, exitCode, cancellation.IsCancellationRequested).ConfigureAwait(false);
     }
@@ -275,6 +289,39 @@ public sealed class TrainingRunExecutor(
     private static TimeSpan WatchdogInterval(TimeSpan inactivityTimeout) =>
         inactivityTimeout < TimeSpan.FromSeconds(4) ? inactivityTimeout / 4 : TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    ///     Waits for the child to reap itself once its output has closed, bounded.
+    ///     <para>
+    ///         A closed stream means the trainer should be exiting right now, and normally it already has. One that is
+    ///         wedged after its last write would otherwise hold this method — and with it the run's
+    ///         <c>TrainingCapacityReservation</c> — forever, starving every later spawn decision on the node: exactly
+    ///         the failure the reservation comment in <c>ExecuteAsync</c> exists to prevent.
+    ///     </para>
+    ///     <para>
+    ///         The bound is <see cref="TrainingRunQueueOptions.ExitGracePeriod" />, which exists for this and nothing
+    ///         else: it is a teardown allowance, not a silence tolerance, so it is short where the inactivity window
+    ///         is long. On expiry the escalation is the watchdog's own — SIGKILL to the group, and the run recorded
+    ///         through <see cref="StreamState.WatchdogReason" /> — so the outcome is honest rather than a success that
+    ///         was really a kill. The status is not waited for a second time: a SIGKILL that has not already settled
+    ///         the process will not settle on this thread, and the status of a killed process is not information this
+    ///         method uses.
+    ///     </para>
+    /// </summary>
+    private async Task<int> WaitForExitOrEscalateAsync(ITrainingProcessHandle handle, StreamState state)
+    {
+        using var exitGrace = new CancellationTokenSource(_options.ExitGracePeriod, _timeProvider);
+        try
+        {
+            return await handle.WaitForExitAsync(exitGrace.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            handle.KillGroup();
+            state.WatchdogReason ??= "The trainer stopped responding after closing its output and was terminated.";
+            return KilledExitCode;
+        }
+    }
+
     /// <summary>Takes the kill callback rather than the handle: the watchdog's only power over the child is to end it.</summary>
     private async Task WatchdogAsync(Action killGroup, StreamState state, CancellationToken stoppingToken)
     {
@@ -285,6 +332,15 @@ public sealed class TrainingRunExecutor(
                 await Task.Delay(WatchdogInterval(_options.InactivityTimeout), _timeProvider, stoppingToken).ConfigureAwait(false);
             }
             catch (OperationCanceledException)
+            {
+                return;
+            }
+
+            // The flag is re-read HERE, not only in the while condition above: the delay can complete in the same
+            // instant the stream closes, and a body that judged silence on the way out would kill a process that had
+            // already finished — recording a successful run as Failed for a stillness that is simply the end of its
+            // output. The cancellation above closes the whole poll interval; this closes the instant it cannot.
+            if (state.Finished)
             {
                 return;
             }

@@ -92,7 +92,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
         // reason the protocol has a heartbeat event in the first place.
         await using var harness = await Harness.CreateAsync(this, lines: []);
 
-        await harness.ExecuteAsync();
+        await harness.AdvancePastAsync(TimeSpan.FromMilliseconds(250));
 
         AssertEx.True(harness.Handle.Killed, "A silent trainer is killed, not waited on: it is holding the whole GPU.");
         _ = await harness.Store.Received(1)
@@ -105,13 +105,14 @@ public sealed class TrainingRunExecutorTests : IDisposable
     [Test]
     public async Task Watchdog_BeyondTheMaximumDuration_TerminatesRun()
     {
-        // The inactivity bound is generous here, so only the absolute ceiling can stop this run.
+        // The inactivity bound is generous here, so only the absolute ceiling can stop this run. Its size also sets
+        // the watchdog's poll interval to a second, so the clock has to clear that too before the check runs at all.
         await using var harness = await Harness.CreateAsync(this,
             lines: [],
             inactivityTimeout: TimeSpan.FromMinutes(10),
             maxRunDuration: TimeSpan.FromMilliseconds(200));
 
-        await harness.ExecuteAsync();
+        await harness.AdvancePastAsync(TimeSpan.FromSeconds(1.5));
 
         AssertEx.True(harness.Handle.Killed, "A run that never ends still has to give the GPU back.");
         _ = await harness.Store.Received(1)
@@ -119,6 +120,58 @@ public sealed class TrainingRunExecutorTests : IDisposable
                              TrainingWorkStatus.Failed,
                              Arg.Is<string>(message => message.Contains("maximum duration", StringComparison.Ordinal)),
                              Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_WhenTheTrainerClosesItsOutputButNeverExits_KillsItAndRecordsTheRun()
+    {
+        // A trainer that says its piece, closes both pipes and then wedges. Nothing reaps it: the watchdog is
+        // already joined by the time the exit is awaited, so an unbounded wait here parks the executor forever —
+        // holding the run's TrainingCapacityReservation and starving every later spawn decision on the node.
+        await using var harness = await Harness.CreateAsync(this,
+        [
+            """{"event":"done","cancelled":false}"""
+        ], exitsOnStreamClose: false);
+
+        var execution = harness.ExecuteAsync();
+        await harness.Handle.ExitWaitEntered.WaitAsync(TestBudgets.Contended);
+        await AssertEx.EventuallyAsync(() => harness.Clock.ArmedTimerCount > 0,
+            TestBudgets.Contended,
+            "The exit grace must be armed on the clock before the clock is moved past it.");
+        harness.Clock.Advance(TimeSpan.FromSeconds(31));
+        await execution;
+
+        AssertEx.True(harness.Handle.Killed, "A trainer that will not exit has to be taken off the GPU, not waited on.");
+        _ = await harness.Store.Received(1)
+                         .CompleteRunAsync(harness.RunId,
+                             TrainingWorkStatus.Failed,
+                             Arg.Is<string>(message => message.Contains("stopped responding", StringComparison.Ordinal)),
+                             Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task Execute_WhenTheInactivityBoundFallsDueAfterTheStreamClosed_StillRecordsSuccess()
+    {
+        // The bug the watchdog's cancellation closed: it judged silence on the way OUT. Its delay is a whole poll
+        // interval long, so "the stream ended" reached it late, and a trainer whose final phase was quieter than the
+        // inactivity bound had its SUCCESSFUL run recorded as Failed — plus a SIGKILL aimed at a process group that
+        // had already gone. Here the stream closes first and the bound falls due afterwards; nothing may act on it.
+        await using var harness = await Harness.CreateAsync(this,
+        [
+            """{"event":"done","cancelled":false}"""
+        ], exitsOnStreamClose: false);
+
+        var execution = harness.ExecuteAsync();
+        await harness.Handle.ExitWaitEntered.WaitAsync(TestBudgets.Contended);
+        // Well past the 200 ms inactivity bound and nowhere near the 30 s exit grace, so only the watchdog's bound
+        // has come due — and the trainer then exits cleanly, exactly as a slow-finishing one does.
+        harness.Clock.Advance(TimeSpan.FromSeconds(5));
+        harness.Handle.SignalExit();
+        await execution;
+
+        AssertEx.False(harness.Handle.Killed, "A stream that has closed is a run that has finished, not one that has gone quiet.");
+        _ = await harness.Store.Received(1)
+                         .CompleteRunAsync(harness.RunId, TrainingWorkStatus.Succeeded, null, Arg.Any<CancellationToken>());
     }
 
     [Test]
@@ -202,11 +255,23 @@ public sealed class TrainingRunExecutorTests : IDisposable
                              Arg.Any<CancellationToken>());
     }
 
-    /// <summary>Wires one executor over scripted collaborators and a controllable clock.</summary>
+    /// <summary>
+    ///     Wires one executor over scripted collaborators and a <see cref="ManualTimeProvider" />. The clock is frozen
+    ///     until a test advances it, so the inactivity and max-duration watchdogs are inert for every test that is not
+    ///     about them, and exact for the two that are.
+    /// </summary>
     private sealed class Harness : IAsyncDisposable
     {
         public const int Pid = 5150;
         public const int Pgid = 5150;
+
+        /// <summary>
+        ///     How many times <see cref="AdvancePastAsync" /> will step the clock before calling the bound broken.
+        ///     Slack, not a budget: one advance is the design, a second covers a poll timer re-armed past the end of
+        ///     the previous one, and the rest exist only so the number is not the interesting part of a failure. It
+        ///     bounds steps of a clock the test owns, not wall time, so a slow box cannot spend it.
+        /// </summary>
+        private const int MaxAdvances = 5;
 
         private readonly TrainingWorkClaim _claim;
         private readonly TrainingRunExecutor _executor;
@@ -218,7 +283,8 @@ public sealed class TrainingRunExecutorTests : IDisposable
             FakeTrainingProcessSpawner spawner,
             FakeTrainingProcessHandle handle,
             TrainingRunCancellationRegistry cancellations,
-            TrainingRunWorkspace workspace)
+            TrainingRunWorkspace workspace,
+            ManualTimeProvider clock)
         {
             _executor = executor;
             _claim = claim;
@@ -227,6 +293,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
             Handle = handle;
             Cancellations = cancellations;
             Workspace = workspace;
+            Clock = clock;
         }
 
         public ITrainingRunStore Store { get; }
@@ -234,6 +301,10 @@ public sealed class TrainingRunExecutorTests : IDisposable
         public FakeTrainingProcessHandle Handle { get; }
         public TrainingRunCancellationRegistry Cancellations { get; }
         public TrainingRunWorkspace Workspace { get; }
+
+        /// <summary>The executor's clock. Frozen unless a test moves it, so the watchdog fires only when asked.</summary>
+        public ManualTimeProvider Clock { get; }
+
         public Guid RunId => _claim.TargetId;
         public TrainingLaunchReceiptV1? PersistedReceipt { get; private set; }
 
@@ -243,8 +314,11 @@ public sealed class TrainingRunExecutorTests : IDisposable
             bool capacityGranted = true,
             bool runtimeReady = true,
             TimeSpan? inactivityTimeout = null,
-            TimeSpan? maxRunDuration = null)
+            TimeSpan? maxRunDuration = null,
+            bool exitsOnStreamClose = true,
+            TimeSpan? exitGracePeriod = null)
         {
+            var clock = new ManualTimeProvider();
             var runId = Guid.NewGuid();
             var datasetId = Guid.NewGuid();
             var freezeId = Guid.NewGuid();
@@ -255,7 +329,7 @@ public sealed class TrainingRunExecutorTests : IDisposable
             var scripted = lines.Select(line => line.Replace("__STAGED__", staged, StringComparison.Ordinal)).ToArray();
 
             var receipt = new TrainingLaunchReceipt(Pid, Pgid, "/venv/bin/python", StartTicks: 42, RunToken: "token");
-            var handle = new FakeTrainingProcessHandle(receipt, scripted, exitCode);
+            var handle = new FakeTrainingProcessHandle(receipt, scripted, exitCode, exitsOnStreamClose);
             var spawner = new FakeTrainingProcessSpawner(handle);
 
             var store = Substitute.For<ITrainingRunStore>();
@@ -319,12 +393,19 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 cancellations,
                 new FixedNodeDataDirectory(owner._root),
                 // Short bounds so the watchdog's real behaviour is exercised in milliseconds rather than minutes.
+                // Short bounds, but they are measured on `clock` — a manual clock only a test moves. A watchdog on the
+                // system clock raced every OTHER test in this file on the box's scheduling jitter: a consume starved
+                // past 200 ms was killed as "silent" and the run landed Failed for the watchdog's reason rather than
+                // the one under assertion. Frozen, the watchdog provably cannot fire unless a test advances the clock.
                 Options.Create(new TrainingRunQueueOptions
                 {
                     InactivityTimeout = inactivityTimeout ?? TimeSpan.FromMilliseconds(200),
-                    MaxRunDuration = maxRunDuration ?? TimeSpan.FromHours(24)
+                    MaxRunDuration = maxRunDuration ?? TimeSpan.FromHours(24),
+                    // Deliberately an order of magnitude clear of the inactivity bound, so a test that crosses one
+                    // provably has not crossed the other and an assertion can name which bound acted.
+                    ExitGracePeriod = exitGracePeriod ?? TimeSpan.FromSeconds(30)
                 }),
-                TimeProvider.System,
+                clock,
                 NullLogger<TrainingRunExecutor>.Instance);
 
             var harness = new Harness(executor,
@@ -333,7 +414,8 @@ public sealed class TrainingRunExecutorTests : IDisposable
                 spawner,
                 handle,
                 cancellations,
-                workspace);
+                workspace,
+                clock);
 
             _ = store.SetLaunchReceiptAsync(runId, Arg.Any<ReadOnlyMemory<byte>?>(), Arg.Any<CancellationToken>())
                      .Returns(callInfo =>
@@ -350,6 +432,80 @@ public sealed class TrainingRunExecutorTests : IDisposable
 
         public Task ExecuteAsync() =>
             _executor.ExecuteAsync(_claim, CancellationToken.None);
+
+        /// <summary>
+        ///     Runs the executor and moves the clock past <paramref name="window" />, for the two tests whose subject IS
+        ///     a watchdog bound. It has two phases, and telling them apart is the whole job.
+        ///     <para>
+        ///         PHASE ONE — advance until the bound fires. The wait on
+        ///         <see cref="ManualTimeProvider.ArmedTimerCount" /> is what makes that safe: advancing before the
+        ///         watchdog has registered its poll timer would step the clock over a window nothing was waiting on, and
+        ///         the run would then hang forever on a bound that can never come due.
+        ///     </para>
+        ///     <para>
+        ///         The advance REPEATS rather than being assumed to land. A window wider than the watchdog's poll
+        ///         interval crosses several due instants, and the watchdog re-arms at each;
+        ///         <see cref="ManualTimeProvider.Advance" /> honours a re-arm only if it lands before the scan that
+        ///         finds nothing armed and sets the clock to the target. A continuation that reads the clock before
+        ///         that scan but arms after it is due BEYOND where the clock stopped, with nothing left to move it —
+        ///         and the run would then hang rather than fail, the worst shape a test can take in CI. One more
+        ///         advance is the only thing that can reach such a timer.
+        ///     </para>
+        ///     <para>
+        ///         <see cref="MaxAdvances" /> keeps that from becoming a way to pass vacuously: the design needs one
+        ///         advance and the re-arm race at most one more, so a run still unkilled after several has not lost a
+        ///         race — its bound has stopped firing, and the helper says so rather than stepping the clock until
+        ///         something happens.
+        ///     </para>
+        ///     <para>
+        ///         PHASE TWO — once the kill has been observed, STOP advancing and only wait for the run to unwind.
+        ///         Carrying the armed-timer predicate past the kill is what made this helper fail spuriously: the
+        ///         executor always continues into <c>WaitForExitOrEscalateAsync</c>, which arms a
+        ///         <see cref="TrainingRunQueueOptions.ExitGracePeriod" /> timer — thirty seconds, an order of magnitude
+        ///         past any <paramref name="window" /> either test passes — on this same clock. From that moment "some
+        ///         timer is armed" is true of a timer no advance of <paramref name="window" /> can ever reach, so every
+        ///         remaining iteration returned from the wait instantly, spent an advance that moved nothing, and the
+        ///         helper accused a bound that had in fact fired correctly. Only teardown was still in flight — which
+        ///         on a contended runner is precisely what gets delayed.
+        ///     </para>
+        ///     <para>
+        ///         <see cref="FakeTrainingProcessHandle.Killed" /> is the phase signal because it is the first thing
+        ///         <c>KillGroup</c> sets, strictly before the exit grace that confounds the timer predicate can exist,
+        ///         and because that same call settles the fake's exit — so nothing past the kill needs the clock at
+        ///         all. It is NOT a reason to return: the run is still unwinding when it is set, which is why the
+        ///         awaited <c>execution</c> below, and not this flag, is what the helper finishes on.
+        ///     </para>
+        /// </summary>
+        public async Task AdvancePastAsync(TimeSpan window)
+        {
+            var execution = ExecuteAsync();
+            var advances = 0;
+            while (!Handle.Killed && !execution.IsCompleted)
+            {
+                if (advances == MaxAdvances)
+                {
+                    throw new AssertionException($"The run was not killed after {MaxAdvances} advances of {window}: "
+                                                 + "the bound under test is no longer firing.");
+                }
+
+                await AssertEx.EventuallyAsync(() => Handle.Killed || execution.IsCompleted || Clock.ArmedTimerCount > 0,
+                    TestBudgets.Contended,
+                    "The run must either be killed or be waiting on a bound of its own for the clock to reach.");
+                if (Handle.Killed || execution.IsCompleted)
+                {
+                    break;
+                }
+
+                Clock.Advance(window);
+                advances++;
+            }
+
+            // The clock's work is over: the kill settled the exit, so what remains is plain asynchronous unwinding.
+            await AssertEx.EventuallyAsync(() => execution.IsCompleted,
+                TestBudgets.Contended,
+                "A killed run must finish unwinding; no advance of the clock can help it, so a stall here is a real one.");
+            await execution;
+        }
 
         public Task WaitForSpawnAsync() =>
             _spawned.Task.WaitAsync(TimeSpan.FromSeconds(10));

@@ -82,6 +82,12 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
         var problemDetails = new ConflictProblemDetails
         {
             Status = StatusCodes.Status409Conflict,
+            // Do NOT "fix" this to FastEndpoints' www.rfc-editor.org/rfc/ base, which DevelopmentConflictExceptionHandler
+            // reaches by setting no Type at all. This host is ALSO what ASP.NET Core's own ProblemDetailsDefaults
+            // emits, and the API already serves those strings unmodified wherever Results.Problem builds the body
+            // (BenchmarkEndpointSupport.Problem), so aligning this line would move it AWAY from the framework's.
+            // One canonical `type` across the API is unreachable; DevelopmentExceptionHandlerTests pins the
+            // divergence, and docs/adr/0009-conflict-envelope-versus-operational-block.md records why it stands.
             Type = "https://tools.ietf.org/html/rfc7231#section-6.5.8",
             Title = "Conflict",
             ConflictType = conflictType.Value.ToString(),

@@ -3236,7 +3236,10 @@
 			"panel": {
 				"loading": "Loading model-fit data…",
 				"cached": "Cached {{timestamp}}",
-				"noCache": "No cached llmfit recommendations for the {{useCase}} use case. Refresh from the Model recommendations page to populate them."
+				"noCache": "No cached llmfit recommendations for the {{useCase}} use case. Refresh from the Model recommendations page to populate them.",
+				"noMatch": "{{model}} is not in the latest {{useCase}} recommendations.",
+				"quantization": "Quantization",
+				"rank": "Rank #{{rank}}"
 			},
 			"recommendations": {
 				"title": "Local model advisor",

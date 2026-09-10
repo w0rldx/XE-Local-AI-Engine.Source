@@ -589,7 +589,10 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
     /// </summary>
     public async Task<DevWorkflowRunSnapshot> WaitForRunStatusAsync(Guid runId, DevWorkflowRunStatus expected, TimeSpan? timeout = null)
     {
-        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(30));
+        // real-timer: the subject is the REAL background pump, a hosted service this test starts itself. There is no
+        // in-process signal to gate on — the run's status in the store is the only thing it publishes. The deadline is
+        // a failure bound sized for a contended runner, not a sleep: a green run returns on the first matching read.
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TestBudgets.Contended);
         DevWorkflowRunSnapshot run;
         do
         {

@@ -105,7 +105,7 @@ to be made on §3's producer test, not on what the SPA renders.
 | `LlamaCppUpdateBlockedResponse` | `runningProcessCount` (**no** `reason`) | `UpdateLlamaCppRuntimeEndpoint`, `EnsureLlamaCppBinaryEndpoint` | **Qualifies**, but it is the odd one out: it carries a count and no reason code, and both producers read `LlamaCppRuntimeAdministrationFailure.Busy` off a result record. Nothing is thrown on either path, so the envelope could not reach it at all. |
 | `BaseArtifactBlockedResponse` | `reason` | `CreateBaseArtifactEndpoint`, `CancelBaseArtifactEndpoint`, `DeleteBaseArtifactEndpoint` | **Qualifies on the vocabulary, not on the payload.** It carries no member the envelope lacks; two of its three codes (`downloading`, `not-downloading`) are returned values, and only `rejected` is a catch. It stays Blocked so one route family speaks one shape — but it is the family a future pass would move first if the reason codes were ever centralised. |
 | `TrainingExportBlockedResponse` | `reason` | `TrainingExportEndpoints` (the export-start endpoint) | **Qualifies**, with a known defect: its `reason` is `TrainingExportStartOutcome.ToString()`, so it emits `Busy` / `RuntimeUnavailable` in PascalCase while every other family emits kebab-case. **Deliberately left as-is** — those strings are the wire contract, and normalising them would break any client already switching on them. An inconsistency inside the convention, not a reason to abandon it. |
-| `TrainingRunBlockedResponse` | `reason` | **nothing** | **Does not qualify. Declared but never produced, and scheduled for removal.** `CreateTrainingRunEndpoint` declares it with `.Produces<TrainingRunBlockedResponse>(409)` but no code constructs it; the route answers `TrainingRunRejectedException` with `AddError` and a 400, so the 409 it advertises cannot occur. The type is nonetheless published in `openapi/v1.json` and in the generated client (`types.gen.ts`, `zod.gen.ts`, `index.ts`) as `CreateTrainingRunErrors[409]`. **This ADR does not bless it as a member of the family**; it is dead wire surface, and its removal — the DTO, the `.Produces` call and a regenerated client — is scheduled as its own change because it moves the OpenAPI document. |
+| `TrainingRunBlockedResponse` | `reason` | **nothing** | **Did not qualify. Declared but never produced — removed on 2026-09-10.** `CreateTrainingRunEndpoint` declared it with `.Produces<TrainingRunBlockedResponse>(409)` but no code constructed it, so it was published in `openapi/v1.json` and in the generated client (`types.gen.ts`, `zod.gen.ts`, `index.ts`) as a `CreateTrainingRunErrors[409]` the server could never send. **The wrong thing was the shape, not the status.** The route does answer 409, from a different exception family: `TrainingRunStore.CreateAndEnqueueAsync` throws `TrainingConflictException` for `VersionConflict`, `DatasetNotReady` and `BaseArtifactNotReady` inside the create transaction, and `TrainingExceptionHandler` answers it with a `TrainingErrorResponse` — the envelope `TrainingComparisonEndpoints` and `TrainingEvaluationEndpoints` already declare. Only `TrainingRunRejectedException` takes the `DomainValidationExceptionHandler` 400. **This ADR never blessed the Blocked DTO as a member of the family**; it was dead wire surface, and the removal — the DTO, the `.Produces` call and a regenerated client — landed as its own change because it moves the OpenAPI document. The row stays for the warning it carries, not as precedent. |
 
 ## A third 409 shape exists, and it is transitional
 
@@ -132,6 +132,35 @@ Content type `application/problem+json; charset=utf-8`. The `errors[].name` on t
 capturing this body from a bare `DefaultHttpContext` sees `GeneralErrors`, because the camel-casing comes from the
 host's serializer naming policy, which only the real host configures. `DevelopmentExceptionHandlerTests` pins the
 raw constant and comments the difference.
+
+**The `type` URI base is not one convention but two, and the split runs through our OWN handlers.**
+`DevelopmentExceptionHandlerTests` already pins the divergence and comments it — read that comment before
+touching this; it is the authority on what the wire carries. What it does not say is where the second base comes
+from, and that is the part a future reader needs. `ConflictExceptionHandler` *sets* `Type` explicitly, to
+`https://tools.ietf.org/html/rfc7231#section-6.5.8`. `DevelopmentConflictExceptionHandler` sets no `Type` at all —
+it writes the body through `AddError` + `Send.ErrorsAsync`, so FastEndpoints derives
+`https://www.rfc-editor.org/rfc/rfc7231#section-6.5.8`. Two of this repository's own conflict handlers, same
+status, same RFC, same section, two hosts.
+
+**Aligning our side onto the FastEndpoints base would make the API less consistent, not more.**
+`tools.ietf.org/html/` is not a stray: three hand-written handlers share it (`ConflictExceptionHandler`,
+`RequestBodyTooLargeProblem`, `DefaultExceptionHandler`), and — the fact that settles the direction — it is also
+what ASP.NET Core's own `ProblemDetailsDefaults` emits. `BenchmarkEndpointSupport.Problem` passes no `type` to
+`Results.Problem`, so the benchmark surface already answers `https://tools.ietf.org/html/rfc9110#section-15.5.10`
+on a 409 and `https://tools.ietf.org/html/rfc4918#section-11.2` on a 422. Those are Microsoft's strings, pinned by
+`BenchmarkExceptionHandlerTests`, and not ours to change without hand-building the bodies the framework exists to
+build. So a single canonical `type` across this API is **unreachable**, and FastEndpoints is the outlier rather
+than our handlers. One wrinkle worth knowing before anyone "modernises" the constants: ours cite RFC 7231, which
+RFC 9110 obsoleted, while the framework's cite 9110 — same semantics, different document.
+
+**What each side would cost, so the next survey does not re-derive it.** Moving ours breaks a pinned client
+string: the SPA fixture `XE-Local-AI-Engine.Client.React/src/features/chat/api/NodeChatConflict.test.ts` asserts
+the `tools.ietf.org` value. Moving the FastEndpoints side needs a custom `ErrorOptions.ResponseBuilder`, which
+rewrites every `Send.ErrorsAsync` body on the API to change a member no client reads — see "What the client
+actually reads" above. Note that the `www.rfc-editor.org/rfc/rfc7231#section-6.5.1` that appears in
+`XE-Local-AI-Engine.Client.React/openapi/v1.json` and `zod.gen.ts` is neither of these: it is the generic schema
+DEFAULT for the `type` property, and its section is 6.5.1 (400), so it says nothing about what a 409 body
+carries at runtime.
 
 **Why it exists.** These handlers were created to remove duplicated per-endpoint catches without changing any
 response body. The endpoints they replaced hand-wrote exactly this shape, so reproducing it was the only
@@ -169,13 +198,23 @@ writes the body while the endpoint keeps its `.Produces<T>(409)` declaration, ex
 obstacle. It is refused because it would split the routes named in §3 across two wire shapes for one reason
 code, and would leave twelve unthrown refusals still hand-built in the endpoint, buying nothing.
 
-**One member of the family is not endorsed.** `TrainingRunBlockedResponse` is declared, published and never
-produced. It is listed above for completeness and as a warning, not as precedent: a `.Produces<T>(409)` whose `T`
-no code constructs advertises a response the server cannot send, and the drift is invisible to `openapi:check`,
-which regenerates the client from the committed spec and so agrees with it happily. Adding a Blocked family means
-adding a producer, not only a declaration.
+**One member of the family was not endorsed, and is gone.** `TrainingRunBlockedResponse` was declared, published
+and never produced; it was removed on 2026-09-10 — the DTO, the `.Produces<T>(409)` call, and the schema and its
+`CreateTrainingRunErrors[409]` reference in the regenerated spec and client. It is listed above for completeness
+and as a warning, not as precedent: a `.Produces<T>(409)` whose `T` no code constructs advertises a response the
+server cannot send, and the drift is invisible to `openapi:check`, which regenerates the client from the
+committed spec and so agrees with it happily. Adding a Blocked family means adding a producer, not only a
+declaration.
 
-**What it costs.** Eight response schemas instead of one, and eight reason vocabularies to keep kebab-case (one
+**Removing the DTO is not removing the status, and the first attempt got that wrong.** The `.Produces` call went
+with the DTO, leaving `CreateTrainingRunEndpoint` declaring 200 and 400 only — while the route still answered 409
+through `TrainingExceptionHandler`, which is worse than the wrongly-typed declaration it replaced: an undeclared
+status is one no typed SPA handler can be written against, and `openapi:check` agrees with that spec just as
+happily. The route now declares `.Produces<TrainingErrorResponse>(StatusCodes.Status409Conflict)`, matching the
+other Training routes. When a dead `*BlockedResponse` is removed, check what the route's *other* exception
+families do before deleting its status declaration.
+
+**What it costs.** Seven response schemas instead of one, and seven reason vocabularies to keep kebab-case (one
 already is not — see `TrainingExportBlockedResponse` above). §4's one-builder-per-family rule is the mitigation:
 the shape and the shared codes exist once per feature, so the drift is bounded to a family rather than spread
 across its endpoints.

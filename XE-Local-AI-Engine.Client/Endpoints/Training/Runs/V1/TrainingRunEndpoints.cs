@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Endpoints.Training.Runs.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.Runs.V1.Mappers;
+using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Runs;
@@ -22,14 +23,17 @@ public sealed class CreateTrainingRunEndpoint(ITrainingRunService runs) : Endpoi
         Description(builder => builder
                                .Produces<TrainingRunResponse>(StatusCodes.Status200OK)
                                .ProducesProblemFE(StatusCodes.Status400BadRequest)
-                               .Produces<TrainingRunBlockedResponse>(StatusCodes.Status409Conflict));
+                               .Produces<TrainingErrorResponse>(StatusCodes.Status409Conflict));
     }
 
     public override async Task HandleAsync(CreateTrainingRunRequest req, CancellationToken ct)
     {
         // TrainingRunRejectedException reaches the global DomainValidationExceptionHandler as the same 400: its
         // rejections are operator-facing by construction — an unconfirmed license, a checkpoint that does not fit,
-        // or a dataset that is not ready.
+        // or a dataset that is not ready. The store's own refusals inside the create transaction are a different
+        // family: VersionConflict — the stale confirmation dialog ExpectedDatasetVersion exists to catch —
+        // DatasetNotReady and BaseArtifactNotReady leave through TrainingExceptionHandler as a 409
+        // TrainingErrorResponse, which is why this route declares both statuses.
         var run = await _runs.CreateAsync(new CreateTrainingRunCommand(req.DatasetId,
                                      req.ExpectedDatasetVersion,
                                      req.BaseArtifactId,

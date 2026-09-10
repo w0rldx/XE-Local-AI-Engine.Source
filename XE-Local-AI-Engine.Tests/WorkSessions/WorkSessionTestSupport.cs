@@ -363,7 +363,9 @@ internal static class WorkSessionTestSupport
         AgentWorkSessionStatus expected,
         TimeSpan? timeout = null)
     {
-        var deadline = DateTimeOffset.UtcNow + (timeout ?? TimeSpan.FromSeconds(30));
+        // real-timer: the session is advanced by loops the test does not own, and the store row is the only thing
+        // they publish. The deadline is a failure bound sized for a contended runner, not a sleep.
+        var deadline = DateTimeOffset.UtcNow + (timeout ?? TestBudgets.Contended);
         AgentWorkSessionSnapshot session;
         do
         {

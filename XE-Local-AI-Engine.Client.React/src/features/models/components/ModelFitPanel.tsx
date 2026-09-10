@@ -23,10 +23,6 @@ interface ModelFitPanelProps {
 	modelName: string;
 }
 
-function errorMessage(error: unknown): string {
-	return apiErrorMessage(error, "Unexpected model-fit error");
-}
-
 type Translate = (key: string, fallback: string) => string;
 
 // Localized label for a use-case slug, reusing the canonical model-fit use-case labels so this panel stays in sync
@@ -114,7 +110,14 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 				</Group>
 			) : null}
 
-			{recommendationsQuery.error ? <InlineErrorAlert message={errorMessage(recommendationsQuery.error)} /> : null}
+			{recommendationsQuery.error ? (
+				<InlineErrorAlert
+					message={apiErrorMessage(
+						recommendationsQuery.error,
+						t("pages.modelFit.recommendations.errors.load", "Could not load recommendations."),
+					)}
+				/>
+			) : null}
 
 			{!recommendationsQuery.isFetching && !recommendationsQuery.error && latest && !latest.hasCache ? (
 				<Text c="dimmed" data-testid="model-fit-no-cache">
@@ -128,7 +131,10 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 
 			{!recommendationsQuery.isFetching && latest?.hasCache && !recommendation ? (
 				<Text c="dimmed" data-testid="model-fit-no-match">
-					{modelName} is not in the latest {labelForUseCase(t, useCase)} recommendations.
+					{t("pages.modelFit.panel.noMatch", "{{model}} is not in the latest {{useCase}} recommendations.", {
+						model: modelName,
+						useCase: labelForUseCase(t, useCase),
+					})}
 				</Text>
 			) : null}
 
@@ -136,7 +142,7 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 				<Stack gap="sm" data-testid="model-fit-result">
 					<Group gap="sm">
 						<Badge color="blue" variant="light">
-							Rank #{recommendation.rank}
+							{t("pages.modelFit.panel.rank", "Rank #{{rank}}", { rank: recommendation.rank })}
 						</Badge>
 						{recommendation.fitLevel ? (
 							<Badge color={fitLevelColor(recommendation.fitLevel)} variant="light">
@@ -146,12 +152,24 @@ export function ModelFitPanel({ modelName }: ModelFitPanelProps) {
 						{recommendation.runMode ? <Badge variant="outline">{recommendation.runMode}</Badge> : null}
 					</Group>
 					<SimpleGrid cols={{ base: 2, sm: 3 }} spacing="md">
-						<FitMetric label="Score">{formatModelFitMetric(recommendation.score, "", 1)}</FitMetric>
-						<FitMetric label="Est. TPS">{formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1)}</FitMetric>
-						<FitMetric label="Context">{formatContextTokens(recommendation.contextTokens)}</FitMetric>
-						<FitMetric label="Quantization">{recommendation.quantization ?? "—"}</FitMetric>
-						<FitMetric label="RAM">{formatMemoryMb(recommendation.requiredRamMb)}</FitMetric>
-						<FitMetric label="VRAM">{formatMemoryMb(recommendation.requiredVramMb)}</FitMetric>
+						<FitMetric label={t("pages.modelFit.recommendations.columns.score", "Score")}>
+							{formatModelFitMetric(recommendation.score, "", 1)}
+						</FitMetric>
+						<FitMetric label={t("pages.modelFit.recommendations.columns.tps", "Est. TPS")}>
+							{formatModelFitMetric(recommendation.estimatedTokensPerSecond, "", 1)}
+						</FitMetric>
+						<FitMetric label={t("pages.modelFit.recommendations.columns.context", "Context")}>
+							{formatContextTokens(recommendation.contextTokens)}
+						</FitMetric>
+						<FitMetric label={t("pages.modelFit.panel.quantization", "Quantization")}>
+							{recommendation.quantization ?? "—"}
+						</FitMetric>
+						<FitMetric label={t("pages.modelFit.recommendations.columns.ram", "Req. RAM")}>
+							{formatMemoryMb(recommendation.requiredRamMb)}
+						</FitMetric>
+						<FitMetric label={t("pages.modelFit.recommendations.columns.vram", "Req. VRAM")}>
+							{formatMemoryMb(recommendation.requiredVramMb)}
+						</FitMetric>
 					</SimpleGrid>
 				</Stack>
 			) : null}

@@ -329,7 +329,11 @@ public sealed class GgufImportTransactionCoordinatorTests
         Guid operationId,
         GgufAcquisitionPhase phase)
     {
-        for (var attempt = 0; attempt < 100; attempt++)
+        // real-timer: the import runs detached and publishes nothing but its status. A fixed attempt count made the
+        // bound a budget the box could spend on scheduling alone; this is a failure deadline sized for a contended
+        // runner, and a green run returns on the first matching read.
+        var deadline = DateTimeOffset.UtcNow + TestBudgets.Contended;
+        do
         {
             if (coordinator.GetStatus(operationId)?.Phase == phase)
             {
@@ -337,7 +341,7 @@ public sealed class GgufImportTransactionCoordinatorTests
             }
 
             await Task.Delay(20);
-        }
+        } while (DateTimeOffset.UtcNow < deadline);
 
         throw new TimeoutException($"Import operation '{operationId}' did not reach phase {phase}.");
     }

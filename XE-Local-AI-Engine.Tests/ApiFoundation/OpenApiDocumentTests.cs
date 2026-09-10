@@ -401,6 +401,36 @@ public sealed class OpenApiDocumentTests
         AssertResponses(paths, "/api/local/v1/development-workflows/work-items", "post", ["201", "400"]);
     }
 
+    /// <summary>
+    ///     Every route whose service reaches <c>TrainingConflictException</c> answers 409 through the globally
+    ///     registered <c>TrainingExceptionHandler</c>, which no endpoint code shows. A route can therefore lose its
+    ///     <c>.Produces&lt;TrainingErrorResponse&gt;(409)</c> and keep emitting 409, and <c>openapi:check</c> stays
+    ///     green because it regenerates the client from the committed spec. This is the only gate on that drift.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DeclaresTheTrainingConflictStatusOnEveryRouteThatEmitsIt()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        // Create-run reaches VersionConflict, DatasetNotReady and BaseArtifactNotReady inside the store's create
+        // transaction; VersionConflict is the stale-confirmation-dialog case ExpectedDatasetVersion exists to catch.
+        AssertResponses(paths, "/api/local/v1/training/runs", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/training/comparisons", "post", ["200", "400", "409"]);
+        AssertResponses(paths, "/api/local/v1/training/comparisons/{comparisonId}", "delete", ["204", "409"]);
+        AssertResponses(paths, "/api/local/v1/training/evaluations/{evaluationId}", "delete", ["204", "409"]);
+
+        AssertSchemaProperties(document.RootElement.GetProperty("components").GetProperty("schemas"),
+            "TrainingErrorResponse",
+            ["code", "message"]);
+    }
+
     private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
     {
         var schema = FindSchema(schemas, schemaSuffix);

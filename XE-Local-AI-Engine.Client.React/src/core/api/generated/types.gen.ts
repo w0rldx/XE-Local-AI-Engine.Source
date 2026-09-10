@@ -336,10 +336,20 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayloa
 	optimizer: string;
 };
 
-export type XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse = {
-	reason: string;
+export type XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = {
+	code: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode;
 	message: string;
 };
+
+export type XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode =
+	| "NotFound"
+	| "InvalidRequest"
+	| "VersionConflict"
+	| "GenerationActive"
+	| "DefinitionReferenced"
+	| "DatasetReferenced"
+	| "TrainingBusy"
+	| "InvalidLifecycleTransition";
 
 export type XeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest = {
 	datasetId: string;
@@ -634,21 +644,6 @@ export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1ListEvaluationsRe
 export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1ListEvaluationsRequest = {
 	[key: string]: never;
 };
-
-export type XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = {
-	code: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode;
-	message: string;
-};
-
-export type XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode =
-	| "NotFound"
-	| "InvalidRequest"
-	| "VersionConflict"
-	| "GenerationActive"
-	| "DefinitionReferenced"
-	| "DatasetReferenced"
-	| "TrainingBusy"
-	| "InvalidLifecycleTransition";
 
 export type XeLocalAiEngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest = {
 	expectedVersion?: number;
@@ -6644,7 +6639,7 @@ export type CreateTrainingRunErrors = {
 	 * Forbidden
 	 */
 	403: unknown;
-	409: XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse;
+	409: XeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse;
 };
 
 export type CreateTrainingRunError = CreateTrainingRunErrors[keyof CreateTrainingRunErrors];

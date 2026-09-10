@@ -136,10 +136,12 @@ public sealed class DomainValidationExceptionHandlerTests
             AssertEx.Equal("/api/local/v1/promoted", root.GetProperty("instance").GetString(), typeName);
             AssertEx.Equal(context.TraceIdentifier, root.GetProperty("traceId").GetString(), typeName);
             AssertEx.Equal(expected: 1, root.GetProperty("errors").GetArrayLength(), typeName);
-            // The field NAME the message hangs off. Its wire casing ("generalErrors") comes from FastEndpoints'
-            // global Config.Serializer naming policy, which only the real host configures — the route test above
-            // pins that; over a bare context the raw constant is what lands.
-            AssertEx.Equal("GeneralErrors", firstError.GetProperty("name").GetString(), typeName);
+            // The field NAME the message hangs off, put through FastEndpoints' naming policy the way the writer does
+            // — see FastEndpointsProblemBody. Config.Serializer is process-global, so over a bare context this lands
+            // as the raw constant alone and camel-cased once any host in the process has run UseFastEndpoints; a
+            // literal here would assert test order rather than the writer. The wire casing is pinned by the route
+            // test above.
+            AssertEx.Equal(FastEndpointsProblemBody.GeneralErrorsName, firstError.GetProperty("name").GetString(), typeName);
             AssertEx.Equal(exception.Message, firstError.GetProperty("reason").GetString(), typeName);
             AssertEx.Equal(exception.Message, root.GetProperty("detail").GetString(), typeName);
         }

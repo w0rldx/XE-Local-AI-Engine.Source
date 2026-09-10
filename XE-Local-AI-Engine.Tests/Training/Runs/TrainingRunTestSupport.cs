@@ -33,12 +33,22 @@ internal sealed class FixedNodeSqliteKeyHolder(byte[] key) : INodeSqliteKeyHolde
 /// <summary>
 ///     A scripted trainer. Lines are handed to the reader in order; the process "exits" with the scripted status once
 ///     the caller stops reading, and a stop or kill is recorded rather than signalled.
+///     <para>
+///         With <paramref name="exitsOnStreamClose" /> false the exit task is never settled, which models the one
+///         shape a scripted handle otherwise cannot: a trainer that closes its output and then wedges. Nothing —
+///         not the closed stream, not a kill, not disposal — reaps it, so a caller that waits on the status without a
+///         bound waits forever.
+///     </para>
 /// </summary>
-internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt, IReadOnlyList<string> lines, int exitCode)
+internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt,
+    IReadOnlyList<string> lines,
+    int exitCode,
+    bool exitsOnStreamClose = true)
     : ITrainingProcessHandle
 {
     private readonly Channel<string> _output = CreateChannel(lines);
     private readonly TaskCompletionSource<int> _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource _exitWaitEntered = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     public TrainingLaunchReceipt Receipt { get; } = receipt;
 
@@ -55,8 +65,23 @@ internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt, I
     public IAsyncEnumerable<string> ReadOutputAsync(CancellationToken cancellationToken) =>
         ReadAsync(cancellationToken);
 
-    public Task<int> WaitForExitAsync(CancellationToken cancellationToken) =>
-        _exit.Task.WaitAsync(cancellationToken);
+    /// <summary>
+    ///     Completes the moment the executor starts waiting for the process to exit. That is the gate a test needs
+    ///     before it moves the clock onto the exit bound: by then the executor's <c>finally</c> has already joined the
+    ///     watchdog, so the only timer that can be armed is the exit grace, and an advance cannot land on a watchdog
+    ///     poll that is still pending.
+    /// </summary>
+    public Task ExitWaitEntered => _exitWaitEntered.Task;
+
+    /// <summary>Settles the exit status by hand, for a test that decides when the process goes away.</summary>
+    public void SignalExit() =>
+        _ = _exit.TrySetResult(exitCode);
+
+    public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
+    {
+        _ = _exitWaitEntered.TrySetResult();
+        return _exit.Task.WaitAsync(cancellationToken);
+    }
 
     public void RequestStop()
     {
@@ -79,7 +104,10 @@ internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt, I
     private void Complete()
     {
         _ = _output.Writer.TryComplete();
-        _ = _exit.TrySetResult(exitCode);
+        if (exitsOnStreamClose)
+        {
+            _ = _exit.TrySetResult(exitCode);
+        }
     }
 
     private async IAsyncEnumerable<string> ReadAsync([EnumeratorCancellation] CancellationToken cancellationToken)
@@ -89,8 +117,12 @@ internal sealed class FakeTrainingProcessHandle(TrainingLaunchReceipt receipt, I
             yield return line;
         }
 
-        // The real handle's stream closes when the child closes both pipes, which is what settles the exit task.
-        _ = _exit.TrySetResult(exitCode);
+        // The real handle's stream closes when the child closes both pipes, which is what settles the exit task —
+        // unless the child is wedged and never reaches its own exit, which is what the flag models.
+        if (exitsOnStreamClose)
+        {
+            _ = _exit.TrySetResult(exitCode);
+        }
     }
 
     private static Channel<string> CreateChannel(IReadOnlyList<string> lines)

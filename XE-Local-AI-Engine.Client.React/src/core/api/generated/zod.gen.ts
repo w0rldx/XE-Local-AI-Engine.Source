@@ -387,8 +387,19 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunResponse = 
 	updatedAtUtc: z.int(),
 });
 
-export const zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunBlockedResponse = z.object({
-	reason: z.string(),
+export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode = z.enum([
+	"NotFound",
+	"InvalidRequest",
+	"VersionConflict",
+	"GenerationActive",
+	"DefinitionReferenced",
+	"DatasetReferenced",
+	"TrainingBusy",
+	"InvalidLifecycleTransition",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = z.object({
+	code: zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode,
 	message: z.string(),
 });
 
@@ -699,22 +710,6 @@ export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1ListEvaluations
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1ListEvaluationsRequest = z.record(z.string(), z.never());
-
-export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode = z.enum([
-	"NotFound",
-	"InvalidRequest",
-	"VersionConflict",
-	"GenerationActive",
-	"DefinitionReferenced",
-	"DatasetReferenced",
-	"TrainingBusy",
-	"InvalidLifecycleTransition",
-]);
-
-export const zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorResponse = z.object({
-	code: zXeLocalAiEngineClientEndpointsTrainingV1TrainingErrorCode,
-	message: z.string(),
-});
 
 export const zXeLocalAiEngineClientEndpointsTrainingEvaluationsV1DeleteEvaluationRequest = z.object({
 	expectedVersion: z.int().optional(),
