@@ -24,3 +24,9 @@ export interface CustomToolEditorSectionProps {
 	errors: FieldErrors;
 	update: (updater: (current: CustomToolFormValues) => CustomToolFormValues) => void;
 }
+
+/** The two sections that carry secret rows; the parameter builder has none, so it keeps the plain props. */
+export interface CustomToolSecretSectionProps extends CustomToolEditorSectionProps {
+	/** Names of the section's secret rows the node already stores, so a cleared row keeps its warning across a remount. */
+	storedSecrets: readonly string[];
+}

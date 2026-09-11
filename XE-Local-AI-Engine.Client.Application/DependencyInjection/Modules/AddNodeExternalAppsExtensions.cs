@@ -6,6 +6,8 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 /// <summary>
 ///     Registers the External Apps runtime (ADR 0010): the instance store, the admission gates, the service every
@@ -47,6 +49,12 @@ internal static class AddNodeExternalAppsExtensions
         // let two commands hold one instance; the operation runner owns the in-flight entries and their cancellation
         // sources, which a second copy could neither see nor cancel.
         builder.Services.AddSingleton<ExternalAppStorageLayout>();
+
+        // The free-space probe the resource gate measures with. TryAdd because the model-runtime module registers
+        // the same implementation for the models directory, and whichever module is composed first wins with the
+        // identical type. Registered here rather than assumed, so this module stands up on its own and a node that
+        // composes it without the model runtime still has an admission gate that can measure a disk.
+        builder.Services.TryAddSingleton<IFreeSpaceProbe, DriveInfoFreeSpaceProbe>();
         builder.Services.AddSingleton<ExternalAppResourceGate>();
         builder.Services.AddSingleton<ExternalAppInstanceGate>();
         builder.Services.AddSingleton<ExternalAppOperationRunner>();

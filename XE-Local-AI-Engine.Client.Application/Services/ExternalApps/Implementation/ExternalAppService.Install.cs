@@ -336,7 +336,9 @@ internal sealed partial class ExternalAppService
             _ => "This application cannot be installed on this node right now."
         };
 
-        return new ExternalAppValidationException($"{reason}: {detail}", reason);
+        // The reason NAME leads the message: the 400 body carries prose only, so the operator reads the category
+        // there rather than from a typed member no layer surfaces.
+        return new ExternalAppValidationException($"{reason}: {detail}");
     }
 
     private static void RequireFingerprint(ApplicationManifest manifest, int manifestVersion, string manifestSha256)

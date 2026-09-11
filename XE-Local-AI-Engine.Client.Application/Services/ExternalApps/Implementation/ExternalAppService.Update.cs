@@ -286,9 +286,19 @@ internal sealed partial class ExternalAppService : IExternalAppService
     }
 
     /// <summary>
-    ///     The stored values an update may carry forward. A variable that was <c>secret</c> in the installed snapshot
-    ///     and is not in the target is dropped: keeping it would let a manifest change turn a password into an
-    ///     ordinary string the node hands back in plaintext.
+    ///     The stored values an update may carry forward: the ones the TARGET still declares, minus the ones whose
+    ///     classification changed.
+    ///     <para>
+    ///         A variable the target removed or renamed is dropped rather than carried. Validation refuses an
+    ///         undeclared key on purpose — a mistyped password field must never be installed blank — but a key the
+    ///         node itself stored under the previous manifest is not a user's typo, and carrying it made every
+    ///         update to a manifest that dropped a variable refuse itself over a value nobody submitted.
+    ///     </para>
+    ///     <para>
+    ///         A variable that was <c>secret</c> in the installed snapshot and is not in the target is dropped too:
+    ///         keeping it would let a manifest change turn a password into an ordinary string the node hands back
+    ///         in plaintext.
+    ///     </para>
     /// </summary>
     private static IReadOnlyDictionary<string, string> CarryForward(ApplicationManifest installed,
         ApplicationManifest target,
@@ -297,6 +307,11 @@ internal sealed partial class ExternalAppService : IExternalAppService
         var carried = new Dictionary<string, string>(StringComparer.Ordinal);
         foreach (var entry in stored)
         {
+            if (!Declares(target, entry.Key))
+            {
+                continue;
+            }
+
             if (WasSecret(installed, entry.Key) && !WasSecret(target, entry.Key))
             {
                 continue;
@@ -306,6 +321,11 @@ internal sealed partial class ExternalAppService : IExternalAppService
         }
 
         return carried;
+    }
+
+    private static bool Declares(ApplicationManifest manifest, string name)
+    {
+        return manifest.Variables.Any(variable => string.Equals(variable.Name, name, StringComparison.Ordinal));
     }
 
     /// <summary>

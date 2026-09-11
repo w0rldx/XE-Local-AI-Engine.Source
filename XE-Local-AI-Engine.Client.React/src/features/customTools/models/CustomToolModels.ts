@@ -179,3 +179,12 @@ export interface SecretRow {
 	readonly value: string;
 	readonly isSecret: boolean;
 }
+
+/**
+ * The row names the node holds a stored secret for, read off the values it answered with (masked). Taken from the
+ * form's INITIAL values, never its live ones: a cleared row carries "", exactly like a row that never had a value,
+ * and the editors are unmounted and rebuilt whenever the tool kind is switched.
+ */
+export function storedSecretRowNames(rows: readonly SecretRow[]): readonly string[] {
+	return rows.filter((row) => row.isSecret && row.value === CUSTOM_TOOL_SECRET_SENTINEL).map((row) => row.name);
+}

@@ -224,14 +224,34 @@ internal static class ApplicationContainerPolicy
         }
     }
 
+    /// <summary>
+    ///     The two security options are verified by their VALUE, not by the presence of their name. A container that
+    ///     reads back <c>no-new-privileges:false</c> or <c>seccomp=unconfined</c> names both options and has neither
+    ///     protection, and a presence check would hand reuse and boot adoption a container with its confinement
+    ///     switched off.
+    ///     <para>
+    ///         The rules are the sibling of Development Mode's hardening in style and nothing else: the option name is
+    ///         matched by prefix because the daemon has rendered it as <c>no-new-privileges</c>,
+    ///         <c>no-new-privileges:true</c> and <c>no-new-privileges=true</c> across versions, and only the explicit
+    ///         false rendering means the protection is off.
+    ///     </para>
+    /// </summary>
     private static void VerifySecurityOptions(ContainerInspection observed, List<string> violations)
     {
-        if (!observed.SecurityOptions.Any(static option => option.Contains("no-new-privileges", StringComparison.OrdinalIgnoreCase)))
+        if (!observed.SecurityOptions.Any(static option =>
+                option.StartsWith("no-new-privileges", StringComparison.OrdinalIgnoreCase)
+                && !option.EndsWith("false", StringComparison.OrdinalIgnoreCase)))
         {
             violations.Add("no-new-privileges is not applied");
         }
 
-        if (!observed.SecurityOptions.Any(static option => option.Contains("seccomp", StringComparison.OrdinalIgnoreCase)))
+        // No seccomp option at all reads back the same way as a daemon with seccomp disabled, which is why the
+        // profile is passed explicitly; `seccomp=unconfined` is the other rendering that must be refused.
+        // Matched on "names a profile" rather than on equality with the profile that was sent, the same deliberate
+        // limit Dev Mode's verifier takes: the daemon echoes the profile back as ~9 KB of compacted JSON and pinning
+        // a byte-for-byte echo would turn a daemon-side normalisation into a spurious rejection. The cost is that an
+        // adopted container carrying a foreign but non-unconfined profile passes this check.
+        if (!observed.SecurityOptions.Any(DockerSeccompProfile.NamesAProfile))
         {
             violations.Add("the engine seccomp profile is not applied");
         }

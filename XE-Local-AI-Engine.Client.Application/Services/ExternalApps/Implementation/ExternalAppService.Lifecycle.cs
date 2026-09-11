@@ -79,7 +79,7 @@ internal sealed partial class ExternalAppService
         if (row.Status == ExternalAppInstanceStatus.Running || Array.IndexOf(Operable, row.Status) < 0)
         {
             throw new ExternalAppInvalidTransitionException(
-                $"Settings can only be changed while the application is stopped; it is {row.Status}.");
+                $"Settings can only be changed while the application is not running; it is {row.Status}.");
         }
 
         RequireVersion(row, expectedVersion);

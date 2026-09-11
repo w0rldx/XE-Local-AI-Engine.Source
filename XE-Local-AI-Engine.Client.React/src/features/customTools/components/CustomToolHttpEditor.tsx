@@ -2,7 +2,7 @@ import { Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
 import { fieldError } from "@/core/ui/forms/ZodFieldErrors";
-import type { CustomToolEditorSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
+import type { CustomToolSecretSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
 import { CustomToolHostList } from "@/features/customTools/components/CustomToolHostList";
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
 import {
@@ -12,7 +12,7 @@ import {
 } from "@/features/customTools/models/CustomToolModels";
 
 // HttpFetch editor: method, URL template, headers (name/value/isSecret), body template, allowedHosts.
-export function HttpEditor({ values, errors, update }: CustomToolEditorSectionProps) {
+export function HttpEditor({ values, errors, update, storedSecrets }: CustomToolSecretSectionProps) {
 	const { t } = useTranslation();
 	const http = values.http;
 
@@ -61,6 +61,7 @@ export function HttpEditor({ values, errors, update }: CustomToolEditorSectionPr
 				emptyLabel={t("pages.customTools.form.http.noHeaders", "No headers.")}
 				testid="custom-tool-form-http-headers"
 				rows={http.headers}
+				storedSecrets={storedSecrets}
 				onAdd={addHeader}
 				onRemove={removeHeader}
 				onPatch={patchHeader}

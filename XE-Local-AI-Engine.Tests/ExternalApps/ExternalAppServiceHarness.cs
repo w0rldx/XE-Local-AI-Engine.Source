@@ -19,6 +19,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -225,7 +226,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var serviceLog = new RecordingLogger<ExternalAppService>();
         var service = new ExternalAppService(provider.GetRequiredService<IServiceScopeFactory>(),
             layout,
-            new ExternalAppResourceGate(AuditWith(availableRamBytes), dataDirectory),
+            new ExternalAppResourceGate(AuditWith(availableRamBytes), dataDirectory, new DriveInfoFreeSpaceProbe()),
             gate,
             runner,
             publisher,

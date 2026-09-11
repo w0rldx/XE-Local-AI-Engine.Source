@@ -122,15 +122,23 @@ internal sealed record DockerDaemonProbeOutcome
 internal static class DockerDaemonProbe
 {
     /// <summary>
-    ///     Serialises the whole read-compare-write transaction, process-wide.
+    ///     Serialises the compare-and-write half of the transaction, process-wide, and nothing else.
     ///     <para>
     ///         The attestation store locks one operation at a time, which is not the same thing. Two first-use probes
     ///         — Development Mode's preflight and the application-container resolver, which run on independent
     ///         schedules against the same shared pin — can both read an absent pin, each approve whichever daemon
     ///         answered it, and each write over the other. Trust-on-first-use then approved two daemons and remembers
     ///         one, chosen by a race. Static because the pin is a per-node singleton: an injected gate would be one
-    ///         instance per consumer, which is exactly the isolation that lets the race happen. It is held only
-    ///         across a probe, which has its own transport timeout.
+    ///         instance per consumer, which is exactly the isolation that lets the race happen.
+    ///     </para>
+    ///     <para>
+    ///         It deliberately does NOT span the daemon probe. That hazard is a read-compare-write on the pin; the
+    ///         daemon call is neither, and holding the gate across it made every probe wait out every other probe's
+    ///         transport timeout. Two features probe the same daemon on independent schedules, so a Development Mode
+    ///         page load landing beside the application-container resolver queued for one <c>DaemonProbeTimeoutSeconds</c>
+    ///         before spending its own. Every probe that reaches a daemon does enter the gate, because the compare
+    ///         that decides whether this node approves it has to happen on a pin read after the daemon answered —
+    ///         but it holds only store operations, never the call.
     ///     </para>
     /// </summary>
     private static readonly SemaphoreSlim Transaction = new(initialCount: 1, maxCount: 1);
@@ -149,26 +157,12 @@ internal static class DockerDaemonProbe
         ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentNullException.ThrowIfNull(logger);
 
-        await Transaction.WaitAsync(cancellationToken).ConfigureAwait(false);
-        try
-        {
-            return await RunTransactionAsync(request, clientFactory, attestationStore, timeProvider, logger, cancellationToken)
-                .ConfigureAwait(false);
-        }
-        finally
-        {
-            Transaction.Release();
-        }
-    }
-
-    private static async Task<DockerDaemonProbeOutcome> RunTransactionAsync(DockerDaemonProbeRequest request,
-        Func<DockerDaemonEndpoint, IDockerRuntimeClient> clientFactory,
-        IDockerDaemonAttestationStore attestationStore,
-        TimeProvider timeProvider,
-        ILogger logger,
-        CancellationToken cancellationToken)
-    {
         var endpoint = request.ResolvedEndpoint ?? DockerDaemonEndpointResolver.Resolve(request.ConfiguredEndpoint);
+
+        // Read outside the gate, and used by nothing but the three refusals that return before it — transport
+        // failure, API too old, seccomp unsupported — where it is reported and never acted on. Those may carry a pin
+        // that has since moved; re-reading it would mean taking the gate on paths that approve nothing, which is the
+        // contention the gate is kept short to avoid. Every path that does approve re-reads inside CommitAsync.
         var pinned = await attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
 
         DockerDaemonIdentity identity;
@@ -215,6 +209,41 @@ internal static class DockerDaemonProbe
                 PinnedDaemon = pinned
             };
         }
+
+        // Every outcome that approves a daemon — a match, a first-use pin, a confirmation, or the refusal when none
+        // of those hold — is decided inside the gate, against a pin read AFTER the daemon answered. Deciding a match
+        // out here against the pre-call read would approve a daemon this node no longer trusts: a concurrent
+        // confirmation can move the pin while this probe's transport call is in flight, and the resolver would then
+        // cache Ready for the superseded daemon instead of reporting DaemonIdentityChanged. The gate still holds no
+        // daemon I/O, so a matching probe waits only out the other probe's store operations, never its timeout.
+        await Transaction.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await CommitAsync(request, endpoint, identity, attestationStore, timeProvider, logger, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        finally
+        {
+            Transaction.Release();
+        }
+    }
+
+    /// <summary>
+    ///     The read-compare-write half, and the only place a daemon is compared against the pin, entered under
+    ///     <see cref="Transaction" />. The pin is read here rather than reused from the caller's earlier read: that
+    ///     read happened before the daemon call, so a concurrent probe may have pinned or re-confirmed a daemon
+    ///     since. The loser of a first-use race must observe the winner's pin instead of writing over it, and a probe
+    ///     whose pin matched before the call must not report Ready for a daemon the pin has since moved away from.
+    /// </summary>
+    private static async Task<DockerDaemonProbeOutcome> CommitAsync(DockerDaemonProbeRequest request,
+        DockerDaemonEndpoint endpoint,
+        DockerDaemonIdentity identity,
+        IDockerDaemonAttestationStore attestationStore,
+        TimeProvider timeProvider,
+        ILogger logger,
+        CancellationToken cancellationToken)
+    {
+        var pinned = await attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
 
         // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
         // against. What it buys is that every subsequent run has something to compare against, which is where the

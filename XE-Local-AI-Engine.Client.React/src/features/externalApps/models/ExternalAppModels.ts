@@ -193,6 +193,13 @@ const busyStatuses: ReadonlySet<string> = new Set<ExternalAppStatus>([
 /** The three long operations a Cancel can reach. Start/Stop/Restart settle on their own and are not cancellable. */
 const cancellableStatuses: ReadonlySet<string> = new Set<ExternalAppStatus>(["Installing", "Updating", "Resetting"]);
 
+/**
+ * The three settled states `ExternalAppService.ConfigureAsync` accepts a settings save in: every operable status
+ * except `Running`. `Failed` is one of them on purpose — a bad setting is the most common reason a start failed, and
+ * locking the form there left the only repair path through an uninstall.
+ */
+const configurableStatuses: ReadonlySet<string> = new Set<ExternalAppStatus>(["Stopped", "Failed", "StoppedUnexpectedly"]);
+
 function narrow<T extends string>(members: readonly T[], value: string | null | undefined, fallback: T): T {
 	return members.includes(value as T) ? (value as T) : fallback;
 }
@@ -226,4 +233,9 @@ export function isExternalAppBusy(status: ExternalAppStatus): boolean {
 
 export function isExternalAppCancellable(status: ExternalAppStatus): boolean {
 	return cancellableStatuses.has(status);
+}
+
+/** Whether a settings save would be admitted, mirroring `ExternalAppService.ConfigureAsync`'s status check. */
+export function isExternalAppConfigurable(status: ExternalAppStatus): boolean {
+	return configurableStatuses.has(status);
 }

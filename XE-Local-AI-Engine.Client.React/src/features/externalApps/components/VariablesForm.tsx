@@ -1,7 +1,8 @@
-import { Anchor, Checkbox, Collapse, NumberInput, PasswordInput, Select, Stack, Text, TextInput } from "@mantine/core";
+import { Anchor, Checkbox, Collapse, NumberInput, Select, Stack, Text, TextInput } from "@mantine/core";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 
+import { StoredSecretInput } from "@/core/ui/components/StoredSecretInput/StoredSecretInput";
 import { EXTERNAL_APP_SECRET_SENTINEL } from "@/features/externalApps/models/ExternalAppModels";
 import {
 	type ExternalAppVariableDefinition,
@@ -14,6 +15,12 @@ interface VariablesFormProps {
 	readonly definitions: readonly ExternalAppVariableDefinition[];
 	readonly values: ExternalAppVariableValues;
 	readonly issues: readonly ExternalAppVariableIssue[];
+	/**
+	 * Names the node holds a stored secret for, from the masked values it answered with — NOT from `values`, which
+	 * carries "" once a secret is cleared. Install has none. Without it a secret box forgets a pending clear whenever
+	 * the Advanced section is collapsed and reopened, since that unmounts the box.
+	 */
+	readonly storedSecrets: readonly string[];
 	/** Names the TARGET manifest requires and the installed one never declared. The update dialog is the only caller. */
 	readonly newlyRequired?: readonly string[];
 	readonly disabled?: boolean;
@@ -27,17 +34,18 @@ const keyPrefix = "pages.externalApps.variables";
  * The type-switched variable renderer. Manual Mantine controls, no form library: the parent owns the values, so the
  * same component serves the install dialog, the update dialog and the instance's Settings tab.
  *
- * The secret mechanic is `CustomToolSecretRows`': a stored secret arrives as the sentinel, its box renders EMPTY with
- * a "stored — leave empty to keep" placeholder, and an untouched save sends the sentinel straight back. Typing
- * replaces it. A secret renders in a `PasswordInput` so the value the operator TYPES is masked — an install dialog
- * asking for an admin password must not print it on screen, and the live round screenshots these dialogs. The reveal
- * control that comes with it is harmless on a stored secret: the box is empty, so revealing it shows the empty box,
- * never a value the server did not return.
+ * The secret mechanic lives in `StoredSecretInput`, shared with `CustomToolSecretRows`: a stored secret arrives as the
+ * sentinel, its box renders EMPTY with a "stored — leave empty to keep" placeholder, an untouched save sends the
+ * sentinel straight back, and clearing it is an explicit action rather than an emptied box. It is rendered `masked`
+ * so the value the operator TYPES is hidden — an install dialog asking for an admin password must not print it on
+ * screen, and the live round screenshots these dialogs. The reveal control that comes with it is harmless on a stored
+ * secret: the box is empty, so revealing it shows the empty box, never a value the server did not return.
  */
 export function VariablesForm({
 	definitions,
 	values,
 	issues,
+	storedSecrets,
 	newlyRequired,
 	disabled = false,
 	onChange,
@@ -66,6 +74,7 @@ export function VariablesForm({
 				key={name}
 				definition={definition}
 				value={values[name] ?? ""}
+				stored={storedSecrets.includes(name)}
 				issue={issueFor(name)}
 				isNewlyRequired={(newlyRequired ?? []).includes(name)}
 				disabled={disabled}
@@ -90,7 +99,7 @@ export function VariablesForm({
 					</Anchor>
 					{/* `keepMounted={false}` so a closed section holds no focusable inputs and no half-rendered
 					    controls — Mantine's default keeps them in the DOM behind an Activity boundary. */}
-					<Collapse expanded={advancedOpen} keepMounted={false}>
+					<Collapse expanded={advancedOpen} keepMounted={false} data-testid="external-app-variables-advanced">
 						<Stack gap="sm">{advanced.map(field)}</Stack>
 					</Collapse>
 				</>
@@ -102,13 +111,14 @@ export function VariablesForm({
 interface VariableFieldProps {
 	readonly definition: ExternalAppVariableDefinition;
 	readonly value: string;
+	readonly stored: boolean;
 	readonly issue: ExternalAppVariableIssue | undefined;
 	readonly isNewlyRequired: boolean;
 	readonly disabled: boolean;
 	readonly onChange: (name: string, value: string) => void;
 }
 
-function VariableField({ definition, value, issue, isNewlyRequired, disabled, onChange }: VariableFieldProps) {
+function VariableField({ definition, value, stored, issue, isNewlyRequired, disabled, onChange }: VariableFieldProps) {
 	const { t } = useTranslation();
 	const name = definition.name ?? "";
 	const type = toExternalAppVariableType(definition.type);
@@ -169,13 +179,15 @@ function VariableField({ definition, value, issue, isNewlyRequired, disabled, on
 	}
 
 	if (type === "secret") {
-		const storedSecret = value === EXTERNAL_APP_SECRET_SENTINEL;
 		return (
-			<PasswordInput
+			<StoredSecretInput
 				{...shared}
-				value={storedSecret ? "" : value}
-				placeholder={storedSecret ? t(`${keyPrefix}.storedSecret`) : undefined}
-				onChange={(event) => onChange(name, event.currentTarget.value)}
+				masked={true}
+				stored={stored}
+				sentinel={EXTERNAL_APP_SECRET_SENTINEL}
+				value={value}
+				storedPlaceholder={t(`${keyPrefix}.storedSecret`)}
+				onChange={(next) => onChange(name, next)}
 			/>
 		);
 	}

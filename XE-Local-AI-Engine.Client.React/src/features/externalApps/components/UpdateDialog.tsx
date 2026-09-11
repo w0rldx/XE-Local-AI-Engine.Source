@@ -18,6 +18,7 @@ import type { ExternalAppInstanceView, ExternalAppUpdatePreview } from "@/featur
 import {
 	type ExternalAppVariableValues,
 	initialVariableValues,
+	storedSecretNames,
 	validateExternalAppVariables,
 } from "@/features/externalApps/models/ExternalAppVariables";
 import {
@@ -242,6 +243,7 @@ export function UpdateDialog({ instance, opened, onClose }: UpdateDialogProps) {
 						definitions={definitions}
 						values={values}
 						issues={issues}
+						storedSecrets={storedSecretNames(preview.currentValues ?? undefined)}
 						newlyRequired={newlyRequired}
 						onChange={(variable, value) => setValues((previous) => ({ ...previous, [variable]: value }))}
 					/>

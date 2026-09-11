@@ -32,13 +32,16 @@ public sealed partial class OdysseusSeedManifestTests
     }
 
     [Test]
-    public void Seed_Odysseus_PublishesOnlyTheOdysseusAndNtfyPorts()
+    public void Seed_Odysseus_PublishesOnlyTheOdysseusPort()
     {
+        // ntfy was published to 127.0.0.1:8091 until the 2026-09-11 follow-ups live round found nothing on the host
+        // reaching it: Odysseus posts reminders to it server-side over the instance network, so the publication served
+        // only ntfy's own web UI.
         var published = Odysseus.Services
                                 .SelectMany(service => service.Ports.Select(port => string.Create(CultureInfo.InvariantCulture, $"{service.Name}:{port.ContainerPort}")))
                                 .ToArray();
 
-        AssertEx.Equal("odysseus:7000,ntfy:80", string.Join(',', published));
+        AssertEx.Equal("odysseus:7000", string.Join(',', published));
     }
 
     [Test]

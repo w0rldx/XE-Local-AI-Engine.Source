@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Stack, Text } from "@mantine/core";
-import { type RefObject, useEffect, useRef, useState } from "react";
 import type { TFunction } from "i18next";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -216,6 +216,8 @@ export function InstallDialog({ application, opened, onClose, onInstalled }: Ins
 						definitions={definitions}
 						values={values}
 						issues={issues}
+						// Nothing is installed yet, so the node holds no stored secret for any of these names.
+						storedSecrets={[]}
 						onChange={(name, value) => setValues((previous) => ({ ...previous, [name]: value }))}
 					/>
 				) : null}

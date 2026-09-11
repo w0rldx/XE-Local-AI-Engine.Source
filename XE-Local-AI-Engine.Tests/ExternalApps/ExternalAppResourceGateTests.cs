@@ -1,12 +1,15 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using NSubstitute;
+using NSubstitute.ExceptionExtensions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -103,10 +106,81 @@ public sealed class ExternalAppResourceGateTests
         AssertEx.NotEmpty(verdict.Message);
     }
 
+    /// <summary>
+    ///     The gate asks about the instance directory itself, not about its path root: on Linux every absolute path
+    ///     roots at <c>/</c>, so a root-based question reports the root filesystem of a node whose data directory is
+    ///     a mounted data volume. Resolving that path to a filesystem is the probe's job and is proved there.
+    /// </summary>
+    [Test]
+    public async Task Evaluate_AsksTheProbeAboutTheInstanceRoot()
+    {
+        var probe = Substitute.For<IFreeSpaceProbe>();
+        _ = probe.GetAvailableFreeBytes(Arg.Any<string>()).Returns(64 * Gibibyte);
+        var instanceRoot = Path.Combine(Path.GetTempPath(), "xe-external-apps", Guid.NewGuid().ToString("N"), "volumes");
+
+        var verdict = await Evaluate(minimumMemoryMb: 512,
+            availableRamBytes: 16 * Gibibyte,
+            freeDiskBytes: 1,
+            instanceRoot: instanceRoot,
+            freeSpace: probe);
+
+        _ = probe.Received(requiredNumberOfCalls: 1).GetAvailableFreeBytes(instanceRoot);
+        AssertEx.True(verdict.Satisfied, verdict.Message);
+        AssertEx.Equal(64 * Gibibyte, verdict.AvailableDiskBytes);
+    }
+
+    /// <summary>A measurement that came back is the one that decides, even when it refuses the install.</summary>
+    [Test]
+    public async Task Evaluate_WithTooLittleDiskWhereTheInstanceWillLive_ReportsInsufficientDisk()
+    {
+        var probe = Substitute.For<IFreeSpaceProbe>();
+        _ = probe.GetAvailableFreeBytes(Arg.Any<string>()).Returns(ExternalAppResourceGate.RequiredDiskBytes - 1);
+
+        var verdict = await Evaluate(minimumMemoryMb: 512,
+            availableRamBytes: 16 * Gibibyte,
+            freeDiskBytes: 100 * Gibibyte,
+            freeSpace: probe);
+
+        AssertEx.False(verdict.Satisfied, "One byte short of the requirement is not enough.");
+        AssertEx.Equal(ExternalAppFailureCategory.InsufficientDisk, verdict.FailureCategory);
+        AssertEx.Equal(ExternalAppResourceGate.RequiredDiskBytes - 1, verdict.AvailableDiskBytes);
+    }
+
+    /// <summary>
+    ///     A probe that cannot answer falls back to the hardware profile's figure rather than refusing the install:
+    ///     "could not measure" must never reach a user as "your disk is full". Zero falls back as hard as a throw,
+    ///     because a UNC path and a container bind answer nonsense rather than raising.
+    /// </summary>
+    [Test]
+    public async Task Evaluate_WhenTheProbeCannotAnswer_FallsBackToTheProfile()
+    {
+        await AssertProfileFallback(static probe => probe.GetAvailableFreeBytes(Arg.Any<string>()).Returns(0L));
+
+        // Every way the measurement refuses: a path string the framework will not resolve, no existing directory at
+        // or above the path, a volume that is not ready, and a directory this process may not look at.
+        await AssertProfileFallback(static probe => probe.GetAvailableFreeBytes(Arg.Any<string>()).Throws(new ArgumentException("not a path")));
+        await AssertProfileFallback(static probe =>
+            probe.GetAvailableFreeBytes(Arg.Any<string>()).Throws(new InvalidOperationException("nothing exists at or above the path")));
+        await AssertProfileFallback(static probe => probe.GetAvailableFreeBytes(Arg.Any<string>()).Throws(new IOException("the volume is not ready")));
+        await AssertProfileFallback(static probe => probe.GetAvailableFreeBytes(Arg.Any<string>()).Throws(new UnauthorizedAccessException("denied")));
+    }
+
+    private static async Task AssertProfileFallback(Action<IFreeSpaceProbe> arrange)
+    {
+        var probe = Substitute.For<IFreeSpaceProbe>();
+        arrange(probe);
+
+        var verdict = await Evaluate(minimumMemoryMb: 512, availableRamBytes: 16 * Gibibyte, freeDiskBytes: 100 * Gibibyte, freeSpace: probe);
+
+        AssertEx.True(verdict.Satisfied, verdict.Message);
+        AssertEx.Equal(100 * Gibibyte, verdict.AvailableDiskBytes);
+    }
+
     private static async Task<ExternalAppResourceVerdict> Evaluate(int minimumMemoryMb,
         long availableRamBytes,
         long freeDiskBytes,
-        string? instanceRoot = null)
+        string? instanceRoot = null,
+        IFreeSpaceProbe? freeSpace = null)
     {
         var audit = Substitute.For<IRuntimeDeviceAudit>();
         audit.GetEffectiveProfileAsync(Arg.Any<bool>(), Arg.Any<CancellationToken>())
@@ -123,7 +197,7 @@ public sealed class ExternalAppResourceGateTests
                  FreeDiskBytes = freeDiskBytes
              }));
 
-        var gate = new ExternalAppResourceGate(audit, new FakeNodeDataDirectory(Path.GetTempPath()));
+        var gate = new ExternalAppResourceGate(audit, new FakeNodeDataDirectory(Path.GetTempPath()), freeSpace ?? new DriveInfoFreeSpaceProbe());
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app")],
             resources: new ApplicationResources(minimumMemoryMb, minimumMemoryMb * 2, CpuHint: 1, PidsLimit: 512));
 

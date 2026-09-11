@@ -6299,7 +6299,7 @@
 				"save": "Einstellungen speichern",
 				"saved": "Einstellungen gespeichert.",
 				"saveFailed": "Die Einstellungen konnten nicht gespeichert werden.",
-				"stoppedOnly": "Stoppen Sie die Anwendung, um ihre Einstellungen zu ändern.",
+				"stoppedOnly": "Einstellungen können erst geändert werden, wenn die Anwendung gestoppt ist.",
 				"issues": {
 					"required": "{{label}} ist erforderlich.",
 					"minLength": "{{label}} muss mindestens {{min}} Zeichen lang sein.",
@@ -6527,6 +6527,11 @@
 		}
 	},
 	"components": {
+		"storedSecretInput": {
+			"clear": "Gespeicherten Wert löschen",
+			"cleared": "Dieser Wert wird beim Speichern entfernt.",
+			"undo": "Rückgängig"
+		},
 		"loginCard": {
 			"signIn": "Anmelden",
 			"noAccount": "Kein Konto? Registrieren",

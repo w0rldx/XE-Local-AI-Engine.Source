@@ -201,10 +201,12 @@ different as **`foreignInstallContainers`**. It reports them and **never removes
 **Secrets.** A `secret` variable is the user's own credential. Values live in the single AEAD-encrypted column
 `external_app_instance_variables_json`, bound by AAD to the row's own id. They are masked on the way out by
 `ExternalAppVariableMask` and kept on the sentinel on the way in, so a save that echoes the mask preserves the
-stored value. `ApplicationManifest` suppresses its own record `PrintMembers`, so a stray structured log of a
-snapshot cannot print the catalog or a variable default. `FailureSummary` is content-free by contract: category
-prose, a service name, and the resource gate's requested-versus-available figures — never a variable value and never
-a daemon message.
+stored value. Any other value is written, the empty string included, so clearing a stored secret is a deliberate act
+in the UI: the shared `StoredSecretInput` sends the sentinel back for an emptied box and only its explicit Clear
+control sends the empty string. `ApplicationManifest` suppresses its own record `PrintMembers`, so a stray
+structured log of a snapshot cannot print the catalog or a variable default. `FailureSummary` is content-free by
+contract: category prose, a service name, and the resource gate's requested-versus-available figures — never a
+variable value and never a daemon message.
 
 **The socket is root-equivalent.** Anything that can reach the Docker socket can reach the host. That is the whole
 subject of [ADR 0010](../adr/0010-external-apps-container-execution.md), and this feature is its **second**

@@ -12,6 +12,7 @@ import {
 	externalAppStatuses,
 	isExternalAppBusy,
 	isExternalAppCancellable,
+	isExternalAppConfigurable,
 	toContainerRuntimeStatus,
 	toExternalAppEventKind,
 	toExternalAppFailureCategory,
@@ -87,6 +88,13 @@ describe("isExternalAppBusy", () => {
 describe("isExternalAppCancellable", () => {
 	it("is true for exactly the three long operations", () => {
 		expect(externalAppStatuses.filter(isExternalAppCancellable)).toEqual(["Installing", "Updating", "Resetting"]);
+	});
+});
+
+describe("isExternalAppConfigurable", () => {
+	// The mirror of `ExternalAppService.ConfigureAsync`'s admission: every operable status except `Running`.
+	it("is true for exactly the three settled states the node admits a save in", () => {
+		expect(externalAppStatuses.filter(isExternalAppConfigurable)).toEqual(["Stopped", "Failed", "StoppedUnexpectedly"]);
 	});
 });
 

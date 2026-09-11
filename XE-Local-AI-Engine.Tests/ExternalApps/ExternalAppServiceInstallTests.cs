@@ -66,7 +66,6 @@ public sealed class ExternalAppServiceInstallTests
             () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.GpuNotSupported));
-        AssertEx.Equal(ExternalAppBlockedReason.GpuNotSupported, failure.Reason, "The API layer renders the label from the enum, never from the prose.");
         AssertEx.Empty(harness.Runtime.CreatedContainerIds, "Nothing is created for an application this engine cannot run.");
     }
 
@@ -82,7 +81,6 @@ public sealed class ExternalAppServiceInstallTests
             () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RuntimeIncompatible));
-        AssertEx.Equal(ExternalAppBlockedReason.RuntimeIncompatible, failure.Reason);
         AssertEx.Contains(failure.Message, "gpuDevices");
     }
 
@@ -98,7 +96,6 @@ public sealed class ExternalAppServiceInstallTests
             () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.RuntimeUnavailable));
-        AssertEx.Equal(ExternalAppBlockedReason.RuntimeUnavailable, failure.Reason);
 
         // The resolution's own prose, not a second description of the same state written at the refusal site.
         AssertEx.Contains(failure.Message, "Nothing answered at unix:///var/run/docker.sock.");
@@ -117,7 +114,6 @@ public sealed class ExternalAppServiceInstallTests
             () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
 
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.InsufficientMemory));
-        AssertEx.Equal(ExternalAppBlockedReason.InsufficientMemory, failure.Reason);
     }
 
     [Test]
@@ -132,7 +128,6 @@ public sealed class ExternalAppServiceInstallTests
         var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
             () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
 
-        AssertEx.Null(failure.Reason, "A value-level rejection is not an admission refusal and carries no blocked reason.");
         AssertEx.Contains(failure.Names, "ADMIN_PASSWORD");
         AssertEx.Contains(failure.Message, "ADMIN_PASSWORD");
     }

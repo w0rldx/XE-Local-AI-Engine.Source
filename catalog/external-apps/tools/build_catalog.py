@@ -6,7 +6,8 @@ The engine never parses Compose. This script is the offline pipeline that turns 
 document the engine loads (bundled as an embedded seed, optionally refreshed from a pinned URL).
 
 It validates only what a converter alone can get wrong -- the C1..C7 gates below, the file
-base64/sha256/size invariants and the manifest fingerprint. ``ExternalAppCatalogValidator`` on the
+base64/sha256/size invariants, the manifest fingerprint and the ``manifestVersion`` bump that has to
+accompany a changed fingerprint. ``ExternalAppCatalogValidator`` on the
 C# side is the sole authority on manifest validity; duplicating ~50 rules here would only generate
 drift between the two.
 
@@ -32,6 +33,7 @@ import hashlib
 import json
 import re
 import shlex
+import subprocess
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -579,6 +581,52 @@ def build_application(application_dir: Path) -> dict[str, Any]:
     return manifest
 
 
+def check_version_bumps(applications: list[dict[str, Any]], committed: str | None) -> None:
+    """Refuse a manifest whose fingerprint moved while its ``manifestVersion`` stood still.
+
+    The version is what reaches an instance that is already installed: ``ExternalAppService.UpdateAsync``
+    treats a target whose ``manifestVersion`` is not greater than the stored one as a no-op, so a manifest
+    edited without a bump changes fresh installs only -- every existing instance keeps running on its stored
+    snapshot and nothing surfaces the drift. A capability narrowing shipped that way is half a fix.
+
+    ``committed`` is the document as committed at ``HEAD``, not the one on disk, so rebuilding several times
+    while authoring one change never asks for a second bump. ``None`` when there is no baseline to compare
+    against, and an application absent from it is new.
+    """
+    if committed is None:
+        return
+
+    baseline = {application["id"]: application for application in json.loads(committed).get("applications", [])}
+    for application in applications:
+        previous = baseline.get(application["id"])
+        if previous is None or previous[HASH_KEY] == application[HASH_KEY]:
+            continue
+
+        if application["manifestVersion"] <= previous["manifestVersion"]:
+            raise _fail(
+                application["id"],
+                "manifestVersion",
+                f"the manifest changed ({previous[HASH_KEY][:12]} -> {application[HASH_KEY][:12]}) while "
+                f"manifestVersion stayed at {previous['manifestVersion']}. Bump it in manifest.overrides.json, "
+                "or no instance that is already installed will ever receive the change.",
+            )
+
+
+def committed_document() -> str | None:
+    """The dist document as committed at ``HEAD``, or ``None`` when there is none to read.
+
+    ``None`` covers a checkout that is not a git repository and a document that is not in ``HEAD`` yet; both
+    mean there is no baseline for :func:`check_version_bumps`, not that the rule passed.
+    """
+    read = subprocess.run(  # noqa: S603
+        ["git", "-C", str(REPO_ROOT), "show", f"HEAD:{DIST_PATH.relative_to(REPO_ROOT).as_posix()}"],  # noqa: S607
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return read.stdout if read.returncode == 0 else None
+
+
 def build_document() -> dict[str, Any]:
     """Build the whole catalog document. Always every application: both outputs are whole-catalog files."""
     directories = sorted(entry for entry in APPLICATIONS_DIR.iterdir() if entry.is_dir())
@@ -646,6 +694,7 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         document = build_document()
+        check_version_bumps(document["applications"], committed_document())
     except CatalogBuildError as error:
         print(f"catalog build failed: {error}", file=sys.stderr)
         return 1

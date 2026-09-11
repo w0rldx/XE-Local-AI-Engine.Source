@@ -444,9 +444,14 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
         var installed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
-        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
+        var failure = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
             () => harness.Service.ConfigureAsync(installed.Id, installed.Version, new Dictionary<string, string>(StringComparer.Ordinal)))
             .ConfigureAwait(false);
+
+        // The wording, not only the refusal: admission is every Operable status except Running, so a message that
+        // said "while the application is stopped" described a rule the service stopped enforcing when Failed and
+        // StoppedUnexpectedly became configurable, and it is the only copy an API caller ever sees.
+        AssertEx.Contains(failure.Message, "while the application is not running");
     }
 
     [Test]

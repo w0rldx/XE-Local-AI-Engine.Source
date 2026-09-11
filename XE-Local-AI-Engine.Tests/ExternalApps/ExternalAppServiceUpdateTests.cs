@@ -207,6 +207,68 @@ public sealed class ExternalAppServiceUpdateTests
     }
 
     /// <summary>
+    ///     A variable the target dropped is the node's own stored key, not a user's typo, so it must not be carried
+    ///     into validation and refused there as undeclared.
+    /// </summary>
+    [Test]
+    public async Task Update_WhenTheTargetRemovesAVariable_DropsTheStoredValueAndSucceeds()
+    {
+        var installed = ExternalAppTestManifests.Manifest(
+            [ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["HOST"] = "${LLM_HOST}" })],
+            variables: [ExternalAppTestManifests.Variable("LLM_HOST")]);
+
+        await using var harness = await InstalledAsync(installed,
+                                            new Dictionary<string, string>(StringComparer.Ordinal) { ["LLM_HOST"] = "stored-host" })
+                                        .ConfigureAwait(false);
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+
+        var target = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")], manifestVersion: 2);
+        ExternalAppServiceHarness.Seed(harness.Catalog, target);
+
+        var admitted = await harness.Service.UpdateAsync(row.Id, row.Version, Command(target)).ConfigureAwait(false);
+        var after = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 2, after.ManifestVersion);
+        AssertEx.False(after.VariablesJson.Contains("LLM_HOST", StringComparison.Ordinal),
+            "A variable the target no longer declares must not be written back onto the row.");
+    }
+
+    /// <summary>
+    ///     A rename is a removal and an addition. The submitted value satisfies the target; the stale key must
+    ///     neither refuse the update nor survive it.
+    /// </summary>
+    [Test]
+    public async Task Update_WhenTheTargetRenamesAVariable_AcceptsTheSubmittedValueAndDropsTheStaleKey()
+    {
+        var installed = ExternalAppTestManifests.Manifest(
+            [ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["HOST"] = "${LLM_HOST}" })],
+            variables: [ExternalAppTestManifests.Variable("LLM_HOST", required: true)]);
+
+        await using var harness = await InstalledAsync(installed,
+                                            new Dictionary<string, string>(StringComparer.Ordinal) { ["LLM_HOST"] = "stored-host" })
+                                        .ConfigureAwait(false);
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+
+        var target = ExternalAppTestManifests.Manifest(
+            [ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["HOST"] = "${MODEL_HOST}" })],
+            variables: [ExternalAppTestManifests.Variable("MODEL_HOST", required: true)],
+            manifestVersion: 2);
+        ExternalAppServiceHarness.Seed(harness.Catalog, target);
+
+        var admitted = await harness.Service.UpdateAsync(row.Id,
+                                        row.Version,
+                                        Command(target) with
+                                        {
+                                            Variables = new Dictionary<string, string>(StringComparer.Ordinal) { ["MODEL_HOST"] = "renamed-host" }
+                                        })
+                                    .ConfigureAwait(false);
+        var after = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+
+        AssertEx.True(after.VariablesJson.Contains("renamed-host", StringComparison.Ordinal), "The submitted value is what the target asked for.");
+        AssertEx.False(after.VariablesJson.Contains("LLM_HOST", StringComparison.Ordinal), "The stale key must not be persisted.");
+    }
+
+    /// <summary>
     ///     The commit sits after every replacement container is created and verified and before any is started. It is
     ///     the recovery boundary: before it the row still describes the old version, after it a start recovers forward.
     /// </summary>

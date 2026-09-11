@@ -23,6 +23,7 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
+using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Containers;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -470,7 +471,7 @@ public sealed class ExternalAppRealDaemonTests
             var scopeFactory = provider.GetRequiredService<IServiceScopeFactory>();
             var service = new ExternalAppService(scopeFactory,
                 layout,
-                new ExternalAppResourceGate(Audit(), dataDirectory),
+                new ExternalAppResourceGate(Audit(), dataDirectory, new DriveInfoFreeSpaceProbe()),
                 new ExternalAppInstanceGate(),
                 new ExternalAppOperationRunner(scopeFactory, lifetime, NullLogger<ExternalAppOperationRunner>.Instance),
                 new NoOpExternalAppEventPublisher(),

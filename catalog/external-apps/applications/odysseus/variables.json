@@ -216,7 +216,7 @@
     "LOCALHOST_BYPASS": "false",
     "SECURE_COOKIES": "false",
     "ALLOWED_ORIGINS": "http://127.0.0.1:${XE_UI_HOST_PORT_odysseus},http://localhost:${XE_UI_HOST_PORT_odysseus}",
-    "NTFY_BASE_URL": "http://127.0.0.1:${XE_UI_HOST_PORT_ntfy}",
+    "NTFY_BASE_URL": "http://ntfy",
     "PUID": "${XE_UID}",
     "PGID": "${XE_GID}",
     "DATABASE_URL": "sqlite:///./data/app.db",

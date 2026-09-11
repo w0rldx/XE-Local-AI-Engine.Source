@@ -2,7 +2,16 @@ namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
-/// <summary>Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />.</summary>
+/// <summary>
+///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />.
+///     <para>
+///         Measured on the closest EXISTING ancestor of the path, which is also the directory handed to
+///         <see cref="DriveInfo" />. The path ROOT is not that filesystem: on Linux every absolute path roots at
+///         <c>/</c>, so measuring the root reported the root filesystem for a models directory, a cache or an
+///         instance directory that lives on a mounted data volume. <see cref="DriveInfo" /> resolves the filesystem
+///         actually holding a directory when it is given one, and on Windows the ancestor still names its volume.
+///     </para>
+/// </summary>
 public sealed class DriveInfoFreeSpaceProbe : IFreeSpaceProbe
 {
     /// <inheritdoc />
@@ -10,25 +19,20 @@ public sealed class DriveInfoFreeSpaceProbe : IFreeSpaceProbe
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-        // Resolve the closest existing ancestor so the probe works before the model directory is first created.
+        // Resolve the closest existing ancestor so the probe works before the directory is first created.
         var probePath = Path.GetFullPath(path);
         while (!Directory.Exists(probePath))
         {
             var parent = Path.GetDirectoryName(probePath);
             if (string.IsNullOrEmpty(parent) || string.Equals(parent, probePath, StringComparison.Ordinal))
             {
-                break;
+                throw new InvalidOperationException(
+                    $"No existing directory was found at or above '{path}', so the free space on its volume cannot be measured.");
             }
 
             probePath = parent;
         }
 
-        var root = Path.GetPathRoot(probePath);
-        if (string.IsNullOrEmpty(root))
-        {
-            throw new InvalidOperationException("Unable to determine the volume root for the model directory.");
-        }
-
-        return new DriveInfo(root).AvailableFreeSpace;
+        return new DriveInfo(probePath).AvailableFreeSpace;
     }
 }

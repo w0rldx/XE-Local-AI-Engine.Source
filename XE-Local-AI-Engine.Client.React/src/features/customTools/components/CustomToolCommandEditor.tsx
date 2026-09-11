@@ -3,7 +3,7 @@ import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { fieldError } from "@/core/ui/forms/ZodFieldErrors";
-import type { CustomToolEditorSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
+import type { CustomToolSecretSectionProps } from "@/features/customTools/components/CustomToolEditorShared";
 import { useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
 import { CustomToolProgramLaunchSelector } from "@/features/customTools/components/CustomToolProgramLaunchSelector";
 import { CustomToolSecretRows } from "@/features/customTools/components/CustomToolSecretRows";
@@ -14,7 +14,7 @@ import {
 } from "@/features/customTools/models/CustomToolModels";
 
 // Command editor: executable (with a ProgramLaunch probe), args template, working directory, timeout, env.
-export function CommandEditor({ values, errors, update }: CustomToolEditorSectionProps) {
+export function CommandEditor({ values, errors, update, storedSecrets }: CustomToolSecretSectionProps) {
 	const { t } = useTranslation();
 	const command = values.command;
 	const {
@@ -127,6 +127,7 @@ export function CommandEditor({ values, errors, update }: CustomToolEditorSectio
 				emptyLabel={t("pages.customTools.form.command.noEnv", "No environment variables.")}
 				testid="custom-tool-form-command-env"
 				rows={command.env}
+				storedSecrets={storedSecrets}
 				onAdd={addEnv}
 				onRemove={removeEnv}
 				onPatch={patchEnv}

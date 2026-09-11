@@ -8,49 +8,24 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The lying fake as the subject, because it is the seam every later slice's tests stand on.
 ///     <para>
-///         Two properties are asserted here and nowhere else. First, that the fake refuses exactly what the daemon
-///         path refuses: a fake that accepted a non-loopback host IP would let a test prove a guard that does not
-///         exist. Second, that each hook actually produces the lie it advertises — a daemon cannot be asked to report
-///         a capability nobody requested, an anonymous volume, or a mount the container cannot write, so a fail-closed
-///         branch above this layer is reachable only through these.
+///         What is asserted here is what only the fake can be asked: that each hook actually produces the lie it
+///         advertises — a daemon cannot be asked to report a capability nobody requested, an anonymous volume, or a
+///         mount the container cannot write, so a fail-closed branch above this layer is reachable only through these
+///         — and the refusals the fake makes on the state it holds rather than on the request, which on the daemon
+///         path are 404s and 409s off the wire and so cannot be a shared contract case.
+///     </para>
+///     <para>
+///         The refusals the fake makes on the REQUEST — a non-loopback host IP, an unpinned image, a blank user, a
+///         duplicated port, an unfiltered list — are no longer asserted here. They are the contract both
+///         implementations owe, so they live once in <see cref="ContainerRuntimeContractTests" />, which runs them
+///         against the fake and the production client alike; a copy here would be the pinning that let two drifts
+///         through.
 ///     </para>
 /// </summary>
 public sealed class ContainerRuntimeFakeContractTests
 {
     private const string Digest = "@sha256:0000000000000000000000000000000000000000000000000000000000000000";
     private const string Image = "ghcr.io/example/app" + Digest;
-
-    [Test]
-    [Arguments("0.0.0.0")]
-    [Arguments("")]
-    [Arguments("::")]
-    [Arguments("192.168.1.10")]
-    [Arguments("localhost")]
-    // Refused although it IS loopback: this node's callers are handed a 127.0.0.1 address, so a port published on
-    // the IPv6 loopback reads back as published and answers nobody.
-    [Arguments("::1")]
-    public async Task RunContainer_WithANonLoopbackHostIp_IsRefused(string hostIp)
-    {
-        var client = Client();
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
-        {
-            PublishedPorts =
-            [
-                new ContainerPortPublication
-                {
-                    ContainerPort = 8080,
-                    HostIp = hostIp,
-                    HostPort = 30080
-                }
-            ]
-        }));
-
-        AssertEx.Contains(failure.Message, "127.0.0.1");
-        // Refused before anything was created: an empty host IP renders as a binding Docker resolves to 0.0.0.0, so
-        // there must be no window in which such a container exists for a later read-back to catch.
-        AssertEx.Empty(client.CreatedContainerIds);
-    }
 
     [Test]
     [Arguments("127.0.0.1")]
@@ -72,66 +47,6 @@ public sealed class ContainerRuntimeFakeContractTests
         });
 
         AssertEx.NotNullOrEmpty(containerId);
-    }
-
-    [Test]
-    public async Task RunContainer_WithATagRatherThanADigest_IsRefused()
-    {
-        var client = Client();
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
-        {
-            Image = "ghcr.io/example/app:1.0.0"
-        }));
-
-        AssertEx.Contains(failure.Message, "digest-pinned");
-        AssertEx.Empty(client.CreatedContainerIds);
-    }
-
-    [Test]
-    public async Task RunContainer_WithABlankUser_IsRefused()
-    {
-        // "" is never read as "no user": the two would otherwise be the same instruction written two ways, and only
-        // one of them says what it means.
-        var client = Client();
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
-        {
-            User = "   "
-        }));
-
-        AssertEx.Contains(failure.Message, "blank container user");
-    }
-
-    [Test]
-    public async Task RunContainer_PublishingOneContainerPortTwice_IsRefused()
-    {
-        // Container port plus protocol keys both wire dictionaries, so the second publication would replace the first
-        // rather than add to it. Refused by this layer, in its own words: left to the BCL it is a duplicate-key
-        // ArgumentException raised where nothing classifies it and which names neither the port nor the caller.
-        var client = Client();
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
-        {
-            PublishedPorts =
-            [
-                new ContainerPortPublication
-                {
-                    ContainerPort = 8080,
-                    HostIp = "127.0.0.1",
-                    HostPort = 30080
-                },
-                new ContainerPortPublication
-                {
-                    ContainerPort = 8080,
-                    HostIp = "127.0.0.1",
-                    HostPort = 30081
-                }
-            ]
-        }));
-
-        AssertEx.Contains(failure.Message, "8080/tcp");
-        AssertEx.Empty(client.CreatedContainerIds);
     }
 
     [Test]
@@ -401,15 +316,6 @@ public sealed class ContainerRuntimeFakeContractTests
     }
 
     [Test]
-    public async Task PullImage_WithoutADigest_IsRefused()
-    {
-        var client = Client();
-
-        await AssertEx.ThrowsAsync<ArgumentException>(() => client.PullImageAsync("ghcr.io/example/app:1.0.0", progress: null));
-        AssertEx.Empty(client.PulledImages);
-    }
-
-    [Test]
     public async Task PullImage_ReportsScriptedProgress()
     {
         var client = Client();
@@ -478,15 +384,6 @@ public sealed class ContainerRuntimeFakeContractTests
     }
 
     [Test]
-    public async Task ListNetworks_WithoutALabelFilter_IsRefused()
-    {
-        var client = Client();
-
-        await AssertEx.ThrowsAsync<ArgumentException>(() =>
-            client.ListNetworksAsync(new Dictionary<string, string>(StringComparer.Ordinal)));
-    }
-
-    [Test]
     public async Task CreateNetwork_OnANameConflictCarryingTheSameInstanceAndInstallLabels_ReturnsTheExistingId()
     {
         var client = EmptyDaemon();
@@ -498,23 +395,6 @@ public sealed class ContainerRuntimeFakeContractTests
         // Re-entrancy after a crash between create and record: the second create of the same name with the same
         // labels is the same network, not a second one and not a refusal.
         AssertEx.Equal(first, second);
-    }
-
-    [Test]
-    public async Task CreateNetwork_WithNoLabels_IsRefused()
-    {
-        // The labels ARE the ownership proof. With none of them a name conflict has nothing to compare, so a
-        // foreign bridge holding the name would pass the reuse check — which is why the specification is refused
-        // rather than given a check it cannot fail.
-        var client = EmptyDaemon();
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.CreateNetworkAsync(Network() with
-        {
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
-        }));
-
-        AssertEx.Equal("specification", failure.ParamName);
-        AssertEx.Empty(client.CreatedNetworks, "A network with no ownership labels was created before the refusal.");
     }
 
     [Test]
@@ -699,7 +579,7 @@ public sealed class ContainerRuntimeFakeContractTests
     }
 
     [Test]
-    public async Task ListContainersDetailed_FiltersByLabelAndRefusesAnEmptyFilter()
+    public async Task ListContainersDetailed_FiltersByLabel()
     {
         var client = Client();
         await client.RunContainerAsync(Specification());
@@ -714,8 +594,6 @@ public sealed class ContainerRuntimeFakeContractTests
         });
 
         AssertEx.Equal(expected: 1, (await client.ListContainersDetailedAsync(Labels())).Count);
-        await AssertEx.ThrowsAsync<ArgumentException>(() =>
-            client.ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)));
     }
 
     [Test]

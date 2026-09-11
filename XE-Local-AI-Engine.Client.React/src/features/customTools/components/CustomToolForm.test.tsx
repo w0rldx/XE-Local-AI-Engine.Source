@@ -5,7 +5,7 @@ import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { CustomToolForm, type CustomToolFormHandle } from "@/features/customTools/components/CustomToolForm";
-import type { CustomToolFormValues } from "@/features/customTools/models/CustomToolModels";
+import { CUSTOM_TOOL_SECRET_SENTINEL, type CustomToolFormValues } from "@/features/customTools/models/CustomToolModels";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // Save lives in the host dialog's sticky footer and reaches the form through an imperative handle, so "pressing Save"
@@ -159,6 +159,70 @@ describe("CustomToolForm", () => {
 		expect(screen.getByTestId("custom-tool-form-command")).toBeTruthy();
 		expect(screen.queryByTestId("custom-tool-form-http")).toBeNull();
 	});
+
+	// C3: the secret rows share the explicit keep/clear mechanic with the External Apps variables form. What matters
+	// here is that a header's stored secret reaches the submitted definition as the sentinel unless it is cleared on
+	// purpose — an emptied box used to send "", which the service writes over the stored value.
+	it("keeps a header's stored secret when its box is typed into and emptied, and clears it only on the explicit action", () => {
+		const { ref, onSubmit } = renderForm({
+			name: "tool",
+			description: "Calls an API with a stored token.",
+			acknowledged: true,
+			http: {
+				method: "GET",
+				urlTemplate: "https://api.example.com",
+				headers: [{ name: "Authorization", value: CUSTOM_TOOL_SECRET_SENTINEL, isSecret: true }],
+				bodyTemplate: "",
+				allowedHosts: [],
+			},
+		});
+
+		const value = screen.getByTestId("custom-tool-form-http-headers-value-0");
+		fireEvent.change(value, { target: { value: "typed" } });
+		fireEvent.change(value, { target: { value: "" } });
+		act(() => ref.current?.submit());
+
+		expect(onSubmit.mock.calls[0]?.[0].http.headers[0].value).toBe(CUSTOM_TOOL_SECRET_SENTINEL);
+
+		fireEvent.click(screen.getByTestId("custom-tool-form-http-headers-value-0-clear"));
+		expect(screen.getByTestId("custom-tool-form-http-headers-value-0-cleared")).toBeTruthy();
+		act(() => ref.current?.submit());
+
+		expect(onSubmit.mock.calls[1]?.[0].http.headers[0].value).toBe("");
+	});
+
+	// The rows keep their test ids positional, so a survivor is RENUMBERED when an earlier row goes. A pending clear
+	// belongs to the row, not to its position: keyed on the test id, the survivor silently forgot it had a stored
+	// secret and hid the warning and Undo while still submitting "".
+	it("keeps a pending clear on the surviving secret row when an earlier row is removed", () => {
+		const { ref, onSubmit } = renderForm({
+			name: "tool",
+			description: "Calls an API with two stored secrets.",
+			acknowledged: true,
+			http: {
+				method: "GET",
+				urlTemplate: "https://api.example.com",
+				headers: [
+					{ name: "X-First", value: CUSTOM_TOOL_SECRET_SENTINEL, isSecret: true },
+					{ name: "Authorization", value: CUSTOM_TOOL_SECRET_SENTINEL, isSecret: true },
+				],
+				bodyTemplate: "",
+				allowedHosts: [],
+			},
+		});
+
+		fireEvent.click(screen.getByTestId("custom-tool-form-http-headers-value-1-clear"));
+		fireEvent.click(screen.getByTestId("custom-tool-form-http-headers-remove-0"));
+
+		const survivor = screen.getByTestId("custom-tool-form-http-headers-name-0") as HTMLInputElement;
+		expect(survivor.value).toBe("Authorization");
+		expect(screen.getByTestId("custom-tool-form-http-headers-value-0-cleared")).toBeTruthy();
+		expect(screen.getByTestId("custom-tool-form-http-headers-value-0-undo")).toBeTruthy();
+
+		act(() => ref.current?.submit());
+		expect(onSubmit.mock.calls[0]?.[0].http.headers).toHaveLength(1);
+		expect(onSubmit.mock.calls[0]?.[0].http.headers[0].value).toBe("");
+	});
 });
 
 // The form's multi-control rows are the ones a phone-width dialog (~358px of body) cannot fit on one line. An <input>
@@ -189,11 +253,13 @@ describe("CustomToolForm narrow-width row layout", () => {
 		});
 
 		const row = screen.getByTestId("custom-tool-form-http-headers-row-0");
-		const [name, value] = Array.from(row.querySelectorAll<HTMLElement>(".mantine-TextInput-root"));
+		const name = row.querySelector<HTMLElement>(".mantine-TextInput-root");
+		// A secret row's value column is `StoredSecretInput`, whose Stack carries the column's flex, not the input.
+		const value = screen.getByTestId("custom-tool-form-http-headers-value-0-column");
 
 		expect(row.style.getPropertyValue("--group-wrap")).not.toBe("nowrap");
 		expect(name?.style.flexBasis).toBe("140px");
-		expect(value?.style.flexBasis).toBe("200px");
+		expect(value.style.flexBasis).toBe("200px");
 	});
 
 	it("lets the executable path and its Validate button wrap", () => {

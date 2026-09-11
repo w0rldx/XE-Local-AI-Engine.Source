@@ -19,6 +19,11 @@ using Docker.DotNet.Models;
 ///         change wording underneath us, which is why the real-daemon suite asserts the prose and these assert the
 ///         readers.
 ///     </para>
+///     <para>
+///         The production client's argument guards are NOT asserted here. Hand-copying them beside the fake's copies
+///         is what let two drifts through; they are asserted once, against both implementations, in
+///         <see cref="ContainerRuntimeContractTests" />.
+///     </para>
 /// </summary>
 public sealed class ContainerRuntimeWireMappingTests
 {
@@ -209,82 +214,6 @@ public sealed class ContainerRuntimeWireMappingTests
     }
 
     [Test]
-    public async Task RunContainer_PublishingOneContainerPortTwice_IsRefusedByThisLayer()
-    {
-        // ExposedPorts and HostConfig.PortBindings are both keyed by "<port>/<protocol>", built with ToDictionary.
-        // Two publications sharing that key would throw the BCL's duplicate-key ArgumentException from OUTSIDE this
-        // method's try, so nothing would classify it and the message would name neither the port nor the caller.
-        // Refused up front instead, with the layer's own words — and before any parameter is built, so no half-formed
-        // create can reach the daemon. Never connects: the guard runs before the first wire call.
-        await using var client = ClientWith(NullLogger.Instance);
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification(
-        [
-            new ContainerPortPublication
-            {
-                ContainerPort = 8080,
-                HostIp = "127.0.0.1",
-                HostPort = 30080
-            },
-            new ContainerPortPublication
-            {
-                ContainerPort = 8080,
-                HostIp = "127.0.0.1",
-                HostPort = 30081
-            }
-        ])));
-
-        AssertEx.Contains(failure.Message, "8080/tcp");
-        AssertEx.Equal("specification", failure.ParamName);
-    }
-
-    // The other half of the key — that 53/tcp and 53/udp are two ports and must both be accepted — is asserted
-    // against the fake in ContainerRuntimeFakeContractTests, which refuses the same four things in the same order.
-    // Proving acceptance here would mean letting the create reach a socket this class deliberately never opens.
-
-    [Test]
-    public async Task RunContainer_PublishingOnTheIpv6Loopback_IsRefusedByThisLayer()
-    {
-        // ::1 is loopback and is still refused. Everything that reaches an application's published port on this node
-        // — the engine itself, the operator's browser — is handed a 127.0.0.1 address, so a binding on the IPv6
-        // loopback reads back as published and accepts no connection anybody here makes.
-        await using var client = ClientWith(NullLogger.Instance);
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification(
-        [
-            new ContainerPortPublication
-            {
-                ContainerPort = 8080,
-                HostIp = "::1",
-                HostPort = 30080
-            }
-        ])));
-
-        AssertEx.Contains(failure.Message, "127.0.0.1");
-        AssertEx.Equal("specification", failure.ParamName);
-    }
-
-    [Test]
-    public async Task CreateNetwork_WithNoLabels_IsRefusedBeforeAnyWireCall()
-    {
-        // The ownership check on a name conflict compares the specification's labels against the existing network's.
-        // With no labels there is nothing to compare and every foreign bridge of that name passes, so the refusal is
-        // on the specification itself — and before the create, because the socket this client names does not exist
-        // and a guard that ran after the wire call could not be proven here at all.
-        await using var client = ClientWith(NullLogger.Instance);
-
-        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.CreateNetworkAsync(new ContainerNetworkSpecification
-        {
-            Name = "xe-app-wire-mapping-net",
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal),
-            Internal = false
-        }));
-
-        AssertEx.Equal("specification", failure.ParamName);
-        AssertEx.Contains(failure.Message, "ownership label");
-    }
-
-    [Test]
     [Arguments(true)]
     [Arguments(false)]
     public async Task ReadBounded_OverAMultiMegabyteStream_KeepsTheCeilingAndReportsTruncation(bool onStandardError)
@@ -335,29 +264,6 @@ public sealed class ContainerRuntimeWireMappingTests
         return buffer.ToArray();
     }
 
-
-    private static ContainerSpecification Specification(IReadOnlyList<ContainerPortPublication> publishedPorts)
-    {
-        return new ContainerSpecification
-        {
-            Image = "ghcr.io/example/app@sha256:0000000000000000000000000000000000000000000000000000000000000000",
-            Name = "xe-app-wire-mapping",
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal),
-            Environment = new Dictionary<string, string>(StringComparer.Ordinal),
-            Mounts = [],
-            PublishedPorts = publishedPorts,
-            CapabilitiesToDrop = ["ALL"],
-            CapabilitiesToAdd = [],
-            SecurityOptions = ["no-new-privileges:true"],
-            ReadOnlyRootFilesystem = false,
-            NetworkName = "xe-app-wire-mapping-net",
-            NetworkAliases = ["app"],
-            RestartMode = ContainerRestartMode.None,
-            MemoryBytes = 0,
-            NanoCpus = 0,
-            PidsLimit = 512
-        };
-    }
 
     private static JSONMessage Layer(string id, string status, long? current, long? total)
     {

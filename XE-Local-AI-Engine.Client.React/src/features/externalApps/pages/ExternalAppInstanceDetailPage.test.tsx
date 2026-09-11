@@ -11,6 +11,7 @@ import { describe, expect, it, vi } from "vitest";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { EXTERNAL_APP_SECRET_SENTINEL } from "@/features/externalApps/models/ExternalAppModels";
 import { ExternalAppInstanceDetailPage } from "@/features/externalApps/pages/ExternalAppInstanceDetailPage";
+import { externalAppInvalidationKey, externalAppQueryIds } from "@/features/externalApps/queries/useExternalApps";
 import {
 	externalAppInstance,
 	externalAppInstanceLogs,
@@ -57,7 +58,7 @@ function baseRoutes(instance = externalAppInstance(), runtime = externalAppRunti
 }
 
 function renderPage() {
-	renderWithProviders(
+	return renderWithProviders(
 		<ConfirmProvider>
 			<ExternalAppInstanceDetailPage instanceId={instanceId} />
 		</ConfirmProvider>,
@@ -314,6 +315,34 @@ describe("ExternalAppInstanceDetailPage", () => {
 		expect((screen.getByTestId("external-app-detail-settings-save") as HTMLButtonElement).disabled).toBe(true);
 	});
 
+	// `ExternalAppService.ConfigureAsync` admits every operable status except `Running` — `Failed` included. Locking
+	// the form there left a bad setting, the most common reason a start fails, repairable only by uninstalling.
+	it("lets a failed instance edit and save its settings", async () => {
+		const bodies: unknown[] = [];
+		server.use(
+			...baseRoutes(
+				externalAppInstance({ status: "Failed", failureCategory: "ConfigurationMissing", version: 11, publishedPorts: [] }),
+			),
+			http.put(localApiPath(`${instancePath}/variables`), async ({ request }) => {
+				bodies.push(await request.json());
+				return HttpResponse.json(externalAppInstance({ status: "Failed" }));
+			}),
+		);
+		renderPage();
+		await waitFor(() => expect(screen.getByTestId("external-app-detail-tab-settings")).toBeDefined());
+
+		fireEvent.click(screen.getByTestId("external-app-detail-tab-settings"));
+		await waitFor(() => expect(screen.getByTestId("external-app-variable-baseUrl")).toBeDefined());
+
+		expect(screen.queryByTestId("external-app-detail-settings-stopped-only")).toBeNull();
+		expect((screen.getByTestId("external-app-variable-baseUrl") as HTMLInputElement).disabled).toBe(false);
+		fireEvent.change(screen.getByTestId("external-app-variable-baseUrl"), { target: { value: "http://127.0.0.1:8080" } });
+		fireEvent.click(screen.getByTestId("external-app-detail-settings-save"));
+
+		await waitFor(() => expect(bodies).toHaveLength(1));
+		expect(bodies[0]).toEqual({ variables: { baseUrl: "http://127.0.0.1:8080" }, expectedVersion: 11 });
+	});
+
 	it("renders the not-found state for an instance that is gone", async () => {
 		server.use(
 			problemDetailsRoute("get", instancePath, 404, { detail: "gone" }),
@@ -323,6 +352,33 @@ describe("ExternalAppInstanceDetailPage", () => {
 
 		await waitFor(() => expect(screen.getByTestId("external-app-detail-not-found")).toBeDefined());
 		expect(screen.getByTestId("external-app-detail-not-found").textContent).toContain("not installed");
+	});
+
+	// TanStack Query keeps the last successful data across a failed refetch, so the uninstall the operator watched
+	// finish left the deleted application on screen, frozen at its last status, until the page was navigated away from.
+	it("renders the not-found state when a hub-triggered re-read answers 404 after an uninstall", async () => {
+		let gone = false;
+		server.use(
+			http.get(localApiPath(instancePath), () =>
+				gone
+					? HttpResponse.json({ title: "Not Found", detail: "gone" }, { status: 404 })
+					: HttpResponse.json(externalAppInstance({ status: "Uninstalling" })),
+			),
+			jsonRoute("get", "external-apps/runtime", externalAppRuntime()),
+			jsonRoute("get", `${instancePath}/events`, { items: [], highestSequence: 0, hasMore: false }),
+			jsonRoute("get", `${instancePath}/logs`, externalAppInstanceLogs()),
+		);
+		const { queryClient } = renderPage();
+		await waitFor(() => expect(screen.getByTestId("external-app-detail-overview")).toBeDefined());
+
+		// Exactly what the hub's `instanceChanged` handler does when the uninstall settles.
+		gone = true;
+		await queryClient.invalidateQueries({
+			queryKey: externalAppInvalidationKey(externalAppQueryIds.instance, { instanceId }),
+		});
+
+		await waitFor(() => expect(screen.getByTestId("external-app-detail-not-found")).toBeDefined());
+		expect(screen.queryByTestId("external-app-detail-overview")).toBeNull();
 	});
 
 	it("keeps the logs tab reading the part names off the instance manifest", async () => {

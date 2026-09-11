@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
 using Microsoft.Extensions.Logging.Abstractions;
+using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
@@ -325,7 +326,7 @@ public sealed class DockerDaemonProbeTests
         // The negative half, without a wall-clock guess: with the scheduler drained, the second probe has not got
         // past the gate. Without the gate it would be finished — it would have read the absent pin and written one.
         await AssertEx.StaysIncompleteAsync(second,
-            "A second probe ran to completion while the first was still inside its read-compare-write transaction, "
+            "A second probe ran to completion while the first was still inside its compare-and-write, "
             + "so two first-use pins can be written over each other.");
 
         store.ReleaseWrite();
@@ -335,9 +336,11 @@ public sealed class DockerDaemonProbeTests
 
         AssertEx.Equal(DockerDaemonProbeReason.Ready, firstOutcome.Reason);
 
-        // The ordering, not merely the end state: a read that happened between the first probe's read and its write
-        // would show up here as read, read, write.
-        AssertEx.Equal("read, write, read", string.Join(", ", store.Events));
+        // The ordering, not merely the end state. Each probe reads twice: once before the daemon call, which feeds
+        // only the refusals that return before the gate, and once inside the gate, which is the read every approval
+        // rests on. The second probe's gated read lands AFTER the first probe's write, so it compares against a pin
+        // that exists rather than writing over one it never saw.
+        AssertEx.Equal("read, read, write, read, read", string.Join(", ", store.Events));
 
         // The second probe did not pin a daemon of its own. It compared against the first probe's pin and refused.
         AssertEx.Equal(expected: 1, store.WriteCount);
@@ -345,6 +348,136 @@ public sealed class DockerDaemonProbeTests
         AssertEx.Equal(DockerDaemonPreflightStatus.DaemonIdentityChanged, secondOutcome.Status);
         AssertEx.Equal("daemon-alpha", AssertEx.NotNull(secondOutcome.PinnedDaemon).DaemonId);
         AssertEx.Equal("daemon-alpha", AssertEx.NotNull(await store.ReadAsync()).DaemonId);
+    }
+
+    [Test]
+    public async Task TwoFirstUseProbesOfTheSameDaemon_PinItOnceAndBothSeeThatPin()
+    {
+        // The race the gate exists for, in its likeliest shape: one daemon, two features reaching it for the first
+        // time at once. Both must end up on the same pin, written once. The first probe's read now happens outside
+        // the gate, so the compare that decides whether to write has to be the one inside it.
+        var store = new GatedAttestationStore();
+
+        var first = Task.Run(() => RunAsync(ClientFor("daemon-alpha"), store));
+        await store.WriteEntered;
+        var second = Task.Run(() => RunAsync(ClientFor("daemon-alpha"), store));
+
+        await AssertEx.StaysIncompleteAsync(second,
+            "A second first-use probe ran to completion while the first was still inside its compare-and-write.");
+
+        store.ReleaseWrite();
+
+        var firstOutcome = await first;
+        var secondOutcome = await second;
+
+        // Trust-on-first-use approved one daemon and remembers it, rather than approving it twice and remembering
+        // whichever write landed last.
+        AssertEx.Equal(expected: 1, store.WriteCount);
+        AssertEx.Equal(DockerDaemonProbeReason.Ready, firstOutcome.Reason);
+        AssertEx.Equal(DockerDaemonProbeReason.Ready, secondOutcome.Reason);
+
+        var pinned = AssertEx.NotNull(await store.ReadAsync());
+        AssertEx.Equal(pinned, AssertEx.NotNull(firstOutcome.PinnedDaemon));
+        AssertEx.Equal(pinned, AssertEx.NotNull(secondOutcome.PinnedDaemon));
+    }
+
+    [Test]
+    public async Task AProbeWhosePinAlreadyMatches_DoesNotWaitForAnInFlightProbe()
+    {
+        // Why the gate stops short of the daemon call. Development Mode's page-load preflight and the
+        // application-container resolver probe the same daemon on independent schedules; a gate held across the call
+        // made each of them wait out the other's transport timeout — two of them, with the daemon unreachable, is a
+        // page load stalled for twice DaemonProbeTimeoutSeconds before it learns anything. The matching probe does
+        // enter the gate, because its compare has to run on a pin read after the daemon answered, but the gate holds
+        // store operations only, so what it can wait on is bounded by those rather than by anyone's timeout.
+        var store = new InMemoryDaemonAttestationStore();
+        store.Seed(Pin("daemon-alpha"));
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parkedClient = Substitute.For<IDockerRuntimeClient>();
+        parkedClient.ProbeAsync(Arg.Any<CancellationToken>()).Returns(_ => ParkAsync());
+
+        var parked = Task.Run(() => DockerDaemonProbe.RunAsync(Request(),
+            _ => parkedClient,
+            store,
+            new FixedTimeProvider(FixedNow),
+            NullLogger.Instance));
+
+        await entered.Task;
+
+        var matching = Task.Run(() => RunAsync(ClientFor("daemon-alpha"), store));
+
+        await AssertEx.CompletesAsync(matching,
+            TestBudgets.Contended,
+            "A probe whose pin already matches waited for an unrelated probe that was still talking to the daemon: "
+            + "the transaction gate is spanning the daemon call again.");
+
+        AssertEx.Equal(DockerDaemonProbeReason.Ready, (await matching).Reason);
+        // A match approves nothing, so the seeded pin is still the only one this node ever recorded.
+        AssertEx.Equal(expected: 0, store.WriteCount);
+
+        release.TrySetResult();
+        AssertEx.Equal(DockerDaemonProbeReason.Ready, (await parked).Reason);
+
+        async Task<DockerDaemonIdentity> ParkAsync()
+        {
+            entered.TrySetResult();
+            await release.Task.ConfigureAwait(false);
+
+            return ClientFor("daemon-alpha").Identity;
+        }
+    }
+
+    [Test]
+    public async Task AProbeWhosePinMovesWhileItIsTalkingToTheDaemon_ReportsTheSubstitution()
+    {
+        // The staleness a pre-call compare would hide. This probe reads a pin naming daemon-alpha and then parks
+        // inside its transport call; while it is parked an operator confirmation moves the shared pin to
+        // daemon-beta. Answering from the pre-call read would report Ready for a daemon this node has stopped
+        // trusting, and ContainerRuntimeResolver would cache that approval instead of surfacing the substitution the
+        // operator has to answer for. The compare has to happen on a pin read after the daemon answered.
+        var store = new InMemoryDaemonAttestationStore();
+        store.Seed(Pin("daemon-alpha"));
+
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var parkedClient = Substitute.For<IDockerRuntimeClient>();
+        parkedClient.ProbeAsync(Arg.Any<CancellationToken>()).Returns(_ => ParkAsync());
+
+        var parked = Task.Run(() => DockerDaemonProbe.RunAsync(Request(),
+            _ => parkedClient,
+            store,
+            new FixedTimeProvider(FixedNow),
+            NullLogger.Instance));
+
+        // The gate is the test's clock: the confirmation runs only once the first probe is provably inside its
+        // daemon call, and the first probe is released only once the pin has provably moved.
+        await entered.Task;
+
+        var confirmation = await RunAsync(ClientFor("daemon-beta"), store, confirmingDaemonId: "daemon-beta");
+
+        AssertEx.Equal(DockerDaemonProbeReason.Ready, confirmation.Reason);
+        AssertEx.Equal("daemon-beta", AssertEx.NotNull(await store.ReadAsync()).DaemonId);
+
+        release.TrySetResult();
+        var outcome = await parked;
+
+        AssertEx.Equal(DockerDaemonPreflightStatus.DaemonIdentityChanged, outcome.Status);
+        AssertEx.Equal(DockerDaemonProbeReason.IdentityChanged, outcome.Reason);
+        // Reported against the pin as it stands now, not the one this probe read before the call.
+        AssertEx.Equal("daemon-beta", AssertEx.NotNull(outcome.PinnedDaemon).DaemonId);
+        // A refusal approves nothing: the operator's confirmation is still the only write this node has taken.
+        AssertEx.Equal(expected: 1, store.WriteCount);
+        AssertEx.Equal("daemon-beta", AssertEx.NotNull(await store.ReadAsync()).DaemonId);
+
+        async Task<DockerDaemonIdentity> ParkAsync()
+        {
+            entered.TrySetResult();
+            await release.Task.ConfigureAwait(false);
+
+            return ClientFor("daemon-alpha").Identity;
+        }
     }
 
     [Test]
@@ -428,7 +561,12 @@ public sealed class DockerDaemonProbeTests
 
     private static Task PinAsync(InMemoryDaemonAttestationStore store, string daemonId)
     {
-        return store.WriteAsync(new DockerDaemonAttestation
+        return store.WriteAsync(Pin(daemonId));
+    }
+
+    private static DockerDaemonAttestation Pin(string daemonId)
+    {
+        return new DockerDaemonAttestation
         {
             DaemonId = daemonId,
             Endpoint = ConfiguredEndpoint,
@@ -436,7 +574,7 @@ public sealed class DockerDaemonProbeTests
             ServerVersion = "99.0.0",
             ConfirmedAtUtc = FixedNow,
             ConfirmedByOperator = false
-        });
+        };
     }
 
     private static IDockerDaemonPreflightService Preflight(FakeDockerRuntimeClient client, InMemoryDaemonAttestationStore store)

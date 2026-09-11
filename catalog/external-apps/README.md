@@ -98,6 +98,18 @@ exact manifest they were shown, so **never hand-edit it and never hand-edit a ma
 instead. `build_catalog.manifest_fingerprint` is importable for tooling that has to re-fingerprint a mutated
 manifest.
 
+## `manifestVersion`
+
+**Bump it in the same edit that changes a manifest.** `manifestSha256` is recomputed by the build, but the
+version is what reaches an instance that is already installed: `ExternalAppService.UpdateAsync` treats a target
+whose `manifestVersion` is not greater than the stored one as a no-op, so a manifest edited without a bump
+changes fresh installs only and every existing instance keeps running on its stored snapshot — an operator who
+presses Update is told it worked and nothing happens.
+
+The build enforces it. `build_catalog.check_version_bumps` compares each rebuilt manifest against the document
+committed at `HEAD` and fails when a fingerprint moved while its `manifestVersion` stood still. The baseline is
+`HEAD`, not the file on disk, so rebuilding several times while authoring one change never asks for a second bump.
+
 The Python and C# implementations are two independent pieces of code producing one contract, and
 `OdysseusSeedManifestTests.Seed_EveryManifest_MatchesTheFingerprintTheConverterWrote` is the **sole** proof that they
 agree: it recomputes `ExternalAppManifestFingerprint.Compute` over every shipped manifest and compares it to the value

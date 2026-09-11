@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 /// <summary>
 ///     The admission gate: has this machine the memory and the disk to take one more application.
@@ -15,7 +16,7 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     either: two installs started in the same second can both pass, which is a deliberate simplification for a
 ///     single-user desktop node rather than an oversight.
 /// </remarks>
-internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDataDirectory dataDirectory)
+internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDataDirectory dataDirectory, IFreeSpaceProbe freeSpace)
 {
     /// <summary>Headroom above the manifest's own minimum, so an install does not leave the box with nothing to spare.</summary>
     internal const long MemoryHeadroomBytes = 512L * 1024 * 1024;
@@ -25,6 +26,7 @@ internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDa
 
     private readonly IRuntimeDeviceAudit _audit = audit ?? throw new ArgumentNullException(nameof(audit));
     private readonly INodeDataDirectory _dataDirectory = dataDirectory ?? throw new ArgumentNullException(nameof(dataDirectory));
+    private readonly IFreeSpaceProbe _freeSpace = freeSpace ?? throw new ArgumentNullException(nameof(freeSpace));
 
     public async Task<ExternalAppResourceVerdict> EvaluateAsync(ApplicationManifest manifest, string? instanceRoot, CancellationToken ct = default)
     {
@@ -68,29 +70,26 @@ internal sealed class ExternalAppResourceGate(IRuntimeDeviceAudit audit, INodeDa
     }
 
     /// <summary>
-    ///     Free space on the volume the instance directory actually lives on, because the hardware profile measures
-    ///     the models volume and the two are routinely different disks.
+    ///     Free space where the instance directory will live, because the hardware profile measures the models
+    ///     volume and the two are routinely different disks. The probe resolves the filesystem — the instance
+    ///     directory does not exist yet on the admission path, so it measures the closest existing ancestor.
     /// </summary>
     /// <remarks>
-    ///     A zero falls back as hard as an exception does. On a UNC path or inside a container bind,
-    ///     <c>DriveInfo</c> returns nonsense rather than throwing, and "could not measure" must never be shown to a
-    ///     user as "your disk is full".
+    ///     A zero falls back as hard as an exception does. On a UNC path or inside a container bind the measurement
+    ///     returns nonsense rather than throwing, and "could not measure" must never be shown to a user as "your
+    ///     disk is full".
     /// </remarks>
-    private static long MeasureFreeDisk(string instanceRoot, long profileFallback)
+    private long MeasureFreeDisk(string instanceRoot, long profileFallback)
     {
         try
         {
-            var root = Path.GetPathRoot(Path.GetFullPath(instanceRoot));
-            if (!string.IsNullOrWhiteSpace(root))
+            var available = _freeSpace.GetAvailableFreeBytes(instanceRoot);
+            if (available > 0)
             {
-                var available = new DriveInfo(root).AvailableFreeSpace;
-                if (available > 0)
-                {
-                    return available;
-                }
+                return available;
             }
         }
-        catch (Exception exception) when (exception is ArgumentException or IOException or UnauthorizedAccessException)
+        catch (Exception exception) when (exception is ArgumentException or InvalidOperationException or IOException or UnauthorizedAccessException)
         {
             // Fall through to the profile figure below.
         }

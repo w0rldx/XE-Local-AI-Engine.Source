@@ -10,6 +10,7 @@ import {
 	CUSTOM_TOOL_NAME_PREFIX,
 	type CustomToolFormValues,
 	customToolFormSchema,
+	storedSecretRowNames,
 } from "@/features/customTools/models/CustomToolModels";
 
 // Imperative handle so the host dialog can place Save in its sticky footer yet still trigger validate-then-submit.
@@ -195,10 +196,22 @@ export function CustomToolForm({
 
 			<Divider />
 
+			{/* The stored-secret names come from the INITIAL values, so a cleared row keeps its warning when the kind
+			    switch unmounts and rebuilds the editor. */}
 			{values.kind === "HttpFetch" ? (
-				<HttpEditor values={values} errors={errors} update={update} />
+				<HttpEditor
+					values={values}
+					errors={errors}
+					update={update}
+					storedSecrets={storedSecretRowNames(initialValues.http.headers)}
+				/>
 			) : (
-				<CommandEditor values={values} errors={errors} update={update} />
+				<CommandEditor
+					values={values}
+					errors={errors}
+					update={update}
+					storedSecrets={storedSecretRowNames(initialValues.command.env)}
+				/>
 			)}
 
 			<Divider />

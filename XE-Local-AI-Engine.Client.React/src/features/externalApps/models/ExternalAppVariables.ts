@@ -4,7 +4,7 @@
 // Client validation is a COURTESY. The server validates again and its 400 names the offending variables, so nothing
 // here is a gate: it only saves a round trip and puts the message next to the field.
 
-import { type ExternalAppVariableView, EXTERNAL_APP_SECRET_SENTINEL } from "@/features/externalApps/models/ExternalAppModels";
+import { EXTERNAL_APP_SECRET_SENTINEL, type ExternalAppVariableView } from "@/features/externalApps/models/ExternalAppModels";
 
 /**
  * A variable definition is the WIRE view, not a second local interface. Both previews and
@@ -52,6 +52,16 @@ export function initialVariableValues(
 		values[name] = stored?.[name] ?? definition.default ?? "";
 	}
 	return values;
+}
+
+/**
+ * The names the node reports a stored secret for, read off the MASKED values it answered with. The form's own values
+ * cannot answer this once a secret is cleared (the pending clear carries ""), so the boxes are told from here.
+ */
+export function storedSecretNames(stored: ExternalAppVariableValues | undefined): readonly string[] {
+	return Object.entries(stored ?? {})
+		.filter(([, value]) => value === EXTERNAL_APP_SECRET_SENTINEL)
+		.map(([name]) => name);
 }
 
 /**

@@ -492,3 +492,62 @@ def test_two_builds_of_the_repository_tree_produce_identical_bytes() -> None:
 
 def test_check_reports_the_committed_document_as_up_to_date() -> None:
     assert build_catalog.main(["--check"]) == 0
+
+
+def _committed(manifest_version: int, fingerprint: str) -> str:
+    return json.dumps(
+        {
+            "schemaVersion": 1,
+            "applications": [
+                {"id": "fixture", "manifestVersion": manifest_version, build_catalog.HASH_KEY: fingerprint}
+            ],
+        }
+    )
+
+
+def test_a_changed_manifest_that_kept_its_version_is_refused() -> None:
+    """The drift this rule exists for: UpdateAsync is a no-op when the target version is not greater, so a
+    manifest edited without a bump reaches fresh installs only and every installed instance keeps its snapshot."""
+    rebuilt = [{"id": "fixture", "manifestVersion": 1, build_catalog.HASH_KEY: "b" * 64}]
+
+    with pytest.raises(build_catalog.CatalogBuildError, match="manifestVersion stayed at 1"):
+        build_catalog.check_version_bumps(rebuilt, _committed(1, "a" * 64))
+
+
+def test_a_changed_manifest_that_bumped_its_version_is_accepted() -> None:
+    rebuilt = [{"id": "fixture", "manifestVersion": 2, build_catalog.HASH_KEY: "b" * 64}]
+
+    build_catalog.check_version_bumps(rebuilt, _committed(1, "a" * 64))
+
+
+def test_an_unchanged_manifest_needs_no_bump() -> None:
+    """Every build re-runs this rule, so a rebuild that changed nothing must not ask for a version it does not
+    need -- otherwise the version would climb once per build."""
+    rebuilt = [{"id": "fixture", "manifestVersion": 1, build_catalog.HASH_KEY: "a" * 64}]
+
+    build_catalog.check_version_bumps(rebuilt, _committed(1, "a" * 64))
+
+
+def test_an_application_the_baseline_does_not_carry_is_new() -> None:
+    rebuilt = [{"id": "added-today", "manifestVersion": 1, build_catalog.HASH_KEY: "b" * 64}]
+
+    build_catalog.check_version_bumps(rebuilt, _committed(1, "a" * 64))
+
+
+def test_without_a_baseline_there_is_nothing_to_compare_against() -> None:
+    """A checkout that is not a git repository, or a document not in HEAD yet. The rule has no baseline; it must
+    say so by passing rather than by inventing one from the file on disk, which the build itself just wrote."""
+    rebuilt = [{"id": "fixture", "manifestVersion": 1, build_catalog.HASH_KEY: "b" * 64}]
+
+    build_catalog.check_version_bumps(rebuilt, committed=None)
+
+
+def test_the_baseline_is_the_catalog_document_committed_at_head() -> None:
+    """The baseline has to come from HEAD and not from the file on disk, which the build itself overwrites:
+    rebuilding twice while authoring one change would otherwise demand a second bump for the same edit. This
+    asserts the git read actually resolves -- a wrong ref or path spelling returns None and silently disables
+    the rule."""
+    committed = build_catalog.committed_document()
+
+    assert committed is not None, "The committed catalog document could not be read from HEAD."
+    assert all(build_catalog.HASH_KEY in application for application in json.loads(committed)["applications"])

@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
+import { getErrorStatus } from "@/core/api/errors/RetryClassification";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
 import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { toast } from "@/core/ui/notifications/Toast";
@@ -22,10 +23,15 @@ import { PermissionsPanel } from "@/features/externalApps/components/Permissions
 import { UpdateDialog } from "@/features/externalApps/components/UpdateDialog";
 import { VariablesForm } from "@/features/externalApps/components/VariablesForm";
 import { useExternalAppHub } from "@/features/externalApps/hooks/useExternalAppHub";
-import { toExternalAppFailureCategory, toExternalAppStatus } from "@/features/externalApps/models/ExternalAppModels";
+import {
+	isExternalAppConfigurable,
+	toExternalAppFailureCategory,
+	toExternalAppStatus,
+} from "@/features/externalApps/models/ExternalAppModels";
 import {
 	type ExternalAppVariableValues,
 	initialVariableValues,
+	storedSecretNames,
 	validateExternalAppVariables,
 } from "@/features/externalApps/models/ExternalAppVariables";
 import {
@@ -61,7 +67,12 @@ export function ExternalAppInstanceDetailPage({ instanceId }: ExternalAppInstanc
 	const live = useExternalAppHub(instanceId);
 	const instanceQuery = useExternalAppInstance(instanceId, { pollIntervalMs: live.pollIntervalMs });
 	const runtimeQuery = useExternalAppRuntime();
-	const instance = instanceQuery.data;
+	// A 404 is the only answer that means the row is GONE, and the query keeps its last data across a failed refetch:
+	// after an uninstall settled with this page open, the hub-triggered re-read 404d and the deleted application stayed
+	// on screen, frozen at `Uninstalling`. Every other failure leaves what was last read standing, which is right —
+	// a node that briefly refused is not a reason to blank a page. 404 never retries (`shouldRetryQuery`).
+	const missing = getErrorStatus(instanceQuery.error) === 404;
+	const instance = missing ? undefined : instanceQuery.data;
 
 	if (instanceQuery.isLoading) {
 		return (
@@ -213,11 +224,12 @@ function DetailRow({ label, value, testId }: { label: string; value: string; tes
 }
 
 /**
- * The settings of a stopped instance. The variable definitions come from `instance.manifest`, never the catalog.
+ * The settings of a settled instance. The variable definitions come from `instance.manifest`, never the catalog.
  *
  * The tab echoes the `version` it rendered as `expectedVersion` on every save: a stale token is a 409 that toasts and
  * invalidates, so the next save carries a fresh one. A saved change takes effect on the next start, which is why the
- * instance must be stopped to make one.
+ * container must not be running to make one — `isExternalAppConfigurable` is the single place that rule lives, and it
+ * mirrors what `ExternalAppService.ConfigureAsync` admits (`Failed` included, or a bad setting could not be repaired).
  */
 function SettingsTab({ instance }: { instance: NonNullable<ReturnType<typeof useExternalAppInstance>["data"]> }) {
 	const { t } = useTranslation();
@@ -231,10 +243,10 @@ function SettingsTab({ instance }: { instance: NonNullable<ReturnType<typeof use
 	const [seededFingerprint, setSeededFingerprint] = useState<string | null>(null);
 	const fingerprint = String(instance.manifestVersion ?? 0);
 	const issues = validateExternalAppVariables(definitions, values);
-	const stopped = toExternalAppStatus(instance.status) === "Stopped";
+	const configurable = isExternalAppConfigurable(toExternalAppStatus(instance.status));
 	// The whole form is locked while the save is in flight: the node answers with the masked instance and the success
 	// handler replaces every value with it, so a keystroke landing mid-flight was silently thrown away.
-	const locked = !stopped || save.isPending;
+	const locked = !configurable || save.isPending;
 
 	// Seeded once per INSTALLED MANIFEST, so a poll or an invalidation never discards what was typed. An Update that
 	// lands while this tab is open declares different variables, so the values are reconciled against them the same way
@@ -284,7 +296,7 @@ function SettingsTab({ instance }: { instance: NonNullable<ReturnType<typeof use
 
 	return (
 		<Stack gap="md" data-testid="external-app-detail-settings">
-			{stopped ? null : (
+			{configurable ? null : (
 				<Text size="sm" c="dimmed" data-testid="external-app-detail-settings-stopped-only">
 					{t("pages.externalApps.variables.stoppedOnly")}
 				</Text>
@@ -293,6 +305,7 @@ function SettingsTab({ instance }: { instance: NonNullable<ReturnType<typeof use
 				definitions={definitions}
 				values={values}
 				issues={issues}
+				storedSecrets={storedSecretNames(instance.variables ?? undefined)}
 				disabled={locked}
 				onChange={(name, value) => setValues((previous) => ({ ...previous, [name]: value }))}
 			/>

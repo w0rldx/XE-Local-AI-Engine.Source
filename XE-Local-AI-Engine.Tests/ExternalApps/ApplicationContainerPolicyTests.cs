@@ -119,6 +119,43 @@ public sealed class ApplicationContainerPolicyTests
             static violation => violation.Contains("seccomp", StringComparison.Ordinal));
     }
 
+    /// <summary>
+    ///     A container whose confinement was switched off names both options. Reuse and boot adoption read this
+    ///     verdict, so "the option is mentioned" is not evidence that the protection is on.
+    /// </summary>
+    [Test]
+    public void FindViolations_WhenSeccompCameBackUnconfined_ReportsIt()
+    {
+        var specification = Specification();
+        var observed = Inspection(specification) with
+        {
+            SecurityOptions = [ApplicationContainerPolicy.NoNewPrivileges, DockerSeccompProfile.OptionPrefix + DockerSeccompProfile.Unconfined]
+        };
+
+        AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("seccomp", StringComparison.Ordinal));
+    }
+
+    [Test]
+    public void FindViolations_WhenNoNewPrivilegesCameBackFalse_ReportsIt()
+    {
+        var specification = Specification();
+        var observed = Inspection(specification) with { SecurityOptions = ["no-new-privileges:false", "seccomp=profile.json"] };
+
+        AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
+    }
+
+    /// <summary>The accepted set is symmetric with what the specification writes, plus the daemon's bare rendering.</summary>
+    [Test]
+    public void FindViolations_AcceptsTheHardenedRenderingsOfBothOptions()
+    {
+        var specification = Specification();
+
+        AssertEx.Contains(specification.SecurityOptions, static option => string.Equals(option, ApplicationContainerPolicy.NoNewPrivileges, StringComparison.Ordinal));
+        AssertEx.Empty(Violations(specification, Inspection(specification)));
+        AssertEx.Empty(Violations(specification,
+            Inspection(specification) with { SecurityOptions = ["no-new-privileges", "seccomp=profile.json"] }));
+    }
+
     [Test]
     public void FindViolations_WhenTheContainerIsPrivilegedOrHasADevice_ReportsIt()
     {

@@ -262,17 +262,6 @@ public sealed class ExternalAppValidationException : Exception
         Names = [];
     }
 
-    /// <summary>
-    ///     The admission refusals — GPU, capabilities, runtime, resources — which carry WHY as a value rather than
-    ///     only inside the message. The prose is for a log; the API layer renders the label from the enum, so that
-    ///     rendering cannot drift with a reworded sentence.
-    /// </summary>
-    public ExternalAppValidationException(string message, ExternalAppBlockedReason reason) : base(message)
-    {
-        Names = [];
-        Reason = reason;
-    }
-
     public ExternalAppValidationException(string message, Exception innerException) : base(message, innerException)
     {
         Names = [];
@@ -285,7 +274,4 @@ public sealed class ExternalAppValidationException : Exception
 
     /// <summary>The names that were rejected, in declaration order.</summary>
     public IReadOnlyList<string> Names { get; }
-
-    /// <summary>Why admission refused, or <see langword="null" /> for an ordinary value-level rejection.</summary>
-    public ExternalAppBlockedReason? Reason { get; }
 }

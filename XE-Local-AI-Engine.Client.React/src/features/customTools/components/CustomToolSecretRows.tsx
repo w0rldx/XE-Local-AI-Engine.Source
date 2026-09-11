@@ -2,6 +2,7 @@ import { ActionIcon, Button, Checkbox, Group, Stack, Text, TextInput } from "@ma
 import { IconPlus, IconTrash } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
+import { StoredSecretInput } from "@/core/ui/components/StoredSecretInput/StoredSecretInput";
 import { useEditableRowKeys } from "@/features/customTools/components/CustomToolEditorShared";
 import { CUSTOM_TOOL_SECRET_SENTINEL, type SecretRow } from "@/features/customTools/models/CustomToolModels";
 
@@ -11,15 +12,28 @@ interface SecretRowsProps {
 	emptyLabel: string;
 	testid: string;
 	rows: readonly SecretRow[];
+	/** Row names the node already stores a secret for; a row cleared in this session still counts, its value is "". */
+	storedSecrets: readonly string[];
 	onAdd: () => void;
 	onRemove: (index: number) => void;
 	onPatch: (index: number, patch: Partial<SecretRow>) => void;
 }
 
-// Shared name/value/isSecret row editor for HTTP headers and command env. A stored secret comes back as the sentinel;
-// the row shows a "stored" hint and leaves it in place so an unedited save keeps the secret. Editing the value replaces
-// it. Marking a fresh row secret only affects how it is stored — the value input stays plain (operator on own node).
-export function CustomToolSecretRows({ title, addLabel, emptyLabel, testid, rows, onAdd, onRemove, onPatch }: SecretRowsProps) {
+// Shared name/value/isSecret row editor for HTTP headers and command env. A secret row's value box is the shared
+// `StoredSecretInput`: a stored secret comes back as the sentinel, shows a "stored" hint, survives an unedited save, and
+// is removed only through that control's explicit Clear. Marking a fresh row secret only affects how it is stored — the
+// value input stays plain (operator on own node).
+export function CustomToolSecretRows({
+	title,
+	addLabel,
+	emptyLabel,
+	testid,
+	rows,
+	storedSecrets,
+	onAdd,
+	onRemove,
+	onPatch,
+}: SecretRowsProps) {
 	const { t } = useTranslation();
 	const { rowKeys, appendRowKey, removeRowKey } = useEditableRowKeys(rows.length);
 	const addRow = (): void => {
@@ -47,7 +61,6 @@ export function CustomToolSecretRows({ title, addLabel, emptyLabel, testid, rows
 				</Text>
 			) : null}
 			{rows.map((row, index) => {
-				const isStoredSecret = row.isSecret && row.value === CUSTOM_TOOL_SECRET_SENTINEL;
 				return (
 					<Group key={rowKeys[index]} gap="xs" align="flex-start" data-testid={`${testid}-row-${index}`}>
 						<TextInput
@@ -57,17 +70,26 @@ export function CustomToolSecretRows({ title, addLabel, emptyLabel, testid, rows
 							style={{ flex: "2 1 140px" }}
 							data-testid={`${testid}-name-${index}`}
 						/>
-						<TextInput
-							placeholder={
-								isStoredSecret
-									? t("pages.customTools.form.secretRows.storedPlaceholder", "•••• stored — leave to keep")
-									: t("pages.customTools.form.secretRows.valuePlaceholder", "Value")
-							}
-							value={isStoredSecret ? "" : row.value}
-							onChange={(event) => onPatch(index, { value: event.currentTarget.value })}
-							style={{ flex: "3 1 200px" }}
-							data-testid={`${testid}-value-${index}`}
-						/>
+						{row.isSecret ? (
+							<StoredSecretInput
+								stored={storedSecrets.includes(row.name)}
+								sentinel={CUSTOM_TOOL_SECRET_SENTINEL}
+								value={row.value}
+								onChange={(value) => onPatch(index, { value })}
+								storedPlaceholder={t("pages.customTools.form.secretRows.storedPlaceholder", "•••• stored — leave to keep")}
+								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								style={{ flex: "3 1 200px" }}
+								data-testid={`${testid}-value-${index}`}
+							/>
+						) : (
+							<TextInput
+								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								value={row.value}
+								onChange={(event) => onPatch(index, { value: event.currentTarget.value })}
+								style={{ flex: "3 1 200px" }}
+								data-testid={`${testid}-value-${index}`}
+							/>
+						)}
 						<Checkbox
 							label={t("pages.customTools.form.secretRows.secret", "Secret")}
 							checked={row.isSecret}
