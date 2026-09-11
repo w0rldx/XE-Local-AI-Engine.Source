@@ -27,4 +27,13 @@ public class ConflictProblemDetails : ProblemDetails
     [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
     [JsonPropertyName("standingDecision")]
     public string? StandingDecision { get; set; }
+
+    /// <summary>
+    ///     Set for <c>ExternalAppPermissionChangeRequiresAcknowledgement</c>: the permission names the new manifest
+    ///     adds, from the fixed vocabulary <c>ExternalAppEffectivePermissions.Diff</c> produces. The SPA renders them
+    ///     in the acknowledgement dialog; the server owns the diff, so this is never a list the client computes.
+    /// </summary>
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    [JsonPropertyName("addedPermissions")]
+    public IReadOnlyList<string>? AddedPermissions { get; set; }
 }

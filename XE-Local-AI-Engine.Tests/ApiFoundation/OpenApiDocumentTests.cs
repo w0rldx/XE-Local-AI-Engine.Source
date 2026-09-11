@@ -31,6 +31,31 @@ public sealed class OpenApiDocumentTests
         ("/api/local/v1/work-sessions/{sessionId}/messages", ["post"])
     ];
 
+    // The whole external-apps REST surface: 18 distinct paths carrying 20 operations. Both numbers are DERIVED from
+    // this table below, so neither can be asserted wrong, and the table is what proves the generated client does not
+    // depend on whether the node that produced the spec had the feature on.
+    private static readonly (string Path, string[] Verbs)[] ExternalAppPaths =
+    [
+        ("/api/local/v1/external-apps/runtime", ["get"]),
+        ("/api/local/v1/external-apps/runtime/refresh", ["post"]),
+        ("/api/local/v1/external-apps/catalog", ["get"]),
+        ("/api/local/v1/external-apps/catalog/refresh", ["post"]),
+        ("/api/local/v1/external-apps/catalog/{applicationId}", ["get"]),
+        ("/api/local/v1/external-apps/catalog/{applicationId}/install-preview", ["get"]),
+        ("/api/local/v1/external-apps/instances", ["get", "post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}", ["get", "delete"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/update-preview", ["get"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/start", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/stop", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/restart", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/reset", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/update", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/cancel", ["post"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/variables", ["put"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/events", ["get"]),
+        ("/api/local/v1/external-apps/instances/{instanceId}/logs", ["get"])
+    ];
+
     // operationIds drive the generated hey-api React SDK function names. They must be clean, lower-camelCase,
     // and namespace-free — never the FastEndpoints default (e.g. "xeLocalAiEngineClientEndpoints...Endpoint").
     private static readonly Regex CleanCamelCase = new("^[a-z][A-Za-z0-9]*$", RegexOptions.Compiled | RegexOptions.CultureInvariant);
@@ -367,6 +392,74 @@ public sealed class OpenApiDocumentTests
     }
 
     /// <summary>
+    ///     External apps ship with <c>ExternalApps:Enabled</c> false, so the interesting half is the disabled node: the
+    ///     routes and the hub are mapped unconditionally and only behaviour is gated, which is what lets one generated
+    ///     hey-api client describe every node rather than only the ones that had the feature switched on.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DescribesExternalAppSurface_WhenTheFeatureIsDisabled()
+    {
+        await using var disabledFactory = new TestServerWebAppFactory
+        {
+            AdditionalConfiguration = new Dictionary<string, string?>(StringComparer.Ordinal)
+            {
+                ["ExternalApps:Enabled"] = "false"
+            }
+        };
+
+        using var client = disabledFactory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+
+        AssertExternalAppPaths(document.RootElement.GetProperty("paths"));
+
+        // Proof the overlay actually took: the same client gets the disabled node's 404 from the request-path
+        // middleware. Without this the test would pass identically on a factory whose configuration never applied.
+        using var probe = await client.GetAsync("/api/local/v1/external-apps/catalog").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.NotFound, probe.StatusCode, "A disabled node must refuse the route the document still describes.");
+    }
+
+    /// <summary>
+    ///     The uninstall reads <c>expectedVersion</c> from the QUERY, and the document has to say so. It described a
+    ///     request body instead, so the generated client sent the version where the endpoint never looks and every
+    ///     delete it made would have 400d on the presence rule. Endpoint tests cannot catch this: they build the
+    ///     request themselves. The control is the POST beside it, whose version genuinely is a body member.
+    /// </summary>
+    [Test]
+    public async Task LocalOpenApiDocument_DeclaresTheUninstallExpectedVersionAsAQueryParameter()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        var uninstall = paths.GetProperty("/api/local/v1/external-apps/instances/{instanceId}").GetProperty("delete");
+        var parameters = uninstall.GetProperty("parameters")
+                                  .EnumerateArray()
+                                  .Select(static parameter => (Name: parameter.GetProperty("name").GetString(),
+                                      In: parameter.GetProperty("in").GetString()))
+                                  .ToArray();
+
+        AssertEx.Contains(parameters,
+            static parameter => parameter is { Name: "expectedVersion", In: "query" },
+            $"The uninstall's version is a query parameter; declared = [{string.Join(", ", parameters.Select(static parameter => $"{parameter.Name}:{parameter.In}"))}].");
+        AssertEx.False(uninstall.TryGetProperty("requestBody", out _),
+            "A DELETE that declares a body makes the generated client send the version where the endpoint never reads it.");
+
+        // The control: start takes the same version in a POST body, so a spec that moved everything to the query
+        // would fail here rather than pass both halves.
+        var start = paths.GetProperty("/api/local/v1/external-apps/instances/{instanceId}/start").GetProperty("post");
+        AssertEx.True(start.TryGetProperty("requestBody", out _), "start sends expectedVersion in its body.");
+    }
+
+    /// <summary>
     ///     The update contracts' requiredness, which is not a formality: the generated client types a request body off
     ///     these arrays, so a member in the wrong bucket ships a caller that either omits a mandatory field or is made
     ///     to invent one. Both were wrong here, and for opposite reasons — <c>version</c> is required by the endpoint
@@ -484,6 +577,21 @@ public sealed class OpenApiDocumentTests
             AssertEx.False(declared.Contains(member, StringComparer.Ordinal),
                 $"{schemaSuffix}.{member} means \"leave it alone\" when omitted, so it must not be required; required = [{string.Join(", ", declared)}].");
         }
+    }
+
+    private static void AssertExternalAppPaths(JsonElement paths)
+    {
+        foreach (var (path, verbs) in ExternalAppPaths)
+        {
+            AssertEx.True(paths.TryGetProperty(path, out var pathItem), $"Expected external-apps path '{path}'.");
+            foreach (var verb in verbs)
+            {
+                AssertEx.True(pathItem.TryGetProperty(verb, out _), $"Expected {verb.ToUpperInvariant()} {path}.");
+            }
+        }
+
+        AssertEx.Equal(expected: 18, ExternalAppPaths.Length, "the family is 18 distinct paths.");
+        AssertEx.Equal(expected: 20, ExternalAppPaths.Sum(static entry => entry.Verbs.Length), "carrying 20 operations.");
     }
 
     private static void AssertWorkSessionPaths(JsonElement paths)

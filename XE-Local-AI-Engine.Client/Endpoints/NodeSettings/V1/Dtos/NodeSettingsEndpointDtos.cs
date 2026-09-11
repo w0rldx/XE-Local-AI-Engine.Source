@@ -117,6 +117,14 @@ public sealed record NodeSettingsResponse
     /// <summary>KV-cache element type for GPU chat spawns: <c>f16</c> | <c>q8_0</c> | <c>q4_0</c>. Null means the node default.</summary>
     public string? KvCacheType { get; init; }
 
+    /// <summary>
+    ///     Which container runtime External Apps resolves against: <c>auto</c> picks the one this node can reach,
+    ///     <c>docker</c> pins it. A STRING, not an enum, so a JSON number is rejected by type before any validator runs
+    ///     and the generated client models it as a plain string. The resolver never switches provider on its own, so
+    ///     this is the only node-wide choice; an instance may still carry its own override.
+    /// </summary>
+    public string ContainerRuntimeSelection { get; init; } = StoredNodeSettings.DefaultContainerRuntimeSelection;
+
     public string? SpeculativeDraftModelName { get; init; }
 
     public int? SpeculativeDraftMaxTokens { get; init; }
@@ -272,6 +280,13 @@ public sealed record SaveNodeSettingsRequest
     ///     every frozen inference profile on this node.
     /// </summary>
     public string? KvCacheType { get; init; }
+
+    /// <summary>
+    ///     Which container runtime External Apps resolves against: <c>auto</c> or <c>docker</c>, case-insensitive.
+    ///     <see langword="null" /> keeps the current stored value, like every other member of this partial update. A
+    ///     STRING, not an enum: a JSON number cannot bind to it, so an undefined selection can never be persisted.
+    /// </summary>
+    public string? ContainerRuntimeSelection { get; init; }
 
     public string? SpeculativeDraftModelName { get; init; }
 

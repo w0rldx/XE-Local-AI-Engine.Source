@@ -20,6 +20,9 @@ public sealed class DockerDaemonPreflightServiceTests
 {
     private static readonly DateTimeOffset FixedNow = new(year: 2026, month: 7, day: 29, hour: 9, minute: 30, second: 0, TimeSpan.Zero);
 
+    /// <summary>Every value an operator can hide in an endpoint, in the three components that can hold one.</summary>
+    private static readonly string[] Secrets = ["hunter2", "sekrit-9f3a", "frag-sentinel-4d1c"];
+
     [Test]
     public async Task InspectAsync_OnFirstUse_PinsTheDaemonAndReportsReady()
     {
@@ -271,7 +274,98 @@ public sealed class DockerDaemonPreflightServiceTests
         AssertEx.Contains(option, "SCMP_ACT_ERRNO");
     }
 
-    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, InMemoryAttestationStore Store) CreateService(ContainerSandboxOptions? options = null)
+    [Test]
+    public async Task InspectAsync_WhenThePinOnDiskCarriesCredentials_NamesTheHostAndNeverTheSecret()
+    {
+        // The case the write-side redaction cannot reach. New pins are written through DockerDaemonEndpoint.Display,
+        // but a pin written before that existed holds whatever DOCKER_HOST held — and tcp://user:secret@host is a
+        // value an operator can set. It comes back off disk into the identity-change message and into the Development
+        // Mode API response, so it has to be redacted on the way IN: refusing an endpoint while echoing its
+        // credential discloses the secret in the course of declining to use it.
+        var root = Path.Combine(Path.GetTempPath(), "xe-daemon-attestation-" + Guid.NewGuid().ToString("N"));
+
+        try
+        {
+            var file = Path.Combine(root, DockerDaemonAttestationStore.DirectoryName, DockerDaemonAttestationStore.FileName);
+            Directory.CreateDirectory(Path.GetDirectoryName(file)!);
+            await File.WriteAllTextAsync(file,
+                """
+                {
+                  "daemonId": "daemon-legacy",
+                  "endpoint": "tcp://operator:hunter2@docker.remote:2375/?token=sekrit-9f3a#frag-sentinel-4d1c",
+                  "endpointSource": 1,
+                  "serverVersion": "28.0.0",
+                  "confirmedAtUtc": "2026-07-01T00:00:00+00:00",
+                  "confirmedByOperator": true
+                }
+                """);
+
+            using var store = new DockerDaemonAttestationStore(new FakeNodeDataDirectory(root),
+                NullLogger<DockerDaemonAttestationStore>.Instance);
+
+            var pinned = AssertEx.NotNull(await store.ReadAsync());
+            AssertEx.Contains(pinned.Endpoint, "docker.remote:2375");
+            foreach (var secret in Secrets)
+            {
+                AssertEx.False(pinned.Endpoint.Contains(secret, StringComparison.Ordinal),
+                    $"The pin came back off disk carrying '{secret}': '{pinned.Endpoint}'.");
+            }
+
+            var (service, _, _) = CreateService(attestationStore: store);
+
+            // daemon-alpha answers and the pin names daemon-legacy, which is the one state that renders the pinned
+            // endpoint to the operator.
+            var preflight = await service.InspectAsync();
+
+            AssertEx.Equal(DockerDaemonPreflightStatus.DaemonIdentityChanged, preflight.Status);
+            AssertEx.Contains(preflight.Message, "docker.remote:2375");
+            foreach (var secret in Secrets)
+            {
+                AssertEx.False(preflight.Message.Contains(secret, StringComparison.Ordinal),
+                    $"The identity-change message disclosed '{secret}', which it is refusing to use: {preflight.Message}");
+            }
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    [Test]
+    [Arguments("unix:///fake.sock?token=sekrit-9f3a", "a query string")]
+    [Arguments("unix:///fake.sock#frag-sentinel-4d1c", "a fragment")]
+    [Arguments("tcp://someone:sekrit-9f3a@docker.remote:2375", "user information")]
+    public async Task InspectAsync_WhenTheConfiguredEndpointCarriesASecret_RefusesItAndNamesOnlyTheComponent(string configured,
+        string component)
+    {
+        // Development Mode renders its endpoint into the message on this page, into the log line and into the pin it
+        // would write, so an endpoint holding a secret has to be refused before a client exists rather than after the
+        // probe. The query and fragment cases are the ones no other check catches: unix:///fake.sock is a LOCAL
+        // socket, so nothing else about it is refusable.
+        var (service, _, store) = CreateService(DockerSandboxHardeningTests.Options() with
+        {
+            DaemonEndpoint = configured
+        });
+
+        var preflight = await service.InspectAsync();
+
+        AssertEx.Equal(DockerDaemonPreflightStatus.NotConfigured, preflight.Status);
+        AssertEx.False(preflight.Ready);
+        AssertEx.Contains(preflight.Message, component);
+        foreach (var secret in Secrets)
+        {
+            AssertEx.False(preflight.Message.Contains(secret, StringComparison.Ordinal),
+                $"The refusal disclosed '{secret}' in the course of declining to use it: {preflight.Message}");
+        }
+
+        // Refused rather than pinned: a daemon this node will not talk to must not become the daemon it approved, and
+        // the pin is where a secret would have been written to disk.
+        AssertEx.Null(await store.ReadAsync());
+    }
+
+    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, IDockerDaemonAttestationStore Store) CreateService(
+        ContainerSandboxOptions? options = null,
+        IDockerDaemonAttestationStore? attestationStore = null)
     {
         var resolved = options ?? DockerSandboxHardeningTests.Options() with
         {
@@ -280,7 +374,7 @@ public sealed class DockerDaemonPreflightServiceTests
         var endpoint = new DockerDaemonEndpoint(new Uri("unix:///fake.sock"), DockerDaemonEndpointSource.Configuration);
         var client = new FakeDockerRuntimeClient(endpoint,
             new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
-        var store = new InMemoryAttestationStore();
+        var store = attestationStore ?? new InMemoryAttestationStore();
 
         var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(resolved),
             new SingleClientFactory(client),

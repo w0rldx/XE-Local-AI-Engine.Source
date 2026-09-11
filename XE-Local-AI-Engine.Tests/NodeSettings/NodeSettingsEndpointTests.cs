@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
+using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -812,6 +813,124 @@ public sealed class NodeSettingsEndpointTests
             }
         });
         AssertEx.True(valid.IsValid);
+    }
+
+    [Test]
+    public void NodeSettings_ContainerRuntimeSelection_RoundTripsThroughMapper()
+    {
+        // The mapper is the meeting point: the wire and the store share ONE spelling (the parser's), so a supplied
+        // value is normalized once, an omitted field keeps what is stored, and an unparseable stored value reads back
+        // as the default instead of handing the SPA a string nothing can parse.
+        var stored = new SaveNodeSettingsRequest
+        {
+            ContainerRuntimeSelection = "DOCKER"
+        }.ToStoredSettings(new StoredNodeSettings());
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, stored.ContainerRuntimeSelection);
+
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, stored.ToResponse().ContainerRuntimeSelection);
+
+        var merged = new SaveNodeSettingsRequest().ToStoredSettings(stored);
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, merged.ContainerRuntimeSelection);
+
+        var junk = new StoredNodeSettings
+        {
+            ContainerRuntimeSelection = "podman"
+        }.ToResponse();
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Auto, junk.ContainerRuntimeSelection);
+
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Auto, new StoredNodeSettings().ToResponse().ContainerRuntimeSelection);
+    }
+
+    [Test]
+    public void NodeSettings_ContainerRuntimeSelection_IsAStringOnBothDtos()
+    {
+        // The enum is kept OFF the wire on purpose: a string member cannot bind a JSON number, so an undefined
+        // selection can never be persisted. A later "tidy-up" back to the enum type fails here.
+        var responseMember = AssertEx.NotNull(typeof(NodeSettingsResponse).GetProperty(nameof(NodeSettingsResponse.ContainerRuntimeSelection)));
+        var requestMember = AssertEx.NotNull(typeof(SaveNodeSettingsRequest).GetProperty(nameof(SaveNodeSettingsRequest.ContainerRuntimeSelection)));
+
+        AssertEx.Equal(typeof(string), responseMember.PropertyType);
+        AssertEx.Equal(typeof(string), requestMember.PropertyType);
+    }
+
+    [Test]
+    public async Task GetNodeSettings_ReportsTheStoredContainerRuntimeSelection()
+    {
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            ContainerRuntimeSelection = ContainerRuntimeSelectionParser.Docker
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Get, "/api/local/v1/node-settings");
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, settings.ContainerRuntimeSelection);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenContainerRuntimeSelectionIsMixedCase_PersistsTheCanonicalSpelling()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new
+        {
+            containerRuntimeSelection = "DOCKER"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(ContainerRuntimeSelectionParser.Docker, settings.ContainerRuntimeSelection);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).ContainerRuntimeSelection == ContainerRuntimeSelectionParser.Docker),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenContainerRuntimeSelectionIsUnknown_ReturnsValidationProblem()
+    {
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new
+        {
+            containerRuntimeSelection = "Podman"
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        AssertEx.Contains(body, "containerRuntimeSelection", StringComparison.Ordinal);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenContainerRuntimeSelectionIsANumber_IsRejectedByType()
+    {
+        // The whole reason the enum stayed off the wire: JsonStringEnumConverter rejects an unknown STRING but binds
+        // any JSON integer, which would reach Format and persist a value nothing can parse back.
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new
+        {
+            containerRuntimeSelection = 7
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceiveWithAnyArgs().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
     }
 
     [Test]

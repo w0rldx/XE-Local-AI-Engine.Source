@@ -237,6 +237,38 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
     }
 
     [Test]
+    [Arguments("auto", "auto")]
+    [Arguments("Docker", "docker")]
+    [Arguments("  DOCKER  ", "docker")]
+    public async Task ContainerRuntimeSelection_Known_IsStoredInItsCanonicalSpelling(string stored, string expected)
+    {
+        // The persisted spelling has to be the one the API carries and the engine parses, or the same selection reads
+        // back differently depending on which layer wrote it.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ContainerRuntimeSelection = stored
+        });
+
+        AssertEx.Equal(expected, loaded.ContainerRuntimeSelection);
+    }
+
+    [Test]
+    [Arguments("podman")]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task ContainerRuntimeSelection_Unknown_FallsBackToNull(string selection)
+    {
+        // Null means "the default", which the resolver reads as auto. A hand-edited settings file must not be able to
+        // persist a selection nothing can resolve.
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ContainerRuntimeSelection = selection
+        });
+
+        AssertEx.Null(loaded.ContainerRuntimeSelection);
+    }
+
+    [Test]
     [Arguments("not-a-real-mode")]
     [Arguments("draft-bogus")]
     public async Task SpeculativeMode_Unknown_FallsBackToNull(string mode)
@@ -450,6 +482,27 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         var loaded = await LoadAsync();
 
         AssertEx.Null(loaded.DetachedGraceSeconds);
+    }
+
+    [Test]
+    [Arguments("auto", true)]
+    [Arguments("docker", true)]
+    [Arguments("Docker", true)]
+    [Arguments("  AUTO  ", true)]
+    [Arguments("kubernetes", false)]
+    [Arguments("podman", false)]
+    [Arguments("", false)]
+    [Arguments("   ", false)]
+    [Arguments(null, false)]
+    public void IsValidContainerRuntimeSelection_AcceptsOnlyTheNamesTheEngineKnows(string? value, bool expected)
+    {
+        // The boundary predicate the settings surface calls before it stores a selection. It delegates to the parser
+        // so the stored, wire and engine spellings have one authority — which is exactly the delegation that stops
+        // being checked the moment nothing asserts it, leaving an allow-list free to drift from the parser it claims
+        // to mirror. Casing and surrounding whitespace are accepted because an operator types this; a name the engine
+        // has no runtime for is not, and neither is blank: "no selection" is the field being absent, not present and
+        // empty.
+        AssertEx.Equal(expected, StoredNodeSettings.IsValidContainerRuntimeSelection(value));
     }
 
     [Test]

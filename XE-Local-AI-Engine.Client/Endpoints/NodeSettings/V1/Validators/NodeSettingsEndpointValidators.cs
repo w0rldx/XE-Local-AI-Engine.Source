@@ -70,6 +70,14 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => !string.IsNullOrWhiteSpace(request.KvCacheType))
             .WithMessage("Unknown KV cache type.");
 
+        // The parser IS the allow-list — one producer, so the accepted set cannot drift from the spelling Format
+        // writes — and it is case-insensitive, so a hand-written client's "Docker" is accepted and normalized while
+        // "Podman" answers 400. A blank string is rejected rather than treated as "keep": only an absent member keeps.
+        RuleFor(static request => request.ContainerRuntimeSelection)
+            .Must(StoredNodeSettings.IsValidContainerRuntimeSelection)
+            .When(static request => request.ContainerRuntimeSelection is not null)
+            .WithMessage("Unknown container runtime selection. Use 'auto' or 'docker'.");
+
         RuleFor(static request => request.SpeculativeDraftMaxTokens!.Value)
             .InclusiveBetween(StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens)
             .When(static request => request.SpeculativeDraftMaxTokens is not null);

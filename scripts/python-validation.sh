@@ -9,7 +9,7 @@
 #   style     ruff format --check + ruff check
 #   types     pyrefly check
 #   tests     pytest with the coverage options from pyproject.toml
-#   security  bandit over tools/training and scripts
+#   security  bandit over tools/training, scripts and catalog/external-apps/tools
 #   changed   auto-detect scope from git diff against --base (default develop)
 #   full      deps, then style/types/tests/security in parallel
 #
@@ -31,7 +31,7 @@ mkdir -p "${LOG_DIR}"
 
 PARALLEL="true"
 LOG_RETENTION="${VALIDATE_LOG_RETENTION:-10}"
-PY_ROOTS=(tools/training scripts)
+PY_ROOTS=(tools/training scripts catalog/external-apps/tools)
 
 log() { echo "[python-validate] $*"; }
 
@@ -205,6 +205,11 @@ scope_changed() {
     case "${file}" in
       pyproject.toml|uv.lock|scripts/python-validation.sh|.gitignore) run_full=true ;;
       tools/training/*.py|scripts/*.py) run_py=true ;;  # bash case globs cross "/" — this covers nested dirs
+      # The catalog converter's inputs and outputs are data, not Python: an edited compose.yml,
+      # variables.json, manifest.overrides.json or dist/applications.json is exactly what the drift,
+      # fingerprint and byte-identity tests exist to catch, and a *.py arm alone would miss all of it.
+      catalog/*) run_py=true ;;
+      XE-Local-AI-Engine.Client.Application/Services/ExternalApps/Catalog/external-apps-catalog.seed.json) run_py=true ;;
     esac
   done <<< "${changed_files}"
 
@@ -236,7 +241,7 @@ Scopes:
   style     ruff format --check + ruff check
   types     pyrefly check
   tests     pytest with coverage from pyproject.toml
-  security  bandit over tools/training and scripts
+  security  bandit over tools/training, scripts and catalog/external-apps/tools
   changed   auto-detect scope from git diff (--base defaults to develop)
   full      deps, then style/types/tests/security
 

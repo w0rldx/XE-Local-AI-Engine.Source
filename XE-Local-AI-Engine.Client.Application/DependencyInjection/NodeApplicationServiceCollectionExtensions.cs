@@ -65,6 +65,16 @@ public static class NodeApplicationServiceCollectionExtensions
         // Development Mode concern, not an AgentHome one.
         builder.AddNodeContainerSandbox(configuration);
 
+        // Immediately after AddNodeContainerSandbox, which registers the daemon-attestation singleton the resolver
+        // takes. The order across the whole feature is AddNodeContainerSandbox -> AddNodeContainerRuntime ->
+        // AddNodeExternalAppsCatalog -> AddNodeExternalApps. Nothing here is resolved on the startup path.
+        builder.AddNodeContainerRuntime(configuration);
+        builder.AddNodeExternalAppsCatalog(configuration);
+
+        // Last of the four, and the only one with hosted services: the boot reconciler and the state observer take
+        // the resolver the previous module registered and the catalog the one before it did.
+        builder.AddNodeExternalApps(configuration);
+
         // BEFORE AddNodeModelRuntime, which registers the external multiplexer provider only when an
         // IExternalProviderRegistry is already in the collection. That is a registration-time check, so a later
         // registry would ship a node on which no ext: model can route.

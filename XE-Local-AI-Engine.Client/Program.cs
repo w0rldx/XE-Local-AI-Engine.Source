@@ -67,6 +67,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.Auth;
     using XE_Local_AI_Engine.Client.Services.Development;
     using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+    using XE_Local_AI_Engine.Client.Services.ExternalApps;
     using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
     using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.Proxy;
@@ -322,6 +323,7 @@ namespace XE_Local_AI_Engine.Client
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
             var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
+            var areExternalAppsEnabled = builder.Configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -599,6 +601,26 @@ namespace XE_Local_AI_Engine.Client
                 });
             }
 
+            if (!areExternalAppsEnabled)
+            {
+                // The external-apps family holds the same posture as the three blocks above. Its endpoints and its hub
+                // stay DISCOVERED with the feature off, so the OpenAPI document — and the client generated from it — is
+                // identical on every node; only behaviour is gated, and it is gated here. The prefix check covers the
+                // hub's negotiate too, since that path shares the family's first segment, and sitting ahead of local API
+                // security and authentication is what makes the switch answer 404 before anything can answer 401 or 403.
+                var externalAppsPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.ExternalApps.Root}");
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments(externalAppsPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next(context).ConfigureAwait(false);
+                });
+            }
+
             app.UseMiddleware<LocalApiSecurityMiddleware>();
             app.UseRouting();
             // Skipped in the Testing environment, where the permit limits are relaxed to non-limits anyway (see
@@ -687,6 +709,12 @@ namespace XE_Local_AI_Engine.Client
             // above, which answers 404 for the whole prefix — this path included.
             app.MapHub<GraphWorkflowRunHub>(LocalApiRoutes.GraphWorkflows.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+
+            // And for external apps: ExternalApps:Enabled is enforced by the request-path middleware above, which
+            // answers 404 for the whole prefix — this path and its negotiate included.
+            app.MapHub<ExternalAppHub>(LocalApiRoutes.ExternalApps.Hub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+
             if (isDevelopmentModeEnabled)
             {
                 app.MapHub<DevelopmentAttemptHub>(LocalApiRoutes.Development.Hub)

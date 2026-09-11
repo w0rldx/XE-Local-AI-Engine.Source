@@ -296,6 +296,7 @@ internal static class McpAdminWireNames
             NodeSettingsField.LlamaMaxLoadedProcesses => "llama_max_loaded_processes",
             NodeSettingsField.KeepModelWarmIntervalSeconds => "keep_model_warm_interval_seconds",
             NodeSettingsField.AutoEffortFastModelName => "auto_effort_fast_model_name",
+            NodeSettingsField.ContainerRuntimeSelection => "container_runtime_selection",
             _ => throw new ArgumentOutOfRangeException(nameof(field), field, "Unknown node-settings field.")
         };
 

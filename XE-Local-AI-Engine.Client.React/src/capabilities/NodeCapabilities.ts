@@ -79,6 +79,12 @@ export interface NodeCapabilityConfig {
 	// Open Canvas was removed). The node ALSO has its own `GraphWorkflows:Enabled` switch, which 404s the API — this
 	// flag only decides whether the surface is offered.
 	readonly graphWorkflows: boolean;
+	// External Apps: a curated catalog of applications XE installs and supervises on this computer, their installed
+	// instances and one detail page per instance. Gates the nav group and all four /external-apps routes. The node
+	// ALSO has its own `ExternalApps:Enabled` switch, which 404s the API and the hub negotiate — this flag only
+	// decides whether the surface is OFFERED, and it is compile-time: the backend switch can neither reveal these
+	// routes nor hide them. On since S5 flipped it ahead of its live browser round.
+	readonly externalApps: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -163,6 +169,10 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	integrations: true,
 	// On since S4: the editor and the run view are verified end to end, so the surface is offered by default.
 	graphWorkflows: true,
+	// On since S5: the capability is compile-time, so the live browser round cannot reach the catalog, the installed
+	// list or a detail page until it is true. Flipped BEFORE the round; the backend `ExternalApps:Enabled` default
+	// follows it, after the round has passed on this tree.
+	externalApps: true,
 };
 
 export const nodeRoutePaths = {
@@ -212,6 +222,11 @@ export const nodeRoutePaths = {
 	// Graph Workflows editor + run view — gated on nodeCapabilities.graphWorkflows (on by default). One route; the
 	// definition, run, node and tab selections live in its search params.
 	graphWorkflows: "/graph-workflows",
+	// External Apps — gated on nodeCapabilities.externalApps. The bare /external-apps prefix has no
+	// entry: its index route redirects to the catalog, so a Catalog nav link on /external-apps would stay highlighted
+	// on Installed and on every detail route. The detail route is /external-apps/instances/{instanceId}.
+	externalApps: "/external-apps/catalog",
+	externalAppsInstalled: "/external-apps/installed",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;

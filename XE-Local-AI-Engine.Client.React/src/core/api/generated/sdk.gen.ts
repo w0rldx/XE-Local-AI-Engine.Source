@@ -63,6 +63,9 @@ import type {
 	CancelEvaluationData,
 	CancelEvaluationErrors,
 	CancelEvaluationResponses,
+	CancelExternalAppOperationData,
+	CancelExternalAppOperationErrors,
+	CancelExternalAppOperationResponses,
 	CancelGgufDownloadData,
 	CancelGgufDownloadErrors,
 	CancelGgufDownloadResponses,
@@ -501,6 +504,24 @@ import type {
 	GetEvaluationData,
 	GetEvaluationErrors,
 	GetEvaluationResponses,
+	GetExternalAppCatalogApplicationData,
+	GetExternalAppCatalogApplicationErrors,
+	GetExternalAppCatalogApplicationResponses,
+	GetExternalAppInstallPreviewData,
+	GetExternalAppInstallPreviewErrors,
+	GetExternalAppInstallPreviewResponses,
+	GetExternalAppInstanceData,
+	GetExternalAppInstanceErrors,
+	GetExternalAppInstanceLogsData,
+	GetExternalAppInstanceLogsErrors,
+	GetExternalAppInstanceLogsResponses,
+	GetExternalAppInstanceResponses,
+	GetExternalAppRuntimeData,
+	GetExternalAppRuntimeErrors,
+	GetExternalAppRuntimeResponses,
+	GetExternalAppUpdatePreviewData,
+	GetExternalAppUpdatePreviewErrors,
+	GetExternalAppUpdatePreviewResponses,
 	GetExternalProviderConnectionData,
 	GetExternalProviderConnectionErrors,
 	GetExternalProviderConnectionResponses,
@@ -687,6 +708,9 @@ import type {
 	InspectImageRepositoryData,
 	InspectImageRepositoryErrors,
 	InspectImageRepositoryResponses,
+	InstallExternalAppData,
+	InstallExternalAppErrors,
+	InstallExternalAppResponses,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileErrors,
 	InvalidateInferenceProfileResponses,
@@ -774,6 +798,15 @@ import type {
 	ListEvaluationsData,
 	ListEvaluationsErrors,
 	ListEvaluationsResponses,
+	ListExternalAppCatalogData,
+	ListExternalAppCatalogErrors,
+	ListExternalAppCatalogResponses,
+	ListExternalAppInstanceEventsData,
+	ListExternalAppInstanceEventsErrors,
+	ListExternalAppInstanceEventsResponses,
+	ListExternalAppInstancesData,
+	ListExternalAppInstancesErrors,
+	ListExternalAppInstancesResponses,
 	ListExternalProviderConnectionsData,
 	ListExternalProviderConnectionsErrors,
 	ListExternalProviderConnectionsResponses,
@@ -958,6 +991,12 @@ import type {
 	ReconnectDevelopmentRepositoryData,
 	ReconnectDevelopmentRepositoryErrors,
 	ReconnectDevelopmentRepositoryResponses,
+	RefreshExternalAppCatalogData,
+	RefreshExternalAppCatalogErrors,
+	RefreshExternalAppCatalogResponses,
+	RefreshExternalAppRuntimeData,
+	RefreshExternalAppRuntimeErrors,
+	RefreshExternalAppRuntimeResponses,
 	RefreshModelCatalogData,
 	RefreshModelCatalogErrors,
 	RefreshModelCatalogResponses,
@@ -1006,12 +1045,18 @@ import type {
 	ReorderBenchmarkTaskItemsData,
 	ReorderBenchmarkTaskItemsErrors,
 	ReorderBenchmarkTaskItemsResponses,
+	ResetExternalAppData,
+	ResetExternalAppErrors,
+	ResetExternalAppResponses,
 	ResolveToolApprovalData,
 	ResolveToolApprovalErrors,
 	ResolveToolApprovalResponses,
 	ResolveUserQuestionData,
 	ResolveUserQuestionErrors,
 	ResolveUserQuestionResponses,
+	RestartExternalAppData,
+	RestartExternalAppErrors,
+	RestartExternalAppResponses,
 	ResumeDevWorkflowRunData,
 	ResumeDevWorkflowRunErrors,
 	ResumeDevWorkflowRunResponses,
@@ -1096,6 +1141,9 @@ import type {
 	StartDevWorkflowRunData,
 	StartDevWorkflowRunErrors,
 	StartDevWorkflowRunResponses,
+	StartExternalAppData,
+	StartExternalAppErrors,
+	StartExternalAppResponses,
 	StartGgufDownloadData,
 	StartGgufDownloadErrors,
 	StartGgufDownloadResponses,
@@ -1126,6 +1174,9 @@ import type {
 	StartWorkSessionData,
 	StartWorkSessionErrors,
 	StartWorkSessionResponses,
+	StopExternalAppData,
+	StopExternalAppErrors,
+	StopExternalAppResponses,
 	SuggestComparisonData,
 	SuggestComparisonErrors,
 	SuggestComparisonResponses,
@@ -1135,6 +1186,9 @@ import type {
 	UnhandledExceptionProbeData,
 	UnhandledExceptionProbeErrors,
 	UnhandledExceptionProbeResponses,
+	UninstallExternalAppData,
+	UninstallExternalAppErrors,
+	UninstallExternalAppResponses,
 	UnloadLocalModelData,
 	UnloadLocalModelErrors,
 	UnloadLocalModelResponses,
@@ -1165,6 +1219,12 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemErrors,
 	UpdateDevWorkflowWorkItemResponses,
+	UpdateExternalAppData,
+	UpdateExternalAppErrors,
+	UpdateExternalAppResponses,
+	UpdateExternalAppVariablesData,
+	UpdateExternalAppVariablesErrors,
+	UpdateExternalAppVariablesResponses,
 	UpdateGraphWorkflowDefinitionData,
 	UpdateGraphWorkflowDefinitionErrors,
 	UpdateGraphWorkflowDefinitionResponses,
@@ -1259,6 +1319,7 @@ import {
 	zCancelDevWorkflowRunResponse,
 	zCancelEvaluationPath,
 	zCancelEvaluationResponse,
+	zCancelExternalAppOperationPath,
 	zCancelGgufDownloadBody,
 	zCancelGgufDownloadResponse,
 	zCancelGgufImportPath,
@@ -1552,6 +1613,18 @@ import {
 	zGetDevWorkflowWorkItemResponse,
 	zGetEvaluationPath,
 	zGetEvaluationResponse,
+	zGetExternalAppCatalogApplicationPath,
+	zGetExternalAppCatalogApplicationResponse,
+	zGetExternalAppInstallPreviewPath,
+	zGetExternalAppInstallPreviewResponse,
+	zGetExternalAppInstanceLogsPath,
+	zGetExternalAppInstanceLogsQuery,
+	zGetExternalAppInstanceLogsResponse,
+	zGetExternalAppInstancePath,
+	zGetExternalAppInstanceResponse,
+	zGetExternalAppRuntimeResponse,
+	zGetExternalAppUpdatePreviewPath,
+	zGetExternalAppUpdatePreviewResponse,
 	zGetExternalProviderConnectionPath,
 	zGetExternalProviderConnectionResponse,
 	zGetGgufDownloadOperationStatusPath,
@@ -1657,6 +1730,8 @@ import {
 	zInspectGgufRepositoryResponse,
 	zInspectImageRepositoryQuery,
 	zInspectImageRepositoryResponse,
+	zInstallExternalAppBody,
+	zInstallExternalAppResponse,
 	zInvalidateInferenceProfileBody,
 	zInvalidateInferenceProfileResponse,
 	zListAgentDefinitionsResponse,
@@ -1710,6 +1785,11 @@ import {
 	zListEligibleBenchmarkModelsResponse,
 	zListEvaluationsQuery,
 	zListEvaluationsResponse,
+	zListExternalAppCatalogResponse,
+	zListExternalAppInstanceEventsPath,
+	zListExternalAppInstanceEventsQuery,
+	zListExternalAppInstanceEventsResponse,
+	zListExternalAppInstancesResponse,
 	zListExternalProviderConnectionsResponse,
 	zListGoldenConversationsPath,
 	zListGoldenConversationsResponse,
@@ -1826,6 +1906,9 @@ import {
 	zReconnectDevelopmentRepositoryBody,
 	zReconnectDevelopmentRepositoryPath,
 	zReconnectDevelopmentRepositoryResponse,
+	zRefreshExternalAppCatalogResponse,
+	zRefreshExternalAppRuntimeBody,
+	zRefreshExternalAppRuntimeResponse,
 	zRefreshModelCatalogResponse,
 	zRefreshRecommendationsBody,
 	zRefreshRecommendationsResponse,
@@ -1857,10 +1940,16 @@ import {
 	zReorderBenchmarkTaskItemsBody,
 	zReorderBenchmarkTaskItemsPath,
 	zReorderBenchmarkTaskItemsResponse,
+	zResetExternalAppBody,
+	zResetExternalAppPath,
+	zResetExternalAppResponse,
 	zResolveToolApprovalBody,
 	zResolveToolApprovalResponse,
 	zResolveUserQuestionBody,
 	zResolveUserQuestionResponse,
+	zRestartExternalAppBody,
+	zRestartExternalAppPath,
+	zRestartExternalAppResponse,
 	zResumeDevWorkflowRunBody,
 	zResumeDevWorkflowRunPath,
 	zResumeDevWorkflowRunResponse,
@@ -1926,6 +2015,9 @@ import {
 	zStartDevWorkflowRunBody,
 	zStartDevWorkflowRunPath,
 	zStartDevWorkflowRunResponse,
+	zStartExternalAppBody,
+	zStartExternalAppPath,
+	zStartExternalAppResponse,
 	zStartGgufDownloadBody,
 	zStartGgufDownloadResponse,
 	zStartGgufImportBody,
@@ -1946,11 +2038,17 @@ import {
 	zStartTrainingRuntimeInstallResponse,
 	zStartWorkSessionPath,
 	zStartWorkSessionResponse,
+	zStopExternalAppBody,
+	zStopExternalAppPath,
+	zStopExternalAppResponse,
 	zSuggestComparisonQuery,
 	zSuggestComparisonResponse,
 	zTriggerScheduledJobPath,
 	zTriggerScheduledJobResponse,
 	zUnhandledExceptionProbeResponse,
+	zUninstallExternalAppPath,
+	zUninstallExternalAppQuery,
+	zUninstallExternalAppResponse,
 	zUnloadLocalModelPath,
 	zUnloadLocalModelResponse,
 	zUpdateAgentDefinitionBody,
@@ -1980,6 +2078,12 @@ import {
 	zUpdateDevWorkflowWorkItemBody,
 	zUpdateDevWorkflowWorkItemPath,
 	zUpdateDevWorkflowWorkItemResponse,
+	zUpdateExternalAppBody,
+	zUpdateExternalAppPath,
+	zUpdateExternalAppResponse,
+	zUpdateExternalAppVariablesBody,
+	zUpdateExternalAppVariablesPath,
+	zUpdateExternalAppVariablesResponse,
 	zUpdateGraphWorkflowDefinitionBody,
 	zUpdateGraphWorkflowDefinitionPath,
 	zUpdateGraphWorkflowDefinitionResponse,
@@ -10076,6 +10180,638 @@ export const probeExternalProvider = <ThrowOnError extends boolean = false>(
 			},
 		],
 		url: "/api/local/v1/external-providers/probe",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const cancelExternalAppOperation = <ThrowOnError extends boolean = false>(
+	options: Options<CancelExternalAppOperationData, ThrowOnError>,
+): RequestResult<CancelExternalAppOperationResponses, CancelExternalAppOperationErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelExternalAppOperationResponses, CancelExternalAppOperationErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelExternalAppOperationPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/cancel",
+		...options,
+	});
+
+export const getExternalAppCatalogApplication = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalAppCatalogApplicationData, ThrowOnError>,
+): RequestResult<GetExternalAppCatalogApplicationResponses, GetExternalAppCatalogApplicationErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalAppCatalogApplicationResponses, GetExternalAppCatalogApplicationErrors, ThrowOnError>(
+		{
+			requestValidator: async (data) =>
+				await z
+					.object({
+						body: z.never().optional(),
+						path: zGetExternalAppCatalogApplicationPath,
+						query: z.never().optional(),
+					})
+					.parseAsync(data),
+			responseType: "json",
+			responseValidator: async (data) => await zGetExternalAppCatalogApplicationResponse.parseAsync(data),
+			security: [
+				{
+					key: "JWTBearerAuth",
+					scheme: "bearer",
+					type: "http",
+				},
+				{
+					key: "Bearer",
+					scheme: "bearer",
+					type: "http",
+				},
+			],
+			url: "/api/local/v1/external-apps/catalog/{applicationId}",
+			...options,
+		},
+	);
+
+export const getExternalAppInstallPreview = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalAppInstallPreviewData, ThrowOnError>,
+): RequestResult<GetExternalAppInstallPreviewResponses, GetExternalAppInstallPreviewErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalAppInstallPreviewResponses, GetExternalAppInstallPreviewErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetExternalAppInstallPreviewPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalAppInstallPreviewResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/catalog/{applicationId}/install-preview",
+		...options,
+	});
+
+export const uninstallExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<UninstallExternalAppData, ThrowOnError>,
+): RequestResult<UninstallExternalAppResponses, UninstallExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).delete<UninstallExternalAppResponses, UninstallExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zUninstallExternalAppPath,
+					query: zUninstallExternalAppQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUninstallExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}",
+		...options,
+	});
+
+export const getExternalAppInstance = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalAppInstanceData, ThrowOnError>,
+): RequestResult<GetExternalAppInstanceResponses, GetExternalAppInstanceErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalAppInstanceResponses, GetExternalAppInstanceErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetExternalAppInstancePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalAppInstanceResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}",
+		...options,
+	});
+
+export const getExternalAppInstanceLogs = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalAppInstanceLogsData, ThrowOnError>,
+): RequestResult<GetExternalAppInstanceLogsResponses, GetExternalAppInstanceLogsErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalAppInstanceLogsResponses, GetExternalAppInstanceLogsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetExternalAppInstanceLogsPath,
+					query: zGetExternalAppInstanceLogsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalAppInstanceLogsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/logs",
+		...options,
+	});
+
+export const getExternalAppRuntime = <ThrowOnError extends boolean = false>(
+	options?: Options<GetExternalAppRuntimeData, ThrowOnError>,
+): RequestResult<GetExternalAppRuntimeResponses, GetExternalAppRuntimeErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetExternalAppRuntimeResponses, GetExternalAppRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalAppRuntimeResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/runtime",
+		...options,
+	});
+
+export const getExternalAppUpdatePreview = <ThrowOnError extends boolean = false>(
+	options: Options<GetExternalAppUpdatePreviewData, ThrowOnError>,
+): RequestResult<GetExternalAppUpdatePreviewResponses, GetExternalAppUpdatePreviewErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetExternalAppUpdatePreviewResponses, GetExternalAppUpdatePreviewErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetExternalAppUpdatePreviewPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetExternalAppUpdatePreviewResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/update-preview",
+		...options,
+	});
+
+export const listExternalAppInstances = <ThrowOnError extends boolean = false>(
+	options?: Options<ListExternalAppInstancesData, ThrowOnError>,
+): RequestResult<ListExternalAppInstancesResponses, ListExternalAppInstancesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListExternalAppInstancesResponses, ListExternalAppInstancesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListExternalAppInstancesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances",
+		...options,
+	});
+
+export const installExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<InstallExternalAppData, ThrowOnError>,
+): RequestResult<InstallExternalAppResponses, InstallExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<InstallExternalAppResponses, InstallExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zInstallExternalAppBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zInstallExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listExternalAppCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<ListExternalAppCatalogData, ThrowOnError>,
+): RequestResult<ListExternalAppCatalogResponses, ListExternalAppCatalogErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListExternalAppCatalogResponses, ListExternalAppCatalogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListExternalAppCatalogResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/catalog",
+		...options,
+	});
+
+export const listExternalAppInstanceEvents = <ThrowOnError extends boolean = false>(
+	options: Options<ListExternalAppInstanceEventsData, ThrowOnError>,
+): RequestResult<ListExternalAppInstanceEventsResponses, ListExternalAppInstanceEventsErrors, ThrowOnError> =>
+	(options.client ?? client).get<ListExternalAppInstanceEventsResponses, ListExternalAppInstanceEventsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zListExternalAppInstanceEventsPath,
+					query: zListExternalAppInstanceEventsQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListExternalAppInstanceEventsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/events",
+		...options,
+	});
+
+export const refreshExternalAppCatalog = <ThrowOnError extends boolean = false>(
+	options?: Options<RefreshExternalAppCatalogData, ThrowOnError>,
+): RequestResult<RefreshExternalAppCatalogResponses, RefreshExternalAppCatalogErrors, ThrowOnError> =>
+	(options?.client ?? client).post<RefreshExternalAppCatalogResponses, RefreshExternalAppCatalogErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRefreshExternalAppCatalogResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/catalog/refresh",
+		...options,
+	});
+
+export const refreshExternalAppRuntime = <ThrowOnError extends boolean = false>(
+	options: Options<RefreshExternalAppRuntimeData, ThrowOnError>,
+): RequestResult<RefreshExternalAppRuntimeResponses, RefreshExternalAppRuntimeErrors, ThrowOnError> =>
+	(options.client ?? client).post<RefreshExternalAppRuntimeResponses, RefreshExternalAppRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRefreshExternalAppRuntimeBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRefreshExternalAppRuntimeResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/runtime/refresh",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const resetExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<ResetExternalAppData, ThrowOnError>,
+): RequestResult<ResetExternalAppResponses, ResetExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<ResetExternalAppResponses, ResetExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zResetExternalAppBody,
+					path: zResetExternalAppPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zResetExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/reset",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const restartExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<RestartExternalAppData, ThrowOnError>,
+): RequestResult<RestartExternalAppResponses, RestartExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<RestartExternalAppResponses, RestartExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRestartExternalAppBody,
+					path: zRestartExternalAppPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRestartExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/restart",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<StartExternalAppData, ThrowOnError>,
+): RequestResult<StartExternalAppResponses, StartExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartExternalAppResponses, StartExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartExternalAppBody,
+					path: zStartExternalAppPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/start",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const stopExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<StopExternalAppData, ThrowOnError>,
+): RequestResult<StopExternalAppResponses, StopExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<StopExternalAppResponses, StopExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStopExternalAppBody,
+					path: zStopExternalAppPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStopExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/stop",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const updateExternalApp = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateExternalAppData, ThrowOnError>,
+): RequestResult<UpdateExternalAppResponses, UpdateExternalAppErrors, ThrowOnError> =>
+	(options.client ?? client).post<UpdateExternalAppResponses, UpdateExternalAppErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateExternalAppBody,
+					path: zUpdateExternalAppPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateExternalAppResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/update",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const updateExternalAppVariables = <ThrowOnError extends boolean = false>(
+	options: Options<UpdateExternalAppVariablesData, ThrowOnError>,
+): RequestResult<UpdateExternalAppVariablesResponses, UpdateExternalAppVariablesErrors, ThrowOnError> =>
+	(options.client ?? client).put<UpdateExternalAppVariablesResponses, UpdateExternalAppVariablesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUpdateExternalAppVariablesBody,
+					path: zUpdateExternalAppVariablesPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUpdateExternalAppVariablesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/external-apps/instances/{instanceId}/variables",
 		...options,
 		headers: {
 			"Content-Type": "application/json",

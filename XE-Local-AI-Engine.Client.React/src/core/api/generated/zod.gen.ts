@@ -58,6 +58,7 @@ export const zXeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetai
 	z.object({
 		conflictType: z.string().nullish(),
 		standingDecision: z.string().nullish(),
+		addedPermissions: z.array(z.string()).nullish(),
 	}),
 );
 
@@ -1675,6 +1676,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 		.optional(),
 	speculativeMode: z.string().nullish(),
 	kvCacheType: z.string().nullish(),
+	containerRuntimeSelection: z.string().optional(),
 	speculativeDraftModelName: z.string().nullish(),
 	speculativeDraftMaxTokens: z
 		.int()
@@ -1832,6 +1834,7 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 		.nullish(),
 	speculativeMode: z.string().nullish(),
 	kvCacheType: z.string().nullish(),
+	containerRuntimeSelection: z.string().nullish(),
 	speculativeDraftModelName: z.string().nullish(),
 	speculativeDraftMaxTokens: z
 		.int()
@@ -4155,6 +4158,417 @@ export const zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvi
 		.nullish(),
 	models: z.array(zXeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProviderModelRequest),
 	expectedRevision: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView = z.object({
+	internet: z.boolean().optional(),
+	localNetwork: z.boolean().optional(),
+	hostFiles: z.string().optional(),
+	gpu: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView = z.object({
+	minimumMemoryMb: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	recommendedMemoryMb: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	cpuHint: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	pidsLimit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView = z.object({
+	containerPort: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	role: z.string().optional(),
+	preferredHostPort: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	openPath: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView = z.object({
+	name: z.string().optional(),
+	containerPath: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView = z.object({
+	service: z.string().optional(),
+	condition: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView = z.object({
+	name: z.string().optional(),
+	image: z.string().optional(),
+	imageTag: z.string().optional(),
+	entrypoint: z.array(z.string()).nullish(),
+	command: z.array(z.string()).nullish(),
+	environment: z.record(z.string(), z.string()).optional(),
+	ports: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView).optional(),
+	storage: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView).optional(),
+	hasHealthcheck: z.boolean().optional(),
+	dependsOn: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView).optional(),
+	capAdd: z.array(z.string()).optional(),
+	extraHosts: z.array(z.string()).optional(),
+	readOnlyRootFilesystem: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView = z.object({
+	minLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	maxLength: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	pattern: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView = z.object({
+	name: z.string().optional(),
+	label: z.string().optional(),
+	description: z.string().nullish(),
+	type: z.string().optional(),
+	required: z.boolean().optional(),
+	default: z.string().nullish(),
+	allowedValues: z.array(z.string()).nullish(),
+	advanced: z.boolean().optional(),
+	validation: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView = z.object({
+	id: z.string().optional(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	displayName: z.string().optional(),
+	summary: z.string().optional(),
+	description: z.string().optional(),
+	homepage: z.string().optional(),
+	license: z.string().optional(),
+	trust: z.string().optional(),
+	testedVersion: z.string().optional(),
+	requires: z.array(z.string()).optional(),
+	permissions: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView.optional(),
+	resources: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView.optional(),
+	services: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView).optional(),
+	variables: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView = z.object({
+	capabilities: z.array(z.string()).optional(),
+	writableRootFilesystem: z.boolean().optional(),
+	publishedPorts: z.array(z.string()).optional(),
+	extraHosts: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView = z.object({
+	internet: z.boolean().optional(),
+	hostFiles: z.string().optional(),
+	gpu: z.string().optional(),
+	localNetwork: z.boolean().optional(),
+	services: z.record(z.string(), zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView).optional(),
+	capabilities: z.array(z.string()).optional(),
+	writableRootFilesystem: z.boolean().optional(),
+	publishedPorts: z.array(z.string()).optional(),
+	extraHosts: z.array(z.string()).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView = z.object({
+	daemonId: z.string().nullish(),
+	serverVersion: z.string().nullish(),
+	endpoint: z.string().nullish(),
+	confirmedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView = z.object({
+	containers: z.boolean().optional(),
+	networks: z.boolean().optional(),
+	bindStorage: z.boolean().optional(),
+	loopbackPortPublishing: z.boolean().optional(),
+	healthChecks: z.boolean().optional(),
+	restartPolicies: z.boolean().optional(),
+	logs: z.boolean().optional(),
+	imagePull: z.boolean().optional(),
+	gpuDevices: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse = z.object({
+	provider: z.string().optional(),
+	status: z.string().optional(),
+	available: z.boolean().optional(),
+	ready: z.boolean().optional(),
+	message: z.string().optional(),
+	requiresOperatorConfirmation: z.boolean().optional(),
+	endpoint: z.string().nullish(),
+	endpointSource: z.string().nullish(),
+	observedDaemon: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView.nullish(),
+	pinnedDaemon: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView.nullish(),
+	capabilities: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView.optional(),
+	foreignInstallContainers: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView = z.object({
+	satisfied: z.boolean().optional(),
+	failureCategory: z.string().nullish(),
+	requiredMemoryBytes: z.int().optional(),
+	availableMemoryBytes: z.int().optional(),
+	requiredDiskBytes: z.int().optional(),
+	availableDiskBytes: z.int().optional(),
+	message: z.string().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstallPreview = z.object({
+	applicationId: z.string().optional(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	manifestSha256: z.string().optional(),
+	canInstall: z.boolean().optional(),
+	blockedReason: z.string().nullish(),
+	existingInstanceId: z.guid().nullish(),
+	permissions: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView.optional(),
+	effectivePermissions: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView.optional(),
+	variables: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView).optional(),
+	runtime: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse.optional(),
+	missingCapabilities: z.array(z.string()).optional(),
+	resourceCheck: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView.optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView = z.object({
+	service: z.string().optional(),
+	containerPort: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	hostPort: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	openPath: z.string().nullish(),
+	url: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView = z.object({
+	id: z.guid().optional(),
+	applicationId: z.string().optional(),
+	displayName: z.string().optional(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	status: z.string().optional(),
+	desiredState: z.string().optional(),
+	runtimeOverride: z.string().nullish(),
+	runtimeProvider: z.string().optional(),
+	manifest: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView.optional(),
+	publishedPorts: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView).optional(),
+	variables: z.record(z.string(), z.string()).optional(),
+	failureCategory: z.string().nullish(),
+	failureSummary: z.string().nullish(),
+	updateAvailable: z.boolean().optional(),
+	availableManifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	catalogMissing: z.boolean().optional(),
+	installedAtUtc: z.int().optional(),
+	startedAtUtc: z.int().nullish(),
+	stoppedAtUtc: z.int().nullish(),
+	updatedAtUtc: z.int().optional(),
+	lastSequence: z.int().optional(),
+	version: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse = z.object({
+	service: z.string().optional(),
+	text: z.string().optional(),
+	lineCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	truncated: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview = z.object({
+	applicationId: z.string().optional(),
+	instanceId: z.guid().optional(),
+	currentManifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	targetManifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	manifestSha256: z.string().optional(),
+	variables: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView).optional(),
+	currentValues: z.record(z.string(), z.string()).optional(),
+	addedPermissions: z.array(z.string()).optional(),
+	effectivePermissions: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView.optional(),
+	resourceVerdict: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView.optional(),
+	canUpdate: z.boolean().optional(),
+	blockedReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView = z.object({
+	id: z.guid().optional(),
+	applicationId: z.string().optional(),
+	displayName: z.string().optional(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	status: z.string().optional(),
+	desiredState: z.string().optional(),
+	failureCategory: z.string().nullish(),
+	failureSummary: z.string().nullish(),
+	updateAvailable: z.boolean().optional(),
+	availableManifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	catalogMissing: z.boolean().optional(),
+	updatedAtUtc: z.int().optional(),
+	version: z.int().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppRequest = z.object({
+	applicationId: z
+		.string()
+		.min(1)
+		.regex(/^[a-z][a-z0-9-]{1,40}$/),
+	displayName: z.string().min(0).max(128).nullish(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	manifestSha256: z.string(),
+	variables: z.record(z.string(), z.string()),
+	acceptPermissions: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView = z.object({
+	id: z.string().optional(),
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	displayName: z.string().optional(),
+	summary: z.string().optional(),
+	homepage: z.string().optional(),
+	license: z.string().optional(),
+	trust: z.string().optional(),
+	testedVersion: z.string().optional(),
+	requires: z.array(z.string()).optional(),
+	permissions: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView.optional(),
+	resources: zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView.optional(),
+	installedInstanceId: z.guid().nullish(),
+	installedStatus: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse = z.object({
+	schemaVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional(),
+	generatedAtUtc: z.int().optional(),
+	fetchedAtUtc: z.int().optional(),
+	fromBundledSeed: z.boolean().optional(),
+	refreshFailureMessage: z.string().nullish(),
+	lastRefreshFailure: z.string().nullish(),
+	applications: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView = z.object({
+	sequence: z.int().optional(),
+	atUtc: z.int().optional(),
+	kind: z.string().optional(),
+	detailJson: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView).optional(),
+	highestSequence: z.int().optional(),
+	hasMore: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventFeedRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest = z.object({
+	acknowledgeDaemonId: z.string().min(0).max(128).nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest = z.object({
+	expectedVersion: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1UninstallExternalAppRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppRequest = z.object({
+	manifestVersion: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	manifestSha256: z.string(),
+	acceptPermissions: z.boolean(),
+	variables: z.record(z.string(), z.string()),
+	expectedVersion: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest = z.object({
+	variables: z.record(z.string(), z.string()),
+	expectedVersion: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResponse = z.object({
@@ -9313,6 +9727,194 @@ export const zProbeExternalProviderBody = zXeLocalAiEngineClientEndpointsExterna
  * Success
  */
 export const zProbeExternalProviderResponse = zXeLocalAiEngineClientEndpointsExternalProvidersV1ExternalProviderProbeResponse;
+
+export const zCancelExternalAppOperationPath = z.object({
+	instanceId: z.guid(),
+});
+
+export const zGetExternalAppCatalogApplicationPath = z.object({
+	applicationId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalAppCatalogApplicationResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView;
+
+export const zGetExternalAppInstallPreviewPath = z.object({
+	applicationId: z.string(),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalAppInstallPreviewResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstallPreview;
+
+export const zUninstallExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+export const zUninstallExternalAppQuery = z.object({
+	expectedVersion: z.int().nullish(),
+});
+
+/**
+ * Accepted
+ */
+export const zUninstallExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zGetExternalAppInstancePath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalAppInstanceResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView;
+
+export const zGetExternalAppInstanceLogsPath = z.object({
+	instanceId: z.guid(),
+});
+
+export const zGetExternalAppInstanceLogsQuery = z.object({
+	service: z.string().nullish(),
+	tail: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalAppInstanceLogsResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse;
+
+/**
+ * Success
+ */
+export const zGetExternalAppRuntimeResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+
+export const zGetExternalAppUpdatePreviewPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetExternalAppUpdatePreviewResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview;
+
+/**
+ * Success
+ */
+export const zListExternalAppInstancesResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse;
+
+export const zInstallExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppRequest;
+
+/**
+ * Accepted
+ */
+export const zInstallExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+/**
+ * Success
+ */
+export const zListExternalAppCatalogResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse;
+
+export const zListExternalAppInstanceEventsPath = z.object({
+	instanceId: z.guid(),
+});
+
+export const zListExternalAppInstanceEventsQuery = z.object({
+	afterSequence: z.int(),
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+/**
+ * Success
+ */
+export const zListExternalAppInstanceEventsResponse =
+	zXeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse;
+
+/**
+ * Success
+ */
+export const zRefreshExternalAppCatalogResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse;
+
+export const zRefreshExternalAppRuntimeBody = zXeLocalAiEngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest;
+
+/**
+ * Success
+ */
+export const zRefreshExternalAppRuntimeResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+
+export const zResetExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+
+export const zResetExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zResetExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zRestartExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+
+export const zRestartExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zRestartExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zStartExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+
+export const zStartExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStartExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zStopExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+
+export const zStopExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zStopExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zUpdateExternalAppBody = zXeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppRequest;
+
+export const zUpdateExternalAppPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Accepted
+ */
+export const zUpdateExternalAppResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+
+export const zUpdateExternalAppVariablesBody = zXeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest;
+
+export const zUpdateExternalAppVariablesPath = z.object({
+	instanceId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUpdateExternalAppVariablesResponse = zXeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView;
 
 export const zDecideDevWorkflowNodeRunBody = zXeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest;
 

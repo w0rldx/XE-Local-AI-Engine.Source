@@ -33,6 +33,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"integrations",
+			"externalApps",
 			"preview",
 			"graphWorkflows",
 			"benchmarks",
@@ -59,6 +60,7 @@ describe("navigationLinks", () => {
 			"settings",
 			"automation",
 			"integrations",
+			"externalApps",
 			"preview",
 			"graphWorkflows",
 			"benchmarks",
@@ -117,6 +119,20 @@ describe("navigationLinks", () => {
 		// Every child carries the same capability, so the generic empty-group filter removes the whole group.
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ integrations: false });
 		expect(gatedLinks.some((link) => link.id === "integrations")).toBe(false);
+	});
+
+	it("ships the External Apps group on by default and hides it whole when the capability is compiled off", async () => {
+		const externalApps = navigationLinks.find((link) => link.id === "externalApps");
+
+		expect(externalApps?.to).toBeUndefined();
+		expect(externalApps?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.externalApps,
+			nodeRoutePaths.externalAppsInstalled,
+		]);
+
+		// Every child carries the same capability, so the generic empty-group filter removes the whole group.
+		const { navigationLinks: gatedLinks } = await mockCapabilities({ externalApps: false });
+		expect(gatedLinks.some((link) => link.id === "externalApps")).toBe(false);
 	});
 
 	it("makes each group a pure toggle (no own route) with its children carrying the routes", () => {

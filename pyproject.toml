@@ -12,7 +12,7 @@
 [project]
 name = "xe-python-tooling"
 version = "0.1.0"
-description = "Lint, type-check, test and security-scan the repository's Python (tools/training, scripts/**)."
+description = "Lint, type-check, test and security-scan the repository's Python (tools/training, scripts/**, catalog/external-apps/tools)."
 requires-python = ">=3.13"
 dependencies = []
 
@@ -25,6 +25,7 @@ dev = [
     "pyrefly>=1.0.0",
     "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
+    "pyyaml>=6.0.3",
     "ruff>=0.15.13",
 ]
 
@@ -34,7 +35,7 @@ dev = [
 include = ["*.py", "*.pyi", "**/pyproject.toml"]
 line-length = 120
 target-version = "py313"
-src = ["tools/training", "scripts"]
+src = ["tools/training", "scripts", "catalog/external-apps/tools"]
 extend-exclude = ["tools/training/.venv"]
 
 [tool.ruff.lint]
@@ -65,9 +66,9 @@ select = [
 "scripts/**/*.py" = ["S603", "S607", "S314"]
 
 [tool.pyrefly]
-project-includes = ["tools/training", "scripts"]
+project-includes = ["tools/training", "scripts", "catalog/external-apps/tools"]
 project-excludes = ["**/.venv", "**/node_modules", "**/__pycache__"]
-search-path = ["tools/training", "scripts/compliance"]
+search-path = ["tools/training", "scripts/compliance", "catalog/external-apps/tools"]
 python-version = "3.13"
 # The training scripts import the fine-tuning stack (torch/unsloth/transformers/trl/datasets),
 # which only exists inside the 7 GB provisioned runtime venv, never in this dev venv. Those
@@ -76,10 +77,17 @@ python-version = "3.13"
 replace-imports-with-any = ["unsloth", "unsloth.*", "torch", "torch.*", "transformers", "trl", "datasets"]
 
 [tool.pytest.ini_options]
-testpaths = ["tools/training", "scripts/tests", "scripts/compliance/tests", "scripts/performance/tests"]
+testpaths = [
+    "tools/training",
+    "scripts/tests",
+    "scripts/compliance/tests",
+    "scripts/performance/tests",
+    "catalog/external-apps/tools/tests",
+]
 python_files = ["test_*.py", "*.test.py"]
-pythonpath = ["tools/training"]
-addopts = "-ra --strict-markers --strict-config --import-mode=importlib --cov=tools/training --cov=scripts --cov-report=term-missing"
+# catalog/external-apps/tools so the converter tests can `import build_catalog` without a package.
+pythonpath = ["tools/training", "catalog/external-apps/tools"]
+addopts = "-ra --strict-markers --strict-config --import-mode=importlib --cov=tools/training --cov=scripts --cov=catalog/external-apps/tools --cov-report=term-missing"
 filterwarnings = [
     "error",
 ]

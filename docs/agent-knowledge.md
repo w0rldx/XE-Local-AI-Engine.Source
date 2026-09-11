@@ -55,6 +55,7 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 - `dotnet run --no-build` defaults to Debug. Pass `--configuration Release`, and inspect the `total:` line; **zero tests is never a pass**.
 - Keep the analyzer gate in `Directory.Build.targets`, not `.props`: `Configuration` is not defaulted when `.props` is imported. Verify with `dotnet msbuild <proj> -getProperty:RunAnalyzers -p:Configuration=…`.
 - `RunAnalyzers=false` skips diagnostics, not source generators; do not treat it as a TUnit-discovery switch.
+- **Four analyzer rules are silent in Debug and `error` in Release, and each one rejects a shape a reviewer would call correct.** `S3267` refuses a `foreach` that could be a `Where`, including a character scan written as a loop on purpose; `MA0022`/`S4586` refuse a method returning a bare `null` `Task`; `S1117` refuses a local that shadows a field of the same class. There is no Debug signal for any of them, so a branch that built clean all day fails at the gate. Fix the shape or suppress it in the source with the reason — never "code around it" silently. Authority: the External Apps slices S0–S3, once each.
 
 
 An incremental Release result is evidence only when projects actually compiled. Analyzer diagnostics are not replayed for skipped projects. Keep `TreatWarningsAsErrors` in Debug for compiler warnings, but do not confuse that with the analyzer wall. `XE_FULL_ANALYSIS=1` is the explicit analyzer-sensitive Debug loop. `RunAnalyzers=false` maps to csc `-skipanalyzers`; source generators still execute, so a zero-test run points to build/config/discovery, not this gate.
@@ -369,6 +370,8 @@ The MVID-keyed `/tmp/xe-local-ai-engine-tests-template-*.sqlite` cache intention
   reproduced both ways.
 - The same two variables are needed when you start the regen host BY HAND with an isolated `HOME`. Isolating `HOME` hides the trusted mise config, so mise refuses the toolchain and the host exits with a trust error **before** it ever reaches OpenAPI readiness — which reads as "the spec endpoint is broken", not as a toolchain problem. Point both at the real user paths. Authority: S5 lane A regen, 2026-09-07.
 - **A desktop-mode host ignores `--urls`.** `DesktopPortStore.ResolveBindUrl` owns the bind address in that launch mode, so the port you passed is not the port it listens on. Read the real one from `desktop-port.txt` under the isolated data directory (`scripts/openapi-live-check.sh` does exactly that) and build `OPENAPI_SPEC_URL` from it. Prevents: fetching a spec from a port nothing is bound to and concluding the document is gone.
+- **A flag-gated route family is absent from the spec unless its flag is set on the regen host.** The kill switches are request-path middleware, so a disabled family 404s and NSwag emits nothing for it; the regen then silently DELETES the whole family from the committed document. Put the flag on the regen host's own invocation (`ExternalApps__Enabled=true`, the same shape the Dev-workflow entry uses) whenever the feature you changed is one of them. Prevents: a regen that reads as a clean diff while removing every route of the feature you just added. Authority: the S3 External Apps regen, 2026-09-11.
+- **FastEndpoints binds an unannotated request member from the query anyway, so endpoint tests cannot see a wrong binding.** A member with no `[QueryParam]` on a bodyless verb is documented as a `requestBody` in the spec while the endpoint reads the query. Every endpoint test passes — they build their own request — and only the generated client, which follows the document, sends the value where nothing looks for it. Annotate the member and assert the parameter's location in `OpenApiDocumentTests`. Prevents: a 400 that reproduces only through the generated client. Authority: `UninstallExternalAppRequest.ExpectedVersion`, found by the S4 executor after S3's regen had landed.
 - **A schema that gains a `$ref` reorders NSwag's component output.** The referenced schema is emitted where it is first needed, so a spec diff can show several schemas removed at one offset and re-added at another with identical bodies. That is reordering, not loss. Verify it by comparing the PATH SETS (removals must be zero) rather than by reading the diff hunks, which is what `openapi-live-check.sh` reports. Prevents: reverting a correct regen because the diff looked destructive. Authority: the S5 regen that added `graph` to `GraphWorkflowRunResponse` — the live and committed path sets matched exactly while two graph-workflow schemas moved.
 
 - Gate behavior, not discovery, when services register independently of the flag. Work Sessions keep routes/hub mapped and return 404 ahead of auth when disabled.
@@ -497,6 +500,7 @@ A user-secret key and `.data/node.key` can disagree. `dev-start.sh` always suppl
   ```
 
 - **Graph Workflows no longer need a flag**: `GraphWorkflowOptions.Enabled` and the `Program.cs` middleware default both ship `true`. Setting `GraphWorkflows__Enabled=false` still turns the whole prefix into a 404, and a live round that wants it off must set that explicitly.
+- **External Apps is the third gate and it is asymmetric**: `appsettings.json` ships `ExternalApps:Enabled=true` while the CODE defaults (`ExternalAppsOptions.Enabled`, `Program.cs`'s `GetValue(…, defaultValue: false)`) stay `false`, so a node with missing configuration fails closed. A round on a tree from before that flip must put `ExternalApps__Enabled=true` on the `dev-start.sh` invocation itself, exactly like the two above. Turning it off does **not** stop running application containers and does **not** hide the navigation group — `nodeCapabilities.externalApps` is compile-time — so the rollback order is stop or uninstall every instance, then disable.
 
 - `AppHost.cs` forwards no such variable to the `app` resource; the flags reach the Client process as inherited process environment through `aspire` and DCP. They must therefore be on the `dev-start.sh` invocation itself, and they are read once at startup (`Program.cs`, `areDevWorkflowsEnabled`/`areGraphWorkflowsEnabled`), so changing one needs a restart.
 - `DevWorkflowOptions.Section` defaults to disabled and `GraphWorkflowOptions.Section` defaults to ENABLED; only `WorkSessions:Enabled` ships `true` in `appsettings.json`, and no `GraphWorkflows` section exists in any `appsettings*.json` (it binds to the property defaults). One pair is enforced at startup: `DevWorkflowOptionsValidator` fails the host when DevWorkflows is on with WorkSessions off, because every workflow agent node runs as a work session. GraphWorkflows carries no such coupling — `GraphWorkflowOptionsValidator` checks only its own budgets — so it starts on its own.
@@ -512,7 +516,13 @@ endpoints are `IDesktopOnlyEndpoint` and unmapped in a dev run, and desktop mode
 destroy the isolation — so extra models come from a worktree-private models dir (symlinks + a generated `index.json`),
 never by writing into the shared one. Point `XDG_DATA_HOME` at a scratch dir for any throwaway host, or source the BYO
 llama-server override (§ llama.cpp binaries) before `dev-start.sh` for a GPU round, so the instance never rewrites the
-user-level `installed-runtime.json`. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously
+user-level `installed-runtime.json`. **That scratch `XDG_DATA_HOME` must MIRROR the real one, not be empty**: mise
+installs its toolchains under it, so a bare directory breaks the `dotnet` shim and Aspire exits 7 reporting "the
+`--apphost` option specified a project that does not exist" — a toolchain failure that reads as a missing project.
+Build it as one symlink per child of `~/.local/share`, omitting only `XE-Local-AI-Engine`. **And in Aspire dev mode
+`DesktopBootstrap` does not run**, so `HuggingFace:ModelsDirectory` falls back to `AppContext.BaseDirectory/models`
+and an isolated node lists no models at all; set `HuggingFace__ModelsDirectory` on the same invocation whenever the
+round needs a model. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously
 (observed ~45 min later) — read the table, do not poll once; and `dev_workflow_*` run ids are stored UPPER-CASE while
 SQLite text `IN` is case-sensitive, so a lower-case id returns zero rows silently. **Prevents:** a wasted or voided
 live round on every item above — each one cost one during the AI-trends wave — and, before `75e0f7b60`, a fresh-DB
@@ -538,7 +548,45 @@ resolution.
 - Ollama remains a gated, opt-in secondary provider (`XE_OLLAMA_RUNTIME_ENABLED`). It was removed only from Aspire orchestration; llama.cpp is the default, not the only runtime.
 
 
-**Docker permission boundary:** on Linux, access to the Docker socket is root-equivalent. ADR 0004 documents that risk; the product neither assumes nor provisions rootless Docker. Repository-supplied container configuration is rejected wholesale—especially `devcontainer.json` and aliases—because the repository is agent-writable and therefore untrusted input. Only engine-approved images/profiles may define the container. Widening the accepted configuration surface is an operator/security decision, not plumbing.
+**Docker permission boundary:** on Linux, access to the Docker socket is root-equivalent. ADR 0004 documents that risk; the product neither assumes nor provisions rootless Docker. Repository-supplied container configuration is rejected wholesale—especially `devcontainer.json` and aliases—because the repository is agent-writable and therefore untrusted input. Only engine-approved images/profiles may define the container. Widening the accepted configuration surface is an operator/security decision, not plumbing. **There is now a second consumer class** — External Apps, [ADR 0010](adr/0010-external-apps-container-execution.md) — which uses the same socket for user-installed application containers under its own policy. It does not widen the grant, and the sandbox SPI is untouched; see the block below and `docs/wiki/23-external-apps.md`.
+
+### External Apps: container-written storage, the reserved variable prefix, and the evidence home
+
+**Rule: a container-written directory cannot be deleted by the engine under a rootless daemon, and `rm -rf` exiting 0
+is not proof that it was.** An image that runs as its own non-root in-container user (searxng's uid 977) leaves
+`0700` directories owned by a HOST uid inside the operator's `100000:65536` subuid range — not the engine's uid. The
+engine cannot traverse them, let alone unlink them. Deleting them needs in-container root **with
+`CAP_DAC_OVERRIDE`**, which means the helper container that does it must keep Docker's default capability set:
+`cap_drop ALL`, correct for every application container, silently breaks this one — the delete exits 0 having removed
+nothing but one entry. Always verify a delete by counting the entries left, never by the exit code.
+**Prevents:** an uninstall that tells the operator it "permanently deletes everything it has stored" and leaves the
+data on disk, and a reset that fails with `StorageError`. **Authority:** S5 live step 36, failing then passing across
+`e8c5e64eb`; `ExternalAppService.Pipeline.BuildStorageHelper` is the shape that works.
+
+**Rule: `XE_` is a reserved variable prefix and the engine refuses it, so a live probe named `XE_…` never reaches a
+container.** The refusal is a validation error the catalog path swallows into a fallback-to-cache, so a control that
+asserts nothing off the engine reads as a pass. Name probes without the prefix, and assert the served manifest's
+fingerprint off the engine before concluding anything from a catalog mutation. **Prevents:** a live control that
+proves the opposite of what it claims. **Authority:** S5 live step 30, caught only by the assert-off-the-engine rule.
+
+**Rule: `$` in a .NET regex also matches immediately before a trailing `\n`, so `^…$` accepts a value with a terminal
+line feed.** Use `\A…\z` for anything that validates a whole string — an id, a service name, a digest-pinned image
+reference, a hex hash. Keep `^…$` only for a scanner. The human-readable error message may still spell the rule as
+`^…$`; that is the shape, not the pattern. **Prevents:** `image@sha256:<64 hex>\n` passing a digest-pin check.
+**Authority:** the S1 catalog validator, five regexes, found in review.
+
+**Rule: the External Apps architecture guard greps the directory's RAW TEXT, comments included.** A banned Development
+Mode member name written in a comment under `Services/ExternalApps/**` fails the guard exactly like a call would,
+which is why the state observer is an `IHostedService` with its own loop rather than a `BackgroundService` — the base
+class's entry point carries one of the banned names. **Prevents:** a guard failure that looks like a false positive
+and gets suppressed. **Authority:** `ExternalAppStateObserver`, S2.
+
+**Rule: `Plans/` is `*`-ignored, so a live round's evidence cannot be committed where the plan puts it.** Decide the
+durable home before the round ends: a `docs/roadmaps/<feature>-status.md` page is not ignored and is where the step
+table, the NOT-OBSERVED reasons and the measurements belong. `git add -f` is not the answer — the ignore rule exists
+so machine-specific working notes do not become repository authorities. **Prevents:** a finished round whose only
+record disappears with the worktree. **Authority:** S5's unmade evidence commit;
+`docs/roadmaps/external-apps-status.md` is the record that replaced it.
 
 **Containment is requested and served per capability.** `SandboxContainment` is measured by doing the operation, not locating a binary. `Capabilities` advertises only mechanisms that succeeded, and `BuildLaunchPolicy` rejects requested-but-unserved controls. Do not soften either half. `SandboxNetworkPolicy.Restricted` remains unsupported; `None` means an empty namespace where served. AgentHome/Coder capability-gate the request so Windows and degraded hosts remain usable without claiming isolation.
 

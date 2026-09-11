@@ -3577,6 +3577,163 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.ToTable("development_template_materializations", (string)null);
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ExternalAppInstance", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ApplicationId")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("application_id");
+
+                    b.Property<string>("DesiredState")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("desired_state");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("display_name");
+
+                    b.Property<string>("FailureCategory")
+                        .HasMaxLength(48)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_category");
+
+                    b.Property<string>("FailureSummary")
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("failure_summary");
+
+                    b.Property<long>("InstalledAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("installed_at_utc");
+
+                    b.Property<long>("LastSequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("last_sequence");
+
+                    b.Property<string>("ManifestSnapshotJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("manifest_snapshot_json");
+
+                    b.Property<int>("ManifestVersion")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("manifest_version");
+
+                    b.Property<bool>("NeedsRecreate")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(false)
+                        .HasColumnName("needs_recreate");
+
+                    b.Property<string>("PublishedPortsJson")
+                        .IsRequired()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("published_ports_json");
+
+                    b.Property<string>("RuntimeOverride")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("runtime_override");
+
+                    b.Property<string>("RuntimeProvider")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("runtime_provider");
+
+                    b.Property<long?>("StartedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("started_at_utc");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("status");
+
+                    b.Property<long?>("StoppedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("stopped_at_utc");
+
+                    b.Property<string>("StoragePath")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("storage_path");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.Property<byte[]>("VariablesJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("variables_json");
+
+                    b.Property<long>("Version")
+                        .IsConcurrencyToken()
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("version");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ApplicationId")
+                        .HasDatabaseName("ix_external_app_instances_application");
+
+                    b.HasIndex("Status", "InstalledAtUtc")
+                        .HasDatabaseName("ix_external_app_instances_status");
+
+                    b.ToTable("external_app_instances", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ExternalAppInstanceEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("DetailJson")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("detail_json");
+
+                    b.Property<Guid>("InstanceId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("instance_id");
+
+                    b.Property<string>("Kind")
+                        .IsRequired()
+                        .HasMaxLength(32)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("kind");
+
+                    b.Property<long>("OccurredAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("occurred_at_utc");
+
+                    b.Property<long>("Sequence")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("sequence");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("InstanceId", "Sequence")
+                        .IsUnique()
+                        .HasDatabaseName("ux_external_app_instance_events_instance_sequence");
+
+                    b.ToTable("external_app_instance_events", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.GeneratedImage", b =>
                 {
                     b.Property<Guid>("ImageId")
@@ -7358,6 +7515,15 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.NodeSelectedFolder", null)
                         .WithMany()
                         .HasForeignKey("SelectedFolderId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.ExternalAppInstanceEvent", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.ExternalAppInstance", null)
+                        .WithMany()
+                        .HasForeignKey("InstanceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
                 });

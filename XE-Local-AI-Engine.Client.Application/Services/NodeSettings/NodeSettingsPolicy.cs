@@ -16,7 +16,8 @@ public enum NodeSettingsField
     KeepModelWarmModelName,
     LlamaMaxLoadedProcesses,
     KeepModelWarmIntervalSeconds,
-    AutoEffortFastModelName
+    AutoEffortFastModelName,
+    ContainerRuntimeSelection
 }
 
 /// <summary>A single cross-field violation: the offending field plus the operator-facing message.</summary>

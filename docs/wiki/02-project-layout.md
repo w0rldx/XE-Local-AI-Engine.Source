@@ -21,6 +21,13 @@ Two `.csproj` files on disk are intentionally **not** in `XE-Local-AI-Engine.sln
 - `XE-Local-AI-Engine.Client.Persistence.Tests/NegativeFence/...NegativeFence.csproj` — a compile-only "negative fence" guard project under the persistence tests folder (verified absent from `XE-Local-AI-Engine.slnx`).
 - `tools/AgentTemplateGenerator/AgentTemplateGenerator.csproj` — a standalone code/asset generator with its **own** `Directory.Build.props` so it escapes the repo-wide analyzer wall (`tools/AgentTemplateGenerator/Directory.Build.props`).
 
+One top-level folder holds source that is neither a project nor build tooling: `catalog/external-apps/` is the
+authoring source for the External Apps catalog — an upstream Compose file, a variable classification and a metadata
+override document per application, converted offline by `tools/build_catalog.py` into `dist/applications.json`.
+That generated document is copied byte-for-byte into `Client.Application/Services/ExternalApps/Catalog/` and shipped
+as an `<EmbeddedResource>`, so the bundled seed and the authoring output can never drift; a test asserts they are
+identical. Neither file is ever hand-edited. See [External Apps](23-external-apps.md).
+
 ## Project inventory
 
 Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `ProjectReference`) and, where useful, its file set.

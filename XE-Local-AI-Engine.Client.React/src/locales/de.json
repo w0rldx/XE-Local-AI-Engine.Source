@@ -141,7 +141,10 @@
 		"integrationTriggers": "Trigger",
 		"integrationSessions": "Sitzungen",
 		"integrationExecutions": "Ausführungen",
-		"integrationKeys": "API-Schlüssel"
+		"integrationKeys": "API-Schlüssel",
+		"externalAppsGroup": "Externe Apps",
+		"externalAppsCatalog": "Katalog",
+		"externalAppsInstalled": "Installiert"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -6175,6 +6178,331 @@
 					"revoke": "Der Schlüssel konnte nicht widerrufen werden.",
 					"triggersLoad": "Die Trigger-Liste konnte nicht geladen werden, daher ist die Auswahl der erlaubten Trigger leer."
 				}
+			}
+		},
+		"externalApps": {
+			"status": {
+				"Installing": "Wird installiert",
+				"Stopped": "Gestoppt",
+				"Starting": "Startet",
+				"Running": "Läuft",
+				"Stopping": "Wird gestoppt",
+				"Updating": "Wird aktualisiert",
+				"Resetting": "Wird zurückgesetzt",
+				"Uninstalling": "Wird deinstalliert",
+				"Failed": "Fehlgeschlagen",
+				"StoppedUnexpectedly": "Unerwartet gestoppt"
+			},
+			"failure": {
+				"RuntimeUnavailable": "Die Container-Laufzeit ist auf diesem Computer nicht verfügbar. Prüfen Sie die Laufzeit-Karte auf der Katalogseite.",
+				"RuntimeIncompatible": "Die Container-Laufzeit dieses Computers bietet nicht alles, was diese Anwendung benötigt.",
+				"GpuNotSupported": "Diese Anwendung benötigt eine Grafikkarte, die XE Anwendungen noch nicht bereitstellt.",
+				"InsufficientMemory": "Es ist nicht genug Arbeitsspeicher frei, um diese Anwendung auszuführen.",
+				"InsufficientDisk": "Es ist nicht genug Speicherplatz frei, um diese Anwendung zu installieren.",
+				"ImagePullFailed": "Die Anwendung konnte nicht heruntergeladen werden. Prüfen Sie Ihre Internetverbindung und versuchen Sie es erneut.",
+				"ConfigurationMissing": "Der Anwendung fehlen Einstellungen, die noch nicht ausgefüllt sind.",
+				"PolicyViolation": "XE hat den Start dieser Anwendung abgelehnt, weil sie nicht den von XE geforderten Sicherheitseinstellungen entsprach.",
+				"PortUnavailable": "Auf diesem Computer war keine freie Adresse für die Anwendung verfügbar.",
+				"HealthCheckFailed": "Die Anwendung wurde gestartet, meldete sich aber nie als bereit.",
+				"StoppedUnexpectedly": "Die Anwendung hat sich selbst beendet. Prüfen Sie die Protokolle und starten Sie sie erneut.",
+				"StorageError": "XE konnte den Speicherordner der Anwendung nicht vorbereiten.",
+				"Unknown": "Bei der Anwendung ist ein Problem aufgetreten, das XE nicht einordnen konnte. Prüfen Sie die Protokolle."
+			},
+			"runtime": {
+				"title": "Container-Laufzeit",
+				"provider": "Laufzeit: {{provider}}",
+				"refresh": "Erneut prüfen",
+				"capabilities": "Verfügbare Funktionen",
+				"missingCapabilities": "Auf diesem Computer fehlt: {{capabilities}}",
+				"foreignInstallContainers_one": "XE hat {{count}} Container einer anderen XE-Installation gefunden. XE rührt diese nicht an; entfernen Sie sie selbst, wenn Sie sie nicht mehr brauchen.",
+				"foreignInstallContainers_other": "XE hat {{count}} Container einer anderen XE-Installation gefunden. XE rührt diese nicht an; entfernen Sie sie selbst, wenn Sie sie nicht mehr brauchen.",
+				"capability": {
+					"containers": "Anwendungen in Containern ausführen",
+					"networks": "ein privates Netzwerk zwischen den Teilen einer Anwendung",
+					"bindStorage": "einer Anwendung einen eigenen Speicherordner geben",
+					"loopbackPortPublishing": "eine Adresse auf diesem Computer, unter der die Anwendung erreichbar ist",
+					"healthChecks": "prüfen, ob eine Anwendung fehlerfrei läuft",
+					"restartPolicies": "Anwendungen nach einem Neustart wieder starten",
+					"logs": "die Ausgabe einer Anwendung lesen",
+					"imagePull": "eine Anwendung herunterladen",
+					"gpuDevices": "die Grafikkarte an eine Anwendung durchreichen"
+				},
+				"acknowledgeIdentity": "Dieser Laufzeit vertrauen",
+				"acknowledgeIdentityTitle": "Der geänderten Laufzeit vertrauen?",
+				"acknowledgeIdentityDescription": "XE akzeptiert ab jetzt die Container-Laufzeit {{daemonId}}. Fahren Sie nur fort, wenn Sie sie selbst geändert haben.",
+				"checked": "Laufzeit geprüft.",
+				"checkFailed": "Die Laufzeitprüfung hat nicht funktioniert.",
+				"unavailable": "XE kann die Container-Laufzeit derzeit nicht erreichen; das Folgende ist der zuletzt bekannte Stand.",
+				"status": {
+					"Ready": "Bereit",
+					"DaemonUnreachable": "Nicht erreichbar",
+					"PermissionDenied": "Keine Berechtigung",
+					"ApiVersionTooOld": "Version zu alt",
+					"DaemonIdentityChanged": "Identität geändert",
+					"NotConfigured": "Nicht eingerichtet",
+					"ProbeFailed": "Prüfung fehlgeschlagen"
+				},
+				"hint": {
+					"Ready": "Die Container-Laufzeit läuft und XE kann sie erreichen.",
+					"DaemonUnreachable": "XE kann die Container-Laufzeit nicht erreichen. Starten Sie Docker und prüfen Sie erneut.",
+					"PermissionDenied": "XE darf auf diesem Computer nicht mit der Container-Laufzeit sprechen.",
+					"ApiVersionTooOld": "Die installierte Container-Laufzeit ist zu alt für XE. Aktualisieren Sie Docker und prüfen Sie erneut.",
+					"DaemonIdentityChanged": "Die Container-Laufzeit auf diesem Computer ist nicht die, der XE zuvor vertraut hat. Bestätigen Sie, dass dies erwartet ist.",
+					"NotConfigured": "Auf diesem Computer ist keine Container-Laufzeit eingerichtet. Installieren Sie Docker, um Externe Apps zu nutzen.",
+					"ProbeFailed": "Die Laufzeitprüfung wurde nicht abgeschlossen. Versuchen Sie es erneut."
+				}
+			},
+			"permissions": {
+				"title": "Was diese Anwendung erhält",
+				"networkTitle": "Netzwerkzugriff",
+				"grantedTitle": "Sie erhält",
+				"deniedTitle": "Sie erhält nicht",
+				"internet": "Internetzugang — ja",
+				"localNetwork": "Lokales Netzwerk — diese Anwendung kann Dienste auf diesem Computer (etwa den lokalen Modellserver von XE) und andere Geräte in Ihrem Netzwerk erreichen",
+				"storage": "Einen eigenen, von XE verwalteten Speicherordner",
+				"hostFiles": {
+					"none": "Keinen Zugriff auf Ihre persönlichen Dateien",
+					"read": "Lesezugriff auf die von Ihnen gewählten Dateien",
+					"readWrite": "Lese- und Schreibzugriff auf die von Ihnen gewählten Dateien"
+				},
+				"gpu": {
+					"none": "Keinen Zugriff auf die Grafikkarte",
+					"optional": "Nutzung der Grafikkarte, sofern eine verfügbar ist",
+					"required": "Nutzung der Grafikkarte"
+				},
+				"loopbackOnly": "Nur von diesem Computer erreichbar",
+				"noXeData": "Keinen Zugriff auf Ihre XE-Daten, Modelle oder Unterhaltungen",
+				"noDevices": "Keinen Zugriff auf angeschlossene Geräte",
+				"changedTitle": "Dieses Update verlangt mehr Zugriff",
+				"changedDescription": "Die neue Version möchte zusätzlich zu dem, was Sie bereits erlaubt haben, Folgendes.",
+				"added": {
+					"internet": "Zugang zum Internet",
+					"localNetwork": "Zugriff auf andere Geräte in Ihrem Netzwerk",
+					"hostFiles": "Mehr Zugriff auf Ihre persönlichen Dateien",
+					"gpu": "Nutzung der Grafikkarte",
+					"capabilities": "Zusätzliche Systemberechtigungen",
+					"writableRootFilesystem": "Die Erlaubnis, eigene Programmdateien zu ändern",
+					"publishedPorts": "Eine weitere Adresse auf diesem Computer",
+					"extraHosts": "Zusätzliche Namenseinträge für diesen Computer"
+				},
+				"effective": {
+					"title": "Was jeder Bestandteil erhält",
+					"part": "Bestandteil: {{name}}",
+					"none": "Nichts über das oben Genannte hinaus"
+				}
+			},
+			"variables": {
+				"title": "Einstellungen",
+				"empty": "Diese Anwendung benötigt keine Einstellungen.",
+				"advanced": "Erweiterte Einstellungen",
+				"storedSecret": "•••• gespeichert — leer lassen, um es zu behalten",
+				"save": "Einstellungen speichern",
+				"saved": "Einstellungen gespeichert.",
+				"saveFailed": "Die Einstellungen konnten nicht gespeichert werden.",
+				"stoppedOnly": "Stoppen Sie die Anwendung, um ihre Einstellungen zu ändern.",
+				"issues": {
+					"required": "{{label}} ist erforderlich.",
+					"minLength": "{{label}} muss mindestens {{min}} Zeichen lang sein.",
+					"maxLength": "{{label}} darf höchstens {{max}} Zeichen lang sein.",
+					"pattern": "{{label}} hat ein unerwartetes Format.",
+					"integer": "{{label}} muss eine ganze Zahl sein.",
+					"allowedValues": "{{label}} muss einer dieser Werte sein: {{values}}."
+				}
+			},
+			"catalog": {
+				"title": "Externe Apps",
+				"subtitle": "Anwendungen, die XE für Sie auf diesem Computer installieren und ausführen kann.",
+				"loading": "Anwendungen werden geladen…",
+				"empty": "Es sind noch keine Anwendungen verfügbar.",
+				"refresh": "Katalog aktualisieren",
+				"refreshed": "Katalog aktualisiert.",
+				"refreshFailed": "Der Katalog konnte nicht aktualisiert werden.",
+				"refreshFailureNotice": "Es werden die mit XE gelieferten Anwendungen angezeigt; der Online-Katalog war nicht erreichbar. {{message}}",
+				"testedVersion": "Getestete Version {{version}}",
+				"license": "Lizenz: {{license}}",
+				"homepage": "Projektseite",
+				"install": "Installieren",
+				"details": "Details",
+				"runtimeNotReady": "Die Container-Laufzeit muss bereit sein, bevor Sie eine Anwendung installieren können.",
+				"unsupported": "Dieser Computer kann diese Anwendung noch nicht ausführen."
+			},
+			"install": {
+				"title": "{{name}} installieren",
+				"steps": {
+					"permissions": "Berechtigungen",
+					"variables": "Einstellungen",
+					"resources": "Ressourcenprüfung",
+					"installing": "Installation"
+				},
+				"acceptPermissions": "Akzeptieren und fortfahren",
+				"next": "Weiter",
+				"back": "Zurück",
+				"confirm": "Installieren",
+				"resources": {
+					"ok": "Dieser Computer hat genug Arbeitsspeicher und Speicherplatz.",
+					"memory": "Arbeitsspeicher: {{required}} MB benötigt, {{available}} MB frei",
+					"disk": "Speicherplatz: {{required}} MB benötigt, {{available}} MB frei",
+					"blocked": "Dieser Computer hat derzeit nicht genug freie Ressourcen für diese Anwendung."
+				},
+				"blocked": {
+					"GpuNotSupported": "Diese Anwendung benötigt eine Grafikkarte, die XE Anwendungen noch nicht bereitstellt.",
+					"RuntimeIncompatible": "Die Container-Laufzeit dieses Computers bietet nicht alles, was diese Anwendung benötigt.",
+					"RuntimeUnavailable": "Die Container-Laufzeit ist auf diesem Computer nicht verfügbar.",
+					"InsufficientMemory": "Es ist nicht genug Arbeitsspeicher frei.",
+					"InsufficientDisk": "Es ist nicht genug Speicherplatz frei.",
+					"AlreadyInstalled": "Diese Anwendung ist bereits installiert.",
+					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten."
+				},
+				"progress": {
+					"downloading": "{{service}} wird heruntergeladen — {{completed}} von {{total}} Teilen",
+					"starting": "Die Anwendung wird gestartet…",
+					"waiting": "Warten, bis die Anwendung bereit ist…",
+					"keepsRunning": "Sie können dieses Fenster schließen; die Installation läuft weiter."
+				},
+				"succeeded": "{{name}} ist installiert.",
+				"failed": "{{name}} konnte nicht installiert werden."
+			},
+			"conflict": {
+				"operationInFlight": "Eine andere Aktion für diese Anwendung läuft noch. Warten Sie, bis sie abgeschlossen ist, und versuchen Sie es erneut.",
+				"invalidTransition": "Diese Aktion passt nicht zum aktuellen Zustand der Anwendung. Die Seite wurde aktualisiert.",
+				"alreadyInstalled": "Diese Anwendung ist bereits installiert.",
+				"permissionChangeRequiresAcknowledgement": "Die neue Version verlangt mehr Zugriff, als Sie erlaubt haben. Prüfen Sie die Änderungen und bestätigen Sie sie.",
+				"versionConflict": "Die Anwendung hat sich geändert, während diese Seite geöffnet war. Die Seite wurde aktualisiert; versuchen Sie es erneut.",
+				"manifestChanged": "Diese Anwendung hat sich im Katalog geändert, während Sie sie angesehen haben. Prüfen Sie erneut, was sie verlangt."
+			},
+			"installed": {
+				"title": "Installierte Anwendungen",
+				"subtitle": "Alles, was XE für Sie auf diesem Computer installiert hat.",
+				"loading": "Installierte Anwendungen werden geladen…",
+				"empty": "Sie haben noch keine Anwendung installiert.",
+				"browseCatalog": "Katalog durchsuchen",
+				"columns": {
+					"name": "Anwendung",
+					"status": "Status",
+					"version": "Version",
+					"address": "Adresse",
+					"actions": "Aktionen"
+				}
+			},
+			"detail": {
+				"loading": "Anwendung wird geladen…",
+				"notFound": "Diese Anwendung ist nicht installiert.",
+				"back": "Zurück zu den installierten Anwendungen",
+				"status": "Status",
+				"runtime": "Laufzeit",
+				"version": "Version",
+				"access": "Zugriff",
+				"accessValue": "Nur dieser Computer",
+				"permissions": "Berechtigungen",
+				"storage": "Speicher",
+				"storageValue": "Von XE verwaltet",
+				"address": "Adresse",
+				"addressPending": "Wird beim Start der Anwendung vergeben",
+				"updateAvailable": "Version {{version}} ist verfügbar.",
+				"failureTitle": "Letztes Problem",
+				"tabs": {
+					"overview": "Übersicht",
+					"settings": "Einstellungen",
+					"history": "Verlauf",
+					"logs": "Protokolle"
+				},
+				"liveDegraded": "Live-Aktualisierung ist nicht verfügbar; diese Seite wird alle paar Sekunden neu geladen."
+			},
+			"update": {
+				"title": "{{name}} aktualisieren",
+				"targetVersion": "Neue Version {{version}}",
+				"steps": {
+					"variables": "Einstellungen",
+					"permissions": "Berechtigungsänderungen",
+					"resources": "Ressourcenprüfung",
+					"updating": "Update"
+				},
+				"newlyRequired": "Die neue Version benötigt diese Einstellung.",
+				"noPermissionChanges": "Die neue Version verlangt keinen zusätzlichen Zugriff.",
+				"blocked": {
+					"GpuNotSupported": "Diese Anwendung benötigt eine Grafikkarte, die XE Anwendungen noch nicht bereitstellt.",
+					"RuntimeIncompatible": "Die Container-Laufzeit dieses Computers bietet nicht alles, was diese Anwendung benötigt.",
+					"RuntimeUnavailable": "Die Container-Laufzeit ist auf diesem Computer nicht verfügbar.",
+					"InsufficientMemory": "Es ist nicht genug Arbeitsspeicher frei.",
+					"InsufficientDisk": "Es ist nicht genug Speicherplatz frei.",
+					"AlreadyInstalled": "Diese Anwendung ist bereits installiert.",
+					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten."
+				},
+				"succeeded": "{{name}} wurde aktualisiert.",
+				"failed": "{{name}} konnte nicht aktualisiert werden."
+			},
+			"actions": {
+				"open": "Öffnen",
+				"openDisabled": "Die Anwendung muss laufen, bevor Sie sie öffnen können.",
+				"start": "Starten",
+				"stop": "Stoppen",
+				"restart": "Neu starten",
+				"update": "Aktualisieren",
+				"cancel": "Abbrechen",
+				"cancelRequested": "{{name}} wird abgebrochen.",
+				"reset": "Zurücksetzen",
+				"uninstall": "Deinstallieren",
+				"started": "{{name}} wird gestartet.",
+				"stopped": "{{name}} wird gestoppt.",
+				"restarted": "{{name}} wird neu gestartet.",
+				"updated": "{{name}} wird aktualisiert.",
+				"wasReset": "{{name}} wird zurückgesetzt.",
+				"uninstalled": "{{name}} wird entfernt.",
+				"failed": "Das hat nicht funktioniert.",
+				"versionMoved": "{{name}} hat sich geändert, während die Bestätigung offen war. Prüfen Sie die Anwendung und versuchen Sie es erneut.",
+				"versionMissing": "Für {{name}} liegt keine Version vor. Laden Sie die Seite neu und versuchen Sie es erneut.",
+				"resetConfirm": {
+					"title": "{{name}} zurücksetzen?",
+					"description": "Dies löscht alles, was die Anwendung gespeichert hat, und startet sie in einem leeren Zustand neu. Ihre Einstellungen bleiben erhalten.",
+					"confirm": "Zurücksetzen und Daten löschen"
+				},
+				"uninstallConfirm": {
+					"title": "{{name}} deinstallieren?",
+					"description": "Dies entfernt die Anwendung und löscht dauerhaft alles, was sie gespeichert hat. Das kann nicht rückgängig gemacht werden.",
+					"confirm": "Deinstallieren und Daten löschen"
+				},
+				"updateConfirm": {
+					"confirm": "Akzeptieren und aktualisieren"
+				}
+			},
+			"events": {
+				"title": "Verlauf",
+				"empty": "Es ist noch nichts passiert.",
+				"columns": {
+					"sequence": "#",
+					"time": "Zeit",
+					"kind": "Ereignis"
+				},
+				"loadMore": "Weitere Ereignisse laden",
+				"kind": {
+					"unknown": "Unbekanntes Ereignis",
+					"Installed": "Installiert",
+					"StartRequested": "Start angefordert",
+					"Started": "Gestartet",
+					"StopRequested": "Stopp angefordert",
+					"Stopped": "Gestoppt",
+					"Restarted": "Neu gestartet",
+					"UpdateRequested": "Update angefordert",
+					"Updated": "Aktualisiert",
+					"ResetRequested": "Zurücksetzen angefordert",
+					"Reset": "Zurückgesetzt",
+					"UninstallRequested": "Deinstallation angefordert",
+					"Uninstalled": "Deinstalliert",
+					"Failed": "Fehlgeschlagen",
+					"RestoredOnBoot": "Nach Neustart wiederhergestellt",
+					"StoppedUnexpectedly": "Unerwartet gestoppt",
+					"PermissionAccepted": "Berechtigungen akzeptiert"
+				}
+			},
+			"logs": {
+				"title": "Protokolle",
+				"service": "Bestandteil",
+				"tail": "Zeilen",
+				"refresh": "Aktualisieren",
+				"empty": "Keine Protokollausgabe.",
+				"failed": "Das Protokoll konnte nicht gelesen werden.",
+				"truncated": "Es werden die letzten {{lines}} Zeilen angezeigt; ältere Ausgaben wurden nicht geladen.",
+				"unavailable": "Protokolle sind nur verfügbar, solange die Anwendung auf diesem Computer existiert."
 			}
 		},
 		"externalAccess": {

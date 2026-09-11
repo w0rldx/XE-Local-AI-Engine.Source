@@ -91,107 +91,136 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
             };
         }
 
-        var endpoint = DockerDaemonEndpointResolver.Resolve(options);
-        var pinned = await _attestationStore.ReadAsync(cancellationToken).ConfigureAwait(false);
-
-        DockerDaemonIdentity identity;
-        await using (var client = _clientFactory.Create(endpoint))
-        {
-            try
-            {
-                identity = await client.ProbeAsync(cancellationToken).ConfigureAwait(false);
-            }
-            catch (DockerRuntimeException exception)
-            {
-                _logger.LogInformation(exception,
-                    "Development Mode container-runtime preflight failed at {Endpoint} with {Status}.",
-                    endpoint.Display,
-                    exception.Status);
-
-                return new DockerDaemonPreflight
-                {
-                    Status = exception.Status,
-                    Message = DescribeProbeFailure(exception, endpoint),
-                    Endpoint = endpoint,
-                    PinnedDaemon = pinned
-                };
-            }
-        }
-
-        if (!MeetsMinimumApiVersion(identity, options, out var minimumApiVersion))
+        // Resolved here rather than left to the probe so that the endpoint can be refused before a client is
+        // constructed. User information, a query string and a fragment are all operator-supplied, none of them
+        // addresses a Docker daemon, and any of the three is somewhere a token fits — a DOCKER_HOST of
+        // tcp://host:2375/?token=… is a value an operator can set. Handing the resolved endpoint on rather than
+        // restating it as a string keeps the source that named it, which is what the pin records. The probe would
+        // resolve exactly this endpoint from the same configured value.
+        var endpoint = DockerDaemonEndpointResolver.Resolve(options.DaemonEndpoint);
+        if (endpoint.DisclosingComponent is { } disclosing)
         {
             return new DockerDaemonPreflight
             {
-                Status = DockerDaemonPreflightStatus.ApiVersionTooOld,
-                Message = $"The container runtime at {endpoint.Display} reports Docker Engine {Describe(identity.ServerVersion)} "
-                          + $"serving API {Describe(identity.ApiVersion)}. Development Mode needs API {minimumApiVersion} or newer, "
-                          + "because below that it cannot read back every isolation setting it applies — and it refuses to run your "
-                          + "code in a container it cannot prove is confined. Upgrade Docker Engine, then reload this page.",
-                Endpoint = endpoint,
-                ObservedDaemon = identity,
-                PinnedDaemon = pinned
+                Status = DockerDaemonPreflightStatus.NotConfigured,
+                Message = $"The container runtime endpoint found via {Describe(endpoint.Source)} carries {disclosing}, and "
+                          + "Development Mode refuses it without repeating the value back: a secret that has reached a log file "
+                          + $"or this page is no longer a secret. Remove {disclosing} from the endpoint and reload this page, "
+                          + "and treat whatever was in it as disclosed.",
+                Endpoint = endpoint
             };
         }
 
-        if (!identity.SupportsSeccomp)
-        {
-            return new DockerDaemonPreflight
+        // Everything from here onwards is the shared mechanism: probe, version- and seccomp-check, compare against the
+        // pin. What stays here is the prose, because ADR 0004 makes these messages the entire Development Mode
+        // experience for a user with no daemon, and the second consumer of the same daemon owes its own users
+        // different words for the same status.
+        var outcome = await DockerDaemonProbe.RunAsync(new DockerDaemonProbeRequest
             {
-                Status = DockerDaemonPreflightStatus.ProbeFailed,
-                Message = $"The container runtime at {endpoint.Display} does not report seccomp support, so Development Mode cannot "
-                          + "confine the system calls your build and test commands may make. This is checked here rather than at "
-                          + "container creation because it cannot be checked there: such a daemon still accepts a seccomp profile and "
-                          + "still reports it back on the container, while applying nothing. Either the daemon was started with seccomp "
-                          + "disabled (check 'docker info' — a working daemon lists 'seccomp' under Security Options) or this kernel "
-                          + "was built without CONFIG_SECCOMP. Development Mode stays unavailable until it is available; it does not "
-                          + "fall back to an unconfined container.",
-                Endpoint = endpoint,
-                ObservedDaemon = identity,
-                PinnedDaemon = pinned
-            };
-        }
+                ConfiguredEndpoint = options.DaemonEndpoint,
+                ResolvedEndpoint = endpoint,
+                MinimumApiVersion = options.MinimumApiVersion,
+                RequireSeccompSupport = true,
+                ConfirmingDaemonId = confirmingDaemonId
+            },
+            _clientFactory.Create,
+            _attestationStore,
+            _timeProvider,
+            _logger,
+            cancellationToken).ConfigureAwait(false);
 
-        // Trust-on-first-use is the pin, not a check: there is nothing to compare a first daemon
-        // against. What it buys is that every subsequent run has something to compare against, which is where the
-        // control actually bites.
-        if (pinned is null)
+        // Switched on the reason rather than on the status: two refusals share ProbeFailed and have different prose,
+        // so a mapping keyed on status alone would have to guess between them. Every named reason has its own arm and
+        // the catch-all only throws — the compiler demands one for an out-of-range cast (CS8524) and would reject the
+        // switch outright if a named reason were missing, so nothing here can silently inherit another case's words.
+        // `DockerDaemonProbeTests.EveryProbeReason_IsMappedToItsOwnDevelopmentModeMessage` enumerates the enum, so a
+        // reason added without an arm is a red test rather than a throw a user meets first.
+        return outcome.Reason switch
         {
-            var firstUse = BuildAttestation(identity, endpoint, confirmedByOperator: confirmingDaemonId is not null);
-            await _attestationStore.WriteAsync(firstUse, cancellationToken).ConfigureAwait(false);
-            _logger.LogInformation("Pinned Docker daemon {DaemonId} at {Endpoint} on first use.", identity.DaemonId, endpoint.Display);
-            return Ready(identity, endpoint, firstUse);
-        }
+            DockerDaemonProbeReason.Ready => Ready(outcome.ObservedDaemon!, outcome.Endpoint, outcome.PinnedDaemon!),
+            DockerDaemonProbeReason.TransportFailure => DescribeTransportFailure(outcome),
+            DockerDaemonProbeReason.ApiVersionTooOld => DescribeApiVersionTooOld(outcome),
+            DockerDaemonProbeReason.SeccompUnsupported => DescribeSeccompUnsupported(outcome),
+            DockerDaemonProbeReason.ConfirmationRaced => DescribeConfirmationRace(outcome, confirmingDaemonId),
+            DockerDaemonProbeReason.IdentityChanged => DescribeIdentityChange(outcome),
+            _ => throw new InvalidOperationException($"Unhandled daemon probe reason '{outcome.Reason}'.")
+        };
+    }
 
-        if (pinned.Matches(identity))
+    private DockerDaemonPreflight DescribeTransportFailure(DockerDaemonProbeOutcome outcome)
+    {
+        var exception = outcome.ProbeFailure!;
+
+        _logger.LogInformation(exception,
+            "Development Mode container-runtime preflight failed at {Endpoint} with {Status}.",
+            outcome.Endpoint.Display,
+            exception.Status);
+
+        return new DockerDaemonPreflight
         {
-            return Ready(identity, endpoint, pinned);
-        }
+            Status = exception.Status,
+            Message = DescribeProbeFailure(exception, outcome.Endpoint),
+            Endpoint = outcome.Endpoint,
+            PinnedDaemon = outcome.PinnedDaemon
+        };
+    }
 
-        if (confirmingDaemonId is not null)
+    private static DockerDaemonPreflight DescribeApiVersionTooOld(DockerDaemonProbeOutcome outcome)
+    {
+        var identity = outcome.ObservedDaemon!;
+
+        return new DockerDaemonPreflight
         {
-            if (!string.Equals(confirmingDaemonId, identity.DaemonId, StringComparison.Ordinal))
-            {
-                return new DockerDaemonPreflight
-                {
-                    Status = DockerDaemonPreflightStatus.DaemonIdentityChanged,
-                    Message = "That confirmation was not applied. It approved container runtime "
-                              + $"{Describe(confirmingDaemonId)}, but the runtime reachable now is {Describe(identity.DaemonId)} — "
-                              + "the daemon changed again between the moment you were shown it and the moment you confirmed. "
-                              + "Nothing was approved. Review the runtime below and confirm again if it is the one you intend.",
-                    Endpoint = endpoint,
-                    ObservedDaemon = identity,
-                    PinnedDaemon = pinned
-                };
-            }
+            Status = DockerDaemonPreflightStatus.ApiVersionTooOld,
+            Message = $"The container runtime at {outcome.Endpoint.Display} reports Docker Engine {Describe(identity.ServerVersion)} "
+                      + $"serving API {Describe(identity.ApiVersion)}. Development Mode needs API {outcome.RequiredApiVersion} or newer, "
+                      + "because below that it cannot read back every isolation setting it applies — and it refuses to run your "
+                      + "code in a container it cannot prove is confined. Upgrade Docker Engine, then reload this page.",
+            Endpoint = outcome.Endpoint,
+            ObservedDaemon = identity,
+            PinnedDaemon = outcome.PinnedDaemon
+        };
+    }
 
-            var confirmed = BuildAttestation(identity, endpoint, confirmedByOperator: true);
-            await _attestationStore.WriteAsync(confirmed, cancellationToken).ConfigureAwait(false);
-            _logger.LogWarning("Operator re-confirmed the Docker daemon: {PreviousDaemonId} replaced by {DaemonId} at {Endpoint}.",
-                pinned.DaemonId,
-                identity.DaemonId,
-                endpoint.Display);
-            return Ready(identity, endpoint, confirmed);
-        }
+    private static DockerDaemonPreflight DescribeSeccompUnsupported(DockerDaemonProbeOutcome outcome)
+    {
+        return new DockerDaemonPreflight
+        {
+            Status = DockerDaemonPreflightStatus.ProbeFailed,
+            Message = $"The container runtime at {outcome.Endpoint.Display} does not report seccomp support, so Development Mode cannot "
+                      + "confine the system calls your build and test commands may make. This is checked here rather than at "
+                      + "container creation because it cannot be checked there: such a daemon still accepts a seccomp profile and "
+                      + "still reports it back on the container, while applying nothing. Either the daemon was started with seccomp "
+                      + "disabled (check 'docker info' — a working daemon lists 'seccomp' under Security Options) or this kernel "
+                      + "was built without CONFIG_SECCOMP. Development Mode stays unavailable until it is available; it does not "
+                      + "fall back to an unconfined container.",
+            Endpoint = outcome.Endpoint,
+            ObservedDaemon = outcome.ObservedDaemon,
+            PinnedDaemon = outcome.PinnedDaemon
+        };
+    }
+
+    private static DockerDaemonPreflight DescribeConfirmationRace(DockerDaemonProbeOutcome outcome, string? confirmingDaemonId)
+    {
+        var identity = outcome.ObservedDaemon!;
+
+        return new DockerDaemonPreflight
+        {
+            Status = DockerDaemonPreflightStatus.DaemonIdentityChanged,
+            Message = "That confirmation was not applied. It approved container runtime "
+                      + $"{Describe(confirmingDaemonId)}, but the runtime reachable now is {Describe(identity.DaemonId)} — "
+                      + "the daemon changed again between the moment you were shown it and the moment you confirmed. "
+                      + "Nothing was approved. Review the runtime below and confirm again if it is the one you intend.",
+            Endpoint = outcome.Endpoint,
+            ObservedDaemon = identity,
+            PinnedDaemon = outcome.PinnedDaemon
+        };
+    }
+
+    private static DockerDaemonPreflight DescribeIdentityChange(DockerDaemonProbeOutcome outcome)
+    {
+        var identity = outcome.ObservedDaemon!;
+        var pinned = outcome.PinnedDaemon!;
 
         return new DockerDaemonPreflight
         {
@@ -201,11 +230,11 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
                       + $"Approved {FormatTimestamp(pinned.ConfirmedAtUtc)}: runtime {Describe(pinned.DaemonId)} "
                       + $"(Docker Engine {Describe(pinned.ServerVersion)}) at {pinned.Endpoint}, found via {Describe(pinned.EndpointSource)}. "
                       + $"Reachable now: runtime {Describe(identity.DaemonId)} (Docker Engine {Describe(identity.ServerVersion)}) "
-                      + $"at {endpoint.Display}, found via {Describe(endpoint.Source)}. "
+                      + $"at {outcome.Endpoint.Display}, found via {Describe(outcome.Endpoint.Source)}. "
                       + "DOCKER_HOST is an ordinary environment variable, so a changed runtime can mean a changed machine: your "
                       + "repository would be mounted into, and your build and test commands executed by, something you have not "
                       + "approved. Confirm the runtime below if it is the one you intend, or restore the previous DOCKER_HOST and reload.",
-            Endpoint = endpoint,
+            Endpoint = outcome.Endpoint,
             ObservedDaemon = identity,
             PinnedDaemon = pinned
         };
@@ -248,34 +277,6 @@ internal sealed class DockerDaemonPreflightService : IDockerDaemonPreflightServi
                 $"Development Mode could not complete its container-runtime preflight against {where}: {exception.Message} "
                 + "Development Mode stays unavailable until the preflight succeeds; it does not fall back to running your build "
                 + "and test commands outside a container."
-        };
-    }
-
-    private static bool MeetsMinimumApiVersion(DockerDaemonIdentity identity, ContainerSandboxOptions options, out string minimumApiVersion)
-    {
-        minimumApiVersion = options.MinimumApiVersion;
-
-        if (!ContainerSandboxOptionsValidator.TryParseApiVersion(options.MinimumApiVersion, out var minimum))
-        {
-            // An unparsable minimum is a configuration fault the validator already rejects at startup. Treating it as
-            // "satisfied" here would be the wrong direction for a fail-closed control, so treat it as unsatisfied.
-            return false;
-        }
-
-        return ContainerSandboxOptionsValidator.TryParseApiVersion(identity.ApiVersion, out var observed)
-               && ContainerSandboxOptionsValidator.IsApiVersionAtLeast(observed, minimum);
-    }
-
-    private DockerDaemonAttestation BuildAttestation(DockerDaemonIdentity identity, DockerDaemonEndpoint endpoint, bool confirmedByOperator)
-    {
-        return new DockerDaemonAttestation
-        {
-            DaemonId = identity.DaemonId,
-            Endpoint = endpoint.Display,
-            EndpointSource = endpoint.Source,
-            ServerVersion = identity.ServerVersion,
-            ConfirmedAtUtc = _timeProvider.GetUtcNow(),
-            ConfirmedByOperator = confirmedByOperator
         };
     }
 

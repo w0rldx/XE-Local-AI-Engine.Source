@@ -20,9 +20,24 @@ public sealed record DockerDaemonAttestation
     [JsonPropertyName("daemonId")]
     public required string DaemonId { get; init; }
 
-    /// <summary>The endpoint URI the daemon was approved at, as a string so the record survives a URI-shape change.</summary>
+    /// <summary>
+    ///     The endpoint URI the daemon was approved at, as a string so the record survives a URI-shape change. Always
+    ///     redacted: any user information is stripped on the way in.
+    ///     <para>
+    ///         The redaction is here rather than at any one reader because every reader holds one of these records and
+    ///         none of them shares a formatting helper: the operator's identity-change message, the Development Mode
+    ///         API mapper and the application-container resolver each interpolate this string directly. A pin written
+    ///         before the redaction existed carries whatever <c>DOCKER_HOST</c> carried — <c>tcp://user:secret@host</c>
+    ///         is a value an operator can set — so the file on disk is exactly the case a redaction applied only when
+    ///         writing would miss.
+    ///     </para>
+    /// </summary>
     [JsonPropertyName("endpoint")]
-    public required string Endpoint { get; init; }
+    public required string Endpoint
+    {
+        get;
+        init => field = DockerDaemonEndpoint.Redact(value);
+    } = string.Empty;
 
     /// <summary>How that endpoint had been arrived at when it was approved.</summary>
     [JsonPropertyName("endpointSource")]

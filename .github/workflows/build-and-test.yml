@@ -204,6 +204,22 @@ jobs:
         if: matrix.leg != 'siblings'
         run: docker pull alpine@sha256:14358309a308569c32bdc37e2e0e9694be33a9d99e68afb0f5ff33cc1f695dce
 
+      # The two images ContainerRuntimeRealDaemonTests pins, for the same reason and on the same legs: those tests
+      # also live in the batched module, and TEST_SHARD packs namespaces into groups by measured weight and strides
+      # those groups across the four legs — so which leg owns XE_Local_AI_Engine.Tests.Containers moves whenever the
+      # weights do. Pulling on all four costs a few seconds and 18 MB; pinning the guess is a gate that breaks the
+      # next time the packing changes.
+      # A later slice adds no third step — it reuses these two constants.
+      - name: Pre-pull the pinned BusyBox application-container test image
+        if: matrix.leg != 'siblings'
+        run: docker pull busybox@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0
+
+      # Declares VOLUME /data, which is the whole reason it is pinned: only a real image can produce the anonymous
+      # mount the effective-mount check has to reject.
+      - name: Pre-pull the pinned VOLUME-declaring test image
+        if: matrix.leg != 'siblings'
+        run: docker pull redis@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+
       # Auto-enrolling backend test run: the project list is read from the solution file, so a new
       # test suite is picked up without editing this workflow. E2E is excluded here (it needs
       # Playwright browsers + builds the SPA, so it runs in the dedicated e2e workflow).

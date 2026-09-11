@@ -1,0 +1,560 @@
+namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
+
+using System.Globalization;
+using System.Text.Json;
+using System.Text.RegularExpressions;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
+using XE_Local_AI_Engine.Providers.Abstractions;
+
+/// <summary>
+///     The node's one door to installed external applications: admission, the state machine, the shared rebuild
+///     block every pipeline re-enters, and the projections the API renders.
+///     <para>
+///         A SINGLETON holding an <see cref="IServiceScopeFactory" /> rather than a scoped service holding a store.
+///         Admission and execution both open their own scope, so there is no path by which a request-scoped database
+///         context reaches a pipeline that outlives the request — the browser cannot dispose the context an install
+///         is about to compare-and-swap with by navigating away.
+///     </para>
+/// </summary>
+internal sealed partial class ExternalAppService
+{
+    private const string SecretVariableType = "secret";
+    private const int MaxFailureSummaryLength = 512;
+    private const string LogTruncationMarker = "[earlier output omitted]";
+
+    /// <summary>
+    ///     What a row whose stored manifest cannot be read is marked with. It names no JSON, no path and no value:
+    ///     it is rendered in a browser next to the instance's own card.
+    /// </summary>
+    private const string UnreadableManifestSummary = "The stored manifest for this application could not be read.";
+
+    private static readonly TimeSpan ReadyPollInterval = TimeSpan.FromMilliseconds(500);
+
+    /// <summary>
+    ///     The baseline an install's acknowledgement payload is diffed against: an application that grants nothing.
+    ///     Diffing the manifest against it yields every name it DOES grant, which is what "the whole effective
+    ///     permission set" means without a second derivation that could disagree with <c>Diff</c>.
+    /// </summary>
+    private static readonly ExternalAppEffectivePermissions NoPermissions = new(Internet: false,
+        LocalNetwork: false,
+        "none",
+        "none",
+        new Dictionary<string, ExternalAppServicePermissions>(StringComparer.Ordinal));
+
+    private readonly ExternalAppInstanceGate _gate;
+    private readonly string _installId;
+    private readonly ExternalAppStorageLayout _layout;
+    private readonly ILogger<ExternalAppService> _logger;
+    private readonly ExternalAppsOptions _options;
+    private readonly IExternalAppEventPublisher _publisher;
+    private readonly ExternalAppResourceGate _resourceGate;
+    private readonly ExternalAppOperationRunner _runner;
+    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TimeProvider _timeProvider;
+
+    public ExternalAppService(IServiceScopeFactory scopeFactory,
+        ExternalAppStorageLayout layout,
+        ExternalAppResourceGate resourceGate,
+        ExternalAppInstanceGate gate,
+        ExternalAppOperationRunner runner,
+        IExternalAppEventPublisher publisher,
+        INodeDataDirectory dataDirectory,
+        IOptions<ExternalAppsOptions> options,
+        TimeProvider timeProvider,
+        ILogger<ExternalAppService> logger)
+    {
+        ArgumentNullException.ThrowIfNull(dataDirectory);
+        ArgumentNullException.ThrowIfNull(options);
+
+        _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+        _resourceGate = resourceGate ?? throw new ArgumentNullException(nameof(resourceGate));
+        _gate = gate ?? throw new ArgumentNullException(nameof(gate));
+        _runner = runner ?? throw new ArgumentNullException(nameof(runner));
+        _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
+        _options = options.Value;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+
+        // The same per-installation id Development Mode labels its containers with, derived from the same directory.
+        // Two installations pointed at one daemon must never remove each other's containers, and the owner label
+        // alone cannot tell them apart because its value is a constant.
+        _installId = DockerSandboxRuntimeProvider.BuildInstallId(dataDirectory.Root);
+    }
+
+    /// <summary>
+    ///     This installation's label value, so the boot reconciler and the state observer filter on the same id the
+    ///     pipelines label with. Derived once, in one place: two derivations that drifted would make one of them
+    ///     unable to find what the other created.
+    /// </summary>
+    internal string InstallId => _installId;
+
+    public async Task<IReadOnlyList<ExternalAppInstanceSummary>> ListAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureEnabled();
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var services = ScopedServices.From(scope.ServiceProvider);
+
+        var rows = await services.Store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+
+        return [.. rows.Select(row => ToSummary(row, versions))];
+    }
+
+    public async Task<IReadOnlyList<ExternalAppInstanceDetail>> ListDetailsAsync(CancellationToken cancellationToken = default)
+    {
+        EnsureEnabled();
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var services = ScopedServices.From(scope.ServiceProvider);
+
+        var rows = await services.Store.ListAsync(cancellationToken).ConfigureAwait(false);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+
+        return [.. rows.Select(row => ToDetail(row, ToSummary(row, versions)))];
+    }
+
+    public async Task<ExternalAppInstanceDetail> GetAsync(Guid instanceId, CancellationToken cancellationToken = default)
+    {
+        EnsureEnabled();
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var services = ScopedServices.From(scope.ServiceProvider);
+
+        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+        var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
+
+        return ToDetail(row, ToSummary(row, versions));
+    }
+
+    public async Task<IReadOnlyList<ExternalAppInstanceEventSnapshot>> ListEventsAsync(Guid instanceId,
+        long afterSequence,
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureEnabled();
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var services = ScopedServices.From(scope.ServiceProvider);
+
+        // The existence check is not redundant: an unknown instance must answer "no such instance" rather than an
+        // empty page, which a caller would render as "nothing has happened yet".
+        _ = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+
+        return await services.Store.ListEventsAsync(instanceId, afterSequence, limit, cancellationToken).ConfigureAwait(false);
+    }
+
+    public async Task<ContainerLogSnapshot> ReadLogsAsync(Guid instanceId,
+        string? service,
+        int tail,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureEnabled();
+
+        if (tail < 1 || tail > _options.MaxLogTailLines)
+        {
+            // Rejected rather than clamped: a caller that asked for more than the node serves has to learn that its
+            // window is not the window it reasoned about, not silently receive a different one.
+            throw new ExternalAppValidationException(string.Create(CultureInfo.InvariantCulture,
+                $"A log tail must be between 1 and {_options.MaxLogTailLines} lines."));
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var services = ScopedServices.From(scope.ServiceProvider);
+
+        var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
+        var manifest = DeserializeManifest(row.ManifestSnapshotJson);
+        var serviceName = SelectLogService(manifest, service);
+
+        await using var runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+        var containers = await runtime
+                              .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken)
+                              .ConfigureAwait(false);
+        if (containers.Count == 0)
+        {
+            return new ContainerLogSnapshot { Text = string.Empty, Truncated = false, LineCount = 0 };
+        }
+
+        var snapshot = await runtime.ReadLogsAsync(containers[0],
+                                        new ContainerLogRequest { TailLines = tail, MaxBytes = ContainerLogRequest.MaximumBytes },
+                                        cancellationToken)
+                                    .ConfigureAwait(false);
+
+        // Logs cross UNMASKED by design: the text is the application's own container output rather than an
+        // engine-owned value, and an application printing its own secrets is something its operator needs to see.
+        return snapshot.Truncated
+            ? snapshot with { Text = LogTruncationMarker + Environment.NewLine + snapshot.Text }
+            : snapshot;
+    }
+
+    private static string SelectLogService(ApplicationManifest manifest, string? requested)
+    {
+        if (requested is not null)
+        {
+            return manifest.Services.Any(candidate => string.Equals(candidate.Name, requested, StringComparison.Ordinal))
+                ? requested
+                : throw new ExternalAppNotFoundException($"This application declares no service named '{requested}'.");
+        }
+
+        if (manifest.Services.Count == 0)
+        {
+            throw new ExternalAppNotFoundException("This application declares no services.");
+        }
+
+        var withUi = manifest.Services.FirstOrDefault(candidate => candidate.Ports.Count > 0);
+        return (withUi ?? manifest.Services[0]).Name;
+    }
+
+    private static async Task<ExternalAppInstanceSnapshot> RequireInstanceAsync(IExternalAppInstanceStore store,
+        Guid instanceId,
+        CancellationToken cancellationToken)
+    {
+        return await store.GetAsync(instanceId, cancellationToken).ConfigureAwait(false)
+               ?? throw new ExternalAppNotFoundException($"No external application instance '{instanceId:N}' is installed.");
+    }
+
+    private static async Task<IReadOnlyDictionary<string, int>> ReadCatalogVersionsAsync(IApplicationCatalogProvider catalog,
+        CancellationToken cancellationToken)
+    {
+        // Read once per call rather than once per row: the provider serves one snapshot, and a per-row read would
+        // make a list of ten instances ten chances to observe a refresh landing mid-projection.
+        var snapshot = await catalog.GetCatalogAsync(cancellationToken).ConfigureAwait(false);
+        var versions = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var application in snapshot.Document.Applications)
+        {
+            versions[application.Id] = application.ManifestVersion;
+        }
+
+        return versions;
+    }
+
+    private static ExternalAppInstanceSummary ToSummary(ExternalAppInstanceSnapshot row,
+        IReadOnlyDictionary<string, int> catalogVersions)
+    {
+        var known = catalogVersions.TryGetValue(row.ApplicationId, out var available);
+        var updateAvailable = known && available > row.ManifestVersion;
+
+        return new ExternalAppInstanceSummary(row.Id,
+            row.ApplicationId,
+            row.DisplayName,
+            row.ManifestVersion,
+            row.Status,
+            row.DesiredState,
+            row.FailureCategory,
+            row.FailureSummary,
+            updateAvailable,
+            updateAvailable ? available : null,
+            !known,
+            row.UpdatedAtUtc,
+            row.Version);
+    }
+
+    private static ExternalAppInstanceDetail ToDetail(ExternalAppInstanceSnapshot row, ExternalAppInstanceSummary summary)
+    {
+        ApplicationManifest manifest;
+        try
+        {
+            manifest = DeserializeManifest(row.ManifestSnapshotJson);
+        }
+        catch (Exception exception) when (exception is JsonException or ExternalAppManifestException)
+        {
+            return Unreadable(row, summary);
+        }
+
+        return new ExternalAppInstanceDetail(summary,
+            Sanitize(manifest),
+            manifest.TestedVersion,
+            MaskVariables(manifest, ParseVariables(row.VariablesJson)),
+            ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
+            row.RuntimeProvider,
+            row.RuntimeOverride,
+            row.StoragePath,
+            row.LastSequence,
+            row.NeedsRecreate,
+            row.InstalledAtUtc,
+            row.StartedAtUtc,
+            row.StoppedAtUtc);
+    }
+
+    /// <summary>
+    ///     One row whose stored manifest snapshot cannot be read, projected instead of thrown out of.
+    ///     <para>
+    ///         The list projects every row through <see cref="ToDetail" />, so a single corrupt snapshot thrown from
+    ///         here would take the whole list with it — every healthy instance, and the uninstall that is the only way
+    ///         to be rid of the bad row. It degrades the way <c>CatalogMissing</c> does: the row still renders, its
+    ///         lifecycle controls are still reachable, and the projection claims nothing it cannot read.
+    ///     </para>
+    ///     <para>
+    ///         The manifest is EMPTY apart from the three members the row itself carries, and the variables are empty
+    ///         rather than masked: which variables are secret is a manifest fact, and a map that could not be
+    ///         classified must not be rendered on the guess that none of it is.
+    ///     </para>
+    /// </summary>
+    private static ExternalAppInstanceDetail Unreadable(ExternalAppInstanceSnapshot row, ExternalAppInstanceSummary summary)
+    {
+        var manifest = new ApplicationManifest(row.ApplicationId,
+            row.ManifestVersion,
+            string.Empty,
+            row.DisplayName,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            string.Empty,
+            [],
+            new ApplicationPermissions(Internet: false, LocalNetwork: false, "none", "none"),
+            new ApplicationResources(MinimumMemoryMb: 0, RecommendedMemoryMb: 0, CpuHint: 0, PidsLimit: 0),
+            [],
+            []);
+
+        return new ExternalAppInstanceDetail(summary with
+            {
+                // Content-free by construction, and carried on the members the surface already renders a failure
+                // banner from, so the marker needs no second wire field nobody else reads.
+                FailureCategory = ExternalAppFailureCategory.Unknown,
+                FailureSummary = UnreadableManifestSummary
+            },
+            manifest,
+            TestedVersion: null,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            ExternalAppPublishedPorts.Parse(row.PublishedPortsJson),
+            row.RuntimeProvider,
+            row.RuntimeOverride,
+            row.StoragePath,
+            row.LastSequence,
+            row.NeedsRecreate,
+            row.InstalledAtUtc,
+            row.StartedAtUtc,
+            row.StoppedAtUtc);
+    }
+
+    /// <summary>
+    ///     The installed snapshot as it may leave the node: asset bodies stripped (they are catalog content, not
+    ///     instance state, and one of them is a several-kilobyte base64 blob on every render) and secret defaults
+    ///     nulled, so a manifest that ships a placeholder password does not hand it back as a rendered default.
+    /// </summary>
+    private static ApplicationManifest Sanitize(ApplicationManifest manifest)
+    {
+        return manifest with
+        {
+            Services = [.. manifest.Services.Select(static service => service with { Files = [] })],
+            Variables =
+            [
+                .. manifest.Variables.Select(static variable =>
+                    string.Equals(variable.Type, SecretVariableType, StringComparison.Ordinal)
+                        ? variable with { Default = null }
+                        : variable)
+            ]
+        };
+    }
+
+    private static IReadOnlyDictionary<string, string> MaskVariables(ApplicationManifest manifest,
+        IReadOnlyDictionary<string, string> values)
+    {
+        var secrets = manifest.Variables
+                              .Where(static variable => string.Equals(variable.Type, SecretVariableType, StringComparison.Ordinal))
+                              .Select(static variable => variable.Name)
+                              .ToHashSet(StringComparer.Ordinal);
+
+        var masked = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var entry in values)
+        {
+            masked[entry.Key] = secrets.Contains(entry.Key) ? ExternalAppVariableMask.Value : entry.Value;
+        }
+
+        return masked;
+    }
+
+    /// <summary>
+    ///     Whether a container the daemon reports was built from the image this instance installed.
+    ///     <para>
+    ///         Exact, because the runtime client maps the inspection's <c>Config.Image</c> — the digest-pinned
+    ///         reference the container was created from — rather than the resolved image id. Anything else is a
+    ///         container whose provenance this instance cannot establish: an id, another reference, or an empty
+    ///         string from a daemon that told us nothing. All three fail, and the recovery is the rebuild a Start
+    ///         performs, which is cheaper than serving a container nobody verified.
+    ///     </para>
+    /// </summary>
+    internal static bool ImageMatches(string observed, string requested)
+    {
+        return string.Equals(observed, requested, StringComparison.Ordinal);
+    }
+
+    private static string SerializeManifest(ApplicationManifest manifest)
+    {
+        return JsonSerializer.Serialize(manifest, ExternalAppJson.Options);
+    }
+
+    /// <summary>Internal so the boot reconciler and the state observer read a stored snapshot the way the pipelines do.</summary>
+    internal static ApplicationManifest DeserializeManifest(string json)
+    {
+        return JsonSerializer.Deserialize<ApplicationManifest>(json, ExternalAppJson.Options)
+               ?? throw new ExternalAppManifestException("The stored manifest snapshot could not be read.");
+    }
+
+    /// <inheritdoc cref="DeserializeManifest" />
+    internal static IReadOnlyDictionary<string, string> ParseVariables(string json)
+    {
+        if (string.IsNullOrWhiteSpace(json))
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        return JsonSerializer.Deserialize<Dictionary<string, string>>(json, ExternalAppJson.Options)
+               ?? new Dictionary<string, string>(StringComparer.Ordinal);
+    }
+
+    private static string SerializeVariables(IReadOnlyDictionary<string, string> variables)
+    {
+        // Never null and never absent: the column is required, and an application with no declared variables stores
+        // an empty object.
+        return JsonSerializer.Serialize(variables, ExternalAppJson.Options);
+    }
+
+    /// <summary>
+    ///     Checks supplied values against the manifest's declarations and returns the map to store. Every refusal
+    ///     names the VARIABLES, never their values: this message reaches a browser and a log file.
+    /// </summary>
+    private static IReadOnlyDictionary<string, string> ValidateVariables(ApplicationManifest manifest,
+        IReadOnlyDictionary<string, string> supplied)
+    {
+        var declared = manifest.Variables.ToDictionary(static variable => variable.Name, StringComparer.Ordinal);
+        var offenders = new List<string>();
+
+        // An undeclared key is a refusal rather than a silent drop: the one thing a user most often mistypes is the
+        // name of the field holding their password, and dropping it would install an application with a blank one.
+        offenders.AddRange(supplied.Keys.Where(key => !declared.ContainsKey(key)).Order(StringComparer.Ordinal));
+
+        var accepted = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var variable in manifest.Variables)
+        {
+            var present = supplied.TryGetValue(variable.Name, out var value) && !string.IsNullOrEmpty(value);
+            if (!present)
+            {
+                if (variable.Required && variable.Default is null)
+                {
+                    offenders.Add(variable.Name);
+                }
+
+                continue;
+            }
+
+            if (IsAcceptable(variable, value!))
+            {
+                accepted[variable.Name] = value!;
+            }
+            else
+            {
+                offenders.Add(variable.Name);
+            }
+        }
+
+        if (offenders.Count > 0)
+        {
+            throw new ExternalAppValidationException(
+                $"These configuration values are missing or not valid: {string.Join(", ", offenders)}.",
+                offenders);
+        }
+
+        return accepted;
+    }
+
+    private static bool IsAcceptable(ApplicationVariable variable, string value)
+    {
+        var typeOk = variable.Type switch
+        {
+            "integer" => long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out _),
+            "boolean" => bool.TryParse(value, out _),
+            "enum" => variable.AllowedValues is { } allowed && allowed.Contains(value, StringComparer.Ordinal),
+            _ => true
+        };
+
+        if (!typeOk)
+        {
+            return false;
+        }
+
+        if (variable.Validation is not { } validation)
+        {
+            return true;
+        }
+
+        if (validation.MinLength is { } minimum && value.Length < minimum)
+        {
+            return false;
+        }
+
+        if (validation.MaxLength is { } maximum && value.Length > maximum)
+        {
+            return false;
+        }
+
+        return validation.Pattern is not { } pattern || MatchesPattern(pattern, value);
+    }
+
+    private static bool MatchesPattern(string pattern, string value)
+    {
+        try
+        {
+            return Regex.IsMatch(value, pattern, RegexOptions.NonBacktracking, TimeSpan.FromSeconds(1));
+        }
+        catch (ArgumentException exception)
+        {
+            // A pattern the catalog validator would have rejected, reaching us through a snapshot an older build
+            // admitted. That is a manifest this node cannot use, not a value the user got wrong.
+            throw new ExternalAppManifestException("A variable in this application's manifest declares a pattern this node cannot compile.",
+                exception);
+        }
+    }
+
+    private void EnsureEnabled()
+    {
+        if (!_options.Enabled)
+        {
+            throw new ExternalAppsDisabledException();
+        }
+    }
+
+    private long Now()
+    {
+        return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+    }
+
+    /// <summary>The three per-scope dependencies every entry point and every pipeline resolves, resolved in one place.</summary>
+    private sealed record ScopedServices(IExternalAppInstanceStore Store,
+        IApplicationCatalogProvider Catalog,
+        IContainerRuntimeResolver Resolver)
+    {
+        public static ScopedServices From(IServiceProvider provider)
+        {
+            return new ScopedServices(provider.GetRequiredService<IExternalAppInstanceStore>(),
+                provider.GetRequiredService<IApplicationCatalogProvider>(),
+                provider.GetRequiredService<IContainerRuntimeResolver>());
+        }
+    }
+
+    /// <summary>
+    ///     What a pipeline believes the row currently is. Threaded through every compare-and-swap so the next write
+    ///     states the version and the status it expects, instead of re-reading and hoping nothing moved in between.
+    /// </summary>
+    private sealed class InstanceCursor(Guid instanceId, long version, ExternalAppInstanceStatus status)
+    {
+        public Guid InstanceId { get; } = instanceId;
+
+        public long Version { get; set; } = version;
+
+        public ExternalAppInstanceStatus Status { get; set; } = status;
+
+        /// <summary>The last sequence the store minted for this instance. Uninstall's final ping is the only reader.</summary>
+        public long Sequence { get; set; }
+    }
+}

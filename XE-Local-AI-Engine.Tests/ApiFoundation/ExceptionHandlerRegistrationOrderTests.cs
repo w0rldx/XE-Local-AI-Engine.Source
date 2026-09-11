@@ -27,6 +27,8 @@ public sealed class ExceptionHandlerRegistrationOrderTests
                 nameof(DevWorkflowNotFoundExceptionHandler),
                 nameof(DevelopmentNotFoundExceptionHandler),
                 nameof(GraphWorkflowNotFoundExceptionHandler),
+                nameof(ExternalAppNotFoundExceptionHandler),
+                nameof(ContainerRuntimeUnavailableExceptionHandler),
                 nameof(RequestBodyTooLargeExceptionHandler),
                 nameof(DefaultExceptionHandler)),
             string.Join(Environment.NewLine, handlerTypes),

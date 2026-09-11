@@ -463,6 +463,7 @@ XE-Local-AI-Engine.Client/backups/
 # Runtime state written next to the app during local runs (never product content).
 XE-Local-AI-Engine.Client/generated-images/
 XE-Local-AI-Engine.Client/development/
+XE-Local-AI-Engine.Client/external-apps/
 XE-Local-AI-Engine.Client/logs/
 XE-Local-AI-Engine.Client/models/
 XE-Local-AI-Engine.Client/training/

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -315,6 +316,7 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
                 StoredNodeSettings.MinChatCacheReuse, StoredNodeSettings.MaxChatCacheReuse),
             SpeculativeMode = NormalizeSpeculativeMode(settings.SpeculativeMode),
             KvCacheType = NormalizeKvCacheType(settings.KvCacheType),
+            ContainerRuntimeSelection = NormalizeContainerRuntimeSelection(settings.ContainerRuntimeSelection),
             SpeculativeDraftModelName = TrimToNull(settings.SpeculativeDraftModelName),
             SpeculativeDraftMaxTokens = ClampToRange(settings.SpeculativeDraftMaxTokens,
                 StoredNodeSettings.MinSpeculativeDraftMaxTokens, StoredNodeSettings.MaxSpeculativeDraftMaxTokens),
@@ -437,6 +439,16 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         // that must never let a bad value through: LlamaServerLaunchPolicyOptions.Validate() rejects one at host build,
         // i.e. a persisted junk value would take the node down rather than degrade.
         return LlamaServerKvCacheTypes.TryNormalize(value, out var normalized) ? normalized : null;
+    }
+
+    private static string? NormalizeContainerRuntimeSelection(string? value)
+    {
+        // Lower-cased through the one parser rather than trimmed in place, so the persisted spelling is the same
+        // spelling the API carries and the engine parses. An unrecognised value falls back to null so the reader
+        // re-seeds the default: a hand-edited settings file must not be able to leave the runtime layer unresolvable.
+        return ContainerRuntimeSelectionParser.TryParse(value, out var selection)
+            ? ContainerRuntimeSelectionParser.Format(selection)
+            : null;
     }
 
     private static string? NormalizeSpeculativeMode(string? value)

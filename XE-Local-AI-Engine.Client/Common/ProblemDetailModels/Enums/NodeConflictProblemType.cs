@@ -129,5 +129,46 @@ public enum NodeConflictProblemType
     ///         member's NAME and clients may have persisted its ordinal.
     ///     </para>
     /// </summary>
-    GraphWorkflowGateAlreadyDecided
+    GraphWorkflowGateAlreadyDecided,
+
+    /// <summary>
+    ///     A second lifecycle command on an external-app instance whose per-instance gate is already held. Wait, or
+    ///     cancel the operation that holds it.
+    ///     <para>
+    ///         APPENDED, like the three members above and for the same reason: this enum crosses the wire as the
+    ///         member's NAME and clients may have persisted its ordinal.
+    ///     </para>
+    /// </summary>
+    ExternalAppOperationInFlight,
+
+    /// <summary>
+    ///     A command the instance's current status forbids — starting one already running, reconfiguring one that is
+    ///     not stopped, cancelling with nothing in flight. Re-read the instance.
+    /// </summary>
+    ExternalAppInvalidTransition,
+
+    /// <summary>
+    ///     Installing an application that already has an instance. V1 allows one per application; the schema supports
+    ///     N, so this is a product rule rather than a limit of the model.
+    /// </summary>
+    ExternalAppAlreadyInstalled,
+
+    /// <summary>
+    ///     An update whose new manifest declares WIDER permissions than the installed snapshot. Nothing was changed:
+    ///     the operator re-confirms the added permissions — carried as <c>addedPermissions</c> — and retries.
+    /// </summary>
+    ExternalAppPermissionChangeRequiresAcknowledgement,
+
+    /// <summary>
+    ///     The manifest moved between the preview and the command: the version or the sha256 the request echoed is not
+    ///     what the catalog now serves. Nothing was changed — the client re-fetches the preview and re-shows the
+    ///     permissions step, because an acceptance only ever covers the manifest that was read.
+    /// </summary>
+    ExternalAppManifestChanged,
+
+    /// <summary>
+    ///     A write lost a race — the reconciler moves status while an operator saves variables, or a command carries a
+    ///     stale <c>expectedVersion</c>. Ordinary rather than exceptional: refresh and retry.
+    /// </summary>
+    ExternalAppVersionConflict
 }

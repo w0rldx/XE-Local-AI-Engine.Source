@@ -28,6 +28,7 @@ import {
 	cancelDevelopmentAttempt,
 	cancelDevWorkflowRun,
 	cancelEvaluation,
+	cancelExternalAppOperation,
 	cancelGgufDownload,
 	cancelGgufImport,
 	cancelGraphWorkflowRun,
@@ -174,6 +175,12 @@ import {
 	getDevWorkflowRun,
 	getDevWorkflowWorkItem,
 	getEvaluation,
+	getExternalAppCatalogApplication,
+	getExternalAppInstallPreview,
+	getExternalAppInstance,
+	getExternalAppInstanceLogs,
+	getExternalAppRuntime,
+	getExternalAppUpdatePreview,
 	getExternalProviderConnection,
 	getGgufDownloadOperationStatus,
 	getGgufDownloads,
@@ -236,6 +243,7 @@ import {
 	importKnowledgeRepository,
 	inspectGgufRepository,
 	inspectImageRepository,
+	installExternalApp,
 	invalidateInferenceProfile,
 	listAgentDefinitions,
 	listAgentExecutionLogs,
@@ -265,6 +273,9 @@ import {
 	listEligibleBenchmarkAgents,
 	listEligibleBenchmarkModels,
 	listEvaluations,
+	listExternalAppCatalog,
+	listExternalAppInstanceEvents,
+	listExternalAppInstances,
 	listExternalProviderConnections,
 	listGoldenConversations,
 	listGraphWorkflowDefinitions,
@@ -328,6 +339,8 @@ import {
 	putModelKind,
 	putModelLaunchArguments,
 	reconnectDevelopmentRepository,
+	refreshExternalAppCatalog,
+	refreshExternalAppRuntime,
 	refreshModelCatalog,
 	refreshRecommendations,
 	registerDevelopmentRepository,
@@ -344,8 +357,10 @@ import {
 	removeTrainingRuntime,
 	renameNodeChatConversation,
 	reorderBenchmarkTaskItems,
+	resetExternalApp,
 	resolveToolApproval,
 	resolveUserQuestion,
+	restartExternalApp,
 	resumeDevWorkflowRun,
 	resumeEvaluation,
 	resumeWorkSession,
@@ -374,6 +389,7 @@ import {
 	startCudaBuild,
 	startDevelopmentNextAction,
 	startDevWorkflowRun,
+	startExternalApp,
 	startGgufDownload,
 	startGgufImport,
 	startGraphWorkflowRun,
@@ -384,9 +400,11 @@ import {
 	startTrainingExport,
 	startTrainingRuntimeInstall,
 	startWorkSession,
+	stopExternalApp,
 	suggestComparison,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
+	uninstallExternalApp,
 	unloadLocalModel,
 	updateAgentDefinition,
 	updateBenchmarkJudgePolicy,
@@ -397,6 +415,8 @@ import {
 	updateDevWorkflowDefinition,
 	updateDevWorkflowRuleSet,
 	updateDevWorkflowWorkItem,
+	updateExternalApp,
+	updateExternalAppVariables,
 	updateGraphWorkflowDefinition,
 	updateIntegrationTrigger,
 	updateLlamaCppRuntime,
@@ -458,6 +478,8 @@ import type {
 	CancelDevWorkflowRunResponse,
 	CancelEvaluationData,
 	CancelEvaluationResponse,
+	CancelExternalAppOperationData,
+	CancelExternalAppOperationError,
 	CancelGgufDownloadData,
 	CancelGgufDownloadResponse,
 	CancelGgufImportData,
@@ -814,6 +836,21 @@ import type {
 	GetDevWorkflowWorkItemResponse,
 	GetEvaluationData,
 	GetEvaluationResponse,
+	GetExternalAppCatalogApplicationData,
+	GetExternalAppCatalogApplicationResponse,
+	GetExternalAppInstallPreviewData,
+	GetExternalAppInstallPreviewResponse,
+	GetExternalAppInstanceData,
+	GetExternalAppInstanceError,
+	GetExternalAppInstanceLogsData,
+	GetExternalAppInstanceLogsError,
+	GetExternalAppInstanceLogsResponse,
+	GetExternalAppInstanceResponse,
+	GetExternalAppRuntimeData,
+	GetExternalAppRuntimeResponse,
+	GetExternalAppUpdatePreviewData,
+	GetExternalAppUpdatePreviewError,
+	GetExternalAppUpdatePreviewResponse,
 	GetExternalProviderConnectionData,
 	GetExternalProviderConnectionError,
 	GetExternalProviderConnectionResponse,
@@ -948,6 +985,9 @@ import type {
 	InspectGgufRepositoryResponse,
 	InspectImageRepositoryData,
 	InspectImageRepositoryResponse,
+	InstallExternalAppData,
+	InstallExternalAppError,
+	InstallExternalAppResponse,
 	InvalidateInferenceProfileData,
 	InvalidateInferenceProfileResponse,
 	ListAgentDefinitionsData,
@@ -1017,6 +1057,13 @@ import type {
 	ListEligibleBenchmarkModelsResponse,
 	ListEvaluationsData,
 	ListEvaluationsResponse,
+	ListExternalAppCatalogData,
+	ListExternalAppCatalogResponse,
+	ListExternalAppInstanceEventsData,
+	ListExternalAppInstanceEventsError,
+	ListExternalAppInstanceEventsResponse,
+	ListExternalAppInstancesData,
+	ListExternalAppInstancesResponse,
 	ListExternalProviderConnectionsData,
 	ListExternalProviderConnectionsResponse,
 	ListGoldenConversationsData,
@@ -1163,6 +1210,11 @@ import type {
 	ReconnectDevelopmentRepositoryData,
 	ReconnectDevelopmentRepositoryError,
 	ReconnectDevelopmentRepositoryResponse,
+	RefreshExternalAppCatalogData,
+	RefreshExternalAppCatalogResponse,
+	RefreshExternalAppRuntimeData,
+	RefreshExternalAppRuntimeError,
+	RefreshExternalAppRuntimeResponse,
 	RefreshModelCatalogData,
 	RefreshModelCatalogResponse,
 	RefreshRecommendationsData,
@@ -1204,12 +1256,18 @@ import type {
 	ReorderBenchmarkTaskItemsData,
 	ReorderBenchmarkTaskItemsError,
 	ReorderBenchmarkTaskItemsResponse,
+	ResetExternalAppData,
+	ResetExternalAppError,
+	ResetExternalAppResponse,
 	ResolveToolApprovalData,
 	ResolveToolApprovalError,
 	ResolveToolApprovalResponse,
 	ResolveUserQuestionData,
 	ResolveUserQuestionError,
 	ResolveUserQuestionResponse,
+	RestartExternalAppData,
+	RestartExternalAppError,
+	RestartExternalAppResponse,
 	ResumeDevWorkflowRunData,
 	ResumeDevWorkflowRunError,
 	ResumeDevWorkflowRunResponse,
@@ -1283,6 +1341,9 @@ import type {
 	StartDevWorkflowRunData,
 	StartDevWorkflowRunError,
 	StartDevWorkflowRunResponse,
+	StartExternalAppData,
+	StartExternalAppError,
+	StartExternalAppResponse,
 	StartGgufDownloadData,
 	StartGgufDownloadError,
 	StartGgufDownloadResponse,
@@ -1310,6 +1371,9 @@ import type {
 	StartWorkSessionData,
 	StartWorkSessionError,
 	StartWorkSessionResponse,
+	StopExternalAppData,
+	StopExternalAppError,
+	StopExternalAppResponse,
 	SuggestComparisonData,
 	SuggestComparisonError,
 	SuggestComparisonResponse,
@@ -1317,6 +1381,9 @@ import type {
 	TriggerScheduledJobResponse,
 	UnhandledExceptionProbeData,
 	UnhandledExceptionProbeResponse,
+	UninstallExternalAppData,
+	UninstallExternalAppError,
+	UninstallExternalAppResponse,
 	UnloadLocalModelData,
 	UnloadLocalModelError,
 	UnloadLocalModelResponse,
@@ -1345,6 +1412,12 @@ import type {
 	UpdateDevWorkflowWorkItemData,
 	UpdateDevWorkflowWorkItemError,
 	UpdateDevWorkflowWorkItemResponse,
+	UpdateExternalAppData,
+	UpdateExternalAppError,
+	UpdateExternalAppResponse,
+	UpdateExternalAppVariablesData,
+	UpdateExternalAppVariablesError,
+	UpdateExternalAppVariablesResponse,
 	UpdateGraphWorkflowDefinitionData,
 	UpdateGraphWorkflowDefinitionError,
 	UpdateGraphWorkflowDefinitionResponse,
@@ -6937,6 +7010,432 @@ export const probeExternalProviderMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await probeExternalProvider({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelExternalAppOperationMutation = (
+	options?: Partial<Options<CancelExternalAppOperationData>>,
+): UseMutationOptions<unknown, AxiosError<CancelExternalAppOperationError>, Options<CancelExternalAppOperationData>> => {
+	const mutationOptions: UseMutationOptions<
+		unknown,
+		AxiosError<CancelExternalAppOperationError>,
+		Options<CancelExternalAppOperationData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelExternalAppOperation({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getExternalAppCatalogApplicationQueryKey = (options: Options<GetExternalAppCatalogApplicationData>) =>
+	createQueryKey("getExternalAppCatalogApplication", options);
+
+export const getExternalAppCatalogApplicationOptions = (options: Options<GetExternalAppCatalogApplicationData>) =>
+	queryOptions<
+		GetExternalAppCatalogApplicationResponse,
+		AxiosError<DefaultError>,
+		GetExternalAppCatalogApplicationResponse,
+		ReturnType<typeof getExternalAppCatalogApplicationQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppCatalogApplication({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppCatalogApplicationQueryKey(options),
+	});
+
+export const getExternalAppInstallPreviewQueryKey = (options: Options<GetExternalAppInstallPreviewData>) =>
+	createQueryKey("getExternalAppInstallPreview", options);
+
+export const getExternalAppInstallPreviewOptions = (options: Options<GetExternalAppInstallPreviewData>) =>
+	queryOptions<
+		GetExternalAppInstallPreviewResponse,
+		AxiosError<DefaultError>,
+		GetExternalAppInstallPreviewResponse,
+		ReturnType<typeof getExternalAppInstallPreviewQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppInstallPreview({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppInstallPreviewQueryKey(options),
+	});
+
+export const uninstallExternalAppMutation = (
+	options?: Partial<Options<UninstallExternalAppData>>,
+): UseMutationOptions<UninstallExternalAppResponse, AxiosError<UninstallExternalAppError>, Options<UninstallExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		UninstallExternalAppResponse,
+		AxiosError<UninstallExternalAppError>,
+		Options<UninstallExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uninstallExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getExternalAppInstanceQueryKey = (options: Options<GetExternalAppInstanceData>) =>
+	createQueryKey("getExternalAppInstance", options);
+
+export const getExternalAppInstanceOptions = (options: Options<GetExternalAppInstanceData>) =>
+	queryOptions<
+		GetExternalAppInstanceResponse,
+		AxiosError<GetExternalAppInstanceError>,
+		GetExternalAppInstanceResponse,
+		ReturnType<typeof getExternalAppInstanceQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppInstance({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppInstanceQueryKey(options),
+	});
+
+export const getExternalAppInstanceLogsQueryKey = (options: Options<GetExternalAppInstanceLogsData>) =>
+	createQueryKey("getExternalAppInstanceLogs", options);
+
+export const getExternalAppInstanceLogsOptions = (options: Options<GetExternalAppInstanceLogsData>) =>
+	queryOptions<
+		GetExternalAppInstanceLogsResponse,
+		AxiosError<GetExternalAppInstanceLogsError>,
+		GetExternalAppInstanceLogsResponse,
+		ReturnType<typeof getExternalAppInstanceLogsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppInstanceLogs({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppInstanceLogsQueryKey(options),
+	});
+
+export const getExternalAppRuntimeQueryKey = (options?: Options<GetExternalAppRuntimeData>) =>
+	createQueryKey("getExternalAppRuntime", options);
+
+export const getExternalAppRuntimeOptions = (options?: Options<GetExternalAppRuntimeData>) =>
+	queryOptions<
+		GetExternalAppRuntimeResponse,
+		AxiosError<DefaultError>,
+		GetExternalAppRuntimeResponse,
+		ReturnType<typeof getExternalAppRuntimeQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppRuntime({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppRuntimeQueryKey(options),
+	});
+
+export const getExternalAppUpdatePreviewQueryKey = (options: Options<GetExternalAppUpdatePreviewData>) =>
+	createQueryKey("getExternalAppUpdatePreview", options);
+
+export const getExternalAppUpdatePreviewOptions = (options: Options<GetExternalAppUpdatePreviewData>) =>
+	queryOptions<
+		GetExternalAppUpdatePreviewResponse,
+		AxiosError<GetExternalAppUpdatePreviewError>,
+		GetExternalAppUpdatePreviewResponse,
+		ReturnType<typeof getExternalAppUpdatePreviewQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getExternalAppUpdatePreview({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getExternalAppUpdatePreviewQueryKey(options),
+	});
+
+export const listExternalAppInstancesQueryKey = (options?: Options<ListExternalAppInstancesData>) =>
+	createQueryKey("listExternalAppInstances", options);
+
+export const listExternalAppInstancesOptions = (options?: Options<ListExternalAppInstancesData>) =>
+	queryOptions<
+		ListExternalAppInstancesResponse,
+		AxiosError<DefaultError>,
+		ListExternalAppInstancesResponse,
+		ReturnType<typeof listExternalAppInstancesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listExternalAppInstances({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listExternalAppInstancesQueryKey(options),
+	});
+
+export const installExternalAppMutation = (
+	options?: Partial<Options<InstallExternalAppData>>,
+): UseMutationOptions<InstallExternalAppResponse, AxiosError<InstallExternalAppError>, Options<InstallExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		InstallExternalAppResponse,
+		AxiosError<InstallExternalAppError>,
+		Options<InstallExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await installExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listExternalAppCatalogQueryKey = (options?: Options<ListExternalAppCatalogData>) =>
+	createQueryKey("listExternalAppCatalog", options);
+
+export const listExternalAppCatalogOptions = (options?: Options<ListExternalAppCatalogData>) =>
+	queryOptions<
+		ListExternalAppCatalogResponse,
+		AxiosError<DefaultError>,
+		ListExternalAppCatalogResponse,
+		ReturnType<typeof listExternalAppCatalogQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listExternalAppCatalog({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listExternalAppCatalogQueryKey(options),
+	});
+
+export const listExternalAppInstanceEventsQueryKey = (options: Options<ListExternalAppInstanceEventsData>) =>
+	createQueryKey("listExternalAppInstanceEvents", options);
+
+export const listExternalAppInstanceEventsOptions = (options: Options<ListExternalAppInstanceEventsData>) =>
+	queryOptions<
+		ListExternalAppInstanceEventsResponse,
+		AxiosError<ListExternalAppInstanceEventsError>,
+		ListExternalAppInstanceEventsResponse,
+		ReturnType<typeof listExternalAppInstanceEventsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listExternalAppInstanceEvents({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listExternalAppInstanceEventsQueryKey(options),
+	});
+
+export const refreshExternalAppCatalogMutation = (
+	options?: Partial<Options<RefreshExternalAppCatalogData>>,
+): UseMutationOptions<RefreshExternalAppCatalogResponse, AxiosError<DefaultError>, Options<RefreshExternalAppCatalogData>> => {
+	const mutationOptions: UseMutationOptions<
+		RefreshExternalAppCatalogResponse,
+		AxiosError<DefaultError>,
+		Options<RefreshExternalAppCatalogData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await refreshExternalAppCatalog({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const refreshExternalAppRuntimeMutation = (
+	options?: Partial<Options<RefreshExternalAppRuntimeData>>,
+): UseMutationOptions<
+	RefreshExternalAppRuntimeResponse,
+	AxiosError<RefreshExternalAppRuntimeError>,
+	Options<RefreshExternalAppRuntimeData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RefreshExternalAppRuntimeResponse,
+		AxiosError<RefreshExternalAppRuntimeError>,
+		Options<RefreshExternalAppRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await refreshExternalAppRuntime({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const resetExternalAppMutation = (
+	options?: Partial<Options<ResetExternalAppData>>,
+): UseMutationOptions<ResetExternalAppResponse, AxiosError<ResetExternalAppError>, Options<ResetExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		ResetExternalAppResponse,
+		AxiosError<ResetExternalAppError>,
+		Options<ResetExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await resetExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const restartExternalAppMutation = (
+	options?: Partial<Options<RestartExternalAppData>>,
+): UseMutationOptions<RestartExternalAppResponse, AxiosError<RestartExternalAppError>, Options<RestartExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		RestartExternalAppResponse,
+		AxiosError<RestartExternalAppError>,
+		Options<RestartExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await restartExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startExternalAppMutation = (
+	options?: Partial<Options<StartExternalAppData>>,
+): UseMutationOptions<StartExternalAppResponse, AxiosError<StartExternalAppError>, Options<StartExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartExternalAppResponse,
+		AxiosError<StartExternalAppError>,
+		Options<StartExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const stopExternalAppMutation = (
+	options?: Partial<Options<StopExternalAppData>>,
+): UseMutationOptions<StopExternalAppResponse, AxiosError<StopExternalAppError>, Options<StopExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		StopExternalAppResponse,
+		AxiosError<StopExternalAppError>,
+		Options<StopExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await stopExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateExternalAppMutation = (
+	options?: Partial<Options<UpdateExternalAppData>>,
+): UseMutationOptions<UpdateExternalAppResponse, AxiosError<UpdateExternalAppError>, Options<UpdateExternalAppData>> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateExternalAppResponse,
+		AxiosError<UpdateExternalAppError>,
+		Options<UpdateExternalAppData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateExternalApp({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const updateExternalAppVariablesMutation = (
+	options?: Partial<Options<UpdateExternalAppVariablesData>>,
+): UseMutationOptions<
+	UpdateExternalAppVariablesResponse,
+	AxiosError<UpdateExternalAppVariablesError>,
+	Options<UpdateExternalAppVariablesData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UpdateExternalAppVariablesResponse,
+		AxiosError<UpdateExternalAppVariablesError>,
+		Options<UpdateExternalAppVariablesData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await updateExternalAppVariables({
 				...options,
 				...fnOptions,
 				throwOnError: true,

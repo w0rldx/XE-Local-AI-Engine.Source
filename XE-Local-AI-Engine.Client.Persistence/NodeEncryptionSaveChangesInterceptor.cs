@@ -769,6 +769,16 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
                 trackedProperties);
         }
 
+        // An external app's configured variables are the user's own credentials — a database password, an API key —
+        // and are the one encrypted column in that family. The instance's own id fills BOTH AAD slots, so a row copied
+        // onto another instance fails its tag check instead of handing that instance another's secrets. Required: an
+        // application with no declared variables stores `{}`, never null.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<ExternalAppInstance>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.VariablesJson), entry.Entity.Id, entry.Entity.Id, "external_app_instance_variables_json",
+                trackedProperties);
+        }
+
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD
         // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
 

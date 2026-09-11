@@ -1,5 +1,6 @@
 import type { IconProps } from "@tabler/icons-react";
 import {
+	IconApps,
 	IconBinaryTree2,
 	IconChartHistogram,
 	IconCpu,
@@ -40,7 +41,8 @@ type NavigationCapabilityKey =
 	| "workSessions"
 	| "devWorkflows"
 	| "graphWorkflows"
-	| "integrations";
+	| "integrations"
+	| "externalApps";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -155,6 +157,25 @@ const allNavigationLinks: INavigationLink[] = [
 				capability: "integrations",
 			},
 			{ translationKey: "navigation.integrationKeys", to: nodeRoutePaths.integrationKeys, capability: "integrations" },
+		],
+	},
+	// External Apps group, directly after Integrations: both children carry the same `externalApps` capability, so
+	// the generic empty-group filter below drops the whole group when the capability is compiled off. It ships ON;
+	// the node's own `ExternalApps:Enabled` is a separate switch, and turning THAT off leaves this group visible
+	// (the capability is compile-time) while every route answers 404. Like Integrations the group entry has no `to`
+	// — /external-apps only redirects to the catalog — and the instance detail route has no nav entry, like the
+	// work-session and workflow detail pages.
+	{
+		id: "externalApps",
+		icon: IconApps,
+		translationKey: "navigation.externalAppsGroup",
+		links: [
+			{ translationKey: "navigation.externalAppsCatalog", to: nodeRoutePaths.externalApps, capability: "externalApps" },
+			{
+				translationKey: "navigation.externalAppsInstalled",
+				to: nodeRoutePaths.externalAppsInstalled,
+				capability: "externalApps",
+			},
 		],
 	},
 	// Preview group: collects experimental / preview features under one menu point. Image Generation

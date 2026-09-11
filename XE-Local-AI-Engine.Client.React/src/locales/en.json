@@ -141,7 +141,10 @@
 		"integrationTriggers": "Triggers",
 		"integrationSessions": "Sessions",
 		"integrationExecutions": "Executions",
-		"integrationKeys": "API Keys"
+		"integrationKeys": "API Keys",
+		"externalAppsGroup": "External Apps",
+		"externalAppsCatalog": "Catalog",
+		"externalAppsInstalled": "Installed"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -6175,6 +6178,331 @@
 					"revoke": "Could not revoke the key.",
 					"triggersLoad": "Could not load the trigger list, so the allowed-triggers picker is empty."
 				}
+			}
+		},
+		"externalApps": {
+			"status": {
+				"Installing": "Installing",
+				"Stopped": "Stopped",
+				"Starting": "Starting",
+				"Running": "Running",
+				"Stopping": "Stopping",
+				"Updating": "Updating",
+				"Resetting": "Resetting",
+				"Uninstalling": "Uninstalling",
+				"Failed": "Failed",
+				"StoppedUnexpectedly": "Stopped unexpectedly"
+			},
+			"failure": {
+				"RuntimeUnavailable": "The container runtime is not available on this computer. Check the runtime card on the catalog page.",
+				"RuntimeIncompatible": "This computer's container runtime does not offer everything this application needs.",
+				"GpuNotSupported": "This application needs a graphics card, which XE does not offer to applications yet.",
+				"InsufficientMemory": "There is not enough memory free to run this application.",
+				"InsufficientDisk": "There is not enough disk space free to install this application.",
+				"ImagePullFailed": "The application could not be downloaded. Check your internet connection and try again.",
+				"ConfigurationMissing": "The application needs settings that have not been filled in yet.",
+				"PolicyViolation": "XE refused to start this application because it did not match the security settings XE requires.",
+				"PortUnavailable": "No free address was available on this computer for the application.",
+				"HealthCheckFailed": "The application started but never reported itself ready.",
+				"StoppedUnexpectedly": "The application stopped on its own. Check the logs, then start it again.",
+				"StorageError": "XE could not prepare the application's storage folder.",
+				"Unknown": "The application ran into a problem XE could not identify. Check the logs."
+			},
+			"runtime": {
+				"title": "Container runtime",
+				"provider": "Runtime: {{provider}}",
+				"refresh": "Check again",
+				"capabilities": "Available features",
+				"missingCapabilities": "This computer is missing: {{capabilities}}",
+				"foreignInstallContainers_one": "XE found {{count}} container from another XE installation. XE leaves those alone; remove them yourself if you no longer need them.",
+				"foreignInstallContainers_other": "XE found {{count}} containers from another XE installation. XE leaves those alone; remove them yourself if you no longer need them.",
+				"capability": {
+					"containers": "running applications in containers",
+					"networks": "a private network between the parts of an application",
+					"bindStorage": "giving an application its own storage folder",
+					"loopbackPortPublishing": "an address on this computer to reach the application at",
+					"healthChecks": "checking whether an application is healthy",
+					"restartPolicies": "starting applications again after a restart",
+					"logs": "reading an application's output",
+					"imagePull": "downloading an application",
+					"gpuDevices": "passing the graphics card to an application"
+				},
+				"acknowledgeIdentity": "Trust this runtime",
+				"acknowledgeIdentityTitle": "Trust the changed runtime?",
+				"acknowledgeIdentityDescription": "XE will accept the container runtime {{daemonId}} from now on. Only continue if you changed it yourself.",
+				"checked": "Runtime checked.",
+				"checkFailed": "The runtime check did not work.",
+				"unavailable": "XE cannot reach the container runtime right now; what you see below is the last known state.",
+				"status": {
+					"Ready": "Ready",
+					"DaemonUnreachable": "Not reachable",
+					"PermissionDenied": "No permission",
+					"ApiVersionTooOld": "Version too old",
+					"DaemonIdentityChanged": "Identity changed",
+					"NotConfigured": "Not set up",
+					"ProbeFailed": "Check failed"
+				},
+				"hint": {
+					"Ready": "The container runtime is running and XE can reach it.",
+					"DaemonUnreachable": "XE cannot reach the container runtime. Start Docker and check again.",
+					"PermissionDenied": "XE is not allowed to talk to the container runtime on this computer.",
+					"ApiVersionTooOld": "The installed container runtime is too old for XE. Update Docker and check again.",
+					"DaemonIdentityChanged": "The container runtime on this computer is not the one XE trusted before. Confirm that this is expected.",
+					"NotConfigured": "No container runtime is set up on this computer. Install Docker to use External Apps.",
+					"ProbeFailed": "The runtime check did not finish. Try again."
+				}
+			},
+			"permissions": {
+				"title": "What this application gets",
+				"networkTitle": "Network access",
+				"grantedTitle": "It gets",
+				"deniedTitle": "It does not get",
+				"internet": "Internet access — yes",
+				"localNetwork": "Local network — this application can reach services on this computer (such as XE's local model server) and other devices on your network",
+				"storage": "Its own storage folder, managed by XE",
+				"hostFiles": {
+					"none": "No access to your personal files",
+					"read": "Read access to the files you choose",
+					"readWrite": "Read and write access to the files you choose"
+				},
+				"gpu": {
+					"none": "No access to the graphics card",
+					"optional": "Use of the graphics card when one is available",
+					"required": "Use of the graphics card"
+				},
+				"loopbackOnly": "Reachable only from this computer",
+				"noXeData": "No access to your XE data, models or conversations",
+				"noDevices": "No access to connected devices",
+				"changedTitle": "This update asks for more access",
+				"changedDescription": "The new version wants the following in addition to what you already allowed.",
+				"added": {
+					"internet": "Access to the internet",
+					"localNetwork": "Access to other devices on your network",
+					"hostFiles": "More access to your personal files",
+					"gpu": "Use of the graphics card",
+					"capabilities": "Additional system privileges",
+					"writableRootFilesystem": "Permission to change its own program files",
+					"publishedPorts": "Another address on this computer",
+					"extraHosts": "Additional name entries for this computer"
+				},
+				"effective": {
+					"title": "What each part gets",
+					"part": "Part: {{name}}",
+					"none": "Nothing beyond what is listed above"
+				}
+			},
+			"variables": {
+				"title": "Settings",
+				"empty": "This application needs no settings.",
+				"advanced": "Advanced settings",
+				"storedSecret": "•••• stored — leave empty to keep",
+				"save": "Save settings",
+				"saved": "Settings saved.",
+				"saveFailed": "The settings could not be saved.",
+				"stoppedOnly": "Stop the application to change its settings.",
+				"issues": {
+					"required": "{{label}} is required.",
+					"minLength": "{{label}} must be at least {{min}} characters long.",
+					"maxLength": "{{label}} may be at most {{max}} characters long.",
+					"pattern": "{{label}} has an unexpected format.",
+					"integer": "{{label}} must be a whole number.",
+					"allowedValues": "{{label}} must be one of: {{values}}."
+				}
+			},
+			"catalog": {
+				"title": "External apps",
+				"subtitle": "Applications XE can install and run on this computer for you.",
+				"loading": "Loading applications…",
+				"empty": "No applications are available yet.",
+				"refresh": "Refresh catalog",
+				"refreshed": "Catalog updated.",
+				"refreshFailed": "The catalog could not be updated.",
+				"refreshFailureNotice": "Showing the applications XE ships with; the online catalog could not be reached. {{message}}",
+				"testedVersion": "Tested version {{version}}",
+				"license": "License: {{license}}",
+				"homepage": "Project page",
+				"install": "Install",
+				"details": "Details",
+				"runtimeNotReady": "The container runtime has to be ready before you can install an application.",
+				"unsupported": "This computer cannot run this application yet."
+			},
+			"install": {
+				"title": "Install {{name}}",
+				"steps": {
+					"permissions": "Permissions",
+					"variables": "Settings",
+					"resources": "Resource check",
+					"installing": "Installation"
+				},
+				"acceptPermissions": "Accept and continue",
+				"next": "Continue",
+				"back": "Back",
+				"confirm": "Install",
+				"resources": {
+					"ok": "This computer has enough memory and disk space.",
+					"memory": "Memory: {{required}} MB needed, {{available}} MB free",
+					"disk": "Disk space: {{required}} MB needed, {{available}} MB free",
+					"blocked": "This computer does not have enough free resources for this application right now."
+				},
+				"blocked": {
+					"GpuNotSupported": "This application needs a graphics card, which XE does not offer to applications yet.",
+					"RuntimeIncompatible": "This computer's container runtime does not offer everything this application needs.",
+					"RuntimeUnavailable": "The container runtime is not available on this computer.",
+					"InsufficientMemory": "There is not enough memory free.",
+					"InsufficientDisk": "There is not enough disk space free.",
+					"AlreadyInstalled": "This application is already installed.",
+					"CatalogMissing": "This application is no longer offered in the catalog."
+				},
+				"progress": {
+					"downloading": "Downloading {{service}} — {{completed}} of {{total}} parts",
+					"starting": "Starting the application…",
+					"waiting": "Waiting for the application to become ready…",
+					"keepsRunning": "You can close this window; the installation carries on."
+				},
+				"succeeded": "{{name}} is installed.",
+				"failed": "{{name}} could not be installed."
+			},
+			"conflict": {
+				"operationInFlight": "Another action on this application is still running. Wait for it to finish, then try again.",
+				"invalidTransition": "This action does not fit the application's current state. The page has been refreshed.",
+				"alreadyInstalled": "This application is already installed.",
+				"permissionChangeRequiresAcknowledgement": "The new version asks for more access than you allowed. Review the changes and accept them.",
+				"versionConflict": "The application changed while this page was open. The page has been refreshed; try again.",
+				"manifestChanged": "This application changed in the catalog while you were looking at it. Review what it asks for again."
+			},
+			"installed": {
+				"title": "Installed applications",
+				"subtitle": "Everything XE has installed for you on this computer.",
+				"loading": "Loading installed applications…",
+				"empty": "You have not installed an application yet.",
+				"browseCatalog": "Browse the catalog",
+				"columns": {
+					"name": "Application",
+					"status": "Status",
+					"version": "Version",
+					"address": "Address",
+					"actions": "Actions"
+				}
+			},
+			"detail": {
+				"loading": "Loading application…",
+				"notFound": "This application is not installed.",
+				"back": "Back to installed applications",
+				"status": "Status",
+				"runtime": "Runtime",
+				"version": "Version",
+				"access": "Access",
+				"accessValue": "This computer only",
+				"permissions": "Permissions",
+				"storage": "Storage",
+				"storageValue": "Managed by XE",
+				"address": "Address",
+				"addressPending": "Assigned when the application starts",
+				"updateAvailable": "Version {{version}} is available.",
+				"failureTitle": "Last problem",
+				"tabs": {
+					"overview": "Overview",
+					"settings": "Settings",
+					"history": "History",
+					"logs": "Logs"
+				},
+				"liveDegraded": "Live updates are unavailable; this page refreshes every few seconds."
+			},
+			"update": {
+				"title": "Update {{name}}",
+				"targetVersion": "New version {{version}}",
+				"steps": {
+					"variables": "Settings",
+					"permissions": "Permission changes",
+					"resources": "Resource check",
+					"updating": "Update"
+				},
+				"newlyRequired": "The new version needs this setting.",
+				"noPermissionChanges": "The new version asks for no additional access.",
+				"blocked": {
+					"GpuNotSupported": "This application needs a graphics card, which XE does not offer to applications yet.",
+					"RuntimeIncompatible": "This computer's container runtime does not offer everything this application needs.",
+					"RuntimeUnavailable": "The container runtime is not available on this computer.",
+					"InsufficientMemory": "There is not enough memory free.",
+					"InsufficientDisk": "There is not enough disk space free.",
+					"AlreadyInstalled": "This application is already installed.",
+					"CatalogMissing": "This application is no longer offered in the catalog."
+				},
+				"succeeded": "{{name}} was updated.",
+				"failed": "{{name}} could not be updated."
+			},
+			"actions": {
+				"open": "Open",
+				"openDisabled": "The application has to be running before you can open it.",
+				"start": "Start",
+				"stop": "Stop",
+				"restart": "Restart",
+				"update": "Update",
+				"cancel": "Cancel",
+				"cancelRequested": "Cancelling {{name}}.",
+				"reset": "Reset",
+				"uninstall": "Uninstall",
+				"started": "{{name}} is starting.",
+				"stopped": "{{name}} is stopping.",
+				"restarted": "{{name}} is restarting.",
+				"updated": "{{name}} is being updated.",
+				"wasReset": "{{name}} is being reset.",
+				"uninstalled": "{{name}} is being removed.",
+				"failed": "That did not work.",
+				"versionMoved": "{{name}} changed while the confirmation was open. Check it and try again.",
+				"versionMissing": "{{name}} has no version to send. Reload the page and try again.",
+				"resetConfirm": {
+					"title": "Reset {{name}}?",
+					"description": "This deletes everything the application has stored and starts it again from an empty state. Your settings are kept.",
+					"confirm": "Reset and delete data"
+				},
+				"uninstallConfirm": {
+					"title": "Uninstall {{name}}?",
+					"description": "This removes the application and permanently deletes everything it has stored. This cannot be undone.",
+					"confirm": "Uninstall and delete data"
+				},
+				"updateConfirm": {
+					"confirm": "Accept and update"
+				}
+			},
+			"events": {
+				"title": "History",
+				"empty": "Nothing has happened yet.",
+				"columns": {
+					"sequence": "#",
+					"time": "Time",
+					"kind": "Event"
+				},
+				"loadMore": "Load more events",
+				"kind": {
+					"unknown": "Unknown event",
+					"Installed": "Installed",
+					"StartRequested": "Start requested",
+					"Started": "Started",
+					"StopRequested": "Stop requested",
+					"Stopped": "Stopped",
+					"Restarted": "Restarted",
+					"UpdateRequested": "Update requested",
+					"Updated": "Updated",
+					"ResetRequested": "Reset requested",
+					"Reset": "Reset",
+					"UninstallRequested": "Uninstall requested",
+					"Uninstalled": "Uninstalled",
+					"Failed": "Failed",
+					"RestoredOnBoot": "Restored after restart",
+					"StoppedUnexpectedly": "Stopped unexpectedly",
+					"PermissionAccepted": "Permissions accepted"
+				}
+			},
+			"logs": {
+				"title": "Logs",
+				"service": "Part",
+				"tail": "Lines",
+				"refresh": "Refresh",
+				"empty": "No log output.",
+				"failed": "The log could not be read.",
+				"truncated": "Showing the last {{lines}} lines; older output was not loaded.",
+				"unavailable": "Logs are available only while the application exists on this computer."
 			}
 		},
 		"externalAccess": {

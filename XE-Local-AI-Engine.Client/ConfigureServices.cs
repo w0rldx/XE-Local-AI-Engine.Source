@@ -38,6 +38,7 @@ using XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Images;
 using XE_Local_AI_Engine.Client.Services.Integrations;
@@ -216,6 +217,11 @@ public static class ConfigureServices
         // And for graph workflows, whose publishing store decorator announces every committed run mutation.
         builder.Services.AddSingleton<IGraphWorkflowEventPublisher, GraphWorkflowEventPublisher>();
 
+        // External apps: the hub-backed publisher supersedes the no-op AddNodeExternalApps registers with
+        // TryAddSingleton, so a pull, a state change observed by the daemon watcher and the boot reconciler's
+        // adoptions all reach an open instance view live.
+        builder.Services.AddSingleton<IExternalAppEventPublisher, ExternalAppEventPublisher>();
+
         // Composes the run-detail and node-detail read shapes, which need the pinned graph and the agent names beside
         // the rows. Scoped, because the stores it reads are.
         builder.Services.AddScoped<DevWorkflowRunComposer>();
@@ -242,6 +248,8 @@ public static class ConfigureServices
                .AddExceptionHandler<DevWorkflowNotFoundExceptionHandler>()
                .AddExceptionHandler<DevelopmentNotFoundExceptionHandler>()
                .AddExceptionHandler<GraphWorkflowNotFoundExceptionHandler>()
+               .AddExceptionHandler<ExternalAppNotFoundExceptionHandler>()
+               .AddExceptionHandler<ContainerRuntimeUnavailableExceptionHandler>()
                .AddExceptionHandler<RequestBodyTooLargeExceptionHandler>()
                .AddExceptionHandler<DefaultExceptionHandler>();
         builder.Services.AddProblemDetails();

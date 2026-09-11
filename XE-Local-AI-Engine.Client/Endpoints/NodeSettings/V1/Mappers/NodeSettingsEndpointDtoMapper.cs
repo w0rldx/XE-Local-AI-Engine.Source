@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 
+using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 internal static class NodeSettingsEndpointDtoMapper
@@ -44,6 +45,12 @@ internal static class NodeSettingsEndpointDtoMapper
             MaxAllowedChatCacheReuse = StoredNodeSettings.MaxChatCacheReuse,
             SpeculativeMode = settings.SpeculativeMode,
             KvCacheType = settings.KvCacheType,
+            // The meeting point: the store holds a lower-case string, the engine holds the enum, and this pair is the
+            // only conversion. An unparseable stored value reads back as the default rather than crossing the wire.
+            ContainerRuntimeSelection = ContainerRuntimeSelectionParser.Format(
+                ContainerRuntimeSelectionParser.TryParse(settings.ContainerRuntimeSelection, out var runtimeSelection)
+                    ? runtimeSelection
+                    : ContainerRuntimeSelection.Auto),
             SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
             SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
             MinSpeculativeDraftMaxTokens = StoredNodeSettings.MinSpeculativeDraftMaxTokens,
@@ -131,6 +138,13 @@ internal static class NodeSettingsEndpointDtoMapper
             KvCacheType = request.KvCacheType is null
                 ? currentSettings.KvCacheType
                 : request.KvCacheType.Trim(),
+            // The validator has already proven a supplied value parses; the `else` is written rather than banged so a
+            // future caller that skips the validator keeps the stored value instead of persisting junk.
+            ContainerRuntimeSelection =
+                request.ContainerRuntimeSelection is null
+                || !ContainerRuntimeSelectionParser.TryParse(request.ContainerRuntimeSelection, out var requestedRuntimeSelection)
+                    ? currentSettings.ContainerRuntimeSelection
+                    : ContainerRuntimeSelectionParser.Format(requestedRuntimeSelection),
             SpeculativeDraftModelName = request.SpeculativeDraftModelName is null
                 ? currentSettings.SpeculativeDraftModelName
                 : request.SpeculativeDraftModelName.Trim(),

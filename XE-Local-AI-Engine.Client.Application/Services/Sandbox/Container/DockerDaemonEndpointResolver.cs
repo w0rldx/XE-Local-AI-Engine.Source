@@ -29,10 +29,38 @@ internal static class DockerDaemonEndpointResolver
         bool isWindows)
     {
         ArgumentNullException.ThrowIfNull(options);
+
+        return Resolve(options.DaemonEndpoint, environmentReader, fileExists, isWindows);
+    }
+
+    /// <summary>
+    ///     Resolve the endpoint from a plain configured endpoint string rather than from Development Mode's options
+    ///     record.
+    ///     <para>
+    ///         The discovery order is a property of this host, not of any one consumer: <c>DOCKER_HOST</c> and the
+    ///         platform sockets are the same whichever part of the engine is asking. So the second consumer of a
+    ///         daemon takes this overload and supplies its own configured value, rather than either constructing a
+    ///         <see cref="ContainerSandboxOptions" /> it does not own or forking a resolver that would drift from this
+    ///         one the first time a platform default changed.
+    ///     </para>
+    /// </summary>
+    /// <param name="configuredEndpoint">
+    ///     The consumer's explicit endpoint setting, or null when it has none. Pass a typed null
+    ///     (<c>(string?)null</c>) rather than the literal <c>null</c>: the <see cref="ContainerSandboxOptions" />
+    ///     overload accepts it equally well, so a bare <c>Resolve(null)</c> is CS0121-ambiguous.
+    /// </param>
+    /// <param name="environmentReader">Reads an environment variable; injected so the order is testable.</param>
+    /// <param name="fileExists">Whether a path exists; injected so the order is testable.</param>
+    /// <param name="isWindows">Whether the engine is running on Windows.</param>
+    public static DockerDaemonEndpoint Resolve(string? configuredEndpoint,
+        Func<string, string?> environmentReader,
+        Func<string, bool> fileExists,
+        bool isWindows)
+    {
         ArgumentNullException.ThrowIfNull(environmentReader);
         ArgumentNullException.ThrowIfNull(fileExists);
 
-        if (TryParseEndpoint(options.DaemonEndpoint, out var configured))
+        if (TryParseEndpoint(configuredEndpoint, out var configured))
         {
             return new DockerDaemonEndpoint(configured, DockerDaemonEndpointSource.Configuration);
         }
@@ -69,7 +97,15 @@ internal static class DockerDaemonEndpointResolver
     /// <summary>Production entry point: reads the real environment and filesystem.</summary>
     public static DockerDaemonEndpoint Resolve(ContainerSandboxOptions options)
     {
-        return Resolve(options,
+        ArgumentNullException.ThrowIfNull(options);
+
+        return Resolve(options.DaemonEndpoint);
+    }
+
+    /// <summary>Production entry point for a consumer that holds its own endpoint setting rather than Development Mode's.</summary>
+    public static DockerDaemonEndpoint Resolve(string? configuredEndpoint)
+    {
+        return Resolve(configuredEndpoint,
             Environment.GetEnvironmentVariable,
             static path => File.Exists(path) || Directory.Exists(path),
             OperatingSystem.IsWindows());

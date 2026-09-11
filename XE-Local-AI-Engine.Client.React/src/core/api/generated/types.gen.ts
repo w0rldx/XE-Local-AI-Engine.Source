@@ -57,6 +57,7 @@ export type FastEndpointsProblemDetailsError = {
 export type XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails = MicrosoftAspNetCoreMvcProblemDetails & {
 	conflictType?: string | null;
 	standingDecision?: string | null;
+	addedPermissions?: Array<string> | null;
 	[key: string]: unknown;
 };
 
@@ -1414,6 +1415,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	maxAllowedChatCacheReuse?: number;
 	speculativeMode?: string | null;
 	kvCacheType?: string | null;
+	containerRuntimeSelection?: string;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	minSpeculativeDraftMaxTokens?: number;
@@ -1478,6 +1480,7 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	chatCacheReuse?: number | null;
 	speculativeMode?: string | null;
 	kvCacheType?: string | null;
+	containerRuntimeSelection?: string | null;
 	speculativeDraftModelName?: string | null;
 	speculativeDraftMaxTokens?: number | null;
 	speculativeDraftGpuLayers?: number | null;
@@ -3499,6 +3502,344 @@ export type XeLocalAiEngineClientEndpointsExternalProvidersV1SaveExternalProvide
 	supportsReasoning?: boolean;
 	supportsReasoningEffort?: boolean;
 	defaultReasoningEffort?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView = {
+	id?: string;
+	manifestVersion?: number;
+	displayName?: string;
+	summary?: string;
+	description?: string;
+	homepage?: string;
+	license?: string;
+	trust?: string;
+	testedVersion?: string;
+	requires?: Array<string>;
+	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	resources?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
+	services?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView>;
+	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView = {
+	internet?: boolean;
+	localNetwork?: boolean;
+	hostFiles?: string;
+	gpu?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView = {
+	minimumMemoryMb?: number;
+	recommendedMemoryMb?: number;
+	cpuHint?: number;
+	pidsLimit?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServiceView = {
+	name?: string;
+	image?: string;
+	imageTag?: string;
+	entrypoint?: Array<string> | null;
+	command?: Array<string> | null;
+	environment?: {
+		[key: string]: string;
+	};
+	ports?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView>;
+	storage?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView>;
+	hasHealthcheck?: boolean;
+	dependsOn?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView>;
+	capAdd?: Array<string>;
+	extraHosts?: Array<string>;
+	readOnlyRootFilesystem?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPortView = {
+	containerPort?: number;
+	role?: string;
+	preferredHostPort?: number | null;
+	openPath?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppStorageView = {
+	name?: string;
+	containerPath?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDependencyView = {
+	service?: string;
+	condition?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView = {
+	name?: string;
+	label?: string;
+	description?: string | null;
+	type?: string;
+	required?: boolean;
+	default?: string | null;
+	allowedValues?: Array<string> | null;
+	advanced?: boolean;
+	validation?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView = {
+	minLength?: number | null;
+	maxLength?: number | null;
+	pattern?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstallPreview = {
+	applicationId?: string;
+	manifestVersion?: number;
+	manifestSha256?: string;
+	canInstall?: boolean;
+	blockedReason?: string | null;
+	existingInstanceId?: string | null;
+	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	effectivePermissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
+	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+	runtime?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+	missingCapabilities?: Array<string>;
+	resourceCheck?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView = {
+	internet?: boolean;
+	hostFiles?: string;
+	gpu?: string;
+	localNetwork?: boolean;
+	services?: {
+		[key: string]: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView;
+	};
+	capabilities?: Array<string>;
+	writableRootFilesystem?: boolean;
+	publishedPorts?: Array<string>;
+	extraHosts?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView = {
+	capabilities?: Array<string>;
+	writableRootFilesystem?: boolean;
+	publishedPorts?: Array<string>;
+	extraHosts?: Array<string>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse = {
+	provider?: string;
+	status?: string;
+	available?: boolean;
+	ready?: boolean;
+	message?: string;
+	requiresOperatorConfirmation?: boolean;
+	endpoint?: string | null;
+	endpointSource?: string | null;
+	observedDaemon?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
+	pinnedDaemon?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView | null;
+	capabilities?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView;
+	foreignInstallContainers?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppDaemonView = {
+	daemonId?: string | null;
+	serverVersion?: string | null;
+	endpoint?: string | null;
+	confirmedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView = {
+	containers?: boolean;
+	networks?: boolean;
+	bindStorage?: boolean;
+	loopbackPortPublishing?: boolean;
+	healthChecks?: boolean;
+	restartPolicies?: boolean;
+	logs?: boolean;
+	imagePull?: boolean;
+	gpuDevices?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView = {
+	satisfied?: boolean;
+	failureCategory?: string | null;
+	requiredMemoryBytes?: number;
+	availableMemoryBytes?: number;
+	requiredDiskBytes?: number;
+	availableDiskBytes?: number;
+	message?: string;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView = {
+	id?: string;
+	applicationId?: string;
+	displayName?: string;
+	manifestVersion?: number;
+	status?: string;
+	desiredState?: string;
+	runtimeOverride?: string | null;
+	runtimeProvider?: string;
+	manifest?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView;
+	publishedPorts?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView>;
+	variables?: {
+		[key: string]: string;
+	};
+	failureCategory?: string | null;
+	failureSummary?: string | null;
+	updateAvailable?: boolean;
+	availableManifestVersion?: number | null;
+	catalogMissing?: boolean;
+	installedAtUtc?: number;
+	startedAtUtc?: number | null;
+	stoppedAtUtc?: number | null;
+	updatedAtUtc?: number;
+	lastSequence?: number;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView = {
+	service?: string;
+	containerPort?: number;
+	hostPort?: number;
+	openPath?: string | null;
+	url?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse = {
+	service?: string;
+	text?: string;
+	lineCount?: number;
+	truncated?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview = {
+	applicationId?: string;
+	instanceId?: string;
+	currentManifestVersion?: number;
+	targetManifestVersion?: number;
+	manifestSha256?: string;
+	variables?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppVariableView>;
+	currentValues?: {
+		[key: string]: string;
+	};
+	addedPermissions?: Array<string>;
+	effectivePermissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView;
+	resourceVerdict?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView;
+	canUpdate?: boolean;
+	blockedReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView = {
+	id?: string;
+	applicationId?: string;
+	displayName?: string;
+	manifestVersion?: number;
+	status?: string;
+	desiredState?: string;
+	failureCategory?: string | null;
+	failureSummary?: string | null;
+	updateAvailable?: boolean;
+	availableManifestVersion?: number | null;
+	catalogMissing?: boolean;
+	updatedAtUtc?: number;
+	version?: number;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppRequest = {
+	applicationId: string;
+	displayName?: string | null;
+	manifestVersion: number;
+	manifestSha256: string;
+	variables: {
+		[key: string]: string;
+	};
+	acceptPermissions: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse = {
+	schemaVersion?: number;
+	generatedAtUtc?: number;
+	fetchedAtUtc?: number;
+	fromBundledSeed?: boolean;
+	refreshFailureMessage?: string | null;
+	lastRefreshFailure?: string | null;
+	applications?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppSummaryView = {
+	id?: string;
+	manifestVersion?: number;
+	displayName?: string;
+	summary?: string;
+	homepage?: string;
+	license?: string;
+	trust?: string;
+	testedVersion?: string;
+	requires?: Array<string>;
+	permissions?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppPermissionsView;
+	resources?: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppResourcesView;
+	installedInstanceId?: string | null;
+	installedStatus?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView>;
+	highestSequence?: number;
+	hasMore?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView = {
+	sequence?: number;
+	atUtc?: number;
+	kind?: string;
+	detailJson?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceEventFeedRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse = {
+	items?: Array<XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView>;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest = {
+	acknowledgeDaemonId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest = {
+	expectedVersion?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1UninstallExternalAppRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppRequest = {
+	manifestVersion: number;
+	manifestSha256: string;
+	acceptPermissions: boolean;
+	variables: {
+		[key: string]: string;
+	};
+	expectedVersion?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest = {
+	variables: {
+		[key: string]: string;
+	};
+	expectedVersion?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionResultResponse = {
@@ -13681,6 +14022,739 @@ export type ProbeExternalProviderResponses = {
 };
 
 export type ProbeExternalProviderResponse = ProbeExternalProviderResponses[keyof ProbeExternalProviderResponses];
+
+export type CancelExternalAppOperationData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/cancel";
+};
+
+export type CancelExternalAppOperationErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type CancelExternalAppOperationError = CancelExternalAppOperationErrors[keyof CancelExternalAppOperationErrors];
+
+export type CancelExternalAppOperationResponses = {
+	/**
+	 * Accepted
+	 */
+	202: unknown;
+};
+
+export type GetExternalAppCatalogApplicationData = {
+	body?: never;
+	path: {
+		applicationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/catalog/{applicationId}";
+};
+
+export type GetExternalAppCatalogApplicationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetExternalAppCatalogApplicationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppManifestView;
+};
+
+export type GetExternalAppCatalogApplicationResponse =
+	GetExternalAppCatalogApplicationResponses[keyof GetExternalAppCatalogApplicationResponses];
+
+export type GetExternalAppInstallPreviewData = {
+	body?: never;
+	path: {
+		applicationId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/catalog/{applicationId}/install-preview";
+};
+
+export type GetExternalAppInstallPreviewErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetExternalAppInstallPreviewResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstallPreview;
+};
+
+export type GetExternalAppInstallPreviewResponse =
+	GetExternalAppInstallPreviewResponses[keyof GetExternalAppInstallPreviewResponses];
+
+export type UninstallExternalAppData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query?: {
+		expectedVersion?: number | null;
+	};
+	url: "/api/local/v1/external-apps/instances/{instanceId}";
+};
+
+export type UninstallExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UninstallExternalAppError = UninstallExternalAppErrors[keyof UninstallExternalAppErrors];
+
+export type UninstallExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type UninstallExternalAppResponse = UninstallExternalAppResponses[keyof UninstallExternalAppResponses];
+
+export type GetExternalAppInstanceData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}";
+};
+
+export type GetExternalAppInstanceErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetExternalAppInstanceError = GetExternalAppInstanceErrors[keyof GetExternalAppInstanceErrors];
+
+export type GetExternalAppInstanceResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView;
+};
+
+export type GetExternalAppInstanceResponse = GetExternalAppInstanceResponses[keyof GetExternalAppInstanceResponses];
+
+export type GetExternalAppInstanceLogsData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query: {
+		service?: string | null;
+		tail: number;
+	};
+	url: "/api/local/v1/external-apps/instances/{instanceId}/logs";
+};
+
+export type GetExternalAppInstanceLogsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	503: FastEndpointsProblemDetails;
+};
+
+export type GetExternalAppInstanceLogsError = GetExternalAppInstanceLogsErrors[keyof GetExternalAppInstanceLogsErrors];
+
+export type GetExternalAppInstanceLogsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse;
+};
+
+export type GetExternalAppInstanceLogsResponse = GetExternalAppInstanceLogsResponses[keyof GetExternalAppInstanceLogsResponses];
+
+export type GetExternalAppRuntimeData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/runtime";
+};
+
+export type GetExternalAppRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetExternalAppRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+};
+
+export type GetExternalAppRuntimeResponse = GetExternalAppRuntimeResponses[keyof GetExternalAppRuntimeResponses];
+
+export type GetExternalAppUpdatePreviewData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/update-preview";
+};
+
+export type GetExternalAppUpdatePreviewErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetExternalAppUpdatePreviewError = GetExternalAppUpdatePreviewErrors[keyof GetExternalAppUpdatePreviewErrors];
+
+export type GetExternalAppUpdatePreviewResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview;
+};
+
+export type GetExternalAppUpdatePreviewResponse =
+	GetExternalAppUpdatePreviewResponses[keyof GetExternalAppUpdatePreviewResponses];
+
+export type ListExternalAppInstancesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/instances";
+};
+
+export type ListExternalAppInstancesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListExternalAppInstancesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse;
+};
+
+export type ListExternalAppInstancesResponse = ListExternalAppInstancesResponses[keyof ListExternalAppInstancesResponses];
+
+export type InstallExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1InstallExternalAppRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/instances";
+};
+
+export type InstallExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type InstallExternalAppError = InstallExternalAppErrors[keyof InstallExternalAppErrors];
+
+export type InstallExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type InstallExternalAppResponse = InstallExternalAppResponses[keyof InstallExternalAppResponses];
+
+export type ListExternalAppCatalogData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/catalog";
+};
+
+export type ListExternalAppCatalogErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListExternalAppCatalogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse;
+};
+
+export type ListExternalAppCatalogResponse = ListExternalAppCatalogResponses[keyof ListExternalAppCatalogResponses];
+
+export type ListExternalAppInstanceEventsData = {
+	body?: never;
+	path: {
+		instanceId: string;
+	};
+	query: {
+		afterSequence: number;
+		limit: number;
+	};
+	url: "/api/local/v1/external-apps/instances/{instanceId}/events";
+};
+
+export type ListExternalAppInstanceEventsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type ListExternalAppInstanceEventsError = ListExternalAppInstanceEventsErrors[keyof ListExternalAppInstanceEventsErrors];
+
+export type ListExternalAppInstanceEventsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse;
+};
+
+export type ListExternalAppInstanceEventsResponse =
+	ListExternalAppInstanceEventsResponses[keyof ListExternalAppInstanceEventsResponses];
+
+export type RefreshExternalAppCatalogData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/catalog/refresh";
+};
+
+export type RefreshExternalAppCatalogErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type RefreshExternalAppCatalogResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse;
+};
+
+export type RefreshExternalAppCatalogResponse = RefreshExternalAppCatalogResponses[keyof RefreshExternalAppCatalogResponses];
+
+export type RefreshExternalAppRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/external-apps/runtime/refresh";
+};
+
+export type RefreshExternalAppRuntimeErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	503: FastEndpointsProblemDetails;
+};
+
+export type RefreshExternalAppRuntimeError = RefreshExternalAppRuntimeErrors[keyof RefreshExternalAppRuntimeErrors];
+
+export type RefreshExternalAppRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse;
+};
+
+export type RefreshExternalAppRuntimeResponse = RefreshExternalAppRuntimeResponses[keyof RefreshExternalAppRuntimeResponses];
+
+export type ResetExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/reset";
+};
+
+export type ResetExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type ResetExternalAppError = ResetExternalAppErrors[keyof ResetExternalAppErrors];
+
+export type ResetExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type ResetExternalAppResponse = ResetExternalAppResponses[keyof ResetExternalAppResponses];
+
+export type RestartExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/restart";
+};
+
+export type RestartExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type RestartExternalAppError = RestartExternalAppErrors[keyof RestartExternalAppErrors];
+
+export type RestartExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type RestartExternalAppResponse = RestartExternalAppResponses[keyof RestartExternalAppResponses];
+
+export type StartExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/start";
+};
+
+export type StartExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type StartExternalAppError = StartExternalAppErrors[keyof StartExternalAppErrors];
+
+export type StartExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type StartExternalAppResponse = StartExternalAppResponses[keyof StartExternalAppResponses];
+
+export type StopExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/stop";
+};
+
+export type StopExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type StopExternalAppError = StopExternalAppErrors[keyof StopExternalAppErrors];
+
+export type StopExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type StopExternalAppResponse = StopExternalAppResponses[keyof StopExternalAppResponses];
+
+export type UpdateExternalAppData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/update";
+};
+
+export type UpdateExternalAppErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UpdateExternalAppError = UpdateExternalAppErrors[keyof UpdateExternalAppErrors];
+
+export type UpdateExternalAppResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView;
+};
+
+export type UpdateExternalAppResponse = UpdateExternalAppResponses[keyof UpdateExternalAppResponses];
+
+export type UpdateExternalAppVariablesData = {
+	body: XeLocalAiEngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest;
+	path: {
+		instanceId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/external-apps/instances/{instanceId}/variables";
+};
+
+export type UpdateExternalAppVariablesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientCommonProblemDetailModelsConflictProblemDetails;
+};
+
+export type UpdateExternalAppVariablesError = UpdateExternalAppVariablesErrors[keyof UpdateExternalAppVariablesErrors];
+
+export type UpdateExternalAppVariablesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsExternalAppsV1ExternalAppInstanceView;
+};
+
+export type UpdateExternalAppVariablesResponse = UpdateExternalAppVariablesResponses[keyof UpdateExternalAppVariablesResponses];
 
 export type DecideDevWorkflowNodeRunData = {
 	body: XeLocalAiEngineClientEndpointsDevelopmentWorkflowsV1DevWorkflowDecisionRequest;

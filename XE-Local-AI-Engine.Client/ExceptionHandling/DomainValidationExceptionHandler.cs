@@ -12,6 +12,7 @@ using XE_Local_AI_Engine.Client.Services.CloudProviders.Auth;
 using XE_Local_AI_Engine.Client.Services.CustomTools;
 using XE_Local_AI_Engine.Client.Services.Development;
 using XE_Local_AI_Engine.Client.Services.DevWorkflows;
+using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
@@ -63,7 +64,10 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             or TrainingRunRejectedException
             or KnowledgeRepositoryImportRejectedException
             or DevelopmentTemplateAliasInUseException
-            or DevelopmentTemplateMaterializationException))
+            or DevelopmentTemplateMaterializationException
+            or ExternalAppValidationException
+            or ExternalAppConfigurationException
+            or ExternalAppManifestException))
         {
             return false;
         }

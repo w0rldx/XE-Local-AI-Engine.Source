@@ -13184,6 +13184,1268 @@
         ]
       }
     },
+    "/api/local/v1/external-apps/instances/{instanceId}/cancel": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "cancelExternalAppOperation",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted"
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/catalog/{applicationId}": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppCatalogApplication",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppManifestView"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/catalog/{applicationId}/install-preview": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppInstallPreview",
+        "parameters": [
+          {
+            "name": "applicationId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstallPreview"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppInstance",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "uninstallExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "expectedVersion",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/logs": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppInstanceLogs",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "service",
+            "in": "query",
+            "schema": {
+              "type": "string",
+              "nullable": true
+            }
+          },
+          {
+            "name": "tail",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/runtime": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppRuntime",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/update-preview": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "getExternalAppUpdatePreview",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "installExternalApp",
+        "requestBody": {
+          "x-name": "InstallExternalAppRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1InstallExternalAppRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "listExternalAppInstances",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/catalog": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "listExternalAppCatalog",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/events": {
+      "get": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "listExternalAppInstanceEvents",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          },
+          {
+            "name": "afterSequence",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int32"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/catalog/refresh": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "refreshExternalAppCatalog",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/runtime/refresh": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "refreshExternalAppRuntime",
+        "requestBody": {
+          "x-name": "RefreshExternalAppRuntimeRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/reset": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "resetExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ExternalAppInstanceCommandRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/restart": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "restartExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ExternalAppInstanceCommandRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/start": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "startExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ExternalAppInstanceCommandRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/stop": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "stopExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "ExternalAppInstanceCommandRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/update": {
+      "post": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "updateExternalApp",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateExternalAppRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1UpdateExternalAppRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/external-apps/instances/{instanceId}/variables": {
+      "put": {
+        "tags": [
+          "External-Apps"
+        ],
+        "operationId": "updateExternalAppVariables",
+        "parameters": [
+          {
+            "name": "instanceId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UpdateExternalAppVariablesRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceView"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientCommonProblemDetailModelsConflictProblemDetails"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/development-workflows/runs/{runId}/nodes/{nodeRunId}/decision": {
       "post": {
         "tags": [
@@ -21600,6 +22862,13 @@
               "standingDecision": {
                 "type": "string",
                 "nullable": true
+              },
+              "addedPermissions": {
+                "type": "array",
+                "nullable": true,
+                "items": {
+                  "type": "string"
+                }
               }
             }
           }
@@ -26289,6 +27558,9 @@
             "type": "string",
             "nullable": true
           },
+          "containerRuntimeSelection": {
+            "type": "string"
+          },
           "speculativeDraftModelName": {
             "type": "string",
             "nullable": true
@@ -26537,6 +27809,10 @@
             "nullable": true
           },
           "kvCacheType": {
+            "type": "string",
+            "nullable": true
+          },
+          "containerRuntimeSelection": {
             "type": "string",
             "nullable": true
           },
@@ -33558,6 +34834,1052 @@
           },
           "defaultReasoningEffort": {
             "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppManifestView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "trust": {
+            "type": "string"
+          },
+          "testedVersion": {
+            "type": "string"
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPermissionsView"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourcesView"
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServiceView"
+            }
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPermissionsView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "internet": {
+            "type": "boolean"
+          },
+          "localNetwork": {
+            "type": "boolean"
+          },
+          "hostFiles": {
+            "type": "string"
+          },
+          "gpu": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourcesView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minimumMemoryMb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "recommendedMemoryMb": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "cpuHint": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "pidsLimit": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServiceView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "image": {
+            "type": "string"
+          },
+          "imageTag": {
+            "type": "string"
+          },
+          "entrypoint": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "command": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "environment": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "ports": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPortView"
+            }
+          },
+          "storage": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppStorageView"
+            }
+          },
+          "hasHealthcheck": {
+            "type": "boolean"
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDependencyView"
+            }
+          },
+          "capAdd": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extraHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "readOnlyRootFilesystem": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPortView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "containerPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "role": {
+            "type": "string"
+          },
+          "preferredHostPort": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "openPath": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppStorageView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "containerPath": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDependencyView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "condition": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "label": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string",
+            "nullable": true
+          },
+          "type": {
+            "type": "string"
+          },
+          "required": {
+            "type": "boolean"
+          },
+          "default": {
+            "type": "string",
+            "nullable": true
+          },
+          "allowedValues": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "type": "string"
+            }
+          },
+          "advanced": {
+            "type": "boolean"
+          },
+          "validation": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableValidationView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "minLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "maxLength": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "pattern": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppApplicationRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstallPreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "applicationId": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "canInstall": {
+            "type": "boolean"
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true
+          },
+          "existingInstanceId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPermissionsView"
+          },
+          "effectivePermissions": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableView"
+            }
+          },
+          "runtime": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse"
+          },
+          "missingCapabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "resourceCheck": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "internet": {
+            "type": "boolean"
+          },
+          "hostFiles": {
+            "type": "string"
+          },
+          "gpu": {
+            "type": "string"
+          },
+          "localNetwork": {
+            "type": "boolean"
+          },
+          "services": {
+            "type": "object",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView"
+            }
+          },
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writableRootFilesystem": {
+            "type": "boolean"
+          },
+          "publishedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extraHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppServicePermissionsView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "capabilities": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "writableRootFilesystem": {
+            "type": "boolean"
+          },
+          "publishedPorts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "extraHosts": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "available": {
+            "type": "boolean"
+          },
+          "ready": {
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requiresOperatorConfirmation": {
+            "type": "boolean"
+          },
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpointSource": {
+            "type": "string",
+            "nullable": true
+          },
+          "observedDaemon": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDaemonView"
+              }
+            ]
+          },
+          "pinnedDaemon": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDaemonView"
+              }
+            ]
+          },
+          "capabilities": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView"
+          },
+          "foreignInstallContainers": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppDaemonView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "daemonId": {
+            "type": "string",
+            "nullable": true
+          },
+          "serverVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "endpoint": {
+            "type": "string",
+            "nullable": true
+          },
+          "confirmedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCapabilitiesView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "containers": {
+            "type": "boolean"
+          },
+          "networks": {
+            "type": "boolean"
+          },
+          "bindStorage": {
+            "type": "boolean"
+          },
+          "loopbackPortPublishing": {
+            "type": "boolean"
+          },
+          "healthChecks": {
+            "type": "boolean"
+          },
+          "restartPolicies": {
+            "type": "boolean"
+          },
+          "logs": {
+            "type": "boolean"
+          },
+          "imagePull": {
+            "type": "boolean"
+          },
+          "gpuDevices": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {
+            "type": "boolean"
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "requiredMemoryBytes": {
+            "type": "integer"
+          },
+          "availableMemoryBytes": {
+            "type": "integer"
+          },
+          "requiredDiskBytes": {
+            "type": "integer"
+          },
+          "availableDiskBytes": {
+            "type": "integer"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "desiredState": {
+            "type": "string"
+          },
+          "runtimeOverride": {
+            "type": "string",
+            "nullable": true
+          },
+          "runtimeProvider": {
+            "type": "string"
+          },
+          "manifest": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppManifestView"
+          },
+          "publishedPorts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView"
+            }
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureSummary": {
+            "type": "string",
+            "nullable": true
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          },
+          "availableManifestVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "catalogMissing": {
+            "type": "boolean"
+          },
+          "installedAtUtc": {
+            "type": "integer"
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "stoppedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "lastSequence": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPublishedPortView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "containerPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "hostPort": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "openPath": {
+            "type": "string",
+            "nullable": true
+          },
+          "url": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "service": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "lineCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "truncated": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceLogsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppUpdatePreview": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "applicationId": {
+            "type": "string"
+          },
+          "instanceId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "currentManifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "targetManifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppVariableView"
+            }
+          },
+          "currentValues": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "addedPermissions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "effectivePermissions": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppEffectivePermissionsView"
+          },
+          "resourceVerdict": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourceCheckView"
+          },
+          "canUpdate": {
+            "type": "boolean"
+          },
+          "blockedReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceSummaryView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "applicationId": {
+            "type": "string"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "status": {
+            "type": "string"
+          },
+          "desiredState": {
+            "type": "string"
+          },
+          "failureCategory": {
+            "type": "string",
+            "nullable": true
+          },
+          "failureSummary": {
+            "type": "string",
+            "nullable": true
+          },
+          "updateAvailable": {
+            "type": "boolean"
+          },
+          "availableManifestVersion": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "catalogMissing": {
+            "type": "boolean"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1InstallExternalAppRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "applicationId",
+          "manifestVersion",
+          "manifestSha256",
+          "variables",
+          "acceptPermissions"
+        ],
+        "properties": {
+          "applicationId": {
+            "type": "string",
+            "minLength": 1,
+            "pattern": "^[a-z][a-z0-9-]{1,40}$",
+            "nullable": false
+          },
+          "displayName": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0,
+            "nullable": true
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "acceptPermissions": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppCatalogResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "schemaVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "generatedAtUtc": {
+            "type": "integer"
+          },
+          "fetchedAtUtc": {
+            "type": "integer"
+          },
+          "fromBundledSeed": {
+            "type": "boolean"
+          },
+          "refreshFailureMessage": {
+            "type": "string",
+            "nullable": true
+          },
+          "lastRefreshFailure": {
+            "type": "string",
+            "nullable": true
+          },
+          "applications": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppSummaryView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppSummaryView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "displayName": {
+            "type": "string"
+          },
+          "summary": {
+            "type": "string"
+          },
+          "homepage": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "trust": {
+            "type": "string"
+          },
+          "testedVersion": {
+            "type": "string"
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "permissions": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppPermissionsView"
+          },
+          "resources": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppResourcesView"
+          },
+          "installedInstanceId": {
+            "type": "string",
+            "format": "guid",
+            "nullable": true
+          },
+          "installedStatus": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstanceEventsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView"
+            }
+          },
+          "highestSequence": {
+            "type": "integer"
+          },
+          "hasMore": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceEventView": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "sequence": {
+            "type": "integer"
+          },
+          "atUtc": {
+            "type": "integer"
+          },
+          "kind": {
+            "type": "string"
+          },
+          "detailJson": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceEventFeedRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ListExternalAppInstancesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceView"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1RefreshExternalAppRuntimeRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "acknowledgeDaemonId": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 0,
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1ExternalAppInstanceCommandRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "expectedVersion": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1UninstallExternalAppRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1UpdateExternalAppRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "manifestVersion",
+          "manifestSha256",
+          "acceptPermissions",
+          "variables"
+        ],
+        "properties": {
+          "manifestVersion": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "manifestSha256": {
+            "type": "string"
+          },
+          "acceptPermissions": {
+            "type": "boolean"
+          },
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expectedVersion": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsExternalAppsV1UpdateExternalAppVariablesRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "variables"
+        ],
+        "properties": {
+          "variables": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "expectedVersion": {
+            "type": "integer",
             "nullable": true
           }
         }

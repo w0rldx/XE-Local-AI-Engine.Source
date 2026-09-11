@@ -1,0 +1,238 @@
+{
+  "$comment": [
+    "Everything the manifest needs that the upstream compose cannot supply: catalog metadata, digest-pinned images,",
+    "the loopback ports XE publishes, the engine-owned bind mounts that replace upstream's named volumes, the",
+    "catalog-shipped file bodies, and the provenance of all of it. build_catalog.py merges this with compose.yml and",
+    "variables.json; nothing here is derived from a running container."
+  ],
+  "provenance": {
+    "upstream": "https://github.com/odysseus-dev/odysseus",
+    "commit": "451900fc151554f4c8654d1e4d3dadc1d029b047",
+    "commitDateUtc": "2026-08-25T09:22:41Z",
+    "composePath": "docker-compose.yml",
+    "filesPath": "config/searxng/settings.yml",
+    "fetchedAtUtc": "2026-09-06T10:50:00Z",
+    "fetchCommand": "curl -sSL https://raw.githubusercontent.com/odysseus-dev/odysseus/451900fc151554f4c8654d1e4d3dadc1d029b047/<path>",
+    "fetchedSizes": {
+      "docker-compose.yml": 6951,
+      "config/searxng/settings.yml": 113
+    },
+    "imagePublisherNote": [
+      "ghcr.io/pewdiepie-archdaemon/odysseus is upstream's OWN CI publish under the project's original owner name,",
+      "not a third-party mirror. The repository was later renamed to odysseus-dev/odysseus while the GHCR namespace",
+      "kept the original owner, so the owner mismatch is expected and is not a supply-chain finding.",
+      "Verified 2026-09-05 (see ASSESSMENT.md section 0)."
+    ],
+    "digests": [
+      {
+        "ref": "ghcr.io/pewdiepie-archdaemon/odysseus",
+        "tag": "1.0.0",
+        "digest": "sha256:86da8698e4ad442e9d78d74c94b365315f5c3a9918d81c24518d47808cbdef21",
+        "resolvedAtUtc": "2026-09-05T00:00:00Z",
+        "resolvedBy": "ruling D3 (ASSESSMENT.md section 0) — given, never re-derived here",
+        "mediaType": "application/vnd.oci.image.index.v1+json"
+      },
+      {
+        "ref": "docker.io/chromadb/chroma",
+        "tag": "1.5.9",
+        "digest": "sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6",
+        "resolvedAtUtc": "2026-09-06T10:52:55Z",
+        "resolvedBy": "docker buildx imagetools inspect docker.io/chromadb/chroma:1.5.9 --format '{{json .Manifest}}'",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "tagNote": [
+          "Upstream compose says ':latest', which rule S3 forbids. 1.5.9 (published 2026-05-05) is the newest",
+          "non-dev release of chroma-core/chroma; every Docker Hub tag published since is a '.devNNN' CI build.",
+          "The Docker Hub 'latest' tag resolved to this same digest when it was checked on 2026-09-06."
+        ]
+      },
+      {
+        "ref": "docker.io/searxng/searxng",
+        "tag": "2026.5.31-7159b8aed",
+        "digest": "sha256:35b089054ac9b4257976107e71673d9e30ac17c9b50bbf8b4783f2f6d1d1981f",
+        "resolvedAtUtc": "2026-09-06T10:52:55Z",
+        "resolvedBy": "docker buildx imagetools inspect docker.io/searxng/searxng:2026.5.31-7159b8aed --format '{{json .Manifest}}'",
+        "mediaType": "application/vnd.oci.image.index.v1+json",
+        "tagNote": [
+          "Upstream pins this tag deliberately: its compose comment records that 2026.6.2 crashes on boot with",
+          "KeyError: 'default_doi_resolver', which fails the healthcheck odysseus waits on."
+        ]
+      },
+      {
+        "ref": "docker.io/binwiederhier/ntfy",
+        "tag": "v2.28.0",
+        "digest": "sha256:6ef4b819f722fccdc036af611c4774cfdc2de821ab74fdd48bbf4c9d6f8973da",
+        "resolvedAtUtc": "2026-09-06T10:52:55Z",
+        "resolvedBy": "docker buildx imagetools inspect docker.io/binwiederhier/ntfy:v2.28.0 --format '{{json .Manifest}}'",
+        "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+        "tagNote": [
+          "Upstream compose gives no tag, which would resolve to ':latest'. v2.28.0 (published 2026-08-27) is the",
+          "newest released version and is what ':latest' pointed at when the digest was resolved."
+        ]
+      }
+    ],
+    "resourceEstimateNote": [
+      "Upstream publishes no memory figures. minimumMemoryMb/recommendedMemoryMb are catalog-author estimates built",
+      "from the four containers' shapes: the Python app loading sentence-transformers/all-MiniLM-L6-v2 in-process",
+      "(~0.5-1 GiB), ChromaDB (~0.5 GiB), SearXNG (~0.3 GiB), ntfy (~0.05 GiB), plus SQLite page cache and ingestion",
+      "headroom. S5 records observed RSS so a follow-up can replace the estimates with measurements."
+    ]
+  },
+  "application": {
+    "id": "odysseus",
+    "manifestVersion": 1,
+    "displayName": "Odysseus",
+    "summary": "Self-hosted personal AI assistant with chat, research, memory and a private meta-search engine.",
+    "description": "Odysseus is a self-hosted personal AI workspace: chat with local or hosted models, run multi-step research over the web, keep a searchable memory of documents and conversations, and receive push notifications when long jobs finish. The install runs four containers on a private loopback network — the Odysseus application itself, a ChromaDB vector store for memory, a SearXNG meta-search engine so web research never goes through a third-party search API, and an ntfy server for notifications. Only the Odysseus web interface and the notification server are published, both to 127.0.0.1 only. Odysseus reaches model servers running on this computer, so it can use XE's own local model server; it also reaches the internet for web search, model downloads and any hosted model API you configure.",
+    "homepage": "https://github.com/odysseus-dev/odysseus",
+    "license": "AGPL-3.0-or-later",
+    "trust": "xeCatalog",
+    "testedVersion": "1.0.0",
+    "requires": [
+      "containers",
+      "networks",
+      "bindStorage",
+      "loopbackPortPublishing",
+      "healthChecks",
+      "restartPolicies",
+      "logs",
+      "imagePull"
+    ],
+    "permissions": {
+      "internet": true,
+      "localNetwork": true,
+      "hostFiles": "none",
+      "gpu": "none"
+    },
+    "resources": {
+      "minimumMemoryMb": 4096,
+      "recommendedMemoryMb": 8192,
+      "cpuHint": 2,
+      "pidsLimit": 2048
+    }
+  },
+  "services": {
+    "odysseus": {
+      "image": "ghcr.io/pewdiepie-archdaemon/odysseus@sha256:86da8698e4ad442e9d78d74c94b365315f5c3a9918d81c24518d47808cbdef21",
+      "imageTag": "1.0.0",
+      "readOnlyRootFilesystem": false,
+      "capAdd": [
+        "AUDIT_WRITE",
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+        "KILL",
+        "MKNOD",
+        "NET_BIND_SERVICE",
+        "NET_RAW",
+        "SETFCAP",
+        "SETGID",
+        "SETPCAP",
+        "SETUID",
+        "SYS_CHROOT"
+      ],
+      "capAddJustification": "A PUID/PGID image: it starts as in-container root, chowns its bind mounts and drops to the target uid. Docker's default set is what upstream ships and tests against; the policy still applies cap_drop ALL first, so this never exceeds a plain 'docker run'.",
+      "ports": [
+        { "containerPort": 7000, "role": "ui", "preferredHostPort": 7000, "openPath": "/" }
+      ],
+      "storage": [
+        { "name": "data", "containerPath": "/app/data" },
+        { "name": "logs", "containerPath": "/app/logs" },
+        { "name": "ssh", "containerPath": "/app/.ssh" },
+        { "name": "huggingface", "containerPath": "/app/.cache/huggingface" },
+        { "name": "local", "containerPath": "/app/.local" }
+      ],
+      "files": []
+    },
+    "chromadb": {
+      "image": "docker.io/chromadb/chroma@sha256:1e0b73a187a28757c572acba508c46f48c9e8b0acaf5c20e6d95cdedce1acdf6",
+      "imageTag": "1.5.9",
+      "readOnlyRootFilesystem": false,
+      "capAdd": [
+        "AUDIT_WRITE",
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+        "KILL",
+        "MKNOD",
+        "NET_BIND_SERVICE",
+        "NET_RAW",
+        "SETFCAP",
+        "SETGID",
+        "SETPCAP",
+        "SETUID",
+        "SYS_CHROOT"
+      ],
+      "capAddJustification": "Untested under a narrower set. Docker's default set is what upstream ships and tests against; S5 may narrow it with live-round evidence.",
+      "ports": [],
+      "ignoredPorts": [
+        {
+          "containerPort": 8000,
+          "reason": "Not published: Odysseus reaches ChromaDB server-side at chromadb:8000 through CHROMADB_HOST/CHROMADB_PORT on the instance network."
+        }
+      ],
+      "storage": [
+        { "name": "data", "containerPath": "/chroma/chroma" }
+      ],
+      "files": []
+    },
+    "searxng": {
+      "image": "docker.io/searxng/searxng@sha256:35b089054ac9b4257976107e71673d9e30ac17c9b50bbf8b4783f2f6d1d1981f",
+      "imageTag": "2026.5.31-7159b8aed",
+      "readOnlyRootFilesystem": false,
+      "capAddJustification": "Upstream's own four (CHOWN, SETGID, SETUID, DAC_OVERRIDE), taken from compose: its entrypoint chowns /etc/searxng and drops privileges via su-exec before writing settings.yml.",
+      "ports": [],
+      "ignoredPorts": [
+        {
+          "containerPort": 8080,
+          "reason": "Not published: Odysseus reaches SearXNG server-side at http://searxng:8080 through SEARXNG_INSTANCE on the instance network."
+        }
+      ],
+      "storageNote": [
+        "The searxng image declares TWO volumes, /etc/searxng and /var/cache/searxng. Upstream's compose mounts",
+        "only the first, leaving the second anonymous, so the converter had nothing to derive it from. An",
+        "undeclared image VOLUME is a PolicyViolation on this engine and the install fails at the post-start",
+        "inspect, which is how the S5 live round found it. Every image VOLUME has to appear here."
+      ],
+      "imageVolumes": [ "/var/cache/searxng" ],
+      "storage": [
+        { "name": "config", "containerPath": "/etc/searxng" },
+        { "name": "cache", "containerPath": "/var/cache/searxng" }
+      ],
+      "files": [
+        { "source": "files/searxng/settings.yml", "containerPath": "/tmp/searxng-settings.yml.template" }
+      ]
+    },
+    "ntfy": {
+      "image": "docker.io/binwiederhier/ntfy@sha256:6ef4b819f722fccdc036af611c4774cfdc2de821ab74fdd48bbf4c9d6f8973da",
+      "imageTag": "v2.28.0",
+      "readOnlyRootFilesystem": false,
+      "capAdd": [
+        "AUDIT_WRITE",
+        "CHOWN",
+        "DAC_OVERRIDE",
+        "FOWNER",
+        "FSETID",
+        "KILL",
+        "MKNOD",
+        "NET_BIND_SERVICE",
+        "NET_RAW",
+        "SETFCAP",
+        "SETGID",
+        "SETPCAP",
+        "SETUID",
+        "SYS_CHROOT"
+      ],
+      "capAddJustification": "Binds container port 80, which needs NET_BIND_SERVICE. Docker's default set is what upstream ships and tests against.",
+      "ports": [
+        { "containerPort": 80, "role": "ui", "preferredHostPort": 8091, "openPath": null }
+      ],
+      "portNote": "openPath is null: the browser subscribes to ntfy directly at NTFY_BASE_URL, so the port must resolve from the host, but ntfy is not offered as an Open target. Exactly one port per application carries an openPath (rule A17) and that is odysseus:7000. Inferred from upstream's own port mapping and its localhost base-URL default, not from running the app; S5 confirms or removes it.",
+      "storage": [
+        { "name": "cache", "containerPath": "/var/cache/ntfy" }
+      ],
+      "files": []
+    }
+  }
+}

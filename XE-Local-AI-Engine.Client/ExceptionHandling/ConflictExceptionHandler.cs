@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Common.ProblemDetailModels.Enums;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Connection;
+using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Workspace;
@@ -55,6 +56,12 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             GraphWorkflowDefinitionConflictException => NodeConflictProblemType.GraphWorkflowDefinitionConflict,
             GraphWorkflowRunConflictException => NodeConflictProblemType.GraphWorkflowRunConflict,
             GraphWorkflowGateAlreadyDecidedException => NodeConflictProblemType.GraphWorkflowGateAlreadyDecided,
+            ExternalAppOperationInFlightException => NodeConflictProblemType.ExternalAppOperationInFlight,
+            ExternalAppInvalidTransitionException => NodeConflictProblemType.ExternalAppInvalidTransition,
+            ExternalAppAlreadyInstalledException => NodeConflictProblemType.ExternalAppAlreadyInstalled,
+            ExternalAppPermissionChangeRequiresAcknowledgementException => NodeConflictProblemType.ExternalAppPermissionChangeRequiresAcknowledgement,
+            ExternalAppManifestChangedException => NodeConflictProblemType.ExternalAppManifestChanged,
+            ExternalAppConcurrencyException => NodeConflictProblemType.ExternalAppVersionConflict,
 
             // The store's own rejection channel, under the same member: a stale ExpectedVersion, a lost concurrency
             // race and a request id reused on another definition all reach a client as "re-read the run", and giving
@@ -94,7 +101,7 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
             Detail = exception.Message ?? "Conflict"
         }.WithTraceId(httpContext);
 
-        SetStandingDecision(problemDetails, exception);
+        SetTypedMembers(problemDetails, exception);
 
         // The content type MUST be passed here: WriteAsJsonAsync overwrites Response.ContentType with
         // application/json when it is not, which silently demoted this problem+json body.
@@ -104,11 +111,12 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
     }
 
     /// <summary>
-    ///     Carries the detail an operator needs to act on the refusal — the decision that already stands. It is a
-    ///     typed member of the one conflict envelope (omitted when null) so the OpenAPI schema names it; the wire body
-    ///     is the same as when it was a problem-details extension.
+    ///     Carries the detail an operator needs to act on the refusal — the decision that already stands, or the
+    ///     permissions the refused update would add. Each is a typed member of the one conflict envelope (omitted when
+    ///     null) so the OpenAPI schema names it; the wire body is the same as when they rode as problem-details
+    ///     extensions.
     /// </summary>
-    private static void SetStandingDecision(ConflictProblemDetails problemDetails, Exception exception)
+    private static void SetTypedMembers(ConflictProblemDetails problemDetails, Exception exception)
     {
         switch (exception)
         {
@@ -117,6 +125,9 @@ public class ConflictExceptionHandler(ILogger<ConflictExceptionHandler> logger) 
                 break;
             case GraphWorkflowGateAlreadyDecidedException graphGateDecided:
                 problemDetails.StandingDecision = graphGateDecided.StandingDecision.ToString();
+                break;
+            case ExternalAppPermissionChangeRequiresAcknowledgementException permissionChange:
+                problemDetails.AddedPermissions = permissionChange.AddedPermissions;
                 break;
             default:
                 break;

@@ -491,6 +491,13 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                 graphEvent.DetailJson =
                     DecryptIfPresent(graphEvent.DetailJson, context.NodeEncryptionKey.Span, graphEvent.RunId, graphEvent.Id, "graph_workflow_run_event_detail_json");
                 break;
+            case ExternalAppInstance externalAppInstance:
+                externalAppInstance.VariablesJson = NodePayloadProtector.Decrypt(externalAppInstance.VariablesJson,
+                    context.NodeEncryptionKey.Span,
+                    externalAppInstance.Id,
+                    externalAppInstance.Id,
+                    "external_app_instance_variables_json");
+                break;
         }
 
         return entity;

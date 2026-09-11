@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 
@@ -156,6 +157,12 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const bool DefaultToolRelevanceEnabled = false;
 
+    /// <summary>
+    ///     Default application-container runtime selection. <c>auto</c> lets the engine pick, which in this version is
+    ///     always Docker; the constant exists so a reader of an absent setting is told what absent means.
+    /// </summary>
+    public const string DefaultContainerRuntimeSelection = ContainerRuntimeSelectionParser.Auto;
+
     /// <summary>The <see cref="ExternalAccessProfile" /> literal recording that the recommended preset is in force.</summary>
     public const string ExternalAccessProfileRecommended = "recommended";
 
@@ -226,6 +233,17 @@ public sealed partial record StoredNodeSettings
     public static bool SpeculativeModeRequiresDraftModel(string? mode)
     {
         return SpeculativeDecodingSettings.ModeRequiresDraftModel(mode);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="value" /> names a container runtime this engine knows
+    ///     (<c>auto</c> or <c>docker</c>, ordinal-ignore-case). Delegates to
+    ///     <see cref="ContainerRuntimeSelectionParser.TryParse" /> so the stored, wire and engine representations of the
+    ///     selection have one authority rather than an allow-list restated per caller.
+    /// </summary>
+    public static bool IsValidContainerRuntimeSelection(string? value)
+    {
+        return ContainerRuntimeSelectionParser.TryParse(value, out _);
     }
 
     /// <summary>
@@ -473,6 +491,20 @@ public sealed partial record StoredNodeSettings
     ///     current node settings; no restart needed).
     /// </summary>
     public NodeUsageRateSettings? UsageRates { get; init; }
+
+    /// <summary>
+    ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.
+    ///     <see langword="null" /> (absent) reads as <see cref="DefaultContainerRuntimeSelection" />, so a partial save
+    ///     that omits the field preserves what is stored. Unknown falls back to <see langword="null" /> in
+    ///     <c>NodeSettingsStore.Normalize</c>.
+    ///     <para>
+    ///         Stored as a string rather than as the engine's enum for the reason <c>SpeculativeMode</c> and
+    ///         <c>KvCacheType</c> are: this file is serialized with web defaults and no enum converter, so an enum
+    ///         would persist as <c>0</c>/<c>1</c> in a file an operator hand-edits and would change meaning silently if
+    ///         a value were ever inserted.
+    ///     </para>
+    /// </summary>
+    public string? ContainerRuntimeSelection { get; init; }
 
     /// <summary>
     ///     Stable, LOCAL-ONLY machine identifier used to key inference profiles to the box they were tuned on. Generated

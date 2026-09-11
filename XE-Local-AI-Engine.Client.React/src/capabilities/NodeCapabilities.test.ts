@@ -69,6 +69,13 @@ describe("nodeCapabilities", () => {
 		expect(nodeCapabilities.graphWorkflows).toBe(true);
 	});
 
+	// S5 flips this on ahead of its live browser round. The flag is compile-time: the node's own
+	// ExternalApps:Enabled switch can neither reveal these routes nor hide them, so the default is asserted rather
+	// than assumed — it is what decides whether the nav group and the four routes exist at all.
+	it("enables the External Apps surface by default", () => {
+		expect(nodeCapabilities.externalApps).toBe(true);
+	});
+
 	it("defines the route paths targeted by the node shell", () => {
 		expect(nodeRoutePaths).toEqual({
 			home: "/",
@@ -104,6 +111,8 @@ describe("nodeCapabilities", () => {
 			integrationExecutions: "/integrations/executions",
 			integrationKeys: "/integrations/keys",
 			graphWorkflows: "/graph-workflows",
+			externalApps: "/external-apps/catalog",
+			externalAppsInstalled: "/external-apps/installed",
 			diagnostics: "/diagnostics",
 		});
 	});

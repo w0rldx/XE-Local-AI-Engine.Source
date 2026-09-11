@@ -452,6 +452,65 @@ Unchanged: HTTP MCP registrations stay exact-match loopback (`McpOptions.HttpLoo
 time), the tier is inert for them, and every MCP tool of every tier remains approval-required, pre-wrapped in
 `ApprovalRequiredAIFunction`, and ineligible for a remembered session approval.
 
+### 7.3 External Apps run under an engine-owned container policy
+
+**External Apps** installs curated, containerised applications from an XE-authored catalog
+([ADR 0010](../adr/0010-external-apps-container-execution.md), [External Apps](23-external-apps.md)). It is the
+**second** consumer class of the Docker socket after §7.1's sandbox, and it does not widen that grant — the socket is
+root-equivalent either way, which is the whole subject of the ADR. The sandbox SPI is untouched: an application that
+publishes a port and writes to a data directory violates `DockerSandboxHardening`'s contract by construction, so
+External Apps stands beside that contract with its own rather than loosening it.
+
+What a security reader needs from this page:
+
+- **One policy builds every container, and the daemon's read-back is verified against it.**
+  `ApplicationContainerPolicy.BuildSpecification` sets `cap_drop ALL`, `no-new-privileges:true`, the repo's seccomp
+  profile, the instance's own private network, an explicit mount set, `unless-stopped`, the manifest's `pidsLimit`
+  and a digest-pinned image. `FindViolations` re-reads the daemon's own view **before and after start**; a
+  disagreement is a `PolicyViolation` failure that stops the instance, not a warning.
+- **Publishing is loopback-only.** A published port binds ordinal `127.0.0.1` — `::1` is refused — and only ports
+  the manifest declares. This is checked in the specification and again on read-back.
+- **Containers may run as in-container root, deliberately.** No `--user` is passed: the curated images drop
+  privileges through their own entrypoints, and forcing a uid breaks that and a port-80 bind. The boundary is the
+  container, the dropped capabilities, seccomp, `no-new-privileges` and the loopback network — **not** the uid.
+  `capAdd` is bounded by Docker's own default 14, so a service can never exceed an unhardened `docker run`.
+- **V1 enforces no outbound network restriction.** `permissions.internet` is always true and
+  `permissions.localNetwork` is a **disclosure** on the install panel, not a control. Nothing denies either. Read the
+  panel as what the application may do, never as an enforced boundary. There is likewise **no memory and no CPU
+  ceiling**: the manifest's memory figures gate admission only.
+- **The one container that keeps Docker's default capability set is engine-owned and short-lived.** Reset and
+  uninstall delete an instance's volume contents from a digest-pinned helper container with a read-only root
+  filesystem, no network, no environment, a 64-process limit and exactly one bind mount — that instance's volumes
+  directory. It keeps the default capabilities because `CAP_DAC_OVERRIDE` is what lets in-container root unlink the
+  `0700` directories an application's own non-root user left behind; under a rootless daemon those belong to a host
+  uid inside the operator's subuid range that the engine cannot even traverse. With that helper, **uninstall really
+  does delete everything the application stored**, on rootless and rootful daemons alike — verified live against
+  exactly such a subuid-owned subtree. The engine removes the emptied tree host-side and counts what is left rather
+  than trusting an exit code.
+- **Secrets stay in one encrypted column and are never rendered.** A manifest `secret` variable is the user's own
+  credential: values live in `external_app_instance_variables_json`, AEAD-encrypted and AAD-bound to the row's id,
+  masked on the way out and preserved when the mask comes back in. `ApplicationManifest` suppresses its record
+  `PrintMembers`, so a structured log of a snapshot cannot print the catalog or a variable default, and
+  `FailureSummary` is content-free by contract — category prose, a service name, the resource gate's two figures,
+  never a variable value and never a daemon message. Container **logs are unmasked by design**: the text is the
+  application's own output, not an engine-owned value.
+- **A daemon endpoint is redacted before it is logged, pinned, or returned.** `DockerDaemonEndpoint.Display` drops
+  user information, the query and the fragment whole — an operator-set `DOCKER_HOST` is somewhere a token fits, and
+  the paths that refuse such an endpoint would otherwise disclose it in the course of declining to use it. A pin
+  written before that existed is redacted on the way back off disk, and an endpoint that carries any of the three is
+  refused by name, never by quoting it.
+- **Ownership is by label, and foreign containers are reported, never removed.** Container names repeat across two
+  XE installations pointed at one daemon, so every container and network carries an owner label, a per-installation
+  install id, an instance label and a service label. Owner-labelled containers under a *different* install id are
+  counted as `foreignInstallContainers` and left alone.
+- **Catalog trust is curation plus HTTPS plus digests. There is no signing in V1.** A configured refresh URL must be
+  `https://`, with plain HTTP accepted only for `127.0.0.1`, `::1` and `localhost`; redirects are not followed, and a
+  document that fails any validator rule is rejected whole.
+- **The kill switch is a surface switch, not a stop button.** `ExternalApps:Enabled=false` 404s every route and the
+  hub negotiate at the request-path middleware, ahead of the security middleware, so the switch cannot be probed by
+  status code. It does not stop running containers and does not hide the navigation group, which is compile-time.
+  The safe order is **stop or uninstall every instance, then disable**.
+
 ### Development Mode source and execution boundary
 
 Development Mode ships enabled by default. `Development:Enabled=false` is the backend emergency switch for an
@@ -728,6 +787,7 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [ ] Analysis/eval/extraction AI runs node-local only.
 - [ ] Tool execution stays inside the jail with symlink + O_NOFOLLOW + byte-cap guards.
 - [ ] A new outbound MCP capability does not weaken the default trust tier: `Sandboxed` stays the default for stdio, `PrivilegedHost` stays a per-server operator grant, and a host that cannot serve the boundary still refuses rather than degrading.
+- [ ] A new External Apps capability keeps the container policy fail-closed: `cap_drop ALL` plus a `capAdd` inside Docker's default set, `no-new-privileges` and seccomp, loopback-only publishing, a digest-pinned image, the declared mount set only, and every one of them re-verified against the daemon's read-back rather than assumed from the create call.
 - [ ] No banned API (RS0030) and no literal TODO/FIXME comment.
 
 ---
@@ -740,5 +800,6 @@ The file documents its own scope: it is the "safe set" — APIs with zero curren
 - [Data & Persistence](08-data-and-persistence.md) — at-rest encryption schema & interceptor
 - [API & Hubs](09-api-and-hubs.md) — `/api/local/v1` surface, auth policies, local hubs
 - [Hosting & Deployment](11-hosting-and-deployment.md) — loopback local modes and opt-in user autostart
+- [External Apps](23-external-apps.md) — §7.3 in full: the container policy, the storage helper, and what V1 does not enforce
 - [Testing & Validation](13-testing-and-validation.md) — persistence-encryption & loopback tests
 - [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md) — baseline auditor narrative, evidence states, and residual-risk limitations
