@@ -128,9 +128,9 @@ On 2026-08-19, five cycles included a real `llama-server`, Docker `sqlite-web`, 
 
 ### Rootless container identity
 
-Measured on rootless Docker Engine 29.6.1 with subuid base 100000:
+Measured on a rootless Docker Engine daemon with a non-default subuid range:
 
-- container `1000:1000` mapped to host 100999 and could not write the engine-owned bind mount;
+- container `1000:1000` mapped to a host uid near the top of that range (base + 999) and could not write the engine-owned bind mount;
 - container `0:0` mapped to the invoking host user and wrote files owned by that user;
 - `inspect` reported the requested identity in both cases and could not reveal the mapping.
 
@@ -142,7 +142,7 @@ With a read-only root filesystem, every `dotnet` command failed EROFS before pro
 
 ### Host-git execution from repository configuration
 
-On git 2.53.0, repository `core.fsmonitor` executed during index refresh, and an in-tree `.gitattributes` selected a `filter.*.clean` command during `git add`. Command-line `-c core.fsmonitor=` closes the finite key; arbitrary filter driver names cannot be pre-pinned. This is why `.git/config` is mounted read-only in the container and rewritten before host-side patch-evidence git calls.
+On a recent Git release, repository `core.fsmonitor` executed during index refresh, and an in-tree `.gitattributes` selected a `filter.*.clean` command during `git add`. Command-line `-c core.fsmonitor=` closes the finite key; arbitrary filter driver names cannot be pre-pinned. This is why `.git/config` is mounted read-only in the container and rewritten before host-side patch-evidence git calls.
 
 ### Tool grammar ceiling
 
@@ -176,7 +176,7 @@ The first native Windows run on 2026-08-03 found:
 
 ### BYO CUDA runtime without `llama-fit-params` (2026-09-05)
 
-AI-trends follow-up pass B, B4 (D13 profile-authority live proof) round 1 against `~/cuda-llama/b10201/build/bin`: six host
+AI-trends follow-up pass B, B4 (D13 profile-authority live proof) round 1 against a BYO `~/cuda-llama/<tag>` build: six host
 restarts and about sixteen minutes produced five NOT RUN observations before the missing sibling binary explained them —
 every Explore answered 400. Round 2 against a scratch copy of the same bin directory with the freshly built
 `llama-fit-params` passed 6/6 in about twelve minutes; the shared directory's 25-file md5 manifest was identical before and

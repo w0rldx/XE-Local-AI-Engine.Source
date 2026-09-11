@@ -265,7 +265,7 @@ The mapping is `round(100 · σ(θᵢ − mean θ))`, not `100 · p / max(p)` �
 
 Ranking reads the scores out of the active fit while its `FitKey` still matches. The key covers policy revision, cohort generation, policy hash, both pairwise versions, the task case **and the judge execution identity** — a generation counter alone cannot tell a reader whether the fit behind a stored score used the same verdicts, prompt, case or judge runtime.
 
-Measured on this box: the pointwise judge scored **all four quants 100** and dense-ranked them all rank 1 — zero discrimination — while the pairwise fit over the same four answers produced UD-Q3_K_XL 69 [56, 90], Q5_K_M 60 [46, 77], Q6_K 51 [23, 70], Q4_K_M 23 [9, 34]. ~30.7 s per comparison; budget a 12-run cohort at roughly 68 minutes.
+Measured in one local run: the pointwise judge scored **all four quants 100** and dense-ranked them all rank 1 — zero discrimination — while the pairwise fit over the same four answers produced UD-Q3_K_XL 69 [56, 90], Q5_K_M 60 [46, 77], Q6_K 51 [23, 70], Q4_K_M 23 [9, 34]. ~30.7 s per comparison; budget a 12-run cohort at roughly 68 minutes.
 
 ### 5.4 Comparing two cells — the paired-difference interval
 
@@ -291,7 +291,7 @@ Live: a 7-leaf project (one authored prompt + six cases) froze 7 runs into **one
 
 `BenchmarkFidelityExecutor` runs `llama-perplexity` against the run's **own frozen placement** (`--n-gpu-layers`, `--tensor-split`, `--override-tensor`, `--cache-type-k/-v`, `--flash-attn`) but at a **pinned 512-token window** (`BenchmarkFidelityPolicy.ContextTokens`). The window is pinned because perplexity is only comparable at a fixed window and every published llama.cpp/Unsloth/bartowski number uses 512; the placement knobs are replayed because they are exactly what differs between the runs being compared.
 
-Chunks: `DefaultChunks = 200`, range `50..655`. On this box, 200 chunks of the shipped wikitext-2 corpus separated `Qwen3.8-27B` Q4_K_M (**6.7977 ± 0.07405**) from UD-Q3_K_XL (**6.9497 ± 0.07550**) with non-overlapping bands; at the 50-chunk floor the errors roughly double and the two overlap.
+Chunks: `DefaultChunks = 200`, range `50..655`. In one local run, 200 chunks of the shipped wikitext-2 corpus separated `Qwen3.8-27B` Q4_K_M (**6.7977 ± 0.07405**) from UD-Q3_K_XL (**6.9497 ± 0.07550**) with non-overlapping bands; at the 50-chunk floor the errors roughly double and the two overlap.
 
 **Write the parser against the binary, not the README.** A `--kl-divergence` run prints no `Final estimate` line at all — its perplexity is `Mean PPL(Q)` inside the statistics block; the statistics blocks separate a value from its error with `±` while the plain line uses `+/-`; and top-token agreement is printed as `Same top p`, with the word "agreement" appearing nowhere. `BenchmarkPerplexityOutputParser` holds verbatim fixtures of both shapes.
 

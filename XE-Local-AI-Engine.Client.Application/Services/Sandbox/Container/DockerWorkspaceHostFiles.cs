@@ -10,7 +10,7 @@ using Microsoft.Win32.SafeHandles;
 ///     <c>ProcessSandboxRuntimeProvider</c> applies to its jail.
 ///     <para>
 ///         Why the host and not the container: Docker refuses <c>PUT /containers/{id}/archive</c> outright against a
-///         container with a read-only root filesystem (measured against Engine 29.6.1, which answers
+///         container with a read-only root filesystem (measured against a rootless Docker Engine, which answers
 ///         <c>400 container rootfs is marked read-only</c> regardless of destination, including a writable
 ///         <c>tmpfs</c>), and the Docker hardening contract makes that root filesystem non-negotiable. The bind mount is the same bytes on
 ///         both sides, so writing them host-side is not a workaround for the restriction — it is the route that does

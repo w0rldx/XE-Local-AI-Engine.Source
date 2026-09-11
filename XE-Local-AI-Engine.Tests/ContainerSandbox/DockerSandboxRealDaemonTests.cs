@@ -98,7 +98,7 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Contains(settings.SecurityOptions, option => option.Contains("no-new-privileges", StringComparison.OrdinalIgnoreCase));
 
         // The observed seccomp rendering, recorded here because it is the thing the unit suite has to assume. Measured
-        // against Engine 29.7.2 (rootless, API 1.55): a container created with a seccomp profile inspects back as
+        // against a rootless Docker Engine: a container created with a seccomp profile inspects back as
         // `seccomp=<compacted JSON>` — never as a path, and never as the profile's name — while a container created
         // WITHOUT one inspects back with SecurityOpt null, which is also what a daemon with seccomp disabled reports.
         // That indistinguishability is the whole reason the profile is passed explicitly.
@@ -465,9 +465,9 @@ public sealed class DockerSandboxRealDaemonTests
     {
         // The hardening invariant got backwards, verified the only way it can be. `inspect` echoes back the uid that was
         // ASKED for and can never say what that uid maps to, so this writes from inside the container and stats the
-        // result host-side. Measured on this box (Engine 29.6.1 rootless, /etc/subuid w0rldx:100000:65536): container
-        // uid 0 lands host-side as uid 1000 (the engine), while container uid 1000 would be host uid 100999 and could
-        // not create the file at all.
+        // result host-side. Measured on a rootless Docker Engine whose /etc/subuid maps the engine user to a
+        // 65536-wide range starting at 100000 (an example base): container uid 0 lands host-side as the engine's own
+        // uid, while container uid 1000 would be host uid base+999 and could not create the file at all.
         var options = await RequireDaemonAsync();
         await using var fixture = await ContainerFixture.CreateAsync(options);
 
@@ -611,7 +611,7 @@ public sealed class DockerSandboxRealDaemonTests
     [Test]
     public async Task RealDaemon_AnIdentityThatDoesNotMapToThisEngine_IsRefusedAndTheContainerRemoved()
     {
-        // The measurement that inverted the rule, as a regression pin. Under this box's rootless daemon the hardening
+        // The measurement that inverted the rule, as a regression pin. Under a rootless daemon the hardening
         // mandate of `--user 1000:1000` produces a container that cannot write a byte into its own workspace — and
         // every hardening read-back still passes, because the daemon applied exactly what it was told. Only the probe
         // catches it. Skipped rather than inverted on a rootful daemon, where 1000 is the correct answer.

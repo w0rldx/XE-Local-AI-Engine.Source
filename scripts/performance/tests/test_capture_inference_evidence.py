@@ -1010,7 +1010,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
                             "os": "Linux-9.99.99.9-example-standard-WSL2-x86_64-with-glibc2.99",
                             "architecture": "x86_64",
                             "nvidia_smi_driver": {
-                                "stdout": "0, NVIDIA GeForce RTX 5090, 610.74",
+                                "stdout": "0, NVIDIA GeForce RTX 5090, 999.99",
                             },
                         },
                         "run_stdout": (
@@ -1034,7 +1034,7 @@ class CaptureInferenceEvidenceTests(unittest.TestCase):
             self.assertNotIn("9.99.99", json.dumps(sanitized))
             # GPU name and driver are benchmark metadata and stay.
             self.assertIn("NVIDIA GeForce RTX 5090", host["nvidia_smi_driver"]["stdout"])
-            self.assertIn("610.74", host["nvidia_smi_driver"]["stdout"])
+            self.assertIn("999.99", host["nvidia_smi_driver"]["stdout"])
             labels = [entry["label"] for entry in sanitized["sanitization"]["replacements"]]
             self.assertIn("<redacted-cpu>", labels)
             self.assertIn("<redacted-kernel>", labels)

@@ -13,7 +13,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 ///         legitimately stores CRLF in its blobs — the norm for a Windows-native project — that command reports
 ///         <c>trailing whitespace</c> on every changed line and exits 2. The gate then fails at command one on a
 ///         perfectly correct change, and the operator is told their patch has whitespace errors. Reproduced on
-///         git 2.53.0: a three-line CRLF file plus one added line exits 2 with the default rules and 0 with
+///         a current Git release: a three-line CRLF file plus one added line exits 2 with the default rules and 0 with
 ///         <c>cr-at-eol</c>.
 ///     </para>
 ///     <para>

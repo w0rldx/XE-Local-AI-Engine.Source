@@ -16,7 +16,7 @@ import { benchmarkFidelityFixture, benchmarkRunSummaryFixture } from "@/features
 
 describe("formatPerplexity", () => {
 	it("keeps enough decimals to separate the live Q4_K_M / UD-Q3_K_XL pair", () => {
-		// The measured pair on this box: bands [6.7237, 6.8718] and [6.8742, 7.0252], non-overlapping by 0.0024.
+		// The measured pair from one local run: bands [6.7237, 6.8718] and [6.8742, 7.0252], non-overlapping by 0.0024.
 		// Two decimals would print both standard errors as "0.07" and both bands as touching.
 		expect(formatPerplexity({ perplexityMean: 6.7977, perplexityStdErr: 0.074_05 })).toBe("6.7977 ± 0.0741");
 		expect(formatPerplexity({ perplexityMean: 6.9497, perplexityStdErr: 0.0755 })).toBe("6.9497 ± 0.0755");

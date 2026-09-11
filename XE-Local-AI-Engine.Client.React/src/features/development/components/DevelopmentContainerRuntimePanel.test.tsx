@@ -71,13 +71,13 @@ describe("DevelopmentContainerRuntimePanel", () => {
 		renderPanel({
 			ready: true,
 			status: "ready",
-			message: "Container runtime ready: Docker Engine 29.6.1 (API 1.55).",
+			message: "Container runtime ready: Docker Engine 99.0.0 (API 1.99).",
 			requiresOperatorConfirmation: false,
-			observedDaemon: { daemonId: "daemon-alpha", serverVersion: "29.6.1", endpoint: "unix:///var/run/docker.sock" },
+			observedDaemon: { daemonId: "daemon-alpha", serverVersion: "99.0.0", endpoint: "unix:///var/run/docker.sock" },
 		});
 
 		expect(screen.getByTestId("development-container-runtime-status").textContent).toBe("ready");
-		expect(screen.getByTestId("development-container-runtime-message").textContent).toContain("29.6.1");
+		expect(screen.getByTestId("development-container-runtime-message").textContent).toContain("99.0.0");
 		expect(screen.queryByTestId("development-container-runtime-confirm")).toBeNull();
 	});
 
@@ -88,7 +88,7 @@ describe("DevelopmentContainerRuntimePanel", () => {
 			message: "Development Mode is pinned to a different container runtime than the one it can reach now.",
 			requiresOperatorConfirmation: true,
 			endpoint: "unix:///run/user/1000/docker.sock",
-			pinnedDaemon: { daemonId: "daemon-alpha", serverVersion: "29.6.1", endpoint: "unix:///var/run/docker.sock" },
+			pinnedDaemon: { daemonId: "daemon-alpha", serverVersion: "99.0.0", endpoint: "unix:///var/run/docker.sock" },
 			observedDaemon: { daemonId: "daemon-beta", serverVersion: "28.0.0", endpoint: "unix:///run/user/1000/docker.sock" },
 		});
 

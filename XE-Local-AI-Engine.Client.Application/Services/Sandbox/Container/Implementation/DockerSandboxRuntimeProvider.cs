@@ -102,7 +102,7 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///     <para>
     ///         <see cref="SandboxProviderCapabilities.SupportsCopyInto" /> is served, but not through Docker's archive
     ///         endpoint: Docker refuses <c>PUT /containers/{id}/archive</c> outright against a container with a
-    ///         read-only root filesystem — measured against Engine 29.6.1, which answers
+    ///         read-only root filesystem — measured against a rootless Docker Engine, which answers
     ///         <c>400 container rootfs is marked read-only</c> regardless of the destination path, including a writable
     ///         <c>tmpfs</c> — and the Docker hardening contract makes that root filesystem non-negotiable. The workspace bind mount is the same
     ///         bytes on both sides, so the write goes to the host path backing the destination, under the containment
@@ -388,9 +388,10 @@ public sealed class DockerSandboxRuntimeProvider : IDevelopmentSandboxRuntimePro
     ///         identity must not map to host root</em>, and the two daemon modes answer it with opposite numbers. On a
     ///         rootful daemon an in-container UID maps straight through, so the answer is the engine's own effective
     ///         ids and zero would be host root. On a rootless daemon container UID 0 <b>is</b> the invoking user —
-    ///         measured on Engine 29.6.1 rootless with <c>/etc/subuid</c> = <c>…:100000:65536</c>, a container run as
-    ///         <c>1000:1000</c> could not create a file in the engine-generated workspace mount at all
-    ///         (<c>Permission denied</c>, because container 1000 is host 100999), while one run as <c>0:0</c> wrote
+    ///         measured on a rootless Docker Engine with a representative <c>/etc/subuid</c> mapping (a 65536-wide
+    ///         range starting at, say, 100000), a container run as <c>1000:1000</c> could not create a file in the
+    ///         engine-generated workspace mount at all (<c>Permission denied</c>, because container 1000 is host
+    ///         100999), while one run as <c>0:0</c> wrote
     ///         files that landed host-side owned by uid 1000, the engine's own account. Refusing zero there would
     ///         refuse the only identity that works.
     ///     </para>

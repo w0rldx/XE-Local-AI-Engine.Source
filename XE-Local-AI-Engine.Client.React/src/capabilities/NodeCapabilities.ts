@@ -135,7 +135,7 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	modelManagement: true,
 	invocationMonitor: true,
 	benchmarks: true,
-	// Training group (datasets, runs, comparisons): live-verified end to end on this box 2026-08-15.
+	// Training group (datasets, runs, comparisons): live-verified end to end on a dev host 2026-08-15.
 	training: true,
 	// Agent definition authoring surface (agent-management). On by default; node-local SQLite-backed CRUD.
 	agentManagement: true,

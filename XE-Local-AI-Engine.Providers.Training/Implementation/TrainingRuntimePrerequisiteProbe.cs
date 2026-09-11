@@ -9,7 +9,7 @@ using XE_Local_AI_Engine.Providers.Training.Contracts;
 /// </summary>
 /// <remarks>
 ///     GPU presence is probed with <c>nvidia-smi</c> rather than by looking for <c>/dev/nvidia*</c> or
-///     <c>/proc/driver/nvidia/version</c>: under WSL2 — which is where this box actually runs — neither exists, and the
+///     <c>/proc/driver/nvidia/version</c>: under WSL2 — a supported host — neither exists, and the
 ///     only evidence of a working driver is the shim at <c>/usr/lib/wsl/lib/nvidia-smi</c>. A device-node check would
 ///     report "no GPU" on a machine with a working RTX 5090.
 /// </remarks>
@@ -167,7 +167,7 @@ internal sealed class TrainingRuntimePrerequisiteProbe(ITrainingProcessRunner pr
                 "No NVIDIA driver was detected. Training requires a CUDA-capable GPU.");
         }
 
-        // "610.88, NVIDIA GeForce RTX 5090" — reported back verbatim; it names hardware, not a path or a secret.
+        // "999.99, NVIDIA GeForce RTX 5090" — reported back verbatim; it names hardware, not a path or a secret.
         return new TrainingRuntimePrerequisiteItem(TrainingRuntimePrerequisiteKeys.NvidiaDriver,
             Satisfied: true,
             $"NVIDIA driver detected: {lines[0].Trim()}.");

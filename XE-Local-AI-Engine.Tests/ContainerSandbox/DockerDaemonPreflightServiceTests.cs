@@ -232,7 +232,7 @@ public sealed class DockerDaemonPreflightServiceTests
 
         var preflight = await service.InspectAsync();
 
-        AssertEx.Contains(preflight.Message, "29.6.1");
+        AssertEx.Contains(preflight.Message, "99.0.0");
         AssertEx.Contains(preflight.Message, "daemon-alpha");
         AssertEx.Contains(preflight.Message, "this node's configuration");
     }
@@ -373,7 +373,7 @@ public sealed class DockerDaemonPreflightServiceTests
         };
         var endpoint = new DockerDaemonEndpoint(new Uri("unix:///fake.sock"), DockerDaemonEndpointSource.Configuration);
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
         var store = attestationStore ?? new InMemoryAttestationStore();
 
         var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(resolved),

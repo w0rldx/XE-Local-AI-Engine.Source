@@ -36,7 +36,7 @@
       repository maps to ONE mutex and cross-worktree builds serialize by design; see SCOPE in
       scripts/with-build-lock.sh for why the machine, not assembly safety, is the reason. The name uses the session
       ("Local\") namespace deliberately: the "Global\" namespace needs SeCreateGlobalPrivilege,
-      which an unelevated agent shell does not have, and cooperating shells on this box share a
+      which an unelevated agent shell does not have, and cooperating shells on the same host share a
       session.
 
       Crash safety comes free: if the holder dies without releasing, the kernel abandons the mutex

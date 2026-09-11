@@ -11,7 +11,7 @@ export function formatPerplexity(fidelity: Pick<BenchmarkRunFidelity, "perplexit
 	if (perplexityMean === null) {
 		return null;
 	}
-	// Four decimals because the whole point is separating two quants of one model: the live pair on this box differ by
+	// Four decimals because the whole point is separating two quants of one model: the live pair in one local run differ by
 	// 0.152 with standard errors of ~0.075, and rounding to two would print their bands as touching when they do not.
 	return perplexityStdErr === null ? perplexityMean.toFixed(4) : `${perplexityMean.toFixed(4)} ± ${perplexityStdErr.toFixed(4)}`;
 }

@@ -105,7 +105,7 @@ The architecture does **not** need to embed llama.cpp into .NET, replace llama.c
 Command:
 
 ```text
-~/.local/share/XE-Local-AI-Engine/llama.cpp/b10201/vulkan/llama-b10201/llama-server --list-devices
+$XDG_DATA_HOME/XE-Local-AI-Engine/llama.cpp/b10201/vulkan/llama-b10201/llama-server --list-devices
 ```
 
 Result:

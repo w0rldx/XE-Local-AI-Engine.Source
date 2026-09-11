@@ -689,8 +689,8 @@ internal sealed class FakeContainerRuntimeResolver : IContainerRuntimeResolver
                 Endpoint = "unix:///xe-external-apps-tests.sock",
                 EndpointSource = DockerDaemonEndpointSource.Configuration,
                 DaemonId = "fake-daemon",
-                ServerVersion = "29.7.2",
-                ApiVersion = "1.55",
+                ServerVersion = "99.0.0",
+                ApiVersion = "1.99",
                 IsRootless = isRootless
             }
         };

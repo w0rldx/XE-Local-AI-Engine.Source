@@ -1440,7 +1440,7 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         {
             HostPath = mount.Source ?? string.Empty,
             ContainerPath = mount.Target ?? string.Empty,
-            // A read-write mount comes back with ReadOnly absent rather than false (measured against Engine 29.6.1),
+            // A read-write mount comes back with ReadOnly absent rather than false (measured against a rootless Docker Engine),
             // so a null must read as "writable" — reading it as "unknown" would fail the read-only check on every
             // ordinary workspace mount.
             ReadOnly = mount.ReadOnly ?? false,

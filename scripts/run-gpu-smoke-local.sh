@@ -34,8 +34,8 @@
 #   make this concrete, and both are load-bearing for how step 1 and step 2 are written:
 #
 #     * A `vulkan` runtime is nominally "GPU-capable" and still runs entirely on the CPU when no
-#       Vulkan ICD is present (the exact state of this WSL2 box on 2026-07-31). A variant check
-#       alone would have passed while inference was on the CPU.
+#       Vulkan ICD is present (the state observed on a WSL2 dev host on 2026-07-31). A variant
+#       check alone would have passed while inference was on the CPU.
 #     * Conversely, with XE_LLAMACPP_SERVER_PATH pointing at a CUDA binary, the INSTALLED record
 #       still reads `vulkan` while inference genuinely runs on CUDA. A variant check alone would
 #       have failed a perfectly good GPU box.
@@ -387,7 +387,7 @@ assert_chat_reply() {
 # is still above the pre-start baseline with the model resident.
 #
 # The VRAM half is the DISCRIMINATING one; the utilisation half is the noisier one. Measured on
-# this WSL2 box: GPU 64-72% / +1199-1211 MiB versus CPU-fallback 11-14% / +0 MiB. A desktop
+# a WSL2 dev host: GPU 64-72% / +1199-1211 MiB versus CPU-fallback 11-14% / +0 MiB. A desktop
 # compositor idling on the same GPU can drift utilisation over a 15% floor on its own, and one
 # CPU-fallback run did exactly that — while the VRAM delta stayed at a flat 0 MiB and still
 # failed the step. Because BOTH must pass, utilisation noise can only ever cause a false

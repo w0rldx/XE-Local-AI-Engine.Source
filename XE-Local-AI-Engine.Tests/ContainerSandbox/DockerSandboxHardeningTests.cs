@@ -50,7 +50,7 @@ public sealed class DockerSandboxHardeningTests
     {
         // The hardening rule as written is inverted under a rootless daemon: container uid 0 maps to the INVOKING USER's
         // unprivileged host account, and it is the only identity that can use an engine-generated bind mount there
-        // (measured on Engine 29.6.1 rootless: --user 1000:1000 could not create a file in the mount at all). It still
+        // (measured on a rootless Docker Engine: --user 1000:1000 could not create a file in the mount at all). It still
         // has every capability dropped, no-new-privileges set and a read-only rootfs.
         var specification = Specification() with
         {
@@ -204,7 +204,7 @@ public sealed class DockerSandboxHardeningTests
     [Test]
     public void FindViolations_TreatsAnEmptyNamespaceModeAsPrivate()
     {
-        // The daemon reports "" for the private default (measured against Engine 29.6.1). Reading that as "unknown"
+        // The daemon reports "" for the private default (measured against a current Docker Engine). Reading that as "unknown"
         // would fail every conformant container.
         AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(),
             Conformant() with
@@ -620,7 +620,7 @@ public sealed class DockerSandboxHardeningTests
     public void FindViolations_AcceptsAProfileTheDaemonRenderedDifferently()
     {
         // Matched on "names a profile", not on equality with what was sent. The daemon's rendering of the profile is
-        // its business — measured against Engine 29.7.2 it echoes the compacted JSON — and pinning this check to a
+        // its business — measured against a current Docker Engine it echoes the compacted JSON — and pinning this check to a
         // byte-for-byte echo would turn a cosmetic daemon change into a spurious fail-closed rejection, which is the
         // same trap the no-new-privileges check above is prefix-matched to avoid.
         AssertEx.Empty(DockerSandboxHardening.FindViolations(Specification(), Conformant() with

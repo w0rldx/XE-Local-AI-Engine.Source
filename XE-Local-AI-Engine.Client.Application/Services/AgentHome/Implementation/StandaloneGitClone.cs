@@ -21,7 +21,7 @@ internal static class StandaloneGitClone
     ///         The <c>file://</c> transport is mandatory, not stylistic. Given a plain local path git prints
     ///         <c>warning: --depth is ignored in local clones; use file:// instead</c> and then hardlinks the entire
     ///         object store — reproducing the shared-object coupling this helper exists to prevent, while still
-    ///         reporting success. Measured on git 2.53.0: the plain-path form yields the source's full history, the
+    ///         reporting success. Measured on a current Git release: the plain-path form yields the source's full history, the
     ///         <c>file://</c> form yields exactly one commit.
     ///     </para>
     /// </summary>

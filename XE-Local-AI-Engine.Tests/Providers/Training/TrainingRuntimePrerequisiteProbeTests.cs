@@ -112,7 +112,7 @@ public sealed class TrainingRuntimePrerequisiteProbeTests : IDisposable
     {
         return new FakeProcessRunner((_, _, logSink) =>
         {
-            logSink("610.88, NVIDIA GeForce RTX 5090");
+            logSink("999.99, NVIDIA GeForce RTX 5090");
             return 0;
         });
     }

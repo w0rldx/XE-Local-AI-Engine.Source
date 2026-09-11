@@ -74,8 +74,8 @@ Describe 'capture_windows_vram privacy contract' {
 Describe 'ConvertFrom-NvidiaGlobalOutput' {
     It 'parses one or more UUID-free GPU rows' {
         $rows = @(ConvertFrom-NvidiaGlobalOutput -Output @(
-            '0, NVIDIA GPU, 610.74, 32607, 28427, 3761, 5',
-            '1, NVIDIA GPU 2, 610.74, 24576, 20000, 4576, 2'
+            '0, NVIDIA GPU, 999.99, 32607, 28427, 3761, 5',
+            '1, NVIDIA GPU 2, 999.99, 24576, 20000, 4576, 2'
         ))
 
         $rows.Count | Should -Be 2
@@ -94,7 +94,7 @@ Describe 'ConvertFrom-NvidiaGlobalOutput' {
     It 'fails closed when any non-empty row in a multi-GPU response is malformed' {
         {
             ConvertFrom-NvidiaGlobalOutput -Output @(
-                '0, NVIDIA GPU, 610.74, 32607, 28427, 3761, 5',
+                '0, NVIDIA GPU, 999.99, 32607, 28427, 3761, 5',
                 '1, malformed'
             )
         } | Should -Throw -ExpectedMessage '*1, malformed*'

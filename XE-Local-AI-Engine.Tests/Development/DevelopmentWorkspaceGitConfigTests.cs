@@ -11,7 +11,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     The engine-side, provider-independent closure of the repository-local <c>.git/config</c> execution vector.
 ///     <para>
-///         Two payloads, both measured on git 2.53.0 before this existed. <c>core.fsmonitor</c> runs as a shell command
+///         Two payloads, both measured on a current Git release before this existed. <c>core.fsmonitor</c> runs as a shell command
 ///         on index refresh — <c>AgentHomeGit</c>'s <c>-c</c> pins already close that one. <c>filter.&lt;driver&gt;.clean</c>
 ///         selected by an in-tree <c>.gitattributes</c> runs on <c>git add</c>, and it CANNOT be closed from the
 ///         argument vector: driver names are arbitrary so there is no finite set to pin, and

@@ -19,14 +19,14 @@ using System.Text.Json;
 ///     <para>
 ///         <b>Why ship a copy at all, when the daemon already applies this by default?</b> Because "by default" is not
 ///         verifiable. A container created with no <c>seccomp=</c> option reads back with <c>SecurityOpt: null</c>
-///         (measured against Engine 29.7.2), which is the <em>same</em> read-back as a daemon started with seccomp
+///         (measured against a current Docker Engine), which is the <em>same</em> read-back as a daemon started with seccomp
 ///         disabled entirely. Asking for the profile explicitly is the only way the fail-closed read-back in
 ///         <c>DockerSandboxHardening.VerifySecurityOptions</c> can tell a confined container from an unconfined one.
 ///     </para>
 ///     <para>
 ///         <b>The Engine API takes profile CONTENT, not a path.</b> The <c>docker</c> CLI reads the file named by
 ///         <c>--security-opt seccomp=&lt;path&gt;</c> and sends its JSON; the daemon never opens a host path on the
-///         client's behalf. Measured against Engine 29.7.2: a container created with
+///         client's behalf. Measured against a current Docker Engine: a container created with
 ///         <c>--security-opt seccomp=/tmp/default.json</c> inspects back as <c>seccomp={"defaultAction":…}</c> — the
 ///         compacted JSON — and never as the path. So there is nothing to materialize on disk for the daemon to read,
 ///         and this profile stays an embedded resource rather than a file written into the node data directory.

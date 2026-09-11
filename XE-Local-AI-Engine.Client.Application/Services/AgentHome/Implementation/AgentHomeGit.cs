@@ -28,7 +28,7 @@ internal static class AgentHomeGit
         // command. A command-line -c outranks every config file, including anything reached through an include.path /
         // includeIf chain, so pinning the key here is what makes the repository's own .git/config unable to supply it.
         //
-        // core.fsmonitor is the one that was live. Measured on git 2.53.0: a value planted in a repository-local
+        // core.fsmonitor is the one that was live. Measured on a current Git release: a value planted in a repository-local
         // .git/config runs as a shell command on the first index refresh — status, reset, add and diff all trigger it —
         // under this exact hardened argument vector. That is reachable from the host, not just the sandbox, because
         // DevelopmentPatchEvidenceService runs `reset` and `add -A` with WorkingDirectory set to the workspace, and

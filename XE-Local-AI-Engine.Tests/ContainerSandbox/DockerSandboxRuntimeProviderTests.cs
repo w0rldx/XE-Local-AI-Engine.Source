@@ -288,8 +288,9 @@ public sealed class DockerSandboxRuntimeProviderTests
     {
         // The inversion, and the reason the hardening contract's flat "non-root" rule could not stand. A rootless daemon maps container
         // uid 0 to the invoking user and container uid N>0 into the subordinate range, so the engine's own 1000 names
-        // a host account (100999 with /etc/subuid = ...:100000:65536) that owns nothing of ours. Measured on Engine
-        // 29.6.1 rootless: --user 1000:1000 could not touch a file in the engine-generated workspace mount at all.
+        // a host account (100999 with a /etc/subuid range starting at, say, 100000) that owns nothing of ours.
+        // Measured on a rootless Docker Engine: --user 1000:1000 could not touch a file in the engine-generated
+        // workspace mount at all.
         var identity = DockerSandboxRuntimeProvider.ResolveIdentity(DockerSandboxHardeningTests.Options() with
             {
                 UserId = null,
@@ -630,9 +631,10 @@ public sealed class DockerSandboxRuntimeProviderTests
     [Test]
     public void DescribeWorkspaceMappingFailure_WhenTheProbeOwnerIsNotTheEngine_NamesTheMismatch()
     {
-        // The rootless mis-mapping in numbers: container uid 1000 lands host-side as 100999 (subuid base 100000), so
-        // the engine at uid 1000 cannot modify what its own sandbox writes. No inspect can report this — the daemon
-        // echoes back the uid it was ASKED for and knows nothing about what that uid maps to.
+        // The rootless mis-mapping in numbers: container uid 1000 lands host-side as 100999 for a subuid range
+        // starting at, say, 100000, so the engine at uid 1000 cannot modify what its own sandbox writes. No
+        // inspect can report this — the daemon echoes back the uid it was ASKED for and knows nothing about
+        // what that uid maps to.
         var failure = DockerSandboxRuntimeProvider.DescribeWorkspaceMappingFailure(containerWroteTheProbe: true,
             probeVisibleOnHost: true,
             engineUserId: 1000u,

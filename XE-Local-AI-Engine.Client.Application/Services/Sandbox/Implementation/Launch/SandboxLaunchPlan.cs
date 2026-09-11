@@ -205,7 +205,7 @@ public static class SandboxLaunchPlan
     ///     <para>
     ///         <c>MemorySwapMax=0</c> accompanies every <c>MemoryMax</c> and is not optional. On a host with swap,
     ///         <c>memory.max</c> alone does not produce an OOM kill — the kernel reclaims to swap and the child
-    ///         allocates straight past the ceiling. Measured on this box: 400 MiB allocated successfully under
+    ///         allocates straight past the ceiling. Measured in one local run: 400 MiB allocated successfully under
     ///         <c>MemoryMax=128M</c>; with <c>MemorySwapMax=0</c> added the same child was SIGKILLed (exit 137).
     ///     </para>
     /// </summary>

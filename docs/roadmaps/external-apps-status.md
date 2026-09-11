@@ -36,8 +36,8 @@ working evidence directory is a local planning artifact and is not part of the r
 | Field | Value |
 |---|---|
 | Tree the round concluded on | `c3e761edb` (parts A and B ran on `beddd6bfd`+ and `f2562abed`+; the re-run added the merged storage-helper fix) |
-| Daemon | Docker 29.7.2, API 1.55, **rootless**, `unix:///run/user/1000/docker.sock`, cgroup v2, runc only |
-| Host | WSL2, 48 GiB RAM, RTX 5090 32 GiB, **no** NVIDIA Container Toolkit |
+| Daemon | a rootless Docker Engine daemon reached over its user socket, cgroup v2, runc only |
+| Host | WSL2 with a 32 GiB-class NVIDIA GPU, **no** NVIDIA Container Toolkit |
 | SPA origin | the Vite dev origin throughout — the Aspire app origin serves the last built bundle |
 | Application under test | Odysseus, four services (odysseus, searxng, chromadb, ntfy) |
 
@@ -107,7 +107,7 @@ re-extracted rather than carried over.
 
 ### Measurements
 
-All measured on the box described above, on 2026-09-11. They are a snapshot, not a specification.
+All measured on the host described above, on 2026-09-11. They are a snapshot, not a specification.
 
 | Measurement | Value |
 |---|---|

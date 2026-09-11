@@ -276,7 +276,7 @@ internal static class DockerSandboxHardening
         }
 
         // Matched on "names a profile" rather than on equality with what was sent. The daemon echoes the profile back
-        // as `seccomp=<json>` (measured against Engine 29.7.2: a container created with `--security-opt
+        // as `seccomp=<json>` (measured against a rootless Docker Engine: a container created with `--security-opt
         // seccomp=<path>` inspects back as the compacted JSON, never as the path), and the two renderings that must
         // be refused are the two this can tell apart without pinning us to a byte-for-byte echo: no seccomp option at
         // all — which is ALSO what a daemon with seccomp disabled reports, and the whole reason the profile is passed
@@ -491,8 +491,8 @@ internal static class DockerSandboxHardening
 ///             <description>
 ///                 <b>Rootless daemon:</b> container UID 0 maps to the invoking user and container UID <c>N&gt;0</c>
 ///                 maps to <c>subuid_base + N - 1</c>, so the answer is 0 — and the conventional 1000 is a host
-///                 account that owns nothing of ours. Measured on Engine 29.6.1 rootless with
-///                 <c>/etc/subuid</c> = <c>…:100000:65536</c>: <c>--user 1000:1000</c> could not create a file in the
+///                 account that owns nothing of ours. Measured on a rootless Docker Engine with a representative
+///                 <c>/etc/subuid</c> mapping: <c>--user 1000:1000</c> could not create a file in the
 ///                 engine-generated workspace mount at all, while <c>--user 0:0</c> wrote files the engine then owned.
 ///             </description>
 ///         </item>

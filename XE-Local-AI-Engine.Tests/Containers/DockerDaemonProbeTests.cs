@@ -433,7 +433,7 @@ public sealed class DockerDaemonProbeTests
             DaemonId = daemonId,
             Endpoint = ConfiguredEndpoint,
             EndpointSource = DockerDaemonEndpointSource.Configuration,
-            ServerVersion = "29.6.1",
+            ServerVersion = "99.0.0",
             ConfirmedAtUtc = FixedNow,
             ConfirmedByOperator = false
         });
@@ -484,7 +484,7 @@ public sealed class DockerDaemonProbeTests
     {
         var endpoint = new DockerDaemonEndpoint(new Uri(ConfiguredEndpoint), DockerDaemonEndpointSource.Configuration);
         var client = new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity("daemon-alpha", "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
 
         return (client, new InMemoryDaemonAttestationStore());
     }
@@ -494,7 +494,7 @@ public sealed class DockerDaemonProbeTests
         var endpoint = new DockerDaemonEndpoint(new Uri(ConfiguredEndpoint), DockerDaemonEndpointSource.Configuration);
 
         return new FakeDockerRuntimeClient(endpoint,
-            new DockerDaemonIdentity(daemonId, "29.6.1", "1.55", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
+            new DockerDaemonIdentity(daemonId, "99.0.0", "1.99", "1.40", "linux", endpoint, IsRootless: false, SupportsSeccomp: true));
     }
 
     /// <summary>

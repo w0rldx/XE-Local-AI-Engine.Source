@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// <summary>
 ///     Pins the handshake parse. The probe's stdout is genuinely not clean — importing unsloth prints two banner lines
 ///     before the JSON is written — so a parser that read the first line, or tried to parse the whole buffer, would
-///     fail against the real runtime on this box. Verified live 2026-08-15.
+///     fail against the real runtime. Verified live on a dev host 2026-08-15.
 /// </summary>
 public sealed class TrainingRuntimeProbeParserTests
 {

@@ -7,8 +7,8 @@ namespace XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 ///     direction.
 /// </summary>
 /// <param name="DaemonId">The daemon's own installation id, from the system-info endpoint.</param>
-/// <param name="ServerVersion">The Docker Engine version string (for example <c>29.6.1</c>).</param>
-/// <param name="ApiVersion">The API version the daemon serves (for example <c>1.55</c>).</param>
+/// <param name="ServerVersion">The Docker Engine version string, exactly as the daemon reports it.</param>
+/// <param name="ApiVersion">The API version the daemon serves, as <c>major.minor</c>.</param>
 /// <param name="MinimumApiVersion">The oldest API version the daemon still accepts.</param>
 /// <param name="OperatingSystem">The daemon's OS type (<c>linux</c> / <c>windows</c>), which decides what a mount even means.</param>
 /// <param name="Endpoint">The endpoint this identity was read through.</param>

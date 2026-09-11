@@ -499,7 +499,7 @@ public sealed class ContainerRuntimeResolverTests
                     DaemonId = "daemon-previously-approved",
                     Endpoint = LocalEndpoint,
                     EndpointSource = DockerDaemonEndpointSource.Configuration,
-                    ServerVersion = "29.6.1",
+                    ServerVersion = "98.0.0",
                     ConfirmedAtUtc = FixedNow - TimeSpan.FromDays(3),
                     ConfirmedByOperator = true
                 });
@@ -526,7 +526,7 @@ public sealed class ContainerRuntimeResolverTests
         {
             Endpoint = endpoint ?? new DockerDaemonEndpoint(new Uri(LocalEndpoint), DockerDaemonEndpointSource.Configuration);
             Client = new FakeDockerRuntimeClient(Endpoint,
-                new DockerDaemonIdentity("daemon-alpha", "29.7.2", "1.55", "1.40", "linux", Endpoint, IsRootless: true, SupportsSeccomp: true));
+                new DockerDaemonIdentity("daemon-alpha", "99.0.0", "1.99", "1.40", "linux", Endpoint, IsRootless: true, SupportsSeccomp: true));
             Factory = new RecordingContainerRuntimeFactory(Client);
             AttestationStore = new InMemoryDaemonAttestationStore();
 

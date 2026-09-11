@@ -32,7 +32,7 @@ Note `llama-server` — the OS process table carries no extension on Windows, ev
 Checks **4, 5 and 9** describe fixed behaviour rather than known-broken behaviour; each carries a "Changed for
 this RC" note saying what was proven on Linux and what only you can prove.
 
-**A 2026-08-02 session ran on a real Windows 11 box (build 26220, RTX 5090, git 2.55.0, .NET 10.0.302) and closed
+**A 2026-08-02 session ran on a real Windows 11 host (RTX 5090, .NET 10.0.302) and closed
 several of the questions this runbook was written to ask.** Where that happened the check now says so, and says
 what is left for you:
 
@@ -65,8 +65,8 @@ Still fully open: **checks 5 and 5b**, plus check 9's AMD/Intel result. (The pro
 listed here as open until 2026-08-03, when it turned out to be unreachable rather than unobserved — retired, not
 answered.)
 
-Everything measured in that session came from a **32 GB / 61 GB RAM / 32 CPU** box against a ≈16 GB consumer
-target, so every timing, VRAM and fit figure in it **over-reports**. See "16 GB target notes" at the end.
+Everything measured in that session came from a **32 GB VRAM** box with far more RAM and cores than a ≈16 GB
+consumer target, so every timing, VRAM and fit figure in it **over-reports**. See "16 GB target notes" at the end.
 
 One change can make a previously-starting install fail to start: check 4's fail-closed key ring. A hard startup
 failure there may be the fix working correctly — read that check before concluding the RC is broken.
@@ -87,7 +87,7 @@ box: an orphan holding 8–14 GB of VRAM and a loopback port forever.
 > both halves against real processes — `TreeKill` reaps a descendant the handle never knew about, and a
 > `TerminateProcess` hard kill of the process that OWNS the job (no console-ctrl event, no managed code) reaps it
 > too. The negative control is what makes that evidence: the same parent/grandchild shape with no Job Object,
-> hard-killed the same way, leaves the grandchild running indefinitely — measured on Windows 11 (26220), still
+> hard-killed the same way, leaves the grandchild running indefinitely — measured on Windows 11, still
 > alive 5 s later and killed by hand. Windows does not reap orphans, so the Job Object is what did it.
 >
 > So a red check 1 is now much more likely to mean *something about the real spawn path* — the supervisor, the
@@ -131,7 +131,7 @@ step 3 (single-digit MiB on a headless GPU; a few GiB on a box whose desktop run
 
 > ### Closed 2026-08-03 on real Windows 11 with a real GPU model — the Job Object holds
 >
-> Measured on Windows 11 26220, RTX 5090 32 GB, packaged `0.1.0-rc.4.2` portable build, with
+> Measured on Windows 11, RTX 5090 32 GB, packaged `0.1.0-rc.4.2` portable build, with
 > `unsloth/Qwen3.6-27B-GGUF:Q8_0` (26.6 GiB) fully resident and holding **31741 MiB** of real VRAM through
 > driver 610.88. `Stop-Process -Id <host> -Force` on the parent only — `TerminateProcess`, no console-ctrl
 > event, no managed code:
@@ -311,7 +311,7 @@ and start the app as that user.
 
 3. The host **stays up** and keeps serving. That is expected, not a failure: see the correction above.
 
-Measured on Windows 11 (26220): the message appeared verbatim, the ring stayed at its single original key file,
+Measured on Windows 11: the message appeared verbatim, the ring stayed at its single original key file,
 and the host answered HTTP 200 throughout. Restoring the backed-up key file returned the node to a clean start
 with zero key-ring log lines — on a healthy ring the decorator is invisible, which is the other half of the check.
 
@@ -399,7 +399,7 @@ them have since been closed on a real Windows 11 box, and the remaining one is w
 - **`core.autocrlf` — answered, and the design is correct.** Git for Windows' system config
   (`C:\Program Files\Git\etc\gitconfig`) really does set `core.autocrlf=true`, and it applies inside the managed
   workspace: the engine redirects `HOME`, which suppresses the user's `~/.gitconfig` but not the *system* file,
-  and nothing pins `GIT_CONFIG_NOSYSTEM`. Measured with it genuinely in effect (git 2.55.0): a CRLF-authored file
+  and nothing pins `GIT_CONFIG_NOSYSTEM`. Measured with it genuinely in effect: a CRLF-authored file
   is normalised to **`i/lf w/crlf`**, and after a fresh checkout *every* file reports `w/crlf` while the index
   stays `lf`. So the `i/` column is unaffected by `autocrlf` — the policy correctly derives *no* attributes file
   on such a repository, and sampling `w/` would have blanket-granted `cr-at-eol` to an ordinary LF repository on
@@ -448,7 +448,7 @@ them have since been closed on a real Windows 11 box, and the remaining one is w
   comparing a .NET-normalised string to git's.
 
 - **Still yours: `MAX_PATH` on a host with long paths DISABLED.** The scanner adds no length ceiling of its own —
-  proven on a 399-character path — but that box had
+  proven on a 399-character path — but the verification host had
   `HKLM\SYSTEM\CurrentControlSet\Control\FileSystem\LongPathsEnabled = 1`. Check yours
   (`Get-ItemProperty 'HKLM:\SYSTEM\CurrentControlSet\Control\FileSystem' -Name LongPathsEnabled`) and **record the
   value with your result** — a pass on a box with it enabled says nothing about one where it is not.
@@ -813,7 +813,7 @@ ICD under WSL2"*, `RuntimeDeviceAuditService.BuildFallbackText`) and is shown ve
 
 Skip unless an AMD/Intel-only Windows box is available. Characterization, not pass/fail on the primary target.
 
-> **NOT APPLICABLE on the 2026-08-02/03 verification box, and deliberately reported as such rather than as a
+> **NOT APPLICABLE on the 2026-08-02/03 verification host, and deliberately reported as such rather than as a
 > pass.** That machine enumerates two adapters — `AMD Radeon(TM) Graphics` (integrated) listed **first**, then
 > `NVIDIA GeForce RTX 5090`. `MapAdapterVendor` tests `nvidia` **before** `amd` against the whole listing, so it
 > maps to `nvidia` regardless of enumeration order, and the run confirmed `"gpuVendor":"nvidia"` throughout. The
@@ -826,14 +826,14 @@ Skip unless an AMD/Intel-only Windows box is available. Characterization, not pa
 > `%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe` by absolute path, then bare `powershell`, then
 > `wmic` last. `HardwareProfiler.ProbeWindowsAdapterVendor` is no longer a hardcoded `Unknown` stub.
 >
-> **The query itself is now confirmed to answer on real Windows 11** (build 26220), which was the open half:
+> **The query itself is now confirmed to answer on real Windows 11**, which was the open half:
 > `where.exe wmic` finds **nothing** — the premise holds, `wmic` really is absent by default — and the exact
 > probe invocation
 > (`…\v1.0\powershell.exe -NoProfile -NonInteractive -Command "Get-CimInstance -ClassName Win32_VideoController |
 > Select-Object -ExpandProperty Name"`) returns the adapter list in **~1.3 s**, repeatably, against an 8 s
 > per-tool deadline. The absolute System32 path exists.
 >
-> Two things that box could **not** settle, because it is an NVIDIA box:
+> Two things the verification host could **not** settle, being an NVIDIA host:
 > - Its `ProcessGpuVendorProbe` never reaches this code at all. `System32\nvml.dll` is present, so the NVML fast
 >   path returns `Nvidia` with **zero** processes spawned. The CIM query was verified by running it directly, not
 >   by observing the engine run it.
@@ -915,8 +915,9 @@ measured on Windows.
 
 ### What a 32 GB box measures, and why none of it is a consumer figure
 
-Everything in this block was measured on **RTX 5090 32 GB / 61.4 GB RAM / 32 CPUs**, which is roughly **2× the
-≈16 GB VRAM consumer target**. Every number here **over-reports** and must never be quoted as a consumer figure.
+Everything in this block was measured on an **RTX 5090 32 GB**, on a host with much more RAM and CPU than the
+consumer target. That card is roughly **2× the ≈16 GB VRAM consumer target**. Every number here
+**over-reports** and must never be quoted as a consumer figure.
 It is recorded so a future session does not re-derive the *shape* of the difference.
 
 - **The spill threshold on this card sits above 26.6 GiB of weights**, so the models that exercise partial

@@ -25,7 +25,7 @@ public sealed class ContainerRuntimeOptionsValidatorTests
     [Test]
     [Arguments("1.41")]
     [Arguments("0.0")]
-    [Arguments("1.55")]
+    [Arguments("1.99")]
     public void AMajorMinorApiVersion_IsAccepted(string version)
     {
         AssertEx.True(Validate(new ContainerRuntimeOptions
