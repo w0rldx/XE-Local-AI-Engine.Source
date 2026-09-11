@@ -7,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     Unit tests for the one-shot startup update check (<see cref="LlamaCppUpdateCheckService" />). Drives the check
@@ -134,6 +135,67 @@ public sealed class LlamaCppUpdateCheckServiceTests
         AssertEx.Null(snapshot.InstalledTag);
     }
 
+    // Brief §5 test 1 for the runtime check. Asserting the SNAPSHOT (still empty) as well as the catalog (never called)
+    // is the point: a gated-off node must not report as "checked, nothing found", which is what the panel renders green.
+    [Test]
+    public async Task Execute_WhenRuntimeUpdateChecksAreDisabled_StoresNoSnapshot()
+    {
+        var state = new LlamaCppUpdateState();
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithExternalAccessProfile(StoredNodeSettings.ExternalAccessProfileOffline)
+                                                     .WithAutoCheckRuntimeUpdates(false)
+                                                     .Build();
+        using var service = CreateService(catalog, Substitute.For<IInstalledRuntimeStore>(), state, runtimeSettings, new ManualTimeProvider());
+
+        await BackgroundServiceTestHelper.RunExecuteAsync(service, CancellationToken.None);
+
+        AssertEx.Empty(catalog.ReceivedCalls(), "A disabled runtime-update check must never reach the release catalog.");
+        AssertEx.Null(state.Current.CheckedAtUtc, "The snapshot must stay unchecked, not report a check that never ran.");
+        AssertEx.False(state.Current.UpdateAvailable);
+    }
+
+    // Brief §5 test 2 for the runtime check, on the fake clock: no catalog call while undecided, one once decided.
+    [Test]
+    public async Task Execute_WhileTheProfileIsUndecided_Waits_ThenChecksOnceItIsDecided()
+    {
+        var state = new LlamaCppUpdateState();
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        catalog.ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        StubUpstream(catalog, "b9700");
+
+        var decided = false;
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithExternalAccessProfileRead(_ => Task.FromResult<string?>(decided
+                                                         ? StoredNodeSettings.ExternalAccessProfileRecommended
+                                                         : null))
+                                                     .Build();
+        var timeProvider = new ManualTimeProvider();
+        var service = CreateService(catalog, Substitute.For<IInstalledRuntimeStore>(), state, runtimeSettings, timeProvider);
+        try
+        {
+            var run = BackgroundServiceTestHelper.RunExecuteAsync(service, CancellationToken.None);
+
+            await AssertEx.EventuallyAsync(() => timeProvider.ArmedTimerCount > 0,
+                TimeSpan.FromSeconds(5),
+                "The gate must arm its poll timer while the profile is undecided.");
+            await AssertEx.SettleAsync();
+            AssertEx.Empty(catalog.ReceivedCalls(), "Nothing may be fetched before the operator has chosen.");
+
+            decided = true;
+            timeProvider.Advance(ExternalAccessGate.PollInterval);
+
+            await AssertEx.CompletesAsync(run, TimeSpan.FromSeconds(5), "ExecuteAsync must finish after the one-shot check.");
+            AssertEx.True(state.Current.CheckedAtUtc is not null,
+                "The check must have run and stamped the snapshot once the profile was decided.");
+        }
+        finally
+        {
+            service.Dispose();
+        }
+    }
+
     private static void StubUpstream(ILlamaCppReleaseCatalog catalog, string upstreamTag)
     {
         catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>()).Returns(LlamaCppReleaseResult.ForTag(upstreamTag));
@@ -146,7 +208,24 @@ public sealed class LlamaCppUpdateCheckServiceTests
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
         settings.GetRecommendedLlamaCppTagAsync(Arg.Any<CancellationToken>()).Returns(recommendedTag);
-        return new LlamaCppUpdateCheckService(settings, catalog, installedStore, state,
-            NullLogger<LlamaCppUpdateCheckService>.Instance, TimeSpan.Zero);
+        settings.GetExternalAccessProfileAsync(Arg.Any<CancellationToken>())
+                .Returns(StoredNodeSettings.ExternalAccessProfileRecommended);
+        settings.GetAutoCheckRuntimeUpdatesAsync(Arg.Any<CancellationToken>()).Returns(true);
+        return CreateService(catalog, installedStore, state, settings, TimeProvider.System);
+    }
+
+    private static LlamaCppUpdateCheckService CreateService(ILlamaCppReleaseCatalog catalog,
+        IInstalledRuntimeStore installedStore,
+        ILlamaCppUpdateState state,
+        INodeRuntimeSettings runtimeSettings,
+        TimeProvider timeProvider)
+    {
+        return new LlamaCppUpdateCheckService(runtimeSettings,
+            catalog,
+            installedStore,
+            state,
+            timeProvider,
+            NullLogger<LlamaCppUpdateCheckService>.Instance,
+            TimeSpan.Zero);
     }
 }

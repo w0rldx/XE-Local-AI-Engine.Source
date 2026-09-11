@@ -1588,6 +1588,10 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse =
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
+	externalAccessProfile: z.string().nullish(),
+	autoCheckApplicationUpdates: z.boolean().nullish(),
+	autoCheckRuntimeUpdates: z.boolean().nullish(),
+	autoProvisionFirstRunModel: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
 	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
@@ -1791,6 +1795,10 @@ export const zXeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsReques
 	enableTools: z.boolean().nullish(),
 	customToolsEnabled: z.boolean().nullish(),
 	toolRelevanceEnabled: z.boolean().nullish(),
+	externalAccessProfile: z.string().nullish(),
+	autoCheckApplicationUpdates: z.boolean().nullish(),
+	autoCheckRuntimeUpdates: z.boolean().nullish(),
+	autoProvisionFirstRunModel: z.boolean().nullish(),
 	toolCapableModels: z.array(z.string()).nullish(),
 	ollamaEndpoint: z.string().nullish(),
 	huggingFaceDefaultQuant: z.string().nullish(),
@@ -2296,6 +2304,7 @@ export const zXeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespo
 		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
 	isSourceBuild: z.boolean(),
 	rebuildAvailable: z.boolean(),
+	checkedAtUtc: z.int().nullish(),
 });
 
 export const zXeLocalAiEngineClientEndpointsModelFitV1GetLlamaCppRuntimeRequest = z.record(z.string(), z.never());

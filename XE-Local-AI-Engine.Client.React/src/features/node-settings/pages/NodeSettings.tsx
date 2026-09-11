@@ -35,7 +35,10 @@ import { SourceBuildCard } from "@/features/node-settings/components/SourceBuild
 import { useNodeSettingsModelOptions } from "@/features/node-settings/hooks/useNodeSettingsModelOptions";
 import { useRecommendedModelDownloads } from "@/features/node-settings/hooks/useRecommendedModelDownloads";
 import {
+	applyExternalAccessPreset,
 	buildNodeSettingsRequest,
+	type ExternalAccessPreset,
+	isExternalAccessBooleanField,
 	type NodeSettingsFieldsForm,
 	toNodeSettingsFieldBounds,
 	toNodeSettingsFieldsForm,
@@ -78,6 +81,9 @@ export function NodeSettings() {
 	// they decide whether a newly arrived `settings` may be adopted.
 	const [seededSource, setSeededSource] = useState<NodeSettingsResponse | SaveNodeSettingsResponse>();
 	const [isDirty, setIsDirty] = useState(false);
+	// The profile the operator just picked and has not since overridden by hand. UI-only, deliberately NOT a form field:
+	// keeping it out of the draft is what makes "a save carries the profile OR the switches, never both" expressible.
+	const [pendingPreset, setPendingPreset] = useState<ExternalAccessPreset | null>(null);
 	const [fieldErrors, setFieldErrors] = useState<Readonly<Record<string, string>>>({});
 	const fieldBounds = useMemo(() => toNodeSettingsFieldBounds(settings), [settings]);
 
@@ -97,6 +103,7 @@ export function NodeSettings() {
 		setFieldsBaseline(form);
 		setSeededSource(loaded);
 		setIsDirty(false);
+		setPendingPreset(null);
 		if (loaded.maxMessageRequestTimeoutSeconds !== undefined) {
 			setTimeoutSeconds(loaded.maxMessageRequestTimeoutSeconds);
 		}
@@ -122,6 +129,11 @@ export function NodeSettings() {
 
 	const handleFieldChange = <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]): void => {
 		setIsDirty(true);
+		// A switch edited by hand after a preset click wins: the save then carries the booleans and the server stamps the
+		// profile "custom", instead of honouring the preset and discarding the edit.
+		if (isExternalAccessBooleanField(field)) {
+			setPendingPreset(null);
+		}
 		setFieldsForm((current) => ({ ...current, [field]: value }));
 		// Clear a field's stale error as soon as the operator edits it.
 		setFieldErrors((current) => {
@@ -132,6 +144,12 @@ export function NodeSettings() {
 			delete next[field as string];
 			return next;
 		});
+	};
+
+	const handleApplyExternalAccessPreset = (preset: ExternalAccessPreset): void => {
+		setIsDirty(true);
+		setFieldsForm((current) => applyExternalAccessPreset(current, preset));
+		setPendingPreset(preset);
 	};
 
 	const handleTimeoutChange = (value: NodeSettingsTimeoutInput): void => {
@@ -172,7 +190,7 @@ export function NodeSettings() {
 			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
 			return;
 		}
-		const { body, errors } = buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode);
+		const { body, errors } = buildNodeSettingsRequest(fieldsForm, fieldsBaseline, fieldBounds, developerMode, pendingPreset);
 		if (Object.keys(errors).length > 0) {
 			setFieldErrors(errors);
 			toast.error(t("pages.nodeSettings.fields.validationError", "Some settings are invalid. Fix the highlighted fields."));
@@ -288,6 +306,7 @@ export function NodeSettings() {
 				bounds={fieldBounds}
 				errors={modelOptions.visibleErrors}
 				onChange={handleFieldChange}
+				onApplyPreset={handleApplyExternalAccessPreset}
 				showDeveloperFields={developerMode}
 				draftModelOptions={modelOptions.draftModelOptions}
 				keepWarmModelOptions={modelOptions.keepWarmModelOptions}

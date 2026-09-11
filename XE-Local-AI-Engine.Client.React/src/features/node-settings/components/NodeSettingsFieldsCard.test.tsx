@@ -86,6 +86,7 @@ function renderCard(overrides: RenderOverrides = {}): {
 				bounds={toNodeSettingsFieldBounds(undefined)}
 				errors={overrides.errors ?? {}}
 				onChange={onChange as unknown as NodeSettingsFieldsCardProps["onChange"]}
+				onApplyPreset={vi.fn()}
 				showDeveloperFields={false}
 				draftModelOptions={[]}
 				keepWarmModelOptions={overrides.keepWarmModelOptions ?? []}

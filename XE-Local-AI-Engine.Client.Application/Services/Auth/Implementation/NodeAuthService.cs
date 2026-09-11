@@ -8,6 +8,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 public sealed class NodeAuthService : INodeAuthService
 {
@@ -15,6 +16,7 @@ public sealed class NodeAuthService : INodeAuthService
 
     private readonly NodeIdentityDbContext _dbContext;
     private readonly ILogger<NodeAuthService> _logger;
+    private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly IOptions<NodeAuthOptions> _options;
     private readonly SignInManager<NodeUser> _signInManager;
     private readonly TimeProvider _timeProvider;
@@ -26,6 +28,7 @@ public sealed class NodeAuthService : INodeAuthService
         SignInManager<NodeUser> signInManager,
         INodeTokenService tokenService,
         IOptions<NodeAuthOptions> options,
+        INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
         ILogger<NodeAuthService> logger)
     {
@@ -34,6 +37,7 @@ public sealed class NodeAuthService : INodeAuthService
         _signInManager = signInManager ?? throw new ArgumentNullException(nameof(signInManager));
         _tokenService = tokenService ?? throw new ArgumentNullException(nameof(tokenService));
         _options = options ?? throw new ArgumentNullException(nameof(options));
+        _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
@@ -95,6 +99,22 @@ public sealed class NodeAuthService : INodeAuthService
                 await transaction.RollbackAsync(cancellationToken).ConfigureAwait(false);
                 return new NodeSetupResult(Succeeded: false, AlreadyInitialized: false, ToErrorList(roleResult));
             }
+
+            // Written BEFORE the commit, and only when nothing has been chosen yet. The settings file cannot join the
+            // identity transaction, so one of the two writes has to be the one that can be orphaned. Writing first makes
+            // the orphan "profile pending, no administrator", which is inert: setup fails and is retryable, the gated
+            // services keep waiting because there is no operator to ask, and the retry lands on this same null guard.
+            // Writing after the commit would instead leave "administrator exists, profile null" reachable — the one
+            // state the boot backfill decides as "recommended", which would start outbound checks the operator was
+            // never asked about. The token is SetupAsync's own: a cancellation here throws before the commit, so the
+            // transaction disposes unconfirmed and Identity rolls back.
+            await _nodeSettingsStore.UpdateAsync(latest => latest.ExternalAccessProfile is null
+                    ? latest with
+                    {
+                        ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfilePending
+                    }
+                    : latest,
+                cancellationToken).ConfigureAwait(false);
 
             await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
             _logger.LogInformation("Node admin user created during first-run setup.");

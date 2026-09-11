@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
+using System.Globalization;
 using System.Text.Json;
 using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -211,7 +212,11 @@ internal static class ChatStreamEventMapper
     public static ChatStreamEvent PhaseEvent(NodeChatMessageCorrelation correlation,
         InvocationRuntimePhase phase,
         long timestampMs,
-        long sequence)
+        long sequence,
+        // When the phase CHANGED, off InvocationState. A different clock from timestampMs, which is the frame's send
+        // time off the caller's injected TimeProvider — under a test clock the two disagree by decades, and nothing
+        // may relate them.
+        DateTimeOffset? phaseChangedAtUtc = null)
     {
         return new ChatStreamEvent(ChatStreamEventTypes.AssistantPhase,
             correlation.ConversationId,
@@ -220,7 +225,8 @@ internal static class ChatStreamEventMapper
             NodeChatMessageStatusValues.Streaming,
             sequence,
             timestampMs,
-            RuntimePhase: ToWirePhase(phase));
+            RuntimePhase: ToWirePhase(phase),
+            RuntimePhaseChangedAtUtc: phaseChangedAtUtc?.ToString("O", CultureInfo.InvariantCulture));
     }
 
     /// <summary>The wire form of <see cref="InvocationRuntimePhase" /> the React reducer keys the loading indicator on.</summary>

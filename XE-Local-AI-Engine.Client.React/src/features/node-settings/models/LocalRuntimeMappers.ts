@@ -27,6 +27,8 @@ export function toLlamaCppRuntimeStatus(
 				: null,
 		recommendedTag: dto.recommendedTag ?? "",
 		upstreamLatestTag: dto.upstreamLatestTag ?? null,
+		// Epoch milliseconds straight through, no conversion — the same non-conversion the nested `installedAtUtc` gets.
+		checkedAtUtc: dto.checkedAtUtc ?? null,
 		updateAvailable: dto.updateAvailable ?? false,
 		isOffline: dto.isOffline ?? false,
 		runningProcessCount: dto.runningProcessCount ?? 0,

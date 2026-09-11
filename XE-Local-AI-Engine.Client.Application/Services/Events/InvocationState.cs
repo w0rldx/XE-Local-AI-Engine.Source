@@ -36,6 +36,16 @@ public sealed class InvocationState
     public InvocationRuntimePhase? RuntimePhase { get; set; }
 
     /// <summary>
+    ///     When <see cref="RuntimePhase" /> last CHANGED — not when it was last reported. Stamped server-side by
+    ///     <c>WorkerEventDispatcher.ReportInvocationPhaseAsync</c> on a real transition only, so the browser can render
+    ///     elapsed cold-load time from an authoritative clock that a page reload does not reset. Null for turns that
+    ///     never reported a phase, and for a phase that predates this field. Like every other field,
+    ///     <see cref="Clone" /> must copy it: a member missing from the clone silently travels as null and only shows
+    ///     up live.
+    /// </summary>
+    public DateTimeOffset? RuntimePhaseChangedAtUtc { get; set; }
+
+    /// <summary>
     ///     The immutable streamed-content accumulator — the single source of truth for the response text. Cloning an
     ///     <see cref="InvocationState" /> copies THIS reference (O(1)) rather than the materialized
     ///     <see cref="StreamedContent" /> string, which is what removes the per-chunk materialization from the hot path.
@@ -215,6 +225,7 @@ public sealed class InvocationState
             TraceId = TraceId,
             Status = Status,
             RuntimePhase = RuntimePhase,
+            RuntimePhaseChangedAtUtc = RuntimePhaseChangedAtUtc,
             ContentAccumulator = ContentAccumulator,
             StreamedChunkCount = StreamedChunkCount,
             ThinkingAccumulator = ThinkingAccumulator,

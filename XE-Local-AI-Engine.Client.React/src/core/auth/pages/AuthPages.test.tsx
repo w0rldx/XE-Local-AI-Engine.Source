@@ -146,7 +146,8 @@ describe("node auth pages", () => {
 		);
 		expect(authApiMock.loginNodeAuth).toHaveBeenCalledWith({ email: "admin@example.test", password });
 		expect(useNodeAuthStore.getState().accessToken).toBe("access-token");
-		expect(navigateMock).toHaveBeenCalledWith({ to: "/" });
+		// Setup lands on the first-run external-access choice, not on the app.
+		expect(navigateMock).toHaveBeenCalledWith({ to: "/external-access" });
 	});
 
 	it("blocks setup and surfaces the policy when the password is too weak", async () => {

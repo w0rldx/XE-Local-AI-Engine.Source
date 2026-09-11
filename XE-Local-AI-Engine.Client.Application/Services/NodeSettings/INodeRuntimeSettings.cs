@@ -115,6 +115,34 @@ public interface INodeRuntimeSettings
     /// </summary>
     Task<bool> GetToolRelevanceEnabledAsync(CancellationToken cancellationToken = default);
 
+    /// <summary>
+    ///     Which external-access preset was last applied, verbatim and with NO fallback: <see langword="null" /> is the
+    ///     answer (nobody has decided), not a missing one. <c>"pending"</c> means an administrator exists and the choice
+    ///     has not been made. Read only to tell a decided node from an undecided one — the three switches below are what
+    ///     every gate reads.
+    /// </summary>
+    Task<string?> GetExternalAccessProfileAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether the node checks for application updates on its own (stored &gt; on). Gates
+    ///     <c>AppUpdateCheckService</c> only; the manual check and apply flow never consult it.
+    /// </summary>
+    Task<bool> GetAutoCheckApplicationUpdatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether the node checks for llama.cpp / runtime updates on its own (stored &gt; on). Gates
+    ///     <c>LlamaCppUpdateCheckService</c> only; the manual runtime-status refresh and the runtime install never
+    ///     consult it.
+    /// </summary>
+    Task<bool> GetAutoCheckRuntimeUpdatesAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Whether the node provisions a first-run model on its own (stored &gt; on). Gates
+    ///     <c>FirstRunModelProvisioningService</c>, AFTER the existing <c>FirstRunModel:Enabled</c> config gate rather
+    ///     than instead of it; a manual model download or install never consults it.
+    /// </summary>
+    Task<bool> GetAutoProvisionFirstRunModelAsync(CancellationToken cancellationToken = default);
+
     // Synchronous twins for the composition/startup path (DI factory seeds + singleton constructors) and for
     // request-time call sites that are structurally synchronous. These read the stored settings synchronously to avoid
     // blocking on async file I/O during host startup, which starves the thread pool.

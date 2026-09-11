@@ -10,6 +10,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>
 ///     The desktop-only first-run provisioning service: it auto-installs and selects a small GGUF chat model on a clean
@@ -337,6 +338,75 @@ public sealed class FirstRunModelProvisioningServiceTests
         AssertEx.Null(settingsStore.Saved);
     }
 
+    // Brief §5 test 1 for provisioning. Both halves of the observable effect are asserted: no download STARTED and no
+    // llama.cpp binary acquired — a gate that only stopped the download would still pull a multi-GB runtime.
+    [Test]
+    public async Task Execute_WhenFirstRunProvisioningIsDisabled_StartsNoDownload()
+    {
+        var binaryManager = new RecordingBinaryManager();
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithExternalAccessProfile(StoredNodeSettings.ExternalAccessProfileOffline)
+                                                     .WithAutoProvisionFirstRunModel(false)
+                                                     .Build();
+        using var service = BuildService(isDesktop: true,
+            [],
+            binaryManager,
+            coordinator,
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
+            runtimeSettings: runtimeSettings,
+            timeProvider: new ManualTimeProvider());
+
+        await RunAsync(service);
+
+        AssertEx.Equal(expected: 0, coordinator.StartCalls.Count);
+        AssertEx.False(binaryManager.EnsureCalled, "A disabled first-run provisioning must not acquire a runtime either.");
+    }
+
+    // Brief §5 test 2 for provisioning, on the fake clock.
+    [Test]
+    public async Task Execute_WhileTheProfileIsUndecided_Waits_ThenProvisionsOnceItIsDecided()
+    {
+        var binaryManager = new RecordingBinaryManager();
+        var coordinator = new FakeDownloadCoordinator(GgufDownloadPhase.Completed);
+        var decided = false;
+        var runtimeSettings = StubNodeRuntimeSettings.Create()
+                                                     .WithExternalAccessProfileRead(_ => Task.FromResult<string?>(decided
+                                                         ? StoredNodeSettings.ExternalAccessProfileRecommended
+                                                         : null))
+                                                     .Build();
+        var timeProvider = new ManualTimeProvider();
+        using var service = BuildService(isDesktop: true,
+            [],
+            binaryManager,
+            coordinator,
+            new FakeNodeSettingsStore(new StoredNodeSettings()),
+            runtimeSettings: runtimeSettings,
+            timeProvider: timeProvider);
+
+        await service.StartAsync(CancellationToken.None);
+        try
+        {
+            await AssertEx.EventuallyAsync(() => timeProvider.ArmedTimerCount > 0,
+                TimeSpan.FromSeconds(5),
+                "The gate must arm its poll timer while the profile is undecided.");
+            await AssertEx.SettleAsync();
+            AssertEx.Equal(expected: 0, coordinator.StartCalls.Count, "Nothing may be downloaded before the operator has chosen.");
+            AssertEx.False(binaryManager.EnsureCalled);
+
+            decided = true;
+            timeProvider.Advance(ExternalAccessGate.PollInterval);
+
+            await AssertEx.EventuallyAsync(() => coordinator.StartCalls.Count > 0,
+                TimeSpan.FromSeconds(5),
+                "Provisioning must start once the profile is decided.");
+        }
+        finally
+        {
+            await service.StopAsync(CancellationToken.None);
+        }
+    }
+
     private static FirstRunModelProvisioningService BuildService(bool isDesktop,
         IReadOnlyList<string> installed,
         RecordingBinaryManager binaryManager,
@@ -344,7 +414,9 @@ public sealed class FirstRunModelProvisioningServiceTests
         FakeNodeSettingsStore settingsStore,
         IGpuVariantSelector? variantSelector = null,
         TimeSpan? gpuProbeCeiling = null,
-        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null)
+        IRuntimeAcquisitionStatusRegistry? acquisitionStatus = null,
+        INodeRuntimeSettings? runtimeSettings = null,
+        TimeProvider? timeProvider = null)
     {
         var configuration = new ConfigurationBuilder()
                             .AddInMemoryCollection(new Dictionary<string, string?>
@@ -362,7 +434,9 @@ public sealed class FirstRunModelProvisioningServiceTests
             binaryManager,
             variantSelector ?? new FakeVariantSelector(),
             settingsStore,
+            runtimeSettings ?? StubNodeRuntimeSettings.Create().Build(),
             acquisitionStatus ?? new RecordingAcquisitionStatusRegistry(),
+            timeProvider ?? TimeProvider.System,
             NullLogger<FirstRunModelProvisioningService>.Instance,
             isDesktop,
             TimeSpan.FromMilliseconds(5),

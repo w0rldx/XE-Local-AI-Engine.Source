@@ -15,6 +15,7 @@ using XE_Local_AI_Engine.Client.Services.DevWorkflows;
 using XE_Local_AI_Engine.Client.Services.ExternalProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
 using XE_Local_AI_Engine.Client.Services.Training.Evaluation;
 using XE_Local_AI_Engine.Client.Services.Training.Export;
@@ -55,6 +56,7 @@ public sealed class DomainValidationExceptionHandler(ILogger<DomainValidationExc
             or SkillImportException
             or AppUpdateException
             or ExternalProviderValidationException
+            or NodeSettingsUnreadableException
             or NodeChatInvalidBranchSelectionException
             or EvaluationRejectedException
             or TrainingExportRejectedException

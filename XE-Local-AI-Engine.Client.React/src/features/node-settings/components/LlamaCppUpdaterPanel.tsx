@@ -70,6 +70,10 @@ export function LlamaCppUpdaterPanel() {
 	const status = statusQuery.data;
 	const isOffline = status?.isOffline === true;
 	const updateAvailable = status?.updateAvailable === true;
+	// A null-vs-present test only; the badge renders no timestamp. Before the first check the snapshot is empty
+	// (`updateAvailable` and `isOffline` both false), which would otherwise render a green "Up to date" — a lie that
+	// becomes permanent for an operator who switches the automatic check off.
+	const hasChecked = status?.checkedAtUtc != null;
 	const recommendedTag = status?.recommendedTag ?? "";
 	const upstreamLatestTag = status?.upstreamLatestTag ?? null;
 	const installed = installedTag(status);
@@ -254,6 +258,10 @@ export function LlamaCppUpdaterPanel() {
 									"Offline — using the cached / pinned runtime. Update checks are unavailable until the GitHub release API is reachable.",
 								)}
 							</Alert>
+						) : !hasChecked ? (
+							<Badge color="gray" variant="light" data-testid="llamacpp-updater-state-notchecked">
+								{t("pages.nodeSettings.llamaCpp.updater.notChecked", "Not checked yet")}
+							</Badge>
 						) : updateAvailable ? (
 							<Badge color="primary" variant="light" data-testid="llamacpp-updater-state-available">
 								{t("pages.nodeSettings.llamaCpp.updater.updateAvailable", "Update available")}

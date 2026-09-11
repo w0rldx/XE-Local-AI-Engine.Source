@@ -55,6 +55,19 @@ public sealed class CachedNodeSettingsStore : INodeSettingsStore
         return loaded;
     }
 
+    /// <inheritdoc />
+    /// <remarks>
+    ///     Forwarded WHOLE and deliberately NOT cached. Caching a <see langword="null" /> would make a transient read
+    ///     failure sticky for the lifetime of a no-TTL entry, and the sole caller runs once per boot. The override itself
+    ///     is load-bearing: without it this decorator inherits the interface default and answers from the TOLERANT
+    ///     <see cref="LoadAsync" />, which cannot tell a missing file from an unreadable one — the whole point of the
+    ///     strict read.
+    /// </remarks>
+    public Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
+    {
+        return _inner.LoadStrictAsync(cancellationToken);
+    }
+
     public StoredNodeSettings Load(CancellationToken cancellationToken = default)
     {
         if (_cache.TryGetValue(CacheKey, out StoredNodeSettings? cached) && cached is not null)

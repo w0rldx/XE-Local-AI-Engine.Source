@@ -45,6 +45,20 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
     }
 
+    /// <inheritdoc />
+    public async Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
+    {
+        await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            return await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            _lock.Release();
+        }
+    }
+
     /// <summary>
     ///     Synchronous twin of <see cref="LoadAsync" /> for the composition/startup path. Uses a synchronous lock + file
     ///     read so DI factory seeds and singleton constructors never block on async file I/O (which starves the thread
@@ -110,7 +124,17 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         await _lock.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
-            var current = await LoadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            // STRICT, unlike LoadAsync: a read-modify-write over an unreadable file would mutate a DEFAULT record and
+            // persist it as valid, healing corruption into a settings file that has silently lost every stored value —
+            // the node's external-access posture included. Recovery is an explicit operator action, never an automatic
+            // overwrite. Automatic callers (ExternalProviderStartupReconciler first) already swallow a startup failure.
+            var current = await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false);
+            if (current is null)
+            {
+                _logger.LogError("Node settings at {SettingsPath} are present but unreadable; nothing was written. Repair or delete node-settings.json to recover.", _settingsPath);
+                throw new NodeSettingsUnreadableException(_settingsPath);
+            }
+
             var mutated = Normalize(mutate(current) ?? throw new InvalidOperationException("The node-settings mutation returned null."));
             await SaveUnlockedAsync(mutated, cancellationToken).ConfigureAwait(false);
             return mutated;
@@ -121,7 +145,23 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
     }
 
+    /// <summary>
+    ///     The TOLERANT read every ordinary consumer wants: an unreadable file degrades to the default record so one
+    ///     corrupt byte cannot take a feature down. <see cref="ReadUnlockedAsync" /> is the strict twin.
+    /// </summary>
     private async Task<StoredNodeSettings> LoadUnlockedAsync(CancellationToken cancellationToken)
+    {
+        return await ReadUnlockedAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
+    }
+
+    /// <summary>
+    ///     The STRICT read, and the only place that can tell the three cases apart: a missing file is the DEFAULT record
+    ///     (a legacy install that never saved, not an error), a readable file is the normalized record, and a present but
+    ///     unreadable file is <see langword="null" />. Callers must not conflate the last two — the difference between
+    ///     "no value yet" and "I cannot read the value" is what stops the boot backfill deciding an external-access
+    ///     posture on the strength of a corrupt file.
+    /// </summary>
+    private async Task<StoredNodeSettings?> ReadUnlockedAsync(CancellationToken cancellationToken)
     {
         if (!File.Exists(_settingsPath))
         {
@@ -136,22 +176,74 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
         catch (JsonException exception)
         {
-            _logger.LogWarning(exception, "Node settings could not be deserialized. Falling back to defaults.");
-            return new StoredNodeSettings();
+            _logger.LogWarning(exception, "Node settings could not be deserialized.");
+            return null;
         }
         catch (IOException exception)
         {
-            _logger.LogWarning(exception, "Node settings could not be read. Falling back to defaults.");
-            return new StoredNodeSettings();
+            _logger.LogWarning(exception, "Node settings could not be read.");
+            return null;
         }
     }
 
+    /// <summary>
+    ///     Writes through a temp SIBLING plus an atomic rename, so a crash mid-write never leaves a torn file: the old
+    ///     one survives intact. <see cref="File.Move(string, string, bool)" /> within one directory is a rename — atomic
+    ///     on Linux (<c>rename(2)</c>) and Windows (<c>MoveFileEx</c> / <c>MOVEFILE_REPLACE_EXISTING</c>). Same-directory
+    ///     is load-bearing: a rename across filesystems is a copy, not a replace.
+    ///     <para>
+    ///         The Windows caveat recorded for <c>llama-launch-fallback.json</c> — an atomic replace over a file another
+    ///         holder has open FAILS on Windows, which is why that file's lock sits on a sibling <c>.lock</c> — does not
+    ///         bite here, so do not "fix" this later: every read and write in this class runs under <c>_lock</c>, the
+    ///         write opens with <see cref="FileShare.None" />, and the repo runs one node instance per data directory.
+    ///     </para>
+    /// </summary>
     private async Task SaveUnlockedAsync(StoredNodeSettings normalizedSettings, CancellationToken cancellationToken)
     {
-        // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
-        // chmod. Windows relies on the per-user data-directory ACL (UnixCreateMode is unsupported there).
-        await using var fileStream = CreateOwnerOnly(_settingsPath);
-        await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+        var tempPath = string.Concat(_settingsPath, ".", Guid.NewGuid().ToString("N"), ".tmp");
+        try
+        {
+            // Create with 0600 up front on non-Windows so the file is never briefly world-readable between create and
+            // chmod, and so the RENAMED file keeps owner-only permissions. Windows relies on the per-user
+            // data-directory ACL (UnixCreateMode is unsupported there).
+            await using (var fileStream = CreateOwnerOnly(tempPath))
+            {
+                await JsonSerializer.SerializeAsync(fileStream, normalizedSettings, SerializerOptions, cancellationToken).ConfigureAwait(false);
+            }
+
+            File.Move(tempPath, _settingsPath, overwrite: true);
+        }
+        catch
+        {
+            // A failed serialize or move leaves the previous file untouched; drop the partial temp so no litter builds up.
+            // Best-effort, in its own try: a delete that throws here would REPLACE the original failure with a cleanup
+            // error, hiding why the write failed.
+            DeleteIfExists(tempPath);
+            throw;
+        }
+    }
+
+    /// <summary>
+    ///     Best-effort temp-file cleanup, matching <c>KnowledgeDocumentBlobStore.DeleteFileIfExists</c>: a leftover
+    ///     <c>.tmp</c> sibling is litter, never a correctness problem, and must not mask the exception being propagated.
+    /// </summary>
+    private static void DeleteIfExists(string path)
+    {
+        try
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
+        catch (IOException)
+        {
+            // Best-effort cleanup; a transient IO error leaves an orphan temp file next to node-settings.json.
+        }
+        catch (UnauthorizedAccessException)
+        {
+            // Best-effort cleanup; a permission error leaves an orphan temp file next to node-settings.json.
+        }
     }
 
     /// <summary>
@@ -231,7 +323,8 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
             RerankerModelName = TrimToNull(settings.RerankerModelName),
             AutoEffortFastModelName = TrimToNull(settings.AutoEffortFastModelName),
             DefaultVoiceProfile = TrimToNull(settings.DefaultVoiceProfile),
-            UsageRates = NormalizeUsageRates(settings.UsageRates)
+            UsageRates = NormalizeUsageRates(settings.UsageRates),
+            ExternalAccessProfile = NormalizeExternalAccessProfile(settings.ExternalAccessProfile)
         };
     }
 
@@ -309,6 +402,27 @@ public sealed class NodeSettingsStore : INodeSettingsStore, IDisposable
         }
 
         return value <= 0 ? null : value;
+    }
+
+    /// <summary>
+    ///     Blank or absent is the LEGACY install — nobody ever wrote a profile — so it stays <see langword="null" /> and
+    ///     the boot backfill may stamp it. A non-blank string the engine does not recognise is the opposite case:
+    ///     somebody wrote a profile, just not one this engine knows, so the node is ASKED AGAIN rather than answered for
+    ///     — it loads as <see cref="StoredNodeSettings.ExternalAccessProfilePending" />. The gated services wait on
+    ///     <c>pending</c>, the backfill leaves any non-null profile alone, the three switches beside it are kept exactly
+    ///     as they are, and the SPA shows the profile chooser to the administrator at the next login. The comparison is
+    ///     ordinal, so <c>"Offline"</c> is unrecognised and <c>"  offline  "</c> is not.
+    /// </summary>
+    private static string? NormalizeExternalAccessProfile(string? value)
+    {
+        var trimmed = TrimToNull(value);
+
+        if (trimmed is null)
+        {
+            return null;
+        }
+
+        return StoredNodeSettings.IsValidExternalAccessProfile(trimmed) ? trimmed : StoredNodeSettings.ExternalAccessProfilePending;
     }
 
     private static string? NormalizeRecommendedTag(string? value)

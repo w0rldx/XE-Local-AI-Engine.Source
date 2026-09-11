@@ -3,7 +3,14 @@ namespace XE_Local_AI_Engine.Tests.Auth;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Endpoints.Auth.V1;
+using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class NodeAuthEndpointTests
@@ -167,6 +174,109 @@ public sealed class NodeAuthEndpointTests
         AssertEx.NotEmpty(token.AccessToken);
     }
 
+    [Test]
+    public async Task Setup_WhenItSucceeds_MarksTheExternalAccessProfilePending()
+    {
+        await using var factory = new TestServerWebAppFactory();
+        using var client = factory.CreateClient();
+
+        using var setupResponse = await SetupAsync(client).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.NoContent, setupResponse.StatusCode);
+
+        var stored = await factory.Services.GetRequiredService<INodeSettingsStore>().LoadAsync().ConfigureAwait(false);
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
+    }
+
+    // R5b's ordering, from the failure side: the profile write lands, the operation is cancelled, and the identity
+    // transaction never commits. The orphan this leaves is the harmless one — a pending profile with no administrator —
+    // and both halves are asserted, because the whole point of writing before the commit is that the OTHER orphan
+    // ("administrator exists, profile null", which the boot backfill would decide as recommended) is unreachable.
+    [Test]
+    public async Task Setup_WhenCancelledBetweenTheTwoWrites_LeavesSetupRequiredWithAPendingProfile()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "xe-node-auth-pending", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        try
+        {
+            using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
+            var seam = new CancelTheFirstWriteSettingsStore(store);
+            await using var factory = CreateFactory(seam);
+
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory)).ConfigureAwait(false);
+
+            AssertEx.Equal(expected: 1, seam.CancelledWrites, "The seam must have interrupted exactly the profile write.");
+            AssertEx.True(await SetupRequiredAsync(factory).ConfigureAwait(false),
+                "A cancelled setup must roll the identity transaction back, leaving no administrator.");
+            var stored = await store.LoadAsync().ConfigureAwait(false);
+            AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    // The `is null` guard in NodeAuthService.SetupAsync: a retry after the orphaned write above must not clobber the
+    // profile it finds, or a decided node could be reset to pending by a second setup attempt.
+    [Test]
+    public async Task Setup_RetriedAfterAPendingProfileWasWritten_SucceedsAndKeepsPending()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "xe-node-auth-pending-retry", Guid.NewGuid().ToString("N"));
+        _ = Directory.CreateDirectory(root);
+        try
+        {
+            using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
+            var seam = new CancelTheFirstWriteSettingsStore(store);
+            await using var factory = CreateFactory(seam);
+
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => RunSetupAsync(factory)).ConfigureAwait(false);
+
+            var retry = await RunSetupAsync(factory).ConfigureAwait(false);
+
+            AssertEx.True(retry.Succeeded, "The retried setup must succeed once the seam stops interrupting.");
+            AssertEx.False(await SetupRequiredAsync(factory).ConfigureAwait(false));
+            var stored = await store.LoadAsync().ConfigureAwait(false);
+            AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, stored.ExternalAccessProfile);
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///     Drives <see cref="INodeAuthService.SetupAsync" /> directly rather than through the endpoint, because the
+    ///     cancellation these tests inject is the thing under test and the endpoint would render it as a status code.
+    /// </summary>
+    private static async Task<NodeSetupResult> RunSetupAsync(TestServerWebAppFactory factory)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
+                          .SetupAsync(Email, Password, CancellationToken.None)
+                          .ConfigureAwait(false);
+    }
+
+    private static async Task<bool> SetupRequiredAsync(TestServerWebAppFactory factory)
+    {
+        await using var scope = factory.Services.CreateAsyncScope();
+        var status = await scope.ServiceProvider.GetRequiredService<INodeAuthService>()
+                                .GetStatusAsync(new ClaimsPrincipal(), CancellationToken.None)
+                                .ConfigureAwait(false);
+        return status.SetupRequired;
+    }
+
+    private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore)
+    {
+        return new TestServerWebAppFactory
+        {
+            ConfigureAdditionalTestServices = services =>
+            {
+                services.RemoveAll<INodeSettingsStore>();
+                services.AddSingleton(nodeSettingsStore);
+            }
+        };
+    }
+
     private static Task<HttpResponseMessage> SetupAsync(HttpClient client, string email = Email)
     {
         return client.PostAsJsonAsync("/api/local/v1/auth/setup",
@@ -215,6 +325,50 @@ public sealed class NodeAuthEndpointTests
         return response.Headers.TryGetValues("Set-Cookie", out var values)
             ? values.ToArray()
             : [];
+    }
+
+    /// <summary>
+    ///     Decorates the REAL store and interrupts only the FIRST write: the mutation is persisted, then the caller is
+    ///     cancelled. That is the window R5b's ordering is chosen for — the profile is already durable while the
+    ///     identity transaction has not committed — and leaving later writes alone is what lets a retry run against a
+    ///     node that genuinely holds the orphaned value.
+    /// </summary>
+    private sealed class CancelTheFirstWriteSettingsStore(INodeSettingsStore inner) : INodeSettingsStore
+    {
+        public int CancelledWrites { get; private set; }
+
+        public Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default)
+        {
+            return inner.LoadAsync(cancellationToken);
+        }
+
+        public Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
+        {
+            return inner.LoadStrictAsync(cancellationToken);
+        }
+
+        public StoredNodeSettings Load(CancellationToken cancellationToken = default)
+        {
+            return inner.Load(cancellationToken);
+        }
+
+        public Task SaveAsync(StoredNodeSettings settings, CancellationToken cancellationToken = default)
+        {
+            return inner.SaveAsync(settings, cancellationToken);
+        }
+
+        public async Task<StoredNodeSettings> UpdateAsync(Func<StoredNodeSettings, StoredNodeSettings> mutate,
+            CancellationToken cancellationToken = default)
+        {
+            var persisted = await inner.UpdateAsync(mutate, cancellationToken).ConfigureAwait(false);
+            if (CancelledWrites > 0)
+            {
+                return persisted;
+            }
+
+            CancelledWrites++;
+            throw new OperationCanceledException("The settings write landed and the caller was then cancelled.");
+        }
     }
 
     private sealed record AuthStatusResponse(bool SetupRequired, bool Authenticated);

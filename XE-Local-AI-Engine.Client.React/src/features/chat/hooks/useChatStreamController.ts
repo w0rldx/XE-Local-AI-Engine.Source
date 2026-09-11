@@ -281,7 +281,7 @@ export function useChatStreamController({
 				abortController,
 			};
 
-			let lastVoiceStreaming: ChatStreamingState | undefined;
+			let lastStreaming: ChatStreamingState | undefined;
 			// Running reduced conversation for THIS turn: each event folds onto the previous one here so batched
 			// per-frame commits don't have to round-trip the query cache (which the scheduler hasn't flushed yet).
 			let latestConversation: ChatConversationModel | undefined;
@@ -322,9 +322,9 @@ export function useChatStreamController({
 						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						optimisticConversation;
-					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
+					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming);
 					latestConversation = applied.conversation;
-					lastVoiceStreaming = applied.streamingMessage;
+					lastStreaming = applied.streamingMessage;
 					streamScheduler.schedule({
 						conversation: applied.conversation,
 						writeConversationList: applied.isTerminal,
@@ -340,8 +340,8 @@ export function useChatStreamController({
 				// Flush any trailing batched delta (a stream that ended without an explicit terminal event).
 				streamScheduler.flush();
 				// Fire the final voice flush once the stream completes (the terminal flush is idempotent).
-				if (lastVoiceStreaming) {
-					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
+				if (lastStreaming) {
+					onVoiceAnswerProgress({ ...lastStreaming, isActive: false });
 				}
 			} catch (error) {
 				// The turn errored: drop any batched delta and write the failed state synchronously below.
@@ -448,7 +448,7 @@ export function useChatStreamController({
 			onVoiceTurnStart();
 			setStreamingMessage({ conversationId: conversation.id, messageId: "", content: "", isActive: true });
 
-			let lastVoiceStreaming: ChatStreamingState | undefined;
+			let lastStreaming: ChatStreamingState | undefined;
 			// Running reduced conversation for THIS regenerate turn (see handleSend): each event folds onto the
 			// previous grouped conversation so batched frames don't read a not-yet-flushed query cache.
 			let latestConversation: ChatConversationModel | undefined;
@@ -486,7 +486,7 @@ export function useChatStreamController({
 						latestConversation ??
 						queryClient.getQueryData<ChatConversationModel>(nodeChatQueryKeys.conversation(conversation.id)) ??
 						conversation;
-					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent);
+					const applied = applyNodeChatStreamEvent(currentConversation, streamEvent, lastStreaming);
 					// Collapse the streaming variant onto the original in place (applyNodeChatStreamEvent rebuilds the
 					// variant row per event without a group id, so re-stamp every iteration). Only once the server id
 					// is latched and differs from the original — i.e. a genuine sibling, not an in-place re-render.
@@ -495,7 +495,7 @@ export function useChatStreamController({
 							? stampVariantGroup(applied.conversation, assistantMessageId, streamEvent.messageId, variantGroupId)
 							: applied.conversation;
 					latestConversation = grouped;
-					lastVoiceStreaming = applied.streamingMessage;
+					lastStreaming = applied.streamingMessage;
 					streamScheduler.schedule({
 						conversation: grouped,
 						writeConversationList: applied.isTerminal,
@@ -509,8 +509,8 @@ export function useChatStreamController({
 				// Flush any trailing batched delta the loop left pending.
 				streamScheduler.flush();
 				// Fire the final voice flush once the regenerated stream completes (terminal flush is idempotent).
-				if (lastVoiceStreaming) {
-					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
+				if (lastStreaming) {
+					onVoiceAnswerProgress({ ...lastStreaming, isActive: false });
 				}
 				// The stream events don't carry variant_group_id; the post-stream refetch loads it from persistence
 				// and groupMessageRevisions surfaces the newest sibling by default, so no explicit selection here.
@@ -578,7 +578,7 @@ export function useChatStreamController({
 			// claiming stream ownership there would spin the composer into the in-flight state (and block sends) for a
 			// thread with nothing running.
 			let attachedMessageId: string | undefined;
-			let lastVoiceStreaming: ChatStreamingState | undefined;
+			let lastStreaming: ChatStreamingState | undefined;
 			// Running reduced conversation for THIS re-attach (see handleSend): each event folds onto the previous one
 			// so batched frames never read a query cache the scheduler hasn't flushed yet.
 			let latestConversation: ChatConversationModel | undefined;
@@ -610,9 +610,13 @@ export function useChatStreamController({
 						};
 					}
 					// Remap onto the persisted in-flight row (see inFlightAssistantMessageId).
-					const applied = applyNodeChatStreamEvent(currentConversation, { ...streamEvent, messageId: attachedMessageId });
+					const applied = applyNodeChatStreamEvent(
+						currentConversation,
+						{ ...streamEvent, messageId: attachedMessageId },
+						lastStreaming,
+					);
 					latestConversation = applied.conversation;
-					lastVoiceStreaming = applied.streamingMessage;
+					lastStreaming = applied.streamingMessage;
 					streamScheduler.schedule({
 						conversation: applied.conversation,
 						writeConversationList: applied.isTerminal,
@@ -625,8 +629,8 @@ export function useChatStreamController({
 				}
 				// Flush any trailing batched delta. A no-op for the idle case, which schedules nothing at all.
 				streamScheduler.flush();
-				if (lastVoiceStreaming) {
-					onVoiceAnswerProgress({ ...lastVoiceStreaming, isActive: false });
+				if (lastStreaming) {
+					onVoiceAnswerProgress({ ...lastStreaming, isActive: false });
 				}
 			} catch (error) {
 				streamScheduler.cancel();

@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.BackgroundServices;
 
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
 ///     Runs ONE app self-update check per app start, off the startup path: after a short non-blocking delay it asks
@@ -26,19 +27,28 @@ public sealed class AppUpdateCheckService : BackgroundService
 
     private readonly IAppUpdateService _appUpdateService;
     private readonly ILogger<AppUpdateCheckService> _logger;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly TimeSpan _startupDelay;
+    private readonly TimeProvider _timeProvider;
 
-    public AppUpdateCheckService(IAppUpdateService appUpdateService, ILogger<AppUpdateCheckService> logger)
-        : this(appUpdateService, logger, DefaultStartupDelay)
+    public AppUpdateCheckService(IAppUpdateService appUpdateService,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        TimeProvider timeProvider,
+        ILogger<AppUpdateCheckService> logger)
+        : this(appUpdateService, nodeRuntimeSettings, timeProvider, logger, DefaultStartupDelay)
     {
     }
 
     // Test seam: injects the startup delay so the one-shot check can be exercised without a 10s wait.
     internal AppUpdateCheckService(IAppUpdateService appUpdateService,
+        INodeRuntimeSettings nodeRuntimeSettings,
+        TimeProvider timeProvider,
         ILogger<AppUpdateCheckService> logger,
         TimeSpan startupDelay)
     {
         _appUpdateService = appUpdateService ?? throw new ArgumentNullException(nameof(appUpdateService));
+        _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _startupDelay = startupDelay;
     }
@@ -50,6 +60,15 @@ public sealed class AppUpdateCheckService : BackgroundService
             if (_startupDelay > TimeSpan.Zero)
             {
                 await Task.Delay(_startupDelay, stoppingToken).ConfigureAwait(false);
+            }
+
+            // The gate goes AFTER the startup delay so a node parked on an undecided profile is not also holding the
+            // delay open, and BEFORE the one-shot check so CheckOnceAsync stays the pure check.
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
+            if (!await _nodeRuntimeSettings.GetAutoCheckApplicationUpdatesAsync(stoppingToken).ConfigureAwait(false))
+            {
+                _logger.LogDebug("The automatic application-update check is disabled by the node's external-access settings.");
+                return;
             }
 
             await CheckOnceAsync(stoppingToken).ConfigureAwait(false);

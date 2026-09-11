@@ -93,6 +93,12 @@ export interface NodeChatStreamEventDto {
 	// "loading_model" | "generating" — emitted before the first token while a local model cold-loads, so the UI can
 	// show a distinct "Loading model…" indicator instead of the generic typing dots. Absent for cloud/Ollama turns.
 	runtimePhase?: string | null;
+	// When the runtime phase last CHANGED, as an ISO-8601 UTC string stamped by the server: present on the
+	// `assistant-phase` event only. This is the authoritative clock for the cold-load elapsed time — render from it, never
+	// from when the browser first saw the phase, or a page reload mid-load restarts the timer at zero. Absent for turns
+	// that carry no phase timestamp, which is the only case the first-observed-time fallback covers. Unrelated to
+	// `occurredAtUtc` on the same event, which is the frame's send time off a different clock.
+	runtimePhaseChangedAtUtc?: string | null;
 	// Approval request id: present on the `approval-requested` event only. The durable key the browser echoes
 	// back to the loopback resolve endpoint to release the waiting tool call. `toolCallId` carries the tool-call id the
 	// approval belongs to (so the Approve/Deny controls attach to the matching card) and `toolName` the tool name.

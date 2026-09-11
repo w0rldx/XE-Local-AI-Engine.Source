@@ -156,6 +156,42 @@ public sealed partial record StoredNodeSettings
     /// </summary>
     public const bool DefaultToolRelevanceEnabled = false;
 
+    /// <summary>The <see cref="ExternalAccessProfile" /> literal recording that the recommended preset is in force.</summary>
+    public const string ExternalAccessProfileRecommended = "recommended";
+
+    /// <summary>The <see cref="ExternalAccessProfile" /> literal recording that the offline / manual preset is in force.</summary>
+    public const string ExternalAccessProfileOffline = "offline";
+
+    /// <summary>
+    ///     The <see cref="ExternalAccessProfile" /> literal the save mapper stamps when the three switches no longer match
+    ///     either preset. Engine-written: a client never computes or sends it.
+    /// </summary>
+    public const string ExternalAccessProfileCustom = "custom";
+
+    /// <summary>
+    ///     The <see cref="ExternalAccessProfile" /> literal first-run setup writes once the administrator exists and before
+    ///     the operator has chosen a preset. Engine-written: a client never sends it, and the boundary validator rejects it.
+    /// </summary>
+    public const string ExternalAccessProfilePending = "pending";
+
+    /// <summary>
+    ///     Automatic application-update checks are ON when unset, so an upgraded node behaves exactly as it did before this
+    ///     switch existed. Gates <c>AppUpdateCheckService</c> only; the manual check and apply flow ignore it.
+    /// </summary>
+    public const bool DefaultAutoCheckApplicationUpdates = true;
+
+    /// <summary>
+    ///     Automatic llama.cpp / runtime update checks are ON when unset. Gates <c>LlamaCppUpdateCheckService</c> only; the
+    ///     manual runtime-status refresh and the runtime install ignore it.
+    /// </summary>
+    public const bool DefaultAutoCheckRuntimeUpdates = true;
+
+    /// <summary>
+    ///     First-run model provisioning is ON when unset. Gates <c>FirstRunModelProvisioningService</c> only; a manual model
+    ///     download or install ignores it. It sits AFTER the existing <c>FirstRunModel:Enabled</c> config gate, not instead of it.
+    /// </summary>
+    public const bool DefaultAutoProvisionFirstRunModel = true;
+
     /// <summary>Tag format gate: a llama.cpp release tag is a literal <c>b</c> followed by one or more digits.</summary>
     public const string RecommendedLlamaCppTagPattern = "^b[0-9]+$";
 
@@ -200,6 +236,33 @@ public sealed partial record StoredNodeSettings
     public static bool IsValidKvCacheType(string? type)
     {
         return LlamaServerKvCacheTypes.IsAllowed(type);
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="profile" /> is one of the four PERSISTABLE external-access
+    ///     literals: <see cref="ExternalAccessProfileRecommended" />, <see cref="ExternalAccessProfileOffline" />,
+    ///     <see cref="ExternalAccessProfileCustom" />, <see cref="ExternalAccessProfilePending" />. This is what may be
+    ///     STORED, so <c>NodeSettingsStore.Normalize</c> uses it. The comparison is ordinal (a constant string pattern), so
+    ///     <c>"Offline"</c> is rejected rather than silently accepted. <see langword="null" /> is a state (undecided), not a
+    ///     literal, and is <see langword="false" /> here.
+    /// </summary>
+    public static bool IsValidExternalAccessProfile(string? profile)
+    {
+        return profile is ExternalAccessProfileRecommended
+            or ExternalAccessProfileOffline
+            or ExternalAccessProfileCustom
+            or ExternalAccessProfilePending;
+    }
+
+    /// <summary>
+    ///     Returns <see langword="true" /> when <paramref name="profile" /> is a preset a CLIENT may send:
+    ///     <see cref="ExternalAccessProfileRecommended" /> or <see cref="ExternalAccessProfileOffline" />.
+    ///     <see cref="ExternalAccessProfileCustom" /> and <see cref="ExternalAccessProfilePending" /> are engine-written
+    ///     states — the boundary validator rejects them as inputs and the save mapper is their only writer.
+    /// </summary>
+    public static bool IsExternalAccessPreset(string? profile)
+    {
+        return profile is ExternalAccessProfileRecommended or ExternalAccessProfileOffline;
     }
 
     public int MaxMessageRequestTimeoutSeconds { get; init; } = DefaultMaxMessageRequestTimeoutSeconds;
@@ -347,6 +410,45 @@ public sealed partial record StoredNodeSettings
     ///     passes it through untouched.
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
+
+    /// <summary>
+    ///     Which external-access preset was last applied. A RECORD of the choice, never the authority: every gate reads the
+    ///     three booleans below, and this member is read for exactly one purpose — telling a decided node from an undecided
+    ///     one. The state machine in full:
+    ///     <list type="bullet">
+    ///         <item><see langword="null" /> — nobody has decided AND no administrator exists (a fresh boot), or an upgraded node not yet backfilled. The only backfillable state.</item>
+    ///         <item><see cref="ExternalAccessProfilePending" /> — an administrator exists and the choice has not been made.</item>
+    ///         <item><see cref="ExternalAccessProfileRecommended" /> / <see cref="ExternalAccessProfileOffline" /> — a preset is in force.</item>
+    ///         <item><see cref="ExternalAccessProfileCustom" /> — the switches no longer match either preset.</item>
+    ///     </list>
+    ///     <see langword="null" /> and <see cref="ExternalAccessProfilePending" /> are both UNDECIDED to the gated services;
+    ///     only <see langword="null" /> is backfillable.
+    /// </summary>
+    public string? ExternalAccessProfile { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for application updates on its own. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultAutoCheckApplicationUpdates" /> (on), so an upgraded node keeps today's behaviour. A bool needs
+    ///     no clamping, so <c>NodeSettingsStore.Normalize</c> passes it through untouched. The manual check and apply flow
+    ///     never consult it.
+    /// </summary>
+    public bool? AutoCheckApplicationUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultAutoCheckRuntimeUpdates" /> (on). A bool needs no clamping, so
+    ///     <c>NodeSettingsStore.Normalize</c> passes it through untouched. The manual runtime-status refresh and the runtime
+    ///     install never consult it.
+    /// </summary>
+    public bool? AutoCheckRuntimeUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node downloads a first-run model and runtime on its own. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultAutoProvisionFirstRunModel" /> (on). A bool needs no clamping, so
+    ///     <c>NodeSettingsStore.Normalize</c> passes it through untouched. A manual model download or install never consults
+    ///     it.
+    /// </summary>
+    public bool? AutoProvisionFirstRunModel { get; init; }
 
     /// <summary>
     ///     Preferred browser voice identifier. Older values such as <c>af_heart</c> remain valid persisted data; when

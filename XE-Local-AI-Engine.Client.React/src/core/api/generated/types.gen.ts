@@ -1387,6 +1387,10 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse = {
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
+	externalAccessProfile?: string | null;
+	autoCheckApplicationUpdates?: boolean | null;
+	autoCheckRuntimeUpdates?: boolean | null;
+	autoProvisionFirstRunModel?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
@@ -1457,6 +1461,10 @@ export type XeLocalAiEngineClientEndpointsNodeSettingsV1SaveNodeSettingsRequest 
 	enableTools?: boolean | null;
 	customToolsEnabled?: boolean | null;
 	toolRelevanceEnabled?: boolean | null;
+	externalAccessProfile?: string | null;
+	autoCheckApplicationUpdates?: boolean | null;
+	autoCheckRuntimeUpdates?: boolean | null;
+	autoProvisionFirstRunModel?: boolean | null;
 	toolCapableModels?: Array<string> | null;
 	ollamaEndpoint?: string | null;
 	huggingFaceDefaultQuant?: string | null;
@@ -1849,6 +1857,7 @@ export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppRuntimeStatusRespons
 	runningProcessCount: number;
 	isSourceBuild: boolean;
 	rebuildAvailable: boolean;
+	checkedAtUtc?: number | null;
 };
 
 export type XeLocalAiEngineClientEndpointsModelFitV1LlamaCppInstalledRuntimeResponse = {

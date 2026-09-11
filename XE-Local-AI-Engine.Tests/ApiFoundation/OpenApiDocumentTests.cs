@@ -431,6 +431,42 @@ public sealed class OpenApiDocumentTests
             ["code", "message"]);
     }
 
+    /// <summary>
+    ///     The node-settings save declares ONLY its 409 explicitly: FastEndpoints advertises the 200, and the host's
+    ///     <c>Errors.UseProblemDetails()</c> advertises the ProblemDetails 400 that both the boundary validator and the
+    ///     global <c>DomainValidationExceptionHandler</c> (the unreadable-settings arm included) send. Declaring either
+    ///     explicitly re-labels the 400 as the FastEndpoints <c>ErrorResponse</c> shape, which is NOT what this endpoint
+    ///     sends — and a second 409 schema is impossible on one operation. "We deliberately declared nothing new" is
+    ///     invisible in the endpoint, so it is pinned here: this is what fails when a later change adds a Produces for a
+    ///     newly-mapped exception.
+    ///     <para>
+    ///         Three statuses are the endpoint's OWN contract. The wire set is five: the operator authorization policy
+    ///         makes FastEndpoints add 401 and 403, which no endpoint code declares either. The assertion pins the whole
+    ///         set, because that is the only form a new Produces cannot slip past.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task SaveNodeSettings_DeclaresOnlyItsThreeStatuses()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var save = document.RootElement.GetProperty("paths").GetProperty("/api/local/v1/node-settings").GetProperty("put");
+
+        var declared = save.GetProperty("responses").EnumerateObject().Select(static status => status.Name).Order(StringComparer.Ordinal).ToArray();
+        AssertEx.Equal("200, 400, 401, 403, 409", string.Join(", ", declared),
+            $"The node-settings save must declare its own 200/400/409 plus the policy's 401/403 and no more — a Produces for a globally-handled exception re-labels the already-advertised ProblemDetails 400. Declared: [{string.Join(", ", declared)}].");
+
+        var conflictSchema = save.GetProperty("responses").GetProperty("409")
+                                 .GetProperty("content").GetProperty("application/json").GetProperty("schema")
+                                 .GetProperty("$ref").GetString();
+        AssertEx.Contains(conflictSchema, "NodeSettingsConflictResponse", StringComparison.Ordinal);
+    }
+
     private static void AssertRequired(JsonElement schemas, string schemaSuffix, IReadOnlyList<string> required, IReadOnlyList<string> optional)
     {
         var schema = FindSchema(schemas, schemaSuffix);

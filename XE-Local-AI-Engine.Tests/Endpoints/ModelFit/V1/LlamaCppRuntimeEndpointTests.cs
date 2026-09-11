@@ -7,6 +7,7 @@ using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
@@ -279,12 +280,107 @@ public sealed class LlamaCppRuntimeEndpointTests
         AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 
+    // Brief §5 test 4 / R9: manual actions behave identically in every profile. The gate lives inside the three
+    // ExecuteAsync bodies and nowhere else, so a node with Offline selected and all three switches off must still get a
+    // fresh catalog-backed snapshot when the operator presses Refresh. Fails the day someone wires the gate into the
+    // administration service or the endpoint.
+    [Test]
+    public async Task RuntimeStatus_RefreshWithTheOfflineProfileSelected_StillCallsCatalog()
+    {
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        catalog.ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9777"));
+
+        var updateState = new LlamaCppUpdateState();
+        updateState.Store(new LlamaCppUpdateSnapshot(InstalledTag: "b9692",
+            RecommendedTag: "b9700",
+            UpstreamLatestTag: "b9777",
+            UpdateAvailable: true,
+            IsOffline: false,
+            CheckedAtUtc: DateTimeOffset.UtcNow - TimeSpan.FromMinutes(5)));
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
+            updateState,
+            catalog,
+            nodeSettings: OfflineSettings());
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        await catalog.ReceivedWithAnyArgs().ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        AssertEx.True(updateState.Current.CheckedAtUtc is not null, "The manual refresh must produce a fresh snapshot.");
+    }
+
+    // R8a. checkedAtUtc and updateAvailable are asserted as a PAIR: updateAvailable alone is false today and would prove
+    // nothing, and it is the missing checkedAtUtc that makes a node whose automatic check never ran indistinguishable
+    // from one that checked and found nothing — which the panel renders as a green "Up to date".
+    [Test]
+    public async Task RuntimeStatus_WhenTheCheckIsGatedOff_ReportsNoCheckedAtAndNoUpdate()
+    {
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
+            new LlamaCppUpdateState(),
+            nodeSettings: OfflineSettings());
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("checkedAtUtc").ValueKind);
+        AssertEx.False(doc.RootElement.GetProperty("updateAvailable").GetBoolean());
+    }
+
+    // The other half: without this, S2's new "Not checked yet" state would be permanent on a gated-off node.
+    [Test]
+    public async Task RuntimeStatus_AfterAManualRefresh_ReportsACheckedAt()
+    {
+        var catalog = Substitute.For<ILlamaCppReleaseCatalog>();
+        catalog.ResolveRecommendedAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9700"));
+        catalog.ResolveUpstreamLatestAsync(Arg.Any<CancellationToken>())
+               .Returns(LlamaCppReleaseResult.ForTag("b9777"));
+
+        await using var factory = CreateFactory(Substitute.For<ILlamaCppBinaryManager>(),
+            new LlamaCppUpdateState(),
+            catalog,
+            nodeSettings: OfflineSettings());
+        using var client = factory.CreateClient();
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{ApiPrefix}/model-fit/llamacpp/runtime?refresh=true");
+        factory.AddNodeBearerToken(request);
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync().ConfigureAwait(false));
+        AssertEx.Equal(JsonValueKind.Number, doc.RootElement.GetProperty("checkedAtUtc").ValueKind);
+    }
+
+    /// <summary>A node whose operator chose Offline: every automatic check is off, and every manual action still works.</summary>
+    private static FakeNodeSettingsStore OfflineSettings()
+    {
+        return new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+            AutoCheckApplicationUpdates = false,
+            AutoCheckRuntimeUpdates = false,
+            AutoProvisionFirstRunModel = false
+        });
+    }
+
     private static TestServerWebAppFactory CreateFactory(ILlamaCppBinaryManager binaryManager,
         ILlamaCppUpdateState updateState,
         ILlamaCppReleaseCatalog? releaseCatalog = null,
         ILlamaServerProcessSupervisor? supervisor = null,
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
-        InstalledRuntimeState? installedRuntime = null)
+        InstalledRuntimeState? installedRuntime = null,
+        INodeSettingsStore? nodeSettings = null)
     {
         return new TestServerWebAppFactory
         {
@@ -310,6 +406,12 @@ public sealed class LlamaCppRuntimeEndpointTests
                 {
                     services.RemoveAll<ILlamaCppReleaseCatalog>();
                     services.AddSingleton(releaseCatalog);
+                }
+
+                if (nodeSettings is not null)
+                {
+                    services.RemoveAll<INodeSettingsStore>();
+                    services.AddSingleton(nodeSettings);
                 }
 
                 if (overrideOptions is not null)

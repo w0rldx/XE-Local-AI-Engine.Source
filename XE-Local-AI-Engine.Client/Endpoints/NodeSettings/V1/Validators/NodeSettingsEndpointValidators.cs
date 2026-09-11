@@ -33,6 +33,13 @@ public sealed class SaveNodeSettingsRequestValidator : Validator<SaveNodeSetting
             .When(static request => request.RecommendedLlamaCppTag is not null)
             .WithMessage("Recommended llama.cpp tag must be in the form b<number>.");
 
+        // IsExternalAccessPreset, NOT IsValidExternalAccessProfile: "custom" and "pending" are persistable but
+        // engine-written, so a client must never be able to claim either as input.
+        RuleFor(static request => request.ExternalAccessProfile)
+            .Must(StoredNodeSettings.IsExternalAccessPreset)
+            .When(static request => request.ExternalAccessProfile is not null)
+            .WithMessage("External access profile must be recommended or offline.");
+
         RuleFor(static request => request.LlamaMaxLoadedProcesses!.Value)
             .InclusiveBetween(StoredNodeSettings.MinLlamaMaxLoadedProcesses, StoredNodeSettings.MaxLlamaMaxLoadedProcesses)
             .When(static request => request.LlamaMaxLoadedProcesses is not null);

@@ -14,6 +14,9 @@ public sealed class EngineCliProcessTests : IDisposable
     /// <summary>The engine's deterministic "--port is taken" exit code; it never falls back to another port.</summary>
     private const int PortInUseExitCode = 6;
 
+    /// <summary>The node-settings file name owned by <c>NodeSettingsStore</c>, which keeps it private.</summary>
+    private const string NodeSettingsFileName = "node-settings.json";
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-engine-cli-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -141,6 +144,26 @@ public sealed class EngineCliProcessTests : IDisposable
         {
             File.Delete(blockedDataPath);
         }
+    }
+
+    [Test]
+    public async Task Setup_WhenNodeSettingsFileIsUnreadable_ReturnsExitFiveNamingTheRecovery()
+    {
+        // The store's UpdateAsync refuses a read-modify-write over a present-but-unreadable file, and NodeAuthService
+        // stamps the pending external-access profile through it BEFORE the identity commit. The HTTP endpoint maps that
+        // refusal to a 400; the CLI must report its documented exit code 5 with the operator-facing recovery, not die
+        // through the top-level fatal handler.
+        Directory.CreateDirectory(_root);
+        await File.WriteAllTextAsync(Path.Combine(_root, NodeSettingsFileName), "{ \"maxMessageRequestTimeoutSeconds\": ")
+                  .ConfigureAwait(false);
+
+        var result = await RunAsync(["--setup"], launchMode: null).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 5, result.ExitCode, result.CombinedOutput);
+        AssertEx.Contains(result.StandardError, "could not be read, so nothing was written.");
+        AssertEx.Contains(result.StandardError, "Repair or delete node-settings.json and try again.");
+        AssertEx.False(result.StandardOutput.Contains("XE_SETUP=created", StringComparison.Ordinal),
+            "Setup must not claim it created an administrator when the settings write that precedes the commit failed.");
     }
 
     private async Task<CommandResult> RunAsync(IReadOnlyList<string> arguments, string? launchMode, string? dataDirectory = null)

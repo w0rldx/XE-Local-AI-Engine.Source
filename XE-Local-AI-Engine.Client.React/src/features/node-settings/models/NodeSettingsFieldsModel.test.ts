@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { XeLocalAiEngineClientEndpointsNodeSettingsV1NodeSettingsResponse as NodeSettingsResponse } from "@/core/api/generated";
 import {
+	applyExternalAccessPreset,
 	buildNodeSettingsRequest,
 	newUsageRateRow,
 	nodeSettingsFieldDefaults,
@@ -631,5 +632,126 @@ describe("restart-gated fields", () => {
 		] as const) {
 			expect(restartGatedNodeSettingsFields.has(live)).toBe(false);
 		}
+	});
+});
+
+describe("external access", () => {
+	const baseline = toNodeSettingsFieldsForm(undefined);
+	const bounds = toNodeSettingsFieldBounds(undefined);
+
+	it("seeds the external-access booleans from the response and defaults them to true when absent", () => {
+		const seeded = toNodeSettingsFieldsForm({
+			externalAccessProfile: "offline",
+			autoCheckApplicationUpdates: false,
+			autoCheckRuntimeUpdates: false,
+			autoProvisionFirstRunModel: false,
+		} as NodeSettingsResponse);
+		expect(seeded.externalAccessProfile).toBe("offline");
+		expect(seeded.autoCheckApplicationUpdates).toBe(false);
+		expect(seeded.autoCheckRuntimeUpdates).toBe(false);
+		expect(seeded.autoProvisionFirstRunModel).toBe(false);
+
+		const absent = toNodeSettingsFieldsForm({} as NodeSettingsResponse);
+		expect(absent.autoCheckApplicationUpdates).toBe(true);
+		expect(absent.autoCheckRuntimeUpdates).toBe(true);
+		expect(absent.autoProvisionFirstRunModel).toBe(true);
+	});
+
+	it("renders an absent external-access profile as an empty form value", () => {
+		// A corrupted settings file reads back as null; the form must not claim a profile the node never chose. The
+		// seed default is the same sentinel, so a response-less form and an empty response agree on "undecided".
+		expect(toNodeSettingsFieldsForm({} as NodeSettingsResponse).externalAccessProfile).toBe("");
+		expect(nodeSettingsFieldDefaults.externalAccessProfile).toBe("");
+		expect(toNodeSettingsFieldsForm(undefined).externalAccessProfile).toBe("");
+	});
+
+	it("displays a server-written custom profile without rewriting it", () => {
+		const seeded = toNodeSettingsFieldsForm({ externalAccessProfile: "custom" } as NodeSettingsResponse);
+		expect(seeded.externalAccessProfile).toBe("custom");
+	});
+
+	it("applies the recommended preset as profile plus all three booleans true", () => {
+		const offline = {
+			...baseline,
+			autoCheckApplicationUpdates: false,
+			autoCheckRuntimeUpdates: false,
+			autoProvisionFirstRunModel: false,
+		};
+		const applied = applyExternalAccessPreset(offline, "recommended");
+		expect(applied.externalAccessProfile).toBe("recommended");
+		expect(applied.autoCheckApplicationUpdates).toBe(true);
+		expect(applied.autoCheckRuntimeUpdates).toBe(true);
+		expect(applied.autoProvisionFirstRunModel).toBe(true);
+	});
+
+	it("applies the offline preset as profile plus all three booleans false", () => {
+		const applied = applyExternalAccessPreset(baseline, "offline");
+		expect(applied.externalAccessProfile).toBe("offline");
+		expect(applied.autoCheckApplicationUpdates).toBe(false);
+		expect(applied.autoCheckRuntimeUpdates).toBe(false);
+		expect(applied.autoProvisionFirstRunModel).toBe(false);
+	});
+
+	it("sends only the changed boolean and never a client-computed custom profile", () => {
+		const form = { ...baseline, autoCheckRuntimeUpdates: false };
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false);
+		expect(errors).toEqual({});
+		expect(body).toEqual({ autoCheckRuntimeUpdates: false });
+		expect(body.externalAccessProfile).toBeUndefined();
+	});
+
+	it("sends only the profile name when a preset is pending", () => {
+		const form = applyExternalAccessPreset(baseline, "offline");
+		const { body, errors } = buildNodeSettingsRequest(form, baseline, bounds, false, "offline");
+		expect(errors).toEqual({});
+		expect(body).toEqual({ externalAccessProfile: "offline" });
+	});
+
+	it("sends booleans only when a switch is edited after a preset click", () => {
+		// Offline node -> click Recommended -> turn provisioning back off. Sending the profile too would let the server
+		// honour the preset and discard the operator's switch, which is the failing case this branch exists to prevent.
+		const offlineBaseline = {
+			...baseline,
+			externalAccessProfile: "offline",
+			autoCheckApplicationUpdates: false,
+			autoCheckRuntimeUpdates: false,
+			autoProvisionFirstRunModel: false,
+		};
+		const afterPreset = applyExternalAccessPreset(offlineBaseline, "recommended");
+		const afterHandEdit = { ...afterPreset, autoProvisionFirstRunModel: false };
+
+		const { body, errors } = buildNodeSettingsRequest(afterHandEdit, offlineBaseline, bounds, false, null);
+
+		expect(errors).toEqual({});
+		// Only the two switches that actually differ from the stored state travel; provisioning was already off, so it
+		// needs no wire member to stay off. What matters is that NO profile goes with them — the server then stamps
+		// "custom" and the operator's hand edit survives instead of being overwritten by the preset's triple.
+		expect(body).toEqual({
+			autoCheckApplicationUpdates: true,
+			autoCheckRuntimeUpdates: true,
+		});
+		expect(body.externalAccessProfile).toBeUndefined();
+		expect(afterHandEdit.autoProvisionFirstRunModel).toBe(false);
+	});
+
+	it("never lists an external-access field as restart-gated", () => {
+		// Both check services read the setting live; the ACTION runs once per process, which is why the copy says "at
+		// startup" and why nothing here joins the restart set.
+		for (const field of [
+			"externalAccessProfile",
+			"autoCheckApplicationUpdates",
+			"autoCheckRuntimeUpdates",
+			"autoProvisionFirstRunModel",
+		] as const) {
+			expect(restartGatedNodeSettingsFields.has(field)).toBe(false);
+		}
+		expect(
+			touchesRestartGatedField({
+				externalAccessProfile: "offline",
+				autoCheckApplicationUpdates: false,
+				autoCheckRuntimeUpdates: false,
+				autoProvisionFirstRunModel: false,
+			}),
+		).toBe(false);
 	});
 });

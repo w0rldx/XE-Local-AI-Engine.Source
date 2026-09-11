@@ -172,6 +172,9 @@ function installJsdomEnvironmentMocks(): void {
 			disconnect = vi.fn();
 		},
 	});
+	// jsdom does not implement scrollIntoView; Mantine's Combobox calls it on a timer when a dropdown opens, which
+	// surfaces as an unhandled error AFTER the test that opened it.
+	Element.prototype.scrollIntoView = vi.fn();
 }
 
 // Returns the client so a test can drive a BACKGROUND refetch (an invalidation), which is a different contract from
@@ -730,5 +733,42 @@ describe("NodeSettings (generated hey-api data layer)", () => {
 		await waitFor(() => expect(toastMock.info).toHaveBeenCalled());
 		expect(screen.queryByTestId("model-fit-download-card")).toBeNull();
 		expect((screen.getByTestId("node-settings-embedding-download-recommended") as HTMLButtonElement).disabled).toBe(false);
+	});
+
+	// R2b lives in page state, not in the model: the model-level guard covers buildNodeSettingsRequest, this covers the
+	// handler that decides what to hand it.
+	it("clears the pending preset when a switch is edited after a preset click", async () => {
+		generatedMock.getNodeSettingsOptions.mockReturnValue({
+			queryKey: ["getNodeSettings"],
+			queryFn: async () => ({
+				...settingsResponse,
+				externalAccessProfile: "offline",
+				autoCheckApplicationUpdates: false,
+				autoCheckRuntimeUpdates: false,
+				autoProvisionFirstRunModel: false,
+			}),
+		});
+		renderPage();
+		await screen.findByDisplayValue("Offline / Manual");
+
+		// Pick Recommended, then turn provisioning back off by hand. Sending the profile too would let the server honour
+		// the preset and discard the operator's switch.
+		fireEvent.click(screen.getByTestId("node-settings-external-access-profile"));
+		// Scoped to this select's own listbox: "Recommended" also appears in the llama.cpp runtime card.
+		const profileListbox = screen.getByRole("listbox", { name: "Profile", hidden: true });
+		fireEvent.click(within(profileListbox).getByRole("option", { name: "Recommended", hidden: true }));
+		const provisioning = screen.getByTestId("node-settings-auto-provision-first-run-model");
+		fireEvent.click(provisioning.querySelector("input[type='checkbox']") ?? provisioning);
+		fireEvent.click(screen.getByTestId("node-settings-fields-save-button"));
+
+		await waitFor(() =>
+			expect(generatedMock.saveFn.mock.calls[0]?.[0]).toEqual({
+				body: {
+					autoCheckApplicationUpdates: true,
+					autoCheckRuntimeUpdates: true,
+					maxMessageRequestTimeoutSeconds: 600,
+				},
+			}),
+		);
 	});
 });

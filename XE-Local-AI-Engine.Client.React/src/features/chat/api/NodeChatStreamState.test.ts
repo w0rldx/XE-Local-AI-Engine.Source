@@ -1428,4 +1428,100 @@ describe("node chat stream state", () => {
 		expect(toolPart).toMatchObject({ id: "call-ask", state: "waiting" });
 		expect(toolPart && "pendingQuestion" in toolPart ? toolPart.pendingQuestion : undefined).toBeUndefined();
 	});
+	it("carries the server phase timestamp from an assistant-phase event onto the streaming state", () => {
+		const phase = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantPhase,
+				runtimePhase: "loading_model",
+				runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(phase.streamingMessage).toMatchObject({
+			runtimePhase: "loading_model",
+			runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
+		});
+	});
+
+	// An older node emits the phase without the timestamp; the indicator then falls back to first-observed time,
+	// so the reducer must leave the field undefined rather than invent one.
+	it("leaves the phase timestamp undefined when the assistant-phase event omits it", () => {
+		const phase = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantPhase,
+				runtimePhase: "loading_model",
+				content: null,
+				delta: null,
+			}),
+		);
+
+		expect(phase.streamingMessage.runtimePhase).toBe("loading_model");
+		expect(phase.streamingMessage.runtimePhaseChangedAtUtc).toBeUndefined();
+	});
+
+	// The resume path replays snapshot-then-phase, and the live pump keeps emitting snapshots during a cold
+	// load — so a snapshot that wiped the phase would kill the "Loading model…" affordance and its timer.
+	it("keeps the phase and its timestamp across the resume replay sequence", () => {
+		const firstSnapshot = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantSnapshot, sequence: 1, content: "", delta: null }),
+		);
+		const phase = applyNodeChatStreamEvent(
+			firstSnapshot.conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantPhase,
+				sequence: 2,
+				runtimePhase: "loading_model",
+				runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
+				content: null,
+				delta: null,
+			}),
+			firstSnapshot.streamingMessage,
+		);
+		const secondSnapshot = applyNodeChatStreamEvent(
+			phase.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantSnapshot, sequence: 3, content: "", delta: null }),
+			phase.streamingMessage,
+		);
+
+		expect(secondSnapshot.streamingMessage).toMatchObject({
+			runtimePhase: "loading_model",
+			runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
+		});
+	});
+
+	// The other half of the same rule: the phase must die on real content and on a terminal, or a finished turn
+	// keeps a stale "Loading model…" footer forever.
+	it("clears the phase on a content delta and on a terminal", () => {
+		const phase = applyNodeChatStreamEvent(
+			conversation,
+			streamEvent({
+				type: nodeChatStreamEventTypes.assistantPhase,
+				sequence: 1,
+				runtimePhase: "loading_model",
+				runtimePhaseChangedAtUtc: "2026-09-10T08:15:00.000Z",
+				content: null,
+				delta: null,
+			}),
+		);
+		const delta = applyNodeChatStreamEvent(
+			phase.conversation,
+			streamEvent({ sequence: 2, delta: "he", content: null, contentOffset: 0 }),
+			phase.streamingMessage,
+		);
+		const terminal = applyNodeChatStreamEvent(
+			delta.conversation,
+			streamEvent({ type: nodeChatStreamEventTypes.assistantCompleted, sequence: 3, delta: null, content: "hello" }),
+			delta.streamingMessage,
+		);
+
+		expect(delta.streamingMessage.runtimePhase).toBeUndefined();
+		expect(delta.streamingMessage.runtimePhaseChangedAtUtc).toBeUndefined();
+		expect(terminal.streamingMessage.runtimePhase).toBeUndefined();
+		expect(terminal.streamingMessage.runtimePhaseChangedAtUtc).toBeUndefined();
+	});
 });

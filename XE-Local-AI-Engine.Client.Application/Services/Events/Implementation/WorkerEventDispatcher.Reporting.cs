@@ -45,6 +45,15 @@ public sealed partial class WorkerEventDispatcher
         UpdateInvocation(invocationId,
             state =>
             {
+                // Stamped on a REAL transition only: the browser renders elapsed cold-load time from this value, so a
+                // re-report of the same phase must not restart its clock. DateTimeOffset.UtcNow matches
+                // UpdateInvocation's own LastUpdatedAt stamp in this partial class; no TimeProvider is threaded in for
+                // one field.
+                if (state.RuntimePhase != phase)
+                {
+                    state.RuntimePhaseChangedAtUtc = DateTimeOffset.UtcNow;
+                }
+
                 state.RuntimePhase = phase;
                 return state;
             });

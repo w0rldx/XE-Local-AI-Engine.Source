@@ -76,6 +76,12 @@ export const speculativeModeSelectValues = [
 	"draft-mtp",
 ] as const;
 
+// The external-access profiles an operator can actually pick. The backend stores two more literals the client never
+// sends: "custom", which it stamps when a save carries individual switches and no profile (display-only, rendered as a
+// disabled option on the settings Select), and "pending", which the first-run route intercepts. Naming only the two
+// choosable ones here makes "the client never computes custom" a compile error rather than a runtime guard.
+export type ExternalAccessPreset = "recommended" | "offline";
+
 // The provider default for a GPU chat spawn; the node setting seeds the launch policy with it when unset.
 export const KV_CACHE_TYPE_DEFAULT: KvCacheType = "q8_0";
 
@@ -208,6 +214,12 @@ export interface NodeSettingsFieldsForm {
 	autoEffortFastModelName: string;
 	// Per-model usage cost rates (USD per 1M tokens), edited as ordered rows and reduced to the stored map on save.
 	usageRates: UsageRateRow[];
+	// External access — the profile plus the three switches it sets. The profile is a server-owned stamp (see
+	// applyExternalAccessPreset / buildNodeSettingsRequest); an empty string means the node has not decided one.
+	externalAccessProfile: string;
+	autoCheckApplicationUpdates: boolean;
+	autoCheckRuntimeUpdates: boolean;
+	autoProvisionFirstRunModel: boolean;
 	// Developer-only
 	orchestrationIdleTimeoutSeconds: number | string;
 	agentHomePrepareTimeoutSeconds: number | string;
@@ -243,6 +255,12 @@ export const nodeSettingsFieldDefaults: NodeSettingsFieldsForm = {
 	rerankerModelName: "",
 	autoEffortFastModelName: "",
 	usageRates: [],
+	// No profile until the node has one: "" is what an absent server value seeds too (see toNodeSettingsFieldsForm),
+	// so the Select renders its "Not chosen" placeholder rather than claiming a decision the node never made.
+	externalAccessProfile: "",
+	autoCheckApplicationUpdates: true,
+	autoCheckRuntimeUpdates: true,
+	autoProvisionFirstRunModel: true,
 	orchestrationIdleTimeoutSeconds: 120,
 	agentHomePrepareTimeoutSeconds: 900,
 	agentHomeCommandTimeoutSeconds: 300,
@@ -292,6 +310,12 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 		rerankerModelName: response.rerankerModelName ?? "",
 		autoEffortFastModelName: response.autoEffortFastModelName ?? "",
 		usageRates: toUsageRateRows(response.usageRates),
+		// An absent profile is genuinely undecided (a corrupted settings file reads as null), so it renders as an
+		// unselected Select rather than being coerced to "recommended" — the node must not claim a choice it never made.
+		externalAccessProfile: response.externalAccessProfile ?? "",
+		autoCheckApplicationUpdates: response.autoCheckApplicationUpdates ?? nodeSettingsFieldDefaults.autoCheckApplicationUpdates,
+		autoCheckRuntimeUpdates: response.autoCheckRuntimeUpdates ?? nodeSettingsFieldDefaults.autoCheckRuntimeUpdates,
+		autoProvisionFirstRunModel: response.autoProvisionFirstRunModel ?? nodeSettingsFieldDefaults.autoProvisionFirstRunModel,
 		orchestrationIdleTimeoutSeconds: numberOr(
 			response.orchestrationIdleTimeoutSeconds,
 			nodeSettingsFieldDefaults.orchestrationIdleTimeoutSeconds,
@@ -314,6 +338,30 @@ export function toNodeSettingsFieldsForm(response: NodeSettingsResponse | undefi
 			nodeSettingsFieldDefaults.maxPendingToolCallAgeMinutes,
 		),
 		detachedGraceSeconds: numberOr(response.detachedGraceSeconds, nodeSettingsFieldDefaults.detachedGraceSeconds),
+	};
+}
+
+// The three switches a profile sets. The page uses this to recognise a hand edit that must clear a pending preset.
+const externalAccessBooleanFields = new Set<keyof NodeSettingsFieldsForm>([
+	"autoCheckApplicationUpdates",
+	"autoCheckRuntimeUpdates",
+	"autoProvisionFirstRunModel",
+]);
+
+export function isExternalAccessBooleanField(field: keyof NodeSettingsFieldsForm): boolean {
+	return externalAccessBooleanFields.has(field);
+}
+
+// Moves the draft onto a preset: the profile plus the triple it implies, so the operator sees what the server will
+// write. The save still sends the profile NAME alone (see buildNodeSettingsRequest) — the server owns the derivation.
+export function applyExternalAccessPreset(form: NodeSettingsFieldsForm, preset: ExternalAccessPreset): NodeSettingsFieldsForm {
+	const enabled = preset === "recommended";
+	return {
+		...form,
+		externalAccessProfile: preset,
+		autoCheckApplicationUpdates: enabled,
+		autoCheckRuntimeUpdates: enabled,
+		autoProvisionFirstRunModel: enabled,
 	};
 }
 
@@ -459,12 +507,14 @@ function toValidPositiveLong(value: number | string): number | undefined {
 // Builds the PUT body from the edited form, including ONLY fields that differ from the loaded baseline, and collects
 // per-field validation errors. Developer-only fields are validated + included only when `includeDeveloperFields` is
 // true (they are not rendered, so an off-mode save must never touch them). Error values are i18n suffix keys the page
-// maps to messages.
+// maps to messages. `pendingPreset` is the external-access profile the operator just picked and has not since
+// overridden by hand; it makes the save a profile COMMAND rather than a field diff (see the external-access block).
 export function buildNodeSettingsRequest(
 	form: NodeSettingsFieldsForm,
 	baseline: NodeSettingsFieldsForm,
 	bounds: NodeSettingsFieldBounds,
 	includeDeveloperFields: boolean,
+	pendingPreset: ExternalAccessPreset | null = null,
 ): NodeSettingsValidationResult {
 	const body: SaveNodeSettingsRequest = {};
 	const errors: Record<string, string> = {};
@@ -657,6 +707,26 @@ export function buildNodeSettingsRequest(
 		errors["usageRates"] = "rate";
 	} else if (canonicalRateMap(rates.map) !== canonicalRateMap(validateUsageRates(baseline.usageRates).map)) {
 		body.usageRates = rates.map;
+	}
+
+	// External access — the profile and the three switches are NEVER sent together. A pending preset is a command: the
+	// server writes that preset's triple. Otherwise only the switches the operator changed go out, and the server stamps
+	// the profile "custom" itself. The client never computes "custom", and there is no client-side profile validator —
+	// the value can only come from a closed-set Select, and the request validator is the trust boundary.
+	if (pendingPreset !== null) {
+		body.externalAccessProfile = pendingPreset;
+	} else {
+		// Explicit false is meaningful here exactly as it is for keepModelWarmEnabled: omission preserves the stored
+		// value, while false switches the check off.
+		if (form.autoCheckApplicationUpdates !== baseline.autoCheckApplicationUpdates) {
+			body.autoCheckApplicationUpdates = form.autoCheckApplicationUpdates;
+		}
+		if (form.autoCheckRuntimeUpdates !== baseline.autoCheckRuntimeUpdates) {
+			body.autoCheckRuntimeUpdates = form.autoCheckRuntimeUpdates;
+		}
+		if (form.autoProvisionFirstRunModel !== baseline.autoProvisionFirstRunModel) {
+			body.autoProvisionFirstRunModel = form.autoProvisionFirstRunModel;
+		}
 	}
 
 	if (includeDeveloperFields) {

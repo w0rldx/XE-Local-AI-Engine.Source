@@ -5,12 +5,14 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.NodeSettings.V1.Validators;
 using XE_Local_AI_Engine.Client.Services.Capabilities;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Client.Services.NodeSettings.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.Tests.Testing.Builders;
 
@@ -810,6 +812,240 @@ public sealed class NodeSettingsEndpointTests
             }
         });
         AssertEx.True(valid.IsValid);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_AppliesTheRecommendedPreset_WritesAllFourMembers()
+    {
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+                AutoCheckApplicationUpdates = false,
+                AutoCheckRuntimeUpdates = false,
+                AutoProvisionFirstRunModel = false
+            },
+            new SaveNodeSettingsRequest
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileRecommended
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileRecommended, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: true, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: true, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: true, settings.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_AppliesTheOfflinePreset_WritesAllFourMembers()
+    {
+        var settings = await SaveAsync(new StoredNodeSettings(),
+            new SaveNodeSettingsRequest
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: false, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, settings.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenAPresetArrivesWithContradictoryBooleans_ThePresetWins()
+    {
+        // One owner, one rule: a preset expands to its own triple and ignores anything sent beside it. Without this a
+        // client could persist a profile that contradicts the switches it names.
+        var settings = await SaveAsync(new StoredNodeSettings(),
+            new SaveNodeSettingsRequest
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+                AutoCheckApplicationUpdates = true,
+                AutoCheckRuntimeUpdates = true,
+                AutoProvisionFirstRunModel = true
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: false, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, settings.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenOneSwitchIsEditedAfterAPreset_SetsTheProfileToCustom()
+    {
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileRecommended,
+                AutoCheckApplicationUpdates = true,
+                AutoCheckRuntimeUpdates = true,
+                AutoProvisionFirstRunModel = true
+            },
+            new SaveNodeSettingsRequest
+            {
+                AutoProvisionFirstRunModel = false
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileCustom, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: true, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: true, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, settings.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheLastSwitchIsFlippedBackOn_StaysCustom()
+    {
+        // The stamp is UNCONDITIONAL, never re-derived from the resulting triple: a node at "custom" whose owner flips
+        // the third switch back on stays "custom". Re-deriving would silently relabel it "recommended".
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileCustom,
+                AutoCheckApplicationUpdates = true,
+                AutoCheckRuntimeUpdates = true,
+                AutoProvisionFirstRunModel = false
+            },
+            new SaveNodeSettingsRequest
+            {
+                AutoProvisionFirstRunModel = true
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileCustom, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: true, settings.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenASaveTouchesNoExternalAccessMember_KeepsTheStoredProfile()
+    {
+        // The common case for every OTHER setting. An unrelated save must not disturb a decided node — the one way this
+        // mapper could silently break the whole feature.
+        var settings = await SaveAsync(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+                AutoCheckApplicationUpdates = false,
+                AutoCheckRuntimeUpdates = false,
+                AutoProvisionFirstRunModel = false
+            },
+            new SaveNodeSettingsRequest
+            {
+                MaxMessageRequestTimeoutSeconds = 600
+            });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: false, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, settings.AutoProvisionFirstRunModel);
+        AssertEx.Equal(expected: 600, settings.MaxMessageRequestTimeoutSeconds);
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.ExternalAccessProfilePending)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileCustom)]
+    [Arguments("airgapped")]
+    public async Task SaveNodeSettings_WhenTheProfileIsNotAPreset_ReturnsBadRequestWithoutSaving(string profile)
+    {
+        // "pending" and "custom" are engine-written states, so a client must not be able to claim either; an unknown
+        // literal is simply invalid. All three are rejected at the boundary, ahead of Normalize's defence in depth.
+        var nodeSettingsStore = NewSettingsStore(new StoredNodeSettings
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
+        });
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ExternalAccessProfile = profile
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        await nodeSettingsStore.DidNotReceive().UpdateAsync(Arg.Any<Func<StoredNodeSettings, StoredNodeSettings>>(), Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_RoundTripsAllFourExternalAccessMembers()
+    {
+        // Both halves: the response the client reads back AND the record handed to the store. A member dropped from
+        // ToStoredSettings — which builds a FRESH record, so an omission ERASES the value — fails the second half.
+        var nodeSettingsStore = NewSettingsStore();
+        await using var factory = CreateFactory(nodeSettingsStore);
+        using var client = factory.CreateClient();
+
+        using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
+        });
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var settings = await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, settings.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, settings.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: false, settings.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, settings.AutoProvisionFirstRunModel);
+        await nodeSettingsStore.Received(1).UpdateAsync(Arg.Is<Func<StoredNodeSettings, StoredNodeSettings>>(mutate =>
+                Persisted(mutate).ExternalAccessProfile == StoredNodeSettings.ExternalAccessProfileOffline
+                && Persisted(mutate).AutoCheckApplicationUpdates == false
+                && Persisted(mutate).AutoCheckRuntimeUpdates == false
+                && Persisted(mutate).AutoProvisionFirstRunModel == false),
+            Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task SaveNodeSettings_WhenTheFileIsUnreadable_ReturnsAProblemResponseNamingTheRecovery()
+    {
+        // Driven against the REAL store over a hand-corrupted file, because the behaviour under test lives in the
+        // store's strict read, and a substitute would only assert a double against a double. It also goes through the
+        // real handler chain, since the mapping is a global IExceptionHandler arm rather than a per-endpoint catch and
+        // nothing in the endpoint itself shows it.
+        var root = Path.Combine(Path.GetTempPath(), "xe-node-settings-unreadable", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        var settingsPath = Path.Combine(root, "node-settings.json");
+        try
+        {
+            await File.WriteAllTextAsync(settingsPath, "{ \"externalAccessProfile\": \"offli");
+            var before = await File.ReadAllBytesAsync(settingsPath);
+
+            using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
+            await using var factory = CreateFactory(store);
+            using var client = factory.CreateClient();
+
+            using var request = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+            request.Content = JsonContent.Create(new SaveNodeSettingsRequest
+            {
+                MaxMessageRequestTimeoutSeconds = 600
+            });
+            using var response = await client.SendAsync(request).ConfigureAwait(false);
+            var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+            AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+            AssertEx.Contains(body, "generalErrors", StringComparison.Ordinal);
+            AssertEx.Contains(body, "node-settings.json", StringComparison.Ordinal);
+            AssertEx.Contains(body, "Repair or delete", StringComparison.Ordinal);
+            var after = await File.ReadAllBytesAsync(settingsPath);
+            AssertEx.True(before.SequenceEqual(after), "A refused save must leave the unreadable settings file byte-identical.");
+        }
+        finally
+        {
+            Directory.Delete(root, recursive: true);
+        }
+    }
+
+    /// <summary>
+    ///     PUTs <paramref name="request" /> against a node holding <paramref name="stored" /> and returns the response,
+    ///     which the endpoint renders from the record the store actually persisted.
+    /// </summary>
+    private static async Task<NodeSettingsResponse> SaveAsync(StoredNodeSettings stored, SaveNodeSettingsRequest request)
+    {
+        await using var factory = CreateFactory(NewSettingsStore(stored));
+        using var client = factory.CreateClient();
+
+        using var httpRequest = CreateRequest(factory, HttpMethod.Put, "/api/local/v1/node-settings");
+        httpRequest.Content = JsonContent.Create(request);
+        using var response = await client.SendAsync(httpRequest).ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        return await ReadJsonAsync<NodeSettingsResponse>(response).ConfigureAwait(false);
     }
 
     private static TestServerWebAppFactory CreateFactory(INodeSettingsStore nodeSettingsStore,

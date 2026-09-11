@@ -50,8 +50,10 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
     private readonly TimeSpan _gpuProbeCeiling;
     private readonly bool _isLocalMode;
     private readonly ILogger<FirstRunModelProvisioningService> _logger;
+    private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly INodeSettingsStore _nodeSettingsStore;
     private readonly TimeSpan _pollInterval;
+    private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
 
     public FirstRunModelProvisioningService(IConfiguration configuration,
@@ -60,7 +62,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         INodeSettingsStore nodeSettingsStore,
+        INodeRuntimeSettings nodeRuntimeSettings,
         IRuntimeAcquisitionStatusRegistry acquisitionStatus,
+        TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger)
         : this(configuration,
             ggufModelStore,
@@ -68,7 +72,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             binaryManager,
             variantSelector,
             nodeSettingsStore,
+            nodeRuntimeSettings,
             acquisitionStatus,
+            timeProvider,
             logger,
             DesktopLaunch.ResolveLaunchMode(Environment.GetCommandLineArgs(), VelopackInstall.IsManaged()).IsLocalMode(),
             TimeSpan.FromSeconds(2),
@@ -86,7 +92,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         ILlamaCppBinaryManager binaryManager,
         IGpuVariantSelector variantSelector,
         INodeSettingsStore nodeSettingsStore,
+        INodeRuntimeSettings nodeRuntimeSettings,
         IRuntimeAcquisitionStatusRegistry acquisitionStatus,
+        TimeProvider timeProvider,
         ILogger<FirstRunModelProvisioningService> logger,
         bool isLocalMode,
         TimeSpan pollInterval,
@@ -98,7 +106,9 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _variantSelector = variantSelector ?? throw new ArgumentNullException(nameof(variantSelector));
         _nodeSettingsStore = nodeSettingsStore ?? throw new ArgumentNullException(nameof(nodeSettingsStore));
+        _nodeRuntimeSettings = nodeRuntimeSettings ?? throw new ArgumentNullException(nameof(nodeRuntimeSettings));
         _acquisitionStatus = acquisitionStatus ?? throw new ArgumentNullException(nameof(acquisitionStatus));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _isLocalMode = isLocalMode;
         _pollInterval = pollInterval;
@@ -118,12 +128,21 @@ public sealed class FirstRunModelProvisioningService : BackgroundService
             return;
         }
 
-        // Visible entry marker so an operator log shows the service ran (and reached desktop mode) even when a later
-        // phase stalls. The desktop gate above stays silent to preserve the headless/CI off-flag invariant.
-        _logger.LogInformation("First-run model provisioning starting (desktop mode).");
-
         try
         {
+            // After the existing gates and before the entry marker and ProvisionAsync, so a disabled node starts no
+            // download and an undecided one waits for the operator's choice instead of deciding for them.
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
+            if (!await _nodeRuntimeSettings.GetAutoProvisionFirstRunModelAsync(stoppingToken).ConfigureAwait(false))
+            {
+                _logger.LogDebug("First-run model provisioning is disabled by the node's external-access settings.");
+                return;
+            }
+
+            // Visible entry marker so an operator log shows the service ran (and reached desktop mode) even when a
+            // later phase stalls. The desktop gate above stays silent to preserve the headless/CI off-flag invariant.
+            _logger.LogInformation("First-run model provisioning starting (desktop mode).");
+
             await ProvisionAsync(stoppingToken).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)

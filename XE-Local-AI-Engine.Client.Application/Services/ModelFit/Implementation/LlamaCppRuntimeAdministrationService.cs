@@ -44,7 +44,8 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             snapshot.UpstreamLatestTag,
             snapshot.UpdateAvailable,
             snapshot.IsOffline,
-            processSupervisor.CountRunningProcesses());
+            processSupervisor.CountRunningProcesses(),
+            snapshot.CheckedAtUtc);
     }
 
     public LlamaCppRuntimeAcquisitionStatus GetAcquisitionStatus()

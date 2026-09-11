@@ -35,6 +35,41 @@ public sealed record NodeSettingsResponse
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
 
+    /// <summary>
+    ///     Which external-access preset was last applied: <c>recommended</c>, <c>offline</c>, <c>custom</c> (the switches
+    ///     no longer match a preset), <c>pending</c> (an administrator exists and nobody has chosen yet), or
+    ///     <see langword="null" /> (undecided, with no administrator). A RECORD of the choice, never the authority — the
+    ///     three switches below are what every gate reads. <c>custom</c> and <c>pending</c> are engine-written: the server
+    ///     is their only writer.
+    ///     <para>
+    ///         Honesty rule both surfaces must render: Offline disables exactly the three checks named below and NOTHING
+    ///         else. It does not block the connection to the C0re platform, MCP servers the operator has configured, or
+    ///         model-catalog lookups. Copy that implies a network kill switch is a privacy misrepresentation.
+    ///     </para>
+    /// </summary>
+    public string? ExternalAccessProfile { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for application updates on its own. <see langword="null" /> reads as on. The manual
+    ///     check and apply flow are unaffected. The check runs once per process, so turning it back on takes effect at
+    ///     the next node start.
+    /// </summary>
+    public bool? AutoCheckApplicationUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> reads as on. The
+    ///     manual runtime-status refresh and the runtime install are unaffected. The check runs once per process, so
+    ///     turning it back on takes effect at the next node start.
+    /// </summary>
+    public bool? AutoCheckRuntimeUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node downloads a first-run model and runtime on its own. <see langword="null" /> reads as on. A
+    ///     manual model download or install is unaffected. It applies on a first run only, so turning it back on takes
+    ///     effect at the next node start.
+    /// </summary>
+    public bool? AutoProvisionFirstRunModel { get; init; }
+
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 
     public string? OllamaEndpoint { get; init; }
@@ -178,6 +213,35 @@ public sealed record SaveNodeSettingsRequest
     ///     Off by default; a per-agent opt-out still wins when it is on.
     /// </summary>
     public bool? ToolRelevanceEnabled { get; init; }
+
+    /// <summary>
+    ///     Apply an external-access preset: <c>recommended</c> or <c>offline</c> ONLY. The server writes that preset's
+    ///     three switches and ignores any switch sent alongside it. <c>custom</c> and <c>pending</c> are engine-written
+    ///     states and are REJECTED as input — a client never computes either. <see langword="null" /> keeps the current
+    ///     stored value, unless one of the three switches below is supplied, which stamps <c>custom</c>.
+    /// </summary>
+    public string? ExternalAccessProfile { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for application updates on its own. <see langword="null" /> keeps the current stored
+    ///     value; supplying it (without a preset) stamps the profile <c>custom</c>. The manual check and apply flow are
+    ///     unaffected, and the automatic check runs once per process, so turning it back on applies at the next start.
+    /// </summary>
+    public bool? AutoCheckApplicationUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node checks for llama.cpp / runtime updates on its own. <see langword="null" /> keeps the current
+    ///     stored value; supplying it (without a preset) stamps the profile <c>custom</c>. The manual runtime-status
+    ///     refresh and the runtime install are unaffected, and the automatic check runs once per process.
+    /// </summary>
+    public bool? AutoCheckRuntimeUpdates { get; init; }
+
+    /// <summary>
+    ///     Whether the node downloads a first-run model and runtime on its own. <see langword="null" /> keeps the current
+    ///     stored value; supplying it (without a preset) stamps the profile <c>custom</c>. A manual model download or
+    ///     install is unaffected.
+    /// </summary>
+    public bool? AutoProvisionFirstRunModel { get; init; }
 
     public IReadOnlyList<string>? ToolCapableModels { get; init; }
 

@@ -266,7 +266,8 @@ internal static class ModelFitMapper
             IsOffline = snapshot.IsOffline,
             RunningProcessCount = runningProcessCount,
             IsSourceBuild = isSourceBuild,
-            RebuildAvailable = rebuildAvailable
+            RebuildAvailable = rebuildAvailable,
+            CheckedAtUtc = snapshot.CheckedAtUtc?.ToUnixTimeMilliseconds()
         };
     }
 
@@ -285,7 +286,8 @@ internal static class ModelFitMapper
             IsSourceBuild = isSourceBuild,
             RebuildAvailable = isSourceBuild
                                && status.Installed is not null
-                               && !string.Equals(status.Installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal)
+                               && !string.Equals(status.Installed.Tag, LlamaCppReleasePins.PinnedTag, StringComparison.Ordinal),
+            CheckedAtUtc = status.CheckedAtUtc?.ToUnixTimeMilliseconds()
         };
     }
 

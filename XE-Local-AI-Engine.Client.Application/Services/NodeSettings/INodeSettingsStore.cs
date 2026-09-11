@@ -8,6 +8,23 @@ public interface INodeSettingsStore
     Task<StoredNodeSettings> LoadAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
+    ///     The STRICT load: it distinguishes "there is no value yet" from "I cannot read the value", which
+    ///     <see cref="LoadAsync" /> deliberately cannot. A MISSING file returns the default record (a legacy install that
+    ///     has never saved); a readable file returns the normalized record; a file that is PRESENT but unreadable returns
+    ///     <see langword="null" />.
+    /// </summary>
+    /// <remarks>
+    ///     The default body delegates to <see cref="LoadAsync" />, which is the CORRECT answer for every in-memory
+    ///     implementation: a double that holds a record is readable by definition and can never be the corrupt-file case.
+    ///     Only implementations that touch a file — <c>NodeSettingsStore</c> — and the decorator in front of one
+    ///     override it.
+    /// </remarks>
+    async Task<StoredNodeSettings?> LoadStrictAsync(CancellationToken cancellationToken = default)
+    {
+        return await LoadAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
     ///     Synchronous load of the stored settings. Used only on the composition/startup path (DI factory seeds and
     ///     singleton constructors) where blocking on the async file read would starve the thread pool during host
     ///     startup. The settings come from a tiny local JSON file, so a synchronous read is fast and safe; the common

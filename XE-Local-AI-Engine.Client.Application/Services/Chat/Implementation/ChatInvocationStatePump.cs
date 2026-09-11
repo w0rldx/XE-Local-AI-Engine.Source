@@ -146,10 +146,14 @@ public sealed class ChatInvocationStatePump(
                 // AssistantPhase event so the client renders "Loading model…" during a cold load. Emitted before the
                 // content flush and only for a non-terminal state whose phase changed; the warm wait between "loading"
                 // and "generating" is where the indicator earns its keep.
+                // The diff stays on the PHASE alone. RuntimePhaseChangedAtUtc is written only when the phase actually
+                // changes, so it can never move without the phase moving — widening this condition to include the
+                // timestamp would buy nothing and could only produce duplicate events.
                 if (!isTerminal && latest.RuntimePhase is { } runtimePhase && runtimePhase != lastEmittedPhase)
                 {
                     lastEmittedPhase = runtimePhase;
-                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next()), cancellationToken).ConfigureAwait(false);
+                    await eventSink.WriteAsync(ChatStreamEventMapper.PhaseEvent(correlation, runtimePhase, NowUnixMilliseconds(), sequence.Next(), latest.RuntimePhaseChangedAtUtc), cancellationToken)
+                                   .ConfigureAwait(false);
                 }
 
                 // Send first, on the fast cadence. The first delta emits immediately so the first token is visible

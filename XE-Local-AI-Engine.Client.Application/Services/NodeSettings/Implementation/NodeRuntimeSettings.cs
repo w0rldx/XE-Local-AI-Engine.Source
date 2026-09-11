@@ -104,6 +104,37 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return stored.ToolRelevanceEnabled ?? StoredNodeSettings.DefaultToolRelevanceEnabled;
     }
 
+    public async Task<string?> GetExternalAccessProfileAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // Verbatim, and deliberately NO fallback: null is the answer (undecided), not an absent value to be seeded.
+        // Normalize has already nulled anything that is not one of the four literals.
+        return stored.ExternalAccessProfile;
+    }
+
+    public async Task<bool> GetAutoCheckApplicationUpdatesAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No appsettings seed: nothing configures this, so the fallback IS the hardcoded on — an upgraded node whose
+        // file predates the member keeps checking exactly as it did before.
+        return stored.AutoCheckApplicationUpdates ?? StoredNodeSettings.DefaultAutoCheckApplicationUpdates;
+    }
+
+    public async Task<bool> GetAutoCheckRuntimeUpdatesAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No appsettings seed: nothing configures this, so the fallback IS the hardcoded on.
+        return stored.AutoCheckRuntimeUpdates ?? StoredNodeSettings.DefaultAutoCheckRuntimeUpdates;
+    }
+
+    public async Task<bool> GetAutoProvisionFirstRunModelAsync(CancellationToken cancellationToken = default)
+    {
+        var stored = await LoadAsync(cancellationToken).ConfigureAwait(false);
+        // No appsettings seed of its own: FirstRunModel:Enabled is a SEPARATE, earlier gate, not this one's seed, so
+        // the fallback IS the hardcoded on.
+        return stored.AutoProvisionFirstRunModel ?? StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
+    }
+
     public async Task<IReadOnlyList<string>> GetToolCapableModelsAsync(CancellationToken cancellationToken = default) =>
         ResolveToolCapableModels(await LoadAsync(cancellationToken).ConfigureAwait(false));
 

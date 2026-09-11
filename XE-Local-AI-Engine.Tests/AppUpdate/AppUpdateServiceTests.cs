@@ -11,6 +11,7 @@ using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.AppUpdate;
 using XE_Local_AI_Engine.Tests.CodexOAuth;
 using XE_Local_AI_Engine.Tests.Testing;
+using XE_Local_AI_Engine.Tests.Testing.Builders;
 
 /// <summary>Covers anonymous public-update orchestration without any GitHub credential dependency.</summary>
 public sealed class AppUpdateServiceTests
@@ -103,6 +104,8 @@ public sealed class AppUpdateServiceTests
         var factory = FactoryReturning(manager);
         using var service = CreateService(factory, isDesktop: true);
         using var startup = new AppUpdateCheckService(service,
+            StubNodeRuntimeSettings.Create().Build(),
+            TimeProvider.System,
             NullLogger<AppUpdateCheckService>.Instance,
             TimeSpan.Zero);
 

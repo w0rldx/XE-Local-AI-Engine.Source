@@ -26173,6 +26173,22 @@
             "type": "boolean",
             "nullable": true
           },
+          "externalAccessProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoCheckApplicationUpdates": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "autoCheckRuntimeUpdates": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "autoProvisionFirstRunModel": {
+            "type": "boolean",
+            "nullable": true
+          },
           "toolCapableModels": {
             "type": "array",
             "nullable": true,
@@ -26445,6 +26461,22 @@
             "nullable": true
           },
           "toolRelevanceEnabled": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "externalAccessProfile": {
+            "type": "string",
+            "nullable": true
+          },
+          "autoCheckApplicationUpdates": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "autoCheckRuntimeUpdates": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "autoProvisionFirstRunModel": {
             "type": "boolean",
             "nullable": true
           },
@@ -27887,6 +27919,10 @@
           },
           "rebuildAvailable": {
             "type": "boolean"
+          },
+          "checkedAtUtc": {
+            "type": "integer",
+            "nullable": true
           }
         }
       },

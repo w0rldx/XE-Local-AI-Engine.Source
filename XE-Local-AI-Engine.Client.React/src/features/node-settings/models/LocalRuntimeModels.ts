@@ -41,4 +41,8 @@ export interface LlamaCppRuntimeStatus {
 	// Optional so payloads/test fixtures predating these fields still satisfy the shape.
 	readonly isSourceBuild?: boolean;
 	readonly rebuildAvailable?: boolean;
+	// When the node last checked for a runtime update, as epoch milliseconds; null when it never has. Optional for the
+	// same reason as the two fields above, and an absent value reads as "never checked" — the honest default, since a
+	// node that has never checked must not claim to be up to date.
+	readonly checkedAtUtc?: number | null;
 }

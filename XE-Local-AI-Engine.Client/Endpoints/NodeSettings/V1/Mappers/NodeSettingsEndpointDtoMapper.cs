@@ -17,6 +17,10 @@ internal static class NodeSettingsEndpointDtoMapper
             EnableTools = settings.EnableTools,
             CustomToolsEnabled = settings.CustomToolsEnabled,
             ToolRelevanceEnabled = settings.ToolRelevanceEnabled,
+            ExternalAccessProfile = settings.ExternalAccessProfile,
+            AutoCheckApplicationUpdates = settings.AutoCheckApplicationUpdates,
+            AutoCheckRuntimeUpdates = settings.AutoCheckRuntimeUpdates,
+            AutoProvisionFirstRunModel = settings.AutoProvisionFirstRunModel,
             ToolCapableModels = settings.ToolCapableModels,
             OllamaEndpoint = settings.OllamaEndpoint,
             HuggingFaceDefaultQuant = settings.HuggingFaceDefaultQuant,
@@ -83,6 +87,11 @@ internal static class NodeSettingsEndpointDtoMapper
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(currentSettings);
 
+        // The four external-access members are resolved TOGETHER; see ApplyExternalAccess for why they cannot be
+        // assigned independently.
+        var (externalAccessProfile, autoCheckApplicationUpdates, autoCheckRuntimeUpdates, autoProvisionFirstRunModel) =
+            ApplyExternalAccess(request, currentSettings);
+
         return new StoredNodeSettings
         {
             MaxMessageRequestTimeoutSeconds = request.MaxMessageRequestTimeoutSeconds ?? currentSettings.MaxMessageRequestTimeoutSeconds,
@@ -92,6 +101,10 @@ internal static class NodeSettingsEndpointDtoMapper
             EnableTools = request.EnableTools ?? currentSettings.EnableTools,
             CustomToolsEnabled = request.CustomToolsEnabled ?? currentSettings.CustomToolsEnabled,
             ToolRelevanceEnabled = request.ToolRelevanceEnabled ?? currentSettings.ToolRelevanceEnabled,
+            ExternalAccessProfile = externalAccessProfile,
+            AutoCheckApplicationUpdates = autoCheckApplicationUpdates,
+            AutoCheckRuntimeUpdates = autoCheckRuntimeUpdates,
+            AutoProvisionFirstRunModel = autoProvisionFirstRunModel,
             ToolCapableModels = request.ToolCapableModels ?? currentSettings.ToolCapableModels,
             OllamaEndpoint = request.OllamaEndpoint is null
                 ? currentSettings.OllamaEndpoint
@@ -157,5 +170,53 @@ internal static class NodeSettingsEndpointDtoMapper
                     Models = request.UsageRates
                 }
         };
+    }
+
+    /// <summary>
+    ///     The ONE owner of the external-access stamp. The four members are returned together because assigning them
+    ///     independently is exactly the two-owner bug this replaces: the profile is a record of which preset is in force,
+    ///     so it can only be decided alongside the triple it describes.
+    ///     <list type="number">
+    ///         <item>
+    ///             The request carries a PRESET (<c>recommended</c> or <c>offline</c> — the validator has already
+    ///             rejected anything else): write that literal and that preset's triple, ignoring any switch sent in the
+    ///             same request. One bool drives all three, so the two presets cannot drift apart.
+    ///         </item>
+    ///         <item>
+    ///             Otherwise, the request carries at least one switch: write the supplied switches (each falling back to
+    ///             the stored value) and stamp <c>custom</c> UNCONDITIONALLY. No re-derivation — a node at <c>custom</c>
+    ///             with (true, true, false) whose owner flips the third back on stays <c>custom</c>, because the stamp
+    ///             records that the operator edited switches, not that the values happen to match a preset today.
+    ///         </item>
+    ///         <item>
+    ///             Otherwise the save touches no external-access member (every other setting's save): preserve all four,
+    ///             so an unrelated save never disturbs a decided node.
+    ///         </item>
+    ///     </list>
+    /// </summary>
+    private static (string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel) ApplyExternalAccess(
+        SaveNodeSettingsRequest request,
+        StoredNodeSettings currentSettings)
+    {
+        if (StoredNodeSettings.IsExternalAccessPreset(request.ExternalAccessProfile))
+        {
+            var enabled = string.Equals(request.ExternalAccessProfile, StoredNodeSettings.ExternalAccessProfileRecommended, StringComparison.Ordinal);
+            return (request.ExternalAccessProfile, enabled, enabled, enabled);
+        }
+
+        if (request.AutoCheckApplicationUpdates is null
+            && request.AutoCheckRuntimeUpdates is null
+            && request.AutoProvisionFirstRunModel is null)
+        {
+            return (currentSettings.ExternalAccessProfile,
+                currentSettings.AutoCheckApplicationUpdates,
+                currentSettings.AutoCheckRuntimeUpdates,
+                currentSettings.AutoProvisionFirstRunModel);
+        }
+
+        return (StoredNodeSettings.ExternalAccessProfileCustom,
+            request.AutoCheckApplicationUpdates ?? currentSettings.AutoCheckApplicationUpdates,
+            request.AutoCheckRuntimeUpdates ?? currentSettings.AutoCheckRuntimeUpdates,
+            request.AutoProvisionFirstRunModel ?? currentSettings.AutoProvisionFirstRunModel);
     }
 }

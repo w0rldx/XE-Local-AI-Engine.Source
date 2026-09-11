@@ -125,7 +125,9 @@ export function Setup() {
 			await setupNodeAuth({ email, password: values.password });
 			const token = await loginNodeAuth({ email, password: values.password });
 			setToken(token);
-			await navigate({ to: "/" });
+			// The first-run external-access choice comes between setup and the app; its own route redirects home once the
+			// profile is decided, so this is not a detour for a node that already has one.
+			await navigate({ to: "/external-access" });
 		} catch (submitError) {
 			setError(getErrorMessage(submitError, t));
 		} finally {

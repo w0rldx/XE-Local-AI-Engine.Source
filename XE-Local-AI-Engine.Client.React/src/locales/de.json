@@ -1158,7 +1158,8 @@
 			},
 			"remoteImage": {
 				"load": "Externes Bild laden"
-			}
+			},
+			"loadingModelElapsed": "· {{elapsed}}"
 		},
 		"clientNodes": {
 			"fields": {
@@ -1609,7 +1610,8 @@
 					"toastSuccess": "llama.cpp-Laufzeit auf {{tag}} aktualisiert.",
 					"toastSuccessTitle": "Laufzeit aktualisiert",
 					"toastError": "Die llama.cpp-Laufzeit konnte nicht aktualisiert werden.",
-					"toastErrorTitle": "Update fehlgeschlagen"
+					"toastErrorTitle": "Update fehlgeschlagen",
+					"notChecked": "Noch nicht geprüft"
 				},
 				"updateBanner": {
 					"message": "Eine neuere llama.cpp-Laufzeit ({{tag}}) ist verfügbar.",
@@ -2013,6 +2015,23 @@
 						"input": "Eingabe $/1 Mio.",
 						"output": "Ausgabe $/1 Mio."
 					}
+				},
+				"externalAccess": {
+					"title": "Externer Zugriff",
+					"profileLabel": "Profil",
+					"profileDescription": "Ein Profil zu wählen setzt die drei Schalter unten. Einen Schalter von Hand zu ändern setzt das Profil auf Benutzerdefiniert."
+				},
+				"autoCheckApplicationUpdates": {
+					"label": "Nach Anwendungs-Updates suchen",
+					"description": "Beim Start nach einer neueren Version der Anwendung suchen. Sie können jederzeit von Hand im Dialog „Über“ suchen."
+				},
+				"autoCheckRuntimeUpdates": {
+					"label": "Nach llama.cpp-Laufzeit-Updates suchen",
+					"description": "Beim Start nach einem neueren llama.cpp-Laufzeit-Build suchen. Sie können jederzeit von Hand im Laufzeit-Bereich unten suchen."
+				},
+				"autoProvisionFirstRunModel": {
+					"label": "Beim ersten Start ein Startmodell herunterladen",
+					"description": "Bei einer frischen Installation ein Modell und eine Laufzeit holen, damit die Engine sofort antworten kann. Ohne Wirkung, sobald ein Modell installiert ist."
 				}
 			},
 			"title": "Node-Einstellungen",
@@ -6157,6 +6176,26 @@
 					"triggersLoad": "Die Trigger-Liste konnte nicht geladen werden, daher ist die Auswahl der erlaubten Trigger leer."
 				}
 			}
+		},
+		"externalAccess": {
+			"setupTitle": "Wählen Sie, wie diese Engine auf das Internet zugreift",
+			"setupSubtitle": "Wählen Sie jetzt eine Option. Sie können sie später in den Node-Einstellungen ändern.",
+			"recommended": {
+				"title": "Empfohlen",
+				"body": "Die Engine sucht selbstständig nach Anwendungs-Updates und nach Updates der llama.cpp-Laufzeit und lädt beim ersten Start ein Startmodell und eine Laufzeit herunter, damit Sie sofort chatten können.",
+				"choose": "Empfohlen verwenden"
+			},
+			"offline": {
+				"title": "Offline / Manuell",
+				"disables": "Schaltet drei Dinge ab, die die Engine sonst von selbst tut: die Suche nach Anwendungs-Updates, die Suche nach Updates der llama.cpp-Laufzeit und den Download von Modell und Laufzeit beim ersten Start. Sie können jedes davon jederzeit selbst starten.",
+				"doesNotBlock": "Dies schaltet nicht den gesamten Netzwerkzugriff ab. Es blockiert weder die Verbindung zur C0re-Plattform noch von Ihnen eingerichtete MCP-Server noch Abfragen des Modellkatalogs.",
+				"choose": "Offline / Manuell verwenden"
+			},
+			"custom": {
+				"title": "Benutzerdefiniert"
+			},
+			"notChosen": "Nicht gewählt",
+			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut."
 		}
 	},
 	"components": {

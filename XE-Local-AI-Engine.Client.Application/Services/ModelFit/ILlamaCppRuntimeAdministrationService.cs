@@ -16,7 +16,8 @@ public sealed record LlamaCppRuntimeStatus(
     string? UpstreamLatestTag,
     bool UpdateAvailable,
     bool IsOffline,
-    int RunningProcessCount);
+    int RunningProcessCount,
+    DateTimeOffset? CheckedAtUtc);
 
 public sealed record LlamaCppRuntimeMutationResult(
     bool Succeeded,

@@ -134,7 +134,9 @@ export default defineConfig(({ command, mode }) => {
 			chromaColorsGeneratorPlugin(),
 			createFrontendComponentManifestPlugin(),
 			devtools(),
-			tanstackRouter({ target: "react", autoCodeSplitting: true }),
+			// `routeFileIgnorePattern` keeps test files that live beside a route out of the generated tree: without it the
+			// generator warns on every build that they export no Route.
+			tanstackRouter({ target: "react", autoCodeSplitting: true, routeFileIgnorePattern: "\\.test\\." }),
 			viteReact(),
 			UnoCSS(),
 			aspNetCoreDevelopmentCertificate({ certificateName: "c0re.client.react.web" }),

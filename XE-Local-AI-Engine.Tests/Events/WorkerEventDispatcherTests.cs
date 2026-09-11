@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Events;
 
+using System.Diagnostics;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -482,6 +483,123 @@ public sealed class WorkerEventDispatcherTests
         var eventState = AssertEx.NotNull(lastEventState);
         AssertEx.Equal(expected: 1234L, eventState.GenerationDurationMs);
         AssertEx.Equal("length", eventState.FinishReason);
+    }
+
+    [Test]
+    public async Task ReportInvocationPhaseAsync_OnAFirstTransition_StampsTheChangeTime()
+    {
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        var before = DateTimeOffset.UtcNow;
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.PreparingRuntime);
+        var after = DateTimeOffset.UtcNow;
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(InvocationRuntimePhase.PreparingRuntime, current.RuntimePhase);
+        var stamped = RequiredPhaseStamp(current.RuntimePhaseChangedAtUtc);
+        // Bounded rather than compared to a fixed value: the dispatcher stamps DateTimeOffset.UtcNow directly (no
+        // TimeProvider is threaded in for this one field), so the window either side of the call is the assertion.
+        AssertEx.True(stamped >= before && stamped <= after, $"The phase stamp {stamped:O} must fall between {before:O} and {after:O}.");
+    }
+
+    [Test]
+    public async Task ReportInvocationPhaseAsync_WhenTheSamePhaseIsReportedTwice_KeepsTheOriginalStamp()
+    {
+        // The browser renders elapsed cold-load time from this stamp, so a re-report of the phase the turn is already
+        // in must not restart its clock.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.LoadingModel);
+        var first = RequiredPhaseStamp(AssertEx.NotNull(dispatcher.CurrentInvocation).RuntimePhaseChangedAtUtc);
+
+        WaitForTheClockToAdvancePast(first);
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.LoadingModel);
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(first, RequiredPhaseStamp(current.RuntimePhaseChangedAtUtc));
+    }
+
+    [Test]
+    public async Task ReportInvocationPhaseAsync_OnASecondDistinctTransition_MovesTheStampForward()
+    {
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.PreparingRuntime);
+        var first = RequiredPhaseStamp(AssertEx.NotNull(dispatcher.CurrentInvocation).RuntimePhaseChangedAtUtc);
+
+        WaitForTheClockToAdvancePast(first);
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.LoadingModel);
+
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        AssertEx.Equal(InvocationRuntimePhase.LoadingModel, current.RuntimePhase);
+        var second = RequiredPhaseStamp(current.RuntimePhaseChangedAtUtc);
+        AssertEx.True(second > first, $"A distinct transition must re-stamp: {second:O} must be later than {first:O}.");
+    }
+
+    [Test]
+    public async Task ReportInvocationPhaseAsync_PreservesRuntimePhaseChangedAtUtcThroughSnapshotClone()
+    {
+        // Same bug class as the GenerationDurationMs regression above: a field missing from Clone() silently travels
+        // as null on the snapshot the chat pump consumes, which unit tests on the live state would never catch.
+        var dispatcher = CreateDispatcher(Substitute.For<IInvocationRunner>());
+        var package = RuntimePackageBuilder.Valid().Build();
+        await dispatcher.ReportInvocationAssignedAsync(package);
+
+        InvocationState? lastEventState = null;
+        dispatcher.InvocationStateChanged += (_, args) => lastEventState = args.State;
+
+        await dispatcher.ReportInvocationPhaseAsync(package.InvocationId, InvocationRuntimePhase.LoadingModel);
+
+        // The getter returns Clone(CurrentInvocation).
+        var current = AssertEx.NotNull(dispatcher.CurrentInvocation);
+        var stamped = RequiredPhaseStamp(current.RuntimePhaseChangedAtUtc);
+
+        // The event payload is also a Clone, and it is the one the pump turns into the wire event.
+        var eventState = AssertEx.NotNull(lastEventState);
+        AssertEx.Equal(InvocationRuntimePhase.LoadingModel, eventState.RuntimePhase);
+        AssertEx.Equal(stamped, RequiredPhaseStamp(eventState.RuntimePhaseChangedAtUtc));
+    }
+
+    /// <summary>
+    ///     Asserts the phase stamp is present and unwraps it. <c>AssertEx.NotNull</c> is constrained to reference
+    ///     types, so a nullable <see cref="DateTimeOffset" /> needs its own unwrap rather than a bare
+    ///     null-forgiving <c>.Value</c>, which would surface as a NullReferenceException instead of a named failure.
+    /// </summary>
+    private static DateTimeOffset RequiredPhaseStamp(DateTimeOffset? stamp)
+    {
+        AssertEx.True(stamp is not null, "The runtime phase must carry a change timestamp.");
+        return stamp!.Value;
+    }
+
+    /// <summary>
+    ///     Spins until the system clock reads past <paramref name="stamp" />. The dispatcher stamps
+    ///     <c>DateTimeOffset.UtcNow</c> directly, so "was it re-stamped?" is only answerable once the clock has moved:
+    ///     without this, two reports inside one clock tick produce equal stamps and the assertions above would be
+    ///     probabilistic. It waits on the clock itself, never on an event, and returns after a single tick.
+    /// </summary>
+    /// <summary>
+    ///     Spins until the real clock is strictly past <paramref name="stamp" />, bounded so a clock that never advances
+    ///     fails the test instead of hanging the run.
+    /// </summary>
+    // real-timer: WorkerEventDispatcher.ReportInvocationPhaseAsync stamps RuntimePhaseChangedAtUtc from
+    // DateTimeOffset.UtcNow directly (plan decision D-E leaves that path without an injected TimeProvider), so there is
+    // no gate or fake clock a test can drive here — a distinct LATER stamp can only come from the real clock ticking.
+    private static void WaitForTheClockToAdvancePast(DateTimeOffset stamp)
+    {
+        var elapsed = Stopwatch.StartNew();
+        var spin = default(SpinWait);
+        while (DateTimeOffset.UtcNow <= stamp)
+        {
+            AssertEx.True(elapsed.Elapsed < TimeSpan.FromSeconds(1),
+                $"The system clock did not advance past {stamp:O} within one second, so the phase-stamp assertion cannot run.");
+            spin.SpinOnce();
+        }
     }
 
     [Test]

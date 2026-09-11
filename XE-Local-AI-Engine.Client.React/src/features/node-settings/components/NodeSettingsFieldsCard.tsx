@@ -3,6 +3,7 @@ import { IconRobot, IconServer, IconTool } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
 import { NodeSettingsAdvancedFieldsCard } from "@/features/node-settings/components/NodeSettingsAdvancedFieldsCard";
+import { NodeSettingsExternalAccessCard } from "@/features/node-settings/components/NodeSettingsExternalAccessCard";
 import {
 	nodeSettingsFieldError,
 	nodeSettingsRestartHint,
@@ -11,6 +12,7 @@ import { NodeSettingsKnowledgeModelsCard } from "@/features/node-settings/compon
 import { NodeSettingsRuntimeCard } from "@/features/node-settings/components/NodeSettingsRuntimeCard";
 import { NodeSettingsUsageRatesCard } from "@/features/node-settings/components/NodeSettingsUsageRatesCard";
 import type {
+	ExternalAccessPreset,
 	NodeSettingsFieldBounds,
 	NodeSettingsFieldsForm,
 	NodeSettingsModelOption,
@@ -25,6 +27,9 @@ export interface NodeSettingsFieldsCardProps {
 	readonly bounds: NodeSettingsFieldBounds;
 	readonly errors: Readonly<Record<string, string>>;
 	readonly onChange: <K extends keyof NodeSettingsFieldsForm>(field: K, value: NodeSettingsFieldsForm[K]) => void;
+	// Applies an external-access profile: the page moves all three switches and marks the preset pending, so the save
+	// carries the profile name alone (the server derives the switches from it).
+	readonly onApplyPreset: (preset: ExternalAccessPreset) => void;
 	// When true, the developer-only advanced card is rendered. Driven by the page's developer-mode flag.
 	readonly showDeveloperFields: boolean;
 	// Installed chat-capable models offered as the draft model for draft-* speculative modes.
@@ -61,6 +66,7 @@ export function NodeSettingsFieldsCard({
 	bounds,
 	errors,
 	onChange,
+	onApplyPreset,
 	showDeveloperFields,
 	draftModelOptions,
 	keepWarmModelOptions,
@@ -154,6 +160,8 @@ export function NodeSettingsFieldsCard({
 				autoEffortFastModelOptions={autoEffortFastModelOptions}
 				ollamaRuntimeDisabled={ollamaRuntimeDisabled}
 			/>
+
+			<NodeSettingsExternalAccessCard form={form} onChange={onChange} onApplyPreset={onApplyPreset} />
 
 			<NodeSettingsKnowledgeModelsCard
 				form={form}

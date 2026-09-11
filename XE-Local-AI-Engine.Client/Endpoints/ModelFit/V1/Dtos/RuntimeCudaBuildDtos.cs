@@ -123,6 +123,14 @@ public sealed class LlamaCppRuntimeStatusResponse
     ///     i.e. a fresh in-app CUDA rebuild is available. Always false for a downloaded prebuilt.
     /// </summary>
     public required bool RebuildAvailable { get; init; }
+
+    /// <summary>
+    ///     When the release catalog was last consulted, as unix milliseconds; <c>null</c> when NO check has ever run.
+    ///     That distinction is the point: with the automatic runtime-update check turned off by the node's
+    ///     external-access settings, an empty snapshot would otherwise be indistinguishable from a check that found
+    ///     nothing, and read as a permanent "up to date". A manual refresh populates it.
+    /// </summary>
+    public long? CheckedAtUtc { get; init; }
 }
 
 /// <summary>

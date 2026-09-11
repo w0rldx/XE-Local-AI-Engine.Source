@@ -145,6 +145,7 @@ describe("LlamaCppUpdaterPanel", () => {
 			updateAvailable: true,
 			isOffline: false,
 			runningProcessCount: 0,
+			checkedAtUtc: 1700000000000,
 		};
 
 		renderPanel();
@@ -163,6 +164,8 @@ describe("LlamaCppUpdaterPanel", () => {
 			updateAvailable: false,
 			isOffline: false,
 			runningProcessCount: 0,
+			// "Up to date" is a claim about a check that ran; without a checked-at stamp the panel says so instead.
+			checkedAtUtc: 1700000000000,
 		};
 
 		renderPanel();
@@ -289,5 +292,60 @@ describe("LlamaCppUpdaterPanel", () => {
 
 		fireEvent.click(screen.getByTestId("llamacpp-updater-ensure-button"));
 		expect(hooksMock.ensureMutate.mock.calls[0]?.[0]).toBe("cpu");
+	});
+
+	// R8a: before the first check the snapshot is empty (updateAvailable and isOffline both false), which used to render
+	// a green "Up to date". Switching the automatic check off makes that lie permanent.
+	it("says not checked yet when the runtime has never been checked", () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9692", variant: "cpu", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9692",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: null,
+		};
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-state-notchecked")).toBeTruthy();
+		// Without this half the test passes on the old code.
+		expect(screen.queryByTestId("llamacpp-updater-state-uptodate")).toBeNull();
+	});
+
+	it("says up to date once a check has run and found nothing", () => {
+		hooksMock.statusData = {
+			installed: { tag: "b9692", variant: "cpu", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9692",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			checkedAtUtc: 1700000000000,
+		};
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-state-uptodate")).toBeTruthy();
+		expect(screen.queryByTestId("llamacpp-updater-state-notchecked")).toBeNull();
+	});
+
+	it("still shows the offline alert ahead of the not-checked badge", () => {
+		// An offline node has a reason to show, not an absence.
+		hooksMock.statusData = {
+			installed: { tag: "b9692", variant: "cpu", asset: "a", installedAtUtc: 0 },
+			recommendedTag: "b9692",
+			upstreamLatestTag: null,
+			updateAvailable: false,
+			isOffline: true,
+			runningProcessCount: 0,
+			checkedAtUtc: null,
+		};
+
+		renderPanel();
+
+		expect(screen.getByTestId("llamacpp-updater-offline")).toBeTruthy();
+		expect(screen.queryByTestId("llamacpp-updater-state-notchecked")).toBeNull();
 	});
 });

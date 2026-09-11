@@ -63,4 +63,35 @@ describe("toLlamaCppRuntimeStatus", () => {
 		expect(status.updateAvailable).toBe(false);
 		expect(status.isOffline).toBe(false);
 	});
+
+	it("maps the runtime checked-at timestamp through to the domain status", () => {
+		// The mapper projects field by field, so a DTO field it does not name is silently dropped — and the panel reads
+		// the domain status, not the DTO.
+		const status = toLlamaCppRuntimeStatus({
+			installed: null,
+			recommendedTag: "b1000",
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			isSourceBuild: false,
+			rebuildAvailable: false,
+			checkedAtUtc: 1700000000000,
+		});
+
+		expect(status.checkedAtUtc).toBe(1700000000000);
+	});
+
+	it("maps an absent checked-at timestamp to null", () => {
+		const status = toLlamaCppRuntimeStatus({
+			installed: null,
+			recommendedTag: "b1000",
+			updateAvailable: false,
+			isOffline: false,
+			runningProcessCount: 0,
+			isSourceBuild: false,
+			rebuildAvailable: false,
+		});
+
+		expect(status.checkedAtUtc).toBeNull();
+	});
 });

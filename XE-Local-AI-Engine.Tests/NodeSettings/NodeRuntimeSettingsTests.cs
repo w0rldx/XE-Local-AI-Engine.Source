@@ -279,6 +279,59 @@ public sealed class NodeRuntimeSettingsTests
         AssertEx.Equal(LlamaCppReleasePins.PinnedTag, await sut.GetRecommendedLlamaCppTagAsync());
     }
 
+    [Test]
+    public async Task ExternalAccessProfile_ReturnsTheStoredValueAndNullWhenUndecided()
+    {
+        // No fallback here, unlike every other getter on this surface: null is the ANSWER (nobody has decided), so
+        // seeding it would silently decide for the operator and let the three gated services fire.
+        var undecided = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Null(await undecided.GetExternalAccessProfileAsync());
+
+        var offline = CreateSut(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, await offline.GetExternalAccessProfileAsync());
+
+        var pending = CreateSut(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfilePending
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, await pending.GetExternalAccessProfileAsync());
+    }
+
+    [Test]
+    public async Task AutoCheckSwitches_DefaultToOnWhenUnset()
+    {
+        // The whole no-regression promise rests on this: an upgraded node's file predates all three members, and if
+        // unset read as OFF every existing install would silently stop checking for updates.
+        var sut = CreateSut(new StoredNodeSettings(), seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(expected: true, await sut.GetAutoCheckApplicationUpdatesAsync());
+        AssertEx.Equal(expected: true, await sut.GetAutoCheckRuntimeUpdatesAsync());
+        AssertEx.Equal(expected: true, await sut.GetAutoProvisionFirstRunModelAsync());
+    }
+
+    [Test]
+    [Arguments(true)]
+    [Arguments(false)]
+    public async Task AutoCheckSwitches_HonourTheStoredValue(bool stored)
+    {
+        var sut = CreateSut(new StoredNodeSettings
+            {
+                AutoCheckApplicationUpdates = stored,
+                AutoCheckRuntimeUpdates = stored,
+                AutoProvisionFirstRunModel = stored
+            },
+            seedConfiguration: new Dictionary<string, string?>(StringComparer.Ordinal));
+
+        AssertEx.Equal(stored, await sut.GetAutoCheckApplicationUpdatesAsync());
+        AssertEx.Equal(stored, await sut.GetAutoCheckRuntimeUpdatesAsync());
+        AssertEx.Equal(stored, await sut.GetAutoProvisionFirstRunModelAsync());
+    }
+
     private static NodeRuntimeSettings CreateSut(StoredNodeSettings stored,
         IDictionary<string, string?> seedConfiguration,
         LocalChatAgentOptions? localChat = null,

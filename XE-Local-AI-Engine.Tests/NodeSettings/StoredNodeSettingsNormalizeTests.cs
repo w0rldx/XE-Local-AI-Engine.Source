@@ -452,6 +452,247 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.Null(loaded.DetachedGraceSeconds);
     }
 
+    [Test]
+    public async Task Normalize_KeepsAValidExternalAccessProfile()
+    {
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"offline\" }");
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, (await LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task Normalize_KeepsThePendingExternalAccessProfile()
+    {
+        // "pending" is engine-written at first-run setup, so it must SURVIVE a load: nulling it here would re-arm the
+        // boot backfill and decide "recommended" for an operator who has not chosen yet.
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"pending\" }");
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task Normalize_MapsAnUnknownExternalAccessProfileToPending()
+    {
+        // Somebody wrote a profile, just not one this engine recognises, so the node is ASKED AGAIN rather than answered
+        // for: "pending" keeps the gated services waiting, keeps the switches beside it, and — unlike null — is a
+        // non-null profile the boot backfill leaves alone instead of stamping "recommended" over an operator's opt-outs.
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"airgapped\" }");
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
+
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"Offline\" }");
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    [Arguments("")]
+    [Arguments("   ")]
+    public async Task Normalize_NullsABlankExternalAccessProfile(string profile)
+    {
+        // Blank is the ONE case that stays null: nobody ever wrote a profile, so this is a legacy install and the boot
+        // backfill is allowed to stamp it. Mapping blank to "pending" would instead freeze every upgraded node.
+        await WriteSettingsJsonAsync($"{{ \"externalAccessProfile\": \"{profile}\" }}");
+
+        AssertEx.Null((await LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task Normalize_TrimsButDoesNotCaseFoldTheExternalAccessProfile()
+    {
+        // Pins the ORDINAL comparison: surrounding whitespace is trimmed away, but a differently-cased literal is not
+        // the literal — it loads as "pending". A later case-insensitive change has to edit this test, i.e. it becomes a
+        // visible decision.
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"  offline  \" }");
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, (await LoadAsync()).ExternalAccessProfile);
+
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"Offline\" }");
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfilePending, (await LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task OldFileMissingTheExternalAccessMembers_LoadsToNull_WithoutThrowing()
+    {
+        // An upgraded node's file predates all four members. They must deserialize to null — never to a spurious false,
+        // which would silently disable every automatic outbound check on every existing install.
+        await WriteSettingsJsonAsync("{ \"maxMessageRequestTimeoutSeconds\": 120 }");
+        var loaded = await LoadAsync();
+
+        AssertEx.Null(loaded.ExternalAccessProfile);
+        AssertEx.Null(loaded.AutoCheckApplicationUpdates);
+        AssertEx.Null(loaded.AutoCheckRuntimeUpdates);
+        AssertEx.Null(loaded.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    public async Task ExternalAccessSwitches_RoundTripThroughTheStore()
+    {
+        var loaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+            AutoCheckApplicationUpdates = false,
+            AutoCheckRuntimeUpdates = false,
+            AutoProvisionFirstRunModel = false
+        });
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, loaded.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, loaded.AutoCheckApplicationUpdates);
+        AssertEx.Equal(expected: false, loaded.AutoCheckRuntimeUpdates);
+        AssertEx.Equal(expected: false, loaded.AutoProvisionFirstRunModel);
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileRecommended)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileOffline)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileCustom)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfilePending)]
+    public void IsValidExternalAccessProfile_AcceptsAllFourLiterals(string profile)
+    {
+        AssertEx.True(StoredNodeSettings.IsValidExternalAccessProfile(profile), $"'{profile}' must be persistable.");
+    }
+
+    [Test]
+    [Arguments(null)]
+    [Arguments("")]
+    [Arguments("Recommended")]
+    [Arguments("airgapped")]
+    public void IsValidExternalAccessProfile_RejectsEverythingElse(string? profile)
+    {
+        AssertEx.False(StoredNodeSettings.IsValidExternalAccessProfile(profile), $"'{profile}' must not be persistable.");
+    }
+
+    [Test]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileRecommended, true)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileOffline, true)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfileCustom, false)]
+    [Arguments(StoredNodeSettings.ExternalAccessProfilePending, false)]
+    public void IsExternalAccessPreset_AcceptsOnlyRecommendedAndOffline(string profile, bool expected)
+    {
+        // The two-predicate split is the whole mechanism keeping "pending" and "custom" un-sendable: the boundary
+        // validator gates on THIS predicate, so a client can never claim an engine-written state.
+        AssertEx.Equal(expected, StoredNodeSettings.IsExternalAccessPreset(profile));
+    }
+
+    [Test]
+    public async Task InterruptedSave_LeavesTheStoredOfflineProfileIntact()
+    {
+        // The save writes a temp sibling and renames it over the target, so a crash between the two leaves a leftover
+        // temp file and an INTACT target. Plant exactly that state and prove the stored Offline choice survives: a
+        // truncate-then-write save would instead have reverted the node to "undecided" and re-armed the boot backfill.
+        using (var store = NewStore())
+        {
+            await store.SaveAsync(new StoredNodeSettings
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileOffline,
+                AutoCheckApplicationUpdates = false,
+                AutoCheckRuntimeUpdates = false,
+                AutoProvisionFirstRunModel = false
+            });
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(_root, "node-settings.json.deadbeef.tmp"), "{ \"externalAccessProfile\": ");
+
+        var reloaded = await LoadAsync();
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, reloaded.ExternalAccessProfile);
+        AssertEx.Equal(expected: false, reloaded.AutoCheckRuntimeUpdates);
+    }
+
+    [Test]
+    public async Task Save_LeavesNoTemporaryFileBehind()
+    {
+        using var store = NewStore();
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileRecommended
+        });
+
+        AssertEx.Empty(Directory.GetFiles(_root, "*.tmp"),
+            $"A completed save must leave no temp sibling; found [{string.Join(", ", Directory.GetFiles(_root, "*.tmp"))}].");
+        AssertEx.True(File.Exists(Path.Combine(_root, "node-settings.json")), "The save must land on node-settings.json.");
+    }
+
+    [Test]
+    public async Task Save_KeepsTheOwnerOnlyFileModeAcrossTheAtomicMove()
+    {
+        if (OperatingSystem.IsWindows())
+        {
+            // A visible skip with a reason, never a silent return; the return keeps the platform analyzer happy.
+            Skip.Test("Unix file modes do not exist on Windows; the per-user data-directory ACL governs access there.");
+            return;
+        }
+
+        // The rename replaces the target with the TEMP file's inode, so the temp must be created 0600 as well. A temp
+        // created without UnixCreateMode would silently downgrade the permissions of a file holding the Ollama endpoint
+        // and the machine key.
+        using var store = NewStore();
+        await store.SaveAsync(new StoredNodeSettings
+        {
+            MachineKey = "not-world-readable"
+        });
+
+        AssertEx.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, File.GetUnixFileMode(Path.Combine(_root, "node-settings.json")));
+    }
+
+    [Test]
+    public async Task LoadStrictAsync_WhenTheFileIsMissing_ReturnsTheDefaultRecord()
+    {
+        // A legacy install that has never saved is "no value yet", not an error — the backfill may act on it.
+        using var store = NewStore();
+
+        var strict = await store.LoadStrictAsync();
+
+        AssertEx.NotNull(strict);
+        AssertEx.Null(strict!.ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task LoadStrictAsync_WhenTheFileIsCorrupt_ReturnsNull()
+    {
+        // The two contracts are pinned against each other on ONE file: the tolerant load still degrades to defaults so
+        // no ordinary consumer breaks, while the strict load reports "I cannot read this" so the backfill cannot decide
+        // an external-access posture from bytes it never read.
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"offli");
+        using var store = NewStore();
+
+        AssertEx.Null(await store.LoadStrictAsync());
+        AssertEx.Null((await store.LoadAsync()).ExternalAccessProfile);
+    }
+
+    [Test]
+    public async Task LoadStrictAsync_WhenTheFileIsValid_ReturnsTheNormalizedRecord()
+    {
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"  offline  \", \"llamaMaxLoadedProcesses\": 99 }");
+        using var store = NewStore();
+
+        var strict = AssertEx.NotNull(await store.LoadStrictAsync());
+
+        AssertEx.Equal(StoredNodeSettings.ExternalAccessProfileOffline, strict.ExternalAccessProfile);
+        AssertEx.Null(strict.LlamaMaxLoadedProcesses);
+    }
+
+    [Test]
+    public async Task UpdateAsync_WhenTheFileIsUnreadable_ThrowsAndLeavesTheFileByteIdentical()
+    {
+        // UpdateAsync loads-mutates-saves. Loading TOLERANTLY here would mutate a default record and write it back as
+        // valid, so a startup writer would "heal" the corruption into a settings file with a null profile — which the
+        // boot backfill then decides "recommended" from, silently re-enabling the outbound checks an operator turned
+        // off. Byte-compare, so "left untouched" is proved rather than asserted.
+        await WriteSettingsJsonAsync("{ \"externalAccessProfile\": \"offli");
+        var path = Path.Combine(_root, "node-settings.json");
+        var before = await File.ReadAllBytesAsync(path);
+
+        using var store = NewStore();
+        var thrown = await AssertEx.ThrowsAsync<NodeSettingsUnreadableException>(() =>
+            store.UpdateAsync(static latest => latest with
+            {
+                ExternalAccessProfile = StoredNodeSettings.ExternalAccessProfileRecommended
+            }));
+
+        AssertEx.Equal(path, thrown.SettingsPath);
+        AssertEx.Contains(thrown.Message, "node-settings.json");
+        var after = await File.ReadAllBytesAsync(path);
+        AssertEx.True(before.SequenceEqual(after), "UpdateAsync must not rewrite a present-but-unreadable settings file.");
+    }
+
     private async Task<StoredNodeSettings> SaveAndReloadAsync(StoredNodeSettings settings)
     {
         using var store = NewStore();

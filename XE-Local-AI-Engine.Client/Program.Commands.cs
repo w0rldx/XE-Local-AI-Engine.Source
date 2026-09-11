@@ -9,6 +9,7 @@ using XE_Local_AI_Engine.Client.Endpoints.Auth.V1.Validators;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
+using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Persistence;
 
 public sealed partial class Program
@@ -68,7 +69,20 @@ public sealed partial class Program
 
         await using var scope = services.CreateAsyncScope();
         var authService = scope.ServiceProvider.GetRequiredService<INodeAuthService>();
-        var result = await authService.SetupAsync(command.Email, command.Password, CancellationToken.None).ConfigureAwait(false);
+        NodeSetupResult result;
+        try
+        {
+            result = await authService.SetupAsync(command.Email, command.Password, CancellationToken.None).ConfigureAwait(false);
+        }
+        catch (NodeSettingsUnreadableException exception)
+        {
+            // The HTTP setup endpoint gets this mapped to a 400 by DomainValidationExceptionHandler; the CLI has no such
+            // mapper, so without this catch a corrupt node-settings.json would take --setup out through the top-level
+            // fatal handler instead of the documented exit code 5.
+            await standardError.WriteLineAsync(exception.Message).ConfigureAwait(false);
+            return 5;
+        }
+
         if (result.AlreadyInitialized)
         {
             await standardOutput.WriteLineAsync("XE_SETUP=already-configured").ConfigureAwait(false);

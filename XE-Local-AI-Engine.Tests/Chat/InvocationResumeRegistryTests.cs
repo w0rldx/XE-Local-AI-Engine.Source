@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -582,6 +584,176 @@ public sealed class InvocationResumeRegistryTests
         AssertEx.NotNull(registry.TryGetLiveInvocation(invocationId));
     }
 
+    [Test]
+    public async Task ResumeAsync_WhenTheInvocationIsLoadingAModel_ReplaysThePhaseWithItsOriginalTimestampAfterTheSnapshot()
+    {
+        // A reload during a cold load. Without the replay the resumed stream carries no phase at all, so the client
+        // renders neither the "Loading model…" affordance nor an elapsed time — the hang-shaped screen this exists to
+        // remove. The ORDER is the point: the client's snapshot arm rebuilds the streaming message, so a phase yielded
+        // before the snapshot would be discarded by it.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var changedAt = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello", runtimePhase: InvocationRuntimePhase.LoadingModel, runtimePhaseChangedAtUtc: changedAt));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 2, TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello"));
+        await consumer;
+
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, events[0].Type);
+
+        var phase = events[1];
+        AssertEx.Equal(ChatStreamEventTypes.AssistantPhase, phase.Type);
+        AssertEx.Equal("loading_model", phase.RuntimePhase);
+        // The stamp the state has carried since the load began, NOT a value derived from the registry's own clock:
+        // re-stamping here would reset the reloading client's timer to zero.
+        AssertEx.Equal(changedAt.ToString("O", CultureInfo.InvariantCulture), phase.RuntimePhaseChangedAtUtc);
+        AssertEx.True(phase.Sequence > events[0].Sequence, "The replayed phase must be sequenced after the snapshot.");
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenQueuedThenLoading_EmitsBothPhasesWithTheirOwnTimestamps()
+    {
+        // A reconnect while the turn is still queued, then the load begins. Before the live loop learned to emit
+        // phases this stream showed nothing at all, and no later transition could rescue it.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var queuedAt = new DateTimeOffset(2026, 9, 10, 8, 30, 0, TimeSpan.Zero);
+        var loadingAt = queuedAt.AddSeconds(4);
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Assigned, runtimePhase: InvocationRuntimePhase.PreparingRuntime, runtimePhaseChangedAtUtc: queuedAt));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 2, TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, runtimePhase: InvocationRuntimePhase.LoadingModel, runtimePhaseChangedAtUtc: loadingAt));
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 3, TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hi"));
+        await consumer;
+
+        var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
+        AssertEx.Equal(expected: 2, phases.Count);
+        AssertEx.Equal("preparing_runtime", phases[0].RuntimePhase);
+        AssertEx.Equal(queuedAt.ToString("O", CultureInfo.InvariantCulture), phases[0].RuntimePhaseChangedAtUtc);
+        AssertEx.Equal("loading_model", phases[1].RuntimePhase);
+        // Each phase carries its OWN change time, so the timer restarts with the phase rather than running from the
+        // moment the browser reconnected.
+        AssertEx.Equal(loadingAt.ToString("O", CultureInfo.InvariantCulture), phases[1].RuntimePhaseChangedAtUtc);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenLoadingThenGenerating_EmitsTheGeneratingPhaseBeforeAnyContent()
+    {
+        // The transition a reconnect used to lose entirely, which left the client's elapsed timer counting until the
+        // first content delta arrived.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var loadingAt = new DateTimeOffset(2026, 9, 10, 8, 30, 0, TimeSpan.Zero);
+        var generatingAt = loadingAt.AddSeconds(42);
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, runtimePhase: InvocationRuntimePhase.LoadingModel, runtimePhaseChangedAtUtc: loadingAt));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 2, TimeSpan.FromSeconds(5));
+
+        // The first content arrives on the same publish that carries the new phase, so the phase must still precede it.
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hi", runtimePhase: InvocationRuntimePhase.Generating, runtimePhaseChangedAtUtc: generatingAt));
+
+        await AssertEx.EventuallyAsync(() => events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta), TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hi"));
+        await consumer;
+
+        var generatingIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase && streamEvent.RuntimePhase == "generating");
+        var firstDeltaIndex = events.FindIndex(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta);
+        AssertEx.True(generatingIndex >= 0, "The resumed stream must carry the generating phase.");
+        AssertEx.True(firstDeltaIndex >= 0, "The resumed stream must carry the content delta.");
+        AssertEx.True(generatingIndex < firstDeltaIndex, "The generating phase must precede the content it introduces.");
+        AssertEx.Equal(generatingAt.ToString("O", CultureInfo.InvariantCulture), events[generatingIndex].RuntimePhaseChangedAtUtc);
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenAStatePublishChangesOnlyContent_EmitsNoSecondPhaseEvent()
+    {
+        // The same anti-spam guard the pump keeps: every state publish carries the current phase, so without the
+        // lastEmittedPhase diff the client would get a phase event on every single delta.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+        var generatingAt = new DateTimeOffset(2026, 9, 10, 8, 30, 0, TimeSpan.Zero);
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello", runtimePhase: InvocationRuntimePhase.Generating, runtimePhaseChangedAtUtc: generatingAt));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 2, TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world", runtimePhase: InvocationRuntimePhase.Generating, runtimePhaseChangedAtUtc: generatingAt));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
+        await consumer;
+
+        var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
+        AssertEx.Equal(expected: 1, phases.Count);
+        AssertEx.True(events.Any(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantDelta), "The content still streams; only the phase is deduped.");
+    }
+
+    [Test]
+    public async Task ResumeAsync_WhenTheInvocationHasNoPhase_ReplaysNoPhaseEvent()
+    {
+        // Cloud and Ollama turns report no phase at all. The replay is additive: their resume stream keeps exactly
+        // the shape it has today.
+        var dispatcher = Substitute.For<IWorkerEventDispatcher>();
+        var registry = CreateRegistry(dispatcher);
+        var invocationId = Guid.NewGuid();
+        var conversationId = Guid.NewGuid();
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello"));
+
+        var events = new List<ChatStreamEvent>();
+        var consumer = ConsumeAsync(registry, invocationId, events);
+
+        await AssertEx.EventuallyAsync(() => events.Count >= 1, TimeSpan.FromSeconds(5));
+
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world"));
+        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
+        await consumer;
+
+        AssertEx.Empty(events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList());
+        AssertEx.Equal(ChatStreamEventTypes.AssistantSnapshot, events[0].Type);
+        AssertEx.Equal(ChatStreamEventTypes.AssistantDelta, events[1].Type);
+    }
+
+    /// <summary>Drains a resume stream into <paramref name="events" /> on a background task, so the test can publish into it.</summary>
+    private static Task ConsumeAsync(InvocationResumeRegistry registry, Guid invocationId, List<ChatStreamEvent> events)
+    {
+        return Task.Run(async () =>
+        {
+            await foreach (var streamEvent in registry.ResumeAsync(invocationId, CancellationToken.None))
+            {
+                events.Add(streamEvent);
+            }
+        });
+    }
+
     private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher, ChatStreamBudgetOptions? budget = null)
     {
         return new InvocationResumeRegistry(dispatcher,
@@ -595,7 +767,9 @@ public sealed class InvocationResumeRegistryTests
         InvocationStatus status,
         string content = "",
         long? generationDurationMs = null,
-        string thinking = "")
+        string thinking = "",
+        InvocationRuntimePhase? runtimePhase = null,
+        DateTimeOffset? runtimePhaseChangedAtUtc = null)
     {
         return new InvocationState
         {
@@ -604,6 +778,8 @@ public sealed class InvocationResumeRegistryTests
             Status = status,
             StreamedContent = content,
             StreamedThinkingContent = thinking,
+            RuntimePhase = runtimePhase,
+            RuntimePhaseChangedAtUtc = runtimePhaseChangedAtUtc,
             GenerationDurationMs = generationDurationMs,
             StartedAt = DateTimeOffset.UtcNow,
             LastUpdatedAt = DateTimeOffset.UtcNow

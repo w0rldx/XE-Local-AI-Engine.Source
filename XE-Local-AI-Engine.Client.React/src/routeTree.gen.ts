@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as LayoutRouteImport } from './routes/_layout'
+import { Route as ExternalAccessRouteImport } from './routes/external-access'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as SetupRouteImport } from './routes/setup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
@@ -52,6 +53,11 @@ import { Route as LayoutWorkSessionsSessionIdRouteImport } from './routes/_layou
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExternalAccessRoute = ExternalAccessRouteImport.update({
+  id: '/external-access',
+  path: '/external-access',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -260,6 +266,7 @@ const LayoutWorkSessionsSessionIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
+  '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
@@ -300,6 +307,7 @@ export interface FileRoutesByFullPath {
   '/work-sessions/': typeof LayoutWorkSessionsIndexRoute
 }
 export interface FileRoutesByTo {
+  '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/agents': typeof LayoutAgentsRoute
@@ -343,6 +351,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/_layout': typeof LayoutRouteWithChildren
+  '/external-access': typeof ExternalAccessRoute
   '/login': typeof LoginRoute
   '/setup': typeof SetupRoute
   '/_layout/agents': typeof LayoutAgentsRoute
@@ -387,6 +396,7 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/external-access'
     | '/login'
     | '/setup'
     | '/agents'
@@ -427,6 +437,7 @@ export interface FileRouteTypes {
     | '/work-sessions/'
   fileRoutesByTo: FileRoutesByTo
   to:
+    | '/external-access'
     | '/login'
     | '/setup'
     | '/agents'
@@ -469,6 +480,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/_layout'
+    | '/external-access'
     | '/login'
     | '/setup'
     | '/_layout/agents'
@@ -512,6 +524,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   LayoutRoute: typeof LayoutRouteWithChildren
+  ExternalAccessRoute: typeof ExternalAccessRoute
   LoginRoute: typeof LoginRoute
   SetupRoute: typeof SetupRoute
 }
@@ -523,6 +536,13 @@ declare module '@tanstack/react-router' {
       path: ''
       fullPath: '/'
       preLoaderRoute: typeof LayoutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/external-access': {
+      id: '/external-access'
+      path: '/external-access'
+      fullPath: '/external-access'
+      preLoaderRoute: typeof ExternalAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -887,6 +907,7 @@ const LayoutRouteWithChildren =
 
 const rootRouteChildren: RootRouteChildren = {
   LayoutRoute: LayoutRouteWithChildren,
+  ExternalAccessRoute: ExternalAccessRoute,
   LoginRoute: LoginRoute,
   SetupRoute: SetupRoute,
 }

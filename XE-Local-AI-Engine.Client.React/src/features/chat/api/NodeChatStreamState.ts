@@ -560,6 +560,9 @@ export function appendOptimisticNodeChatSend(
 export function applyNodeChatStreamEvent(
 	conversation: ChatConversationModel,
 	event: NodeChatStreamEventDto,
+	// The prior streaming state, threaded by the stream loops. Only an assistant-snapshot reads it, to keep the
+	// runtime phase alive across a snapshot (the phase is not on ChatMessageModel, so it cannot be re-derived).
+	previous?: ChatStreamingState,
 ): AppliedNodeChatStreamEvent {
 	const terminalStatus = terminalStatusForEvent(event.type);
 	const isTerminal = terminalStatus !== undefined;
@@ -681,7 +684,8 @@ export function applyNodeChatStreamEvent(
 
 	// A pre-first-token runtime-phase transition: carry the phase forward on the streaming state without
 	// touching content/status/parts, so the composer shows a "Loading model…" indicator during a local cold load.
-	// The phase clears naturally once the first content delta lands (the main path returns no runtimePhase).
+	// The phase clears naturally once the first content delta or a terminal lands (the main path returns no
+	// runtimePhase); a snapshot is the one exception and carries it forward from `previous`.
 	if (event.type === nodeChatStreamEventTypes.assistantPhase) {
 		const current = conversation.messages.find((message) => message.id === event.messageId && message.role === "assistant");
 		return {
@@ -695,6 +699,7 @@ export function applyNodeChatStreamEvent(
 				startedAt: current?.createdAt ?? isoFromUnixMilliseconds(event.occurredAtUtc),
 				isActive: true,
 				runtimePhase: event.runtimePhase ?? undefined,
+				runtimePhaseChangedAtUtc: event.runtimePhaseChangedAtUtc ?? undefined,
 				inputTokens: current?.inputTokens,
 				outputTokens: current?.outputTokens,
 				totalTokens: current?.totalTokens,
@@ -779,6 +784,11 @@ export function applyNodeChatStreamEvent(
 		messages: replaceMessage(conversation.messages, assistantMessage),
 	};
 
+	// A snapshot re-states the turn's text; it is not a content delta, so it must NOT end the cold-load
+	// affordance. Carry the phase and its server timestamp forward here only — content deltas and terminals
+	// keep clearing both, which is what retires "Loading model…" once the first token (or the end) lands.
+	const isSnapshot = event.type === nodeChatStreamEventTypes.assistantSnapshot;
+
 	return {
 		conversation: nextConversation,
 		streamingMessage: {
@@ -789,6 +799,8 @@ export function applyNodeChatStreamEvent(
 			parts,
 			startedAt: assistantMessage.createdAt,
 			isActive: !isTerminal,
+			runtimePhase: isSnapshot ? previous?.runtimePhase : undefined,
+			runtimePhaseChangedAtUtc: isSnapshot ? previous?.runtimePhaseChangedAtUtc : undefined,
 			// Queued turns are live (isActive) but not yet streaming; clear once the streaming event arrives.
 			isQueued: status === "queued",
 			error: event.error ?? undefined,

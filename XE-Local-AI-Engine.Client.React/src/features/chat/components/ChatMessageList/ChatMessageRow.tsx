@@ -93,6 +93,7 @@ export function ChatMessageRow({
 						isQueued={scopedStreamingMessage.isQueued}
 						isActive={scopedStreamingMessage.isActive}
 						runtimePhase={scopedStreamingMessage.runtimePhase}
+						runtimePhaseChangedAtUtc={scopedStreamingMessage.runtimePhaseChangedAtUtc}
 					/>
 				}
 			/>
@@ -141,6 +142,7 @@ export function ChatMessageRow({
 						isQueued={scopedStreamingMessage?.isQueued}
 						isActive={scopedStreamingMessage?.isActive ?? false}
 						runtimePhase={scopedStreamingMessage?.runtimePhase}
+						runtimePhaseChangedAtUtc={scopedStreamingMessage?.runtimePhaseChangedAtUtc}
 					/>
 				) : undefined
 			}

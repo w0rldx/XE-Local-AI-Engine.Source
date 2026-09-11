@@ -1158,7 +1158,8 @@
 			},
 			"remoteImage": {
 				"load": "Load remote image"
-			}
+			},
+			"loadingModelElapsed": "· {{elapsed}}"
 		},
 		"clientNodes": {
 			"fields": {
@@ -1609,7 +1610,8 @@
 					"toastSuccess": "llama.cpp runtime updated to {{tag}}.",
 					"toastSuccessTitle": "Runtime updated",
 					"toastError": "Could not update the llama.cpp runtime.",
-					"toastErrorTitle": "Update failed"
+					"toastErrorTitle": "Update failed",
+					"notChecked": "Not checked yet"
 				},
 				"updateBanner": {
 					"message": "A newer llama.cpp runtime ({{tag}}) is available.",
@@ -2013,6 +2015,23 @@
 						"input": "Input $/1M",
 						"output": "Output $/1M"
 					}
+				},
+				"externalAccess": {
+					"title": "External access",
+					"profileLabel": "Profile",
+					"profileDescription": "Picking a profile sets the three switches below. Changing a switch by hand sets the profile to Custom."
+				},
+				"autoCheckApplicationUpdates": {
+					"label": "Check for application updates",
+					"description": "Look for a newer version of the application at startup. You can always check by hand from the About dialog."
+				},
+				"autoCheckRuntimeUpdates": {
+					"label": "Check for llama.cpp runtime updates",
+					"description": "Look for a newer llama.cpp runtime build at startup. You can always check by hand from the runtime panel below."
+				},
+				"autoProvisionFirstRunModel": {
+					"label": "Download a starter model on first run",
+					"description": "On a fresh install, fetch a model and runtime so the engine can answer straight away. Has no effect once a model is installed."
 				}
 			},
 			"title": "Node settings",
@@ -6157,6 +6176,26 @@
 					"triggersLoad": "Could not load the trigger list, so the allowed-triggers picker is empty."
 				}
 			}
+		},
+		"externalAccess": {
+			"setupTitle": "Choose how this engine reaches the internet",
+			"setupSubtitle": "Pick one now. You can change it later in Node settings.",
+			"recommended": {
+				"title": "Recommended",
+				"body": "The engine checks for application updates and for llama.cpp runtime updates on its own, and downloads a starter model and runtime the first time it runs, so you can start chatting straight away.",
+				"choose": "Use recommended"
+			},
+			"offline": {
+				"title": "Offline / Manual",
+				"disables": "Turns off three things the engine would otherwise do by itself: application update checks, llama.cpp runtime update checks, and the first-run model and runtime download. You can still start every one of them yourself, at any time.",
+				"doesNotBlock": "This is not a network switch. It does not block the connection to the C0re platform, MCP servers you have configured, or model-catalog lookups.",
+				"choose": "Use offline / manual"
+			},
+			"custom": {
+				"title": "Custom"
+			},
+			"notChosen": "Not chosen",
+			"saveError": "Could not save your choice. Try again."
 		}
 	},
 	"components": {

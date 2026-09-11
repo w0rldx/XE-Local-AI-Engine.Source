@@ -236,6 +236,9 @@ export interface ChatStreamingState {
 	// Pre-first-token runtime phase ("preparing_runtime" | "loading_model" | "generating"), set by an assistant-phase
 	// stream event. Drives the "Loading model…" indicator during a local cold load; clears once content lands.
 	runtimePhase?: string;
+	// Server-stamped ISO-8601 UTC time of the runtime-phase transition, carried on the same assistant-phase
+	// event. Anchors the cold-load elapsed timer so a reload mid-load resumes the count instead of restarting.
+	runtimePhaseChangedAtUtc?: string;
 	error?: string;
 	failureCategory?: string;
 	inputTokens?: number;

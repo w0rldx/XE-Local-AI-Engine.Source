@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Common.Telemetry;
 using XE_Local_AI_Engine.Client.Models;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Events;
 
 /// <summary>
@@ -136,6 +137,33 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
             _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
             sequence++);
 
+        // The last runtime phase this resume stream has surfaced. ONE mechanism serves both the opening replay below
+        // and the live loop: the replay is simply its first iteration, so the two cannot drift apart. Mirrors the diff
+        // ChatInvocationStatePump.PumpAsync keeps for the same anti-spam reason — a state publish that changes only
+        // content must not re-emit the phase.
+        InvocationRuntimePhase? lastEmittedPhase = null;
+
+        // Always the ORIGINAL change time off the state, never a fresh stamp: replaying "the phase changed just now"
+        // would reset the reloading client's elapsed timer to zero, the exact confusion this field exists to remove.
+        // timestampMs is the FRAME's send time and stays on the registry's own clock; the two are unrelated.
+        ChatStreamEvent PhaseEventFor(InvocationState phaseState, InvocationRuntimePhase phase, long phaseSequence)
+        {
+            return ChatStreamEventMapper.PhaseEvent(new NodeChatMessageCorrelation(phaseState.ConversationId, phaseState.InvocationId, phaseState.InvocationId),
+                phase,
+                _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                phaseSequence,
+                phaseState.RuntimePhaseChangedAtUtc);
+        }
+
+        // Replayed AFTER the snapshot: the client's assistant-snapshot reducer arm rebuilds the streaming message, so a
+        // phase yielded before it would be discarded. Without this a reload during a cold load renders no
+        // "Loading model…" affordance and no elapsed time — the hang-shaped screen this feature exists to remove.
+        if (IsNonTerminal(snapshot.Status) && snapshot.RuntimePhase is { } resumedPhase)
+        {
+            lastEmittedPhase = resumedPhase;
+            yield return PhaseEventFor(snapshot, resumedPhase, sequence++);
+        }
+
         try
         {
             // The invocation can go terminal in the window between ResumeAsync's non-terminal validation and
@@ -182,6 +210,15 @@ public sealed class InvocationResumeRegistry : IInvocationResumeRegistry
                 if (item.State is not { } state)
                 {
                     continue;
+                }
+
+                // Before the delta block, so a phase change that arrives together with the first content still
+                // precedes that content. A reconnect while queued would otherwise show no phase at all, and a
+                // reconnect during a load would never see the Generating transition.
+                if (IsNonTerminal(state.Status) && state.RuntimePhase is { } livePhase && livePhase != lastEmittedPhase)
+                {
+                    lastEmittedPhase = livePhase;
+                    yield return PhaseEventFor(state, livePhase, sequence++);
                 }
 
                 var hasContentDelta = state.StreamedContent.Length > lastContent.Length;

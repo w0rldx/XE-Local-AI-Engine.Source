@@ -148,7 +148,8 @@ public sealed class NodeAdminMcpToolsTests
             "b7002",
             true,
             false,
-            2));
+            2,
+            CheckedAtUtc: null));
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus(3,
             "downloading",
             "cuda",
@@ -572,7 +573,8 @@ public sealed class NodeAdminMcpToolsTests
             UpstreamLatestTag: null,
             UpdateAvailable: false,
             IsOffline: false,
-            RunningProcessCount: 0));
+            RunningProcessCount: 0,
+            CheckedAtUtc: null));
         harness.Runtime.StartAcquisitionAsync(null, Arg.Any<CancellationToken>()).Returns(new LlamaCppRuntimeAcquisitionStartResult(true, "cpu", LlamaCppRuntimeAdministrationFailure.None, null));
         harness.Runtime.GetAcquisitionStatus().Returns(new LlamaCppRuntimeAcquisitionStatus(1,
             "idle",

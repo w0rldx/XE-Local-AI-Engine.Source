@@ -31,14 +31,16 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
     private readonly ILogger<LlamaCppUpdateCheckService> _logger;
     private readonly INodeRuntimeSettings _nodeRuntimeSettings;
     private readonly TimeSpan _startupDelay;
+    private readonly TimeProvider _timeProvider;
     private readonly ILlamaCppUpdateState _updateState;
 
     public LlamaCppUpdateCheckService(INodeRuntimeSettings nodeRuntimeSettings,
         ILlamaCppReleaseCatalog catalog,
         IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppUpdateState updateState,
+        TimeProvider timeProvider,
         ILogger<LlamaCppUpdateCheckService> logger)
-        : this(nodeRuntimeSettings, catalog, installedRuntimeStore, updateState, logger, DefaultStartupDelay)
+        : this(nodeRuntimeSettings, catalog, installedRuntimeStore, updateState, timeProvider, logger, DefaultStartupDelay)
     {
     }
 
@@ -47,6 +49,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
         ILlamaCppReleaseCatalog catalog,
         IInstalledRuntimeStore installedRuntimeStore,
         ILlamaCppUpdateState updateState,
+        TimeProvider timeProvider,
         ILogger<LlamaCppUpdateCheckService> logger,
         TimeSpan startupDelay)
     {
@@ -54,6 +57,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
         _catalog = catalog ?? throw new ArgumentNullException(nameof(catalog));
         _installedRuntimeStore = installedRuntimeStore ?? throw new ArgumentNullException(nameof(installedRuntimeStore));
         _updateState = updateState ?? throw new ArgumentNullException(nameof(updateState));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _startupDelay = startupDelay;
     }
@@ -65,6 +69,15 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
             if (_startupDelay > TimeSpan.Zero)
             {
                 await Task.Delay(_startupDelay, stoppingToken).ConfigureAwait(false);
+            }
+
+            // The gate goes AFTER the startup delay so a node parked on an undecided profile is not also holding the
+            // delay open, and BEFORE the one-shot check so CheckOnceAsync stays the pure check.
+            await ExternalAccessGate.WaitUntilDecidedAsync(_nodeRuntimeSettings, _timeProvider, stoppingToken).ConfigureAwait(false);
+            if (!await _nodeRuntimeSettings.GetAutoCheckRuntimeUpdatesAsync(stoppingToken).ConfigureAwait(false))
+            {
+                _logger.LogDebug("The automatic llama.cpp runtime update check is disabled by the node's external-access settings.");
+                return;
             }
 
             await CheckOnceAsync(stoppingToken).ConfigureAwait(false);

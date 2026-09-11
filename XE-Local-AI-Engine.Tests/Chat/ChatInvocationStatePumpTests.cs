@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Tests.Chat;
 
 using System.Diagnostics.CodeAnalysis;
+using System.Globalization;
 using System.Threading.Channels;
+using XE_Local_AI_Engine.Client.Models.Enums;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.Events;
@@ -139,6 +141,72 @@ public sealed class ChatInvocationStatePumpTests
         AssertEx.Equal(expected: 5L, deltas[1].ReasoningOffset);
     }
 
+    [Test]
+    public async Task PumpAsync_EmitsThePhaseChangedTimestampOnThePhaseEvent()
+    {
+        // A real cold load, stamped server-side well before this stream: the wire value must be that stamp, formatted
+        // ISO-8601 invariant, not anything derived from the pump's own clock.
+        var changedAt = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var states = new List<InvocationState>
+        {
+            NewState(correlation, string.Empty, string.Empty, InvocationStatus.Running, InvocationRuntimePhase.LoadingModel, changedAt),
+            NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
+        };
+
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+
+        var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
+        AssertEx.Equal(expected: 1, phases.Count);
+        AssertEx.Equal("loading_model", phases[0].RuntimePhase);
+        AssertEx.Equal(changedAt.ToString("O", CultureInfo.InvariantCulture), phases[0].RuntimePhaseChangedAtUtc);
+    }
+
+    [Test]
+    public async Task PumpAsync_WhenOnlyTheTimestampDiffers_EmitsNoSecondPhaseEvent()
+    {
+        // The emit diff is on the PHASE alone. Widening it to include the timestamp would spam the client with phase
+        // events, so this pins the guard: two snapshots in the same phase carrying different stamps are one event.
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+        var firstStamp = new DateTimeOffset(2026, 9, 10, 8, 30, 15, TimeSpan.Zero);
+
+        var states = new List<InvocationState>
+        {
+            NewState(correlation, string.Empty, string.Empty, InvocationStatus.Running, InvocationRuntimePhase.LoadingModel, firstStamp),
+            NewState(correlation, string.Empty, string.Empty, InvocationStatus.Running, InvocationRuntimePhase.LoadingModel, firstStamp.AddSeconds(30)),
+            NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
+        };
+
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+
+        var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
+        AssertEx.Equal(expected: 1, phases.Count);
+        // And the one event that was emitted still carries the ORIGINAL stamp, not the later one.
+        AssertEx.Equal(firstStamp.ToString("O", CultureInfo.InvariantCulture), phases[0].RuntimePhaseChangedAtUtc);
+    }
+
+    [Test]
+    public async Task PumpAsync_WhenTheStateCarriesNoPhaseTimestamp_EmitsThePhaseEventWithANullTimestamp()
+    {
+        // The cloud/Ollama and legacy shape: a phase with no stamp behind it. The field is optional end to end — the
+        // event still goes out, and the client falls back to first-observed time.
+        var correlation = new NodeChatMessageCorrelation(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid());
+
+        var states = new List<InvocationState>
+        {
+            NewState(correlation, string.Empty, string.Empty, InvocationStatus.Running, InvocationRuntimePhase.PreparingRuntime),
+            NewState(correlation, "Hi", string.Empty, InvocationStatus.Completed)
+        };
+
+        var events = await RunAsync(new RecordingInvocationPump(), new SteppingClock(DateTimeOffset.UnixEpoch), correlation, states, TimeSpan.FromMilliseconds(50)).ConfigureAwait(false);
+
+        var phases = events.Where(streamEvent => streamEvent.Type == ChatStreamEventTypes.AssistantPhase).ToList();
+        AssertEx.Equal(expected: 1, phases.Count);
+        AssertEx.Equal("preparing_runtime", phases[0].RuntimePhase);
+        AssertEx.Null(phases[0].RuntimePhaseChangedAtUtc);
+    }
+
     private static async Task<(List<ChatStreamEvent> Events, List<string> Flushes)> DriveAsync(TimeSpan step,
         IReadOnlyList<string> contentSnapshots,
         string terminalContent)
@@ -179,7 +247,9 @@ public sealed class ChatInvocationStatePumpTests
     private static InvocationState NewState(NodeChatMessageCorrelation correlation,
         string content,
         string reasoning,
-        InvocationStatus status)
+        InvocationStatus status,
+        InvocationRuntimePhase? runtimePhase = null,
+        DateTimeOffset? runtimePhaseChangedAtUtc = null)
     {
         return new InvocationState
         {
@@ -187,7 +257,9 @@ public sealed class ChatInvocationStatePumpTests
             ConversationId = correlation.ConversationId,
             Status = status,
             StreamedContent = content,
-            StreamedThinkingContent = reasoning
+            StreamedThinkingContent = reasoning,
+            RuntimePhase = runtimePhase,
+            RuntimePhaseChangedAtUtc = runtimePhaseChangedAtUtc
         };
     }
 

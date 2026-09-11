@@ -220,4 +220,12 @@ public sealed record ChatStreamEvent(
     // AttachmentsWithheld / KnowledgeWithheld the effective model, OrchestrationDegraded the degradation reason.
     // Sanitized at the source like every other notice field. Trailing optional so every existing event type's wire
     // shape is unchanged.
-    string? NoticeDetail = null);
+    string? NoticeDetail = null,
+    // When the runtime phase last CHANGED (AssistantPhase events only), as an ISO-8601 UTC string ("O", invariant
+    // culture), stamped server-side on InvocationState. The browser renders elapsed cold-load time from THIS rather
+    // than from when it first saw the phase, so a page reload mid-load keeps counting instead of restarting at zero.
+    // Null when the state carries no phase timestamp (cloud/Ollama turns emit no phase at all, and legacy state
+    // predates the field). Unrelated to OccurredAtUtc, which is the frame's send time off a different clock.
+    // Hand-maintained SSE contract: any change here also edits src/features/chat/models/NodeChatStreamTypes.ts.
+    // Trailing optional so every existing event type's wire shape is unchanged.
+    string? RuntimePhaseChangedAtUtc = null);

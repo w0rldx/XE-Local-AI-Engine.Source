@@ -5301,6 +5301,13 @@ public sealed class NodeChatStreamServiceTests
         {
             if (CurrentInvocation is not null)
             {
+                // Stamped on a real transition only, exactly as the real dispatcher does, so a stream driven through
+                // this double carries the same phase timestamp the wire contract promises.
+                if (CurrentInvocation.RuntimePhase != phase)
+                {
+                    CurrentInvocation.RuntimePhaseChangedAtUtc = DateTimeOffset.UtcNow;
+                }
+
                 CurrentInvocation.RuntimePhase = phase;
             }
 

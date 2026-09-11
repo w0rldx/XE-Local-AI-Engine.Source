@@ -38,6 +38,15 @@ public sealed class StubNodeRuntimeSettings
     private string? _rerankerModelName;
     private bool _customToolsEnabled = StoredNodeSettings.DefaultCustomToolsEnabled;
     private Func<CancellationToken, Task<bool>> _toolRelevanceRead = static _ => Task.FromResult(StoredNodeSettings.DefaultToolRelevanceEnabled);
+    private bool _autoCheckApplicationUpdates = StoredNodeSettings.DefaultAutoCheckApplicationUpdates;
+    private bool _autoCheckRuntimeUpdates = StoredNodeSettings.DefaultAutoCheckRuntimeUpdates;
+    private bool _autoProvisionFirstRunModel = StoredNodeSettings.DefaultAutoProvisionFirstRunModel;
+
+    // A READ, not a value: the wait-until-decided gate re-reads the profile on every poll tick, so a test that flips the
+    // decision mid-wait needs the substitute to answer differently on the second call. Same shape as the tool-relevance
+    // read above, and for the same reason.
+    private Func<CancellationToken, Task<string?>> _externalAccessProfileRead =
+        static _ => Task.FromResult<string?>(StoredNodeSettings.ExternalAccessProfileRecommended);
 
     public static StubNodeRuntimeSettings Create()
     {
@@ -208,6 +217,39 @@ public sealed class StubNodeRuntimeSettings
         return this;
     }
 
+    /// <summary>Pins a single profile value — the common case for a test that is not exercising the wait.</summary>
+    public StubNodeRuntimeSettings WithExternalAccessProfile(string? externalAccessProfile)
+    {
+        _externalAccessProfileRead = _ => Task.FromResult(externalAccessProfile);
+        return this;
+    }
+
+    /// <summary>Answers the profile read from <paramref name="read" />, so a test can decide it part-way through a wait.</summary>
+    public StubNodeRuntimeSettings WithExternalAccessProfileRead(Func<CancellationToken, Task<string?>> read)
+    {
+        ArgumentNullException.ThrowIfNull(read);
+        _externalAccessProfileRead = read;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAutoCheckApplicationUpdates(bool autoCheckApplicationUpdates)
+    {
+        _autoCheckApplicationUpdates = autoCheckApplicationUpdates;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAutoCheckRuntimeUpdates(bool autoCheckRuntimeUpdates)
+    {
+        _autoCheckRuntimeUpdates = autoCheckRuntimeUpdates;
+        return this;
+    }
+
+    public StubNodeRuntimeSettings WithAutoProvisionFirstRunModel(bool autoProvisionFirstRunModel)
+    {
+        _autoProvisionFirstRunModel = autoProvisionFirstRunModel;
+        return this;
+    }
+
     public INodeRuntimeSettings Build()
     {
         var settings = Substitute.For<INodeRuntimeSettings>();
@@ -240,6 +282,11 @@ public sealed class StubNodeRuntimeSettings
         settings.GetRerankerModelNameAsync(Arg.Any<CancellationToken>()).Returns(_rerankerModelName);
         settings.GetCustomToolsEnabledAsync(Arg.Any<CancellationToken>()).Returns(_customToolsEnabled);
         settings.GetToolRelevanceEnabledAsync(Arg.Any<CancellationToken>()).Returns(call => _toolRelevanceRead(call.Arg<CancellationToken>()));
+        settings.GetExternalAccessProfileAsync(Arg.Any<CancellationToken>())
+                .Returns(call => _externalAccessProfileRead(call.Arg<CancellationToken>()));
+        settings.GetAutoCheckApplicationUpdatesAsync(Arg.Any<CancellationToken>()).Returns(_autoCheckApplicationUpdates);
+        settings.GetAutoCheckRuntimeUpdatesAsync(Arg.Any<CancellationToken>()).Returns(_autoCheckRuntimeUpdates);
+        settings.GetAutoProvisionFirstRunModelAsync(Arg.Any<CancellationToken>()).Returns(_autoProvisionFirstRunModel);
 
         // Synchronous twins (composition/ctor path) must mirror the async values so consumers repointed onto the sync
         // getters (e.g. InvocationRunner, the DI factory seeds) observe the same configured knobs.

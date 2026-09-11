@@ -606,6 +606,12 @@ public static class ConfigureServices
         // Re-derives and re-encrypts conversation titles that were NULLed by the EncryptConversationTitle migration
         // (migrations cannot access the node key; this service runs once per startup and is idempotent).
         builder.Services.AddHostedService<NodeChatTitleEncryptionBackfillService>();
+        // Upgrade backfill for the external-access profile: a node that already completed setup but predates the profile
+        // is stamped "recommended" (all three automatic checks on) so it keeps today's behaviour instead of parking on an
+        // undecided profile. Idempotent, node-local, and NOT desktop-gated (an upgrading node exists on every launch
+        // mode). It does its work in StartAsync rather than ExecuteAsync so the decision is durable before Kestrel
+        // accepts a request — the SPA must never read a null profile from a node that has been running for months.
+        builder.Services.AddHostedService<ExternalAccessProfileBackfillService>();
         // FRR-2 upgrade backfill: maps any Ollama model pulled on an EARLIER build (which never wrote a provider-map row)
         // to the ollama provider so the flipped llamacpp default does not silently re-route it. Idempotent + offline-
         // tolerant; not desktop-gated (a pre-existing Ollama install can exist on any launch mode).
