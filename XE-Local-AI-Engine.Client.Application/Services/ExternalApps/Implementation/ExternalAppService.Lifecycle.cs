@@ -158,6 +158,18 @@ internal sealed partial class ExternalAppService
             var admitted = AdmittedStatusFor(kind, row.Status)
                            ?? throw new ExternalAppInvalidTransitionException($"{kind} is not available while the application is {row.Status}.");
 
+            // After the transition table, so a Start of something already Running still reads as the invalid
+            // transition it is; before the compare-and-swap, so the row never enters Starting for a plan this node
+            // cannot build. A bridge that closed after the install — a configuration change, a port collision at
+            // boot — would otherwise fail inside the pipeline on the unresolvable built-in and settle the row Failed,
+            // where install and update refuse the same state with the same 400. Stop, Reset, Uninstall, Cancel and
+            // Configure stay ungated on purpose: an operator must be able to shut down and clear an application on a
+            // node that has lost its bridge.
+            if (kind is ExternalAppOperationKind.Start or ExternalAppOperationKind.Restart && BridgeUnavailableFor(row))
+            {
+                throw Refuse(ExternalAppBlockedReason.BridgeUnavailable, BridgeUnavailableDetail);
+            }
+
             var cursor = new InstanceCursor(instanceId, row.Version, row.Status);
             if (!await ApplyAsync(services.Store, cursor, Transition(cursor, admitted, RequestEventFor(kind, row.Status)), cancellationToken)
                      .ConfigureAwait(false))

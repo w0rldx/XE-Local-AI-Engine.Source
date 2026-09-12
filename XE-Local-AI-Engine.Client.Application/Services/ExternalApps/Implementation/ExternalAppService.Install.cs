@@ -17,6 +17,16 @@ internal sealed partial class ExternalAppService
     private const string GpuRequired = "required";
     private const int MaxDisplayNameLength = 128;
 
+    /// <summary>
+    ///     Admission's own wording for a bridge this node did not open, naming the same setting the planner's refusal
+    ///     names — the planner can add which service and which token failed, which admission has not looked at and must
+    ///     not invent. One copy, because install, update and the Start/Restart admission hand it to the same operator:
+    ///     a second copy would drift from this one without a gate noticing.
+    /// </summary>
+    private const string BridgeUnavailableDetail =
+        "This application reads the node's container bridge, and this node did not open one. Turn it on with "
+        + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.";
+
     public async Task<InstallPreview> PreviewInstallAsync(string applicationId, CancellationToken cancellationToken = default)
     {
         EnsureEnabled();
@@ -350,16 +360,20 @@ internal sealed partial class ExternalAppService
             // The resolution's own prose, never a second description of the same state written here.
             ExternalAppBlockedReason.RuntimeUnavailable => admission.Runtime.Message,
             ExternalAppBlockedReason.InsufficientMemory or ExternalAppBlockedReason.InsufficientDisk => admission.Resources.Message,
-            // Admission's own wording, naming the same setting the planner's refusal names — the planner can add
-            // which service and which token failed, which admission has not looked at and must not invent.
-            ExternalAppBlockedReason.BridgeUnavailable =>
-                "This application reads the node's container bridge, and this node did not open one. Turn it on with "
-                + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.",
+            ExternalAppBlockedReason.BridgeUnavailable => BridgeUnavailableDetail,
             _ => "This application cannot be installed on this node right now."
         };
 
-        // The reason NAME leads the message: the 400 body carries prose only, so the operator reads the category
-        // there rather than from a typed member no layer surfaces.
+        return Refuse(reason, detail);
+    }
+
+    /// <summary>
+    ///     The one composition of a refusal, shared with the lifecycle admission, which holds a detail but no install
+    ///     admission to report from. The reason NAME leads the message: the 400 body carries prose only, so the
+    ///     operator reads the category there rather than from a typed member no layer surfaces.
+    /// </summary>
+    private static ExternalAppValidationException Refuse(ExternalAppBlockedReason reason, string detail)
+    {
         return new ExternalAppValidationException($"{reason}: {detail}");
     }
 

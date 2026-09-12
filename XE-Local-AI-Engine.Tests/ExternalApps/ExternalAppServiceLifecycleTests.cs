@@ -477,6 +477,138 @@ public sealed class ExternalAppServiceLifecycleTests
         AssertEx.Contains(row.VariablesJson, "correct horse battery staple");
     }
 
+    /// <summary>
+    ///     The bridge a node opened at install can be gone by the next start — a configuration change, a port
+    ///     collision at boot. Admission asks the installed snapshot the same predicate install and update ask the
+    ///     catalog entry, so the refusal arrives before the row leaves Stopped instead of after the pipeline has
+    ///     failed on the unresolvable built-in and settled the instance Failed.
+    /// </summary>
+    [Test]
+    public async Task Start_OnANodeWithNoBridge_OfAnInstanceThatNeedsOne_IsRefusedBeforeTheRowMoves()
+    {
+        var manifest = BridgeNeedingManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        var eventsBefore = await harness.ReadEventsAsync(row.Id).ConfigureAwait(false);
+
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
+
+        AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
+        AssertEx.Contains(refused.Message, "container bridge", message: "The operator has to read which feature is missing.");
+
+        var after = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        AssertEx.Equal(ExternalAppInstanceStatus.Stopped, after.Status, "The row never enters Starting: the refusal is ahead of the compare-and-swap.");
+        AssertEx.Equal(row.Version, after.Version, "Nothing was written, so nothing bumped the version.");
+
+        var eventsAfter = await harness.ReadEventsAsync(row.Id).ConfigureAwait(false);
+        AssertEx.Equal(eventsBefore.Count, eventsAfter.Count, "A refused admission records no StartRequested event.");
+
+        AssertEx.Empty(harness.Runtime.PulledImages, "The pipeline never ran, so no image was pulled.");
+        AssertEx.Empty(harness.Runtime.CreatedContainerIds, "Nor was any container created.");
+        AssertEx.False(harness.Runner.IsRunning(row.Id), "No operation was handed to the runner.");
+    }
+
+    [Test]
+    public async Task Restart_OnANodeWithNoBridge_OfAnInstanceThatNeedsOne_IsRefusedAndStopsNothing()
+    {
+        var manifest = BridgeNeedingManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
+
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.RestartAsync(row.Id, row.Version)).ConfigureAwait(false);
+
+        AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
+
+        var after = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        AssertEx.Equal(ExternalAppInstanceStatus.Running, after.Status, "A restart this node cannot finish must not begin by stopping what is working.");
+        AssertEx.Equal(row.Version, after.Version, "Nothing was written, so nothing bumped the version.");
+        AssertEx.Empty(harness.Runtime.StoppedGracePeriods, "The refusal is at admission, before the runtime is asked anything.");
+        AssertEx.Empty(harness.Runtime.RemovedContainerIds, "Nor was a container removed.");
+    }
+
+    /// <summary>
+    ///     The gate is keyed on the MANIFEST, not on the node: a node without a bridge runs everything that never
+    ///     reads one, which is most of the catalog.
+    /// </summary>
+    [Test]
+    public async Task Start_OnANodeWithNoBridge_OfAnInstanceThatNeedsNone_IsAdmitted()
+    {
+        await using var harness = await StoppedHarnessAsync(SingleServiceManifest(), withBridge: false).ConfigureAwait(false);
+        var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+
+        _ = await harness.Service.StartAsync(stopped.Id, stopped.Version).ConfigureAwait(false);
+        var row = await harness.SettleAsync(stopped.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+
+        AssertEx.Equal(ExternalAppDesiredState.Running, row.DesiredState);
+        AssertEx.NotEmpty(harness.Runtime.CreatedContainerIds, "The pipeline ran: the manifest reads no bridge built-in.");
+    }
+
+    /// <summary>
+    ///     Only Start and Restart are gated. An operator whose node lost its bridge must still be able to shut the
+    ///     application down — a stop that refused would leave the containers up with no way to reach them.
+    /// </summary>
+    [Test]
+    public async Task Stop_OnANodeWithNoBridge_OfAnInstanceThatNeedsOne_IsStillAdmitted()
+    {
+        var manifest = BridgeNeedingManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
+
+        _ = await harness.Service.StopAsync(row.Id, row.Version).ConfigureAwait(false);
+        var settled = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+
+        AssertEx.Equal(ExternalAppDesiredState.Stopped, settled.DesiredState);
+    }
+
+    /// <summary>
+    ///     One wording for one state. The install refusal and the Start refusal are read by the same operator out of
+    ///     the same 400 body, and nothing but this assertion stops the two copies from drifting apart.
+    /// </summary>
+    [Test]
+    public async Task Start_OnANodeWithNoBridge_RefusesWithExactlyTheMessageInstallRefusesWith()
+    {
+        var manifest = BridgeNeedingManifest();
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+
+        // Install first and on an empty store: an existing row would be refused as already installed, which is a
+        // different reason and would prove nothing about this one.
+        var installRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.InstallAsync(new InstallCommand(manifest.Id,
+                DisplayName: null,
+                manifest.ManifestVersion,
+                manifest.ManifestSha256,
+                new Dictionary<string, string>(StringComparer.Ordinal),
+                AcceptPermissions: true))).ConfigureAwait(false);
+
+        var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+        var startRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
+
+        AssertEx.Equal(installRefusal.Message, startRefusal.Message);
+    }
+
+    /// <summary>
+    ///     A snapshot admission cannot read is not a bridge problem, and the guard must not turn it into one — nor
+    ///     into a 500. The command is admitted and the pipeline records the same failure on the row it recorded
+    ///     before the guard existed, which is the state the detail page already knows how to render.
+    /// </summary>
+    [Test]
+    public async Task Start_OnANodeWithNoBridge_OfARowWhoseSnapshotCannotBeRead_IsAdmittedAndSettlesFailed()
+    {
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest(), withBridge: false).ConfigureAwait(false);
+        var corruptId = await harness.CreateRowWithManifestJsonAsync("corrupt-app", "Corrupt App", "{").ConfigureAwait(false);
+        var row = await harness.ForceStatusAsync(corruptId, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
+
+        var admitted = await harness.Service.StartAsync(row.Id, row.Version).ConfigureAwait(false);
+        AssertEx.Equal(ExternalAppInstanceStatus.Starting, admitted.Status, "Admission has no bridge verdict for a manifest it cannot read, so it admits.");
+
+        var settled = await harness.SettleAsync(row.Id, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
+        AssertEx.False(AssertEx.NotNull(settled.FailureSummary).Contains("container bridge", StringComparison.Ordinal),
+            "The recorded failure is the unreadable snapshot, never a bridge refusal the guard could not have grounded.");
+    }
+
     private static Task Invoke(ExternalAppServiceHarness harness, string operation, Guid instanceId, long expectedVersion)
     {
         return operation switch
@@ -495,6 +627,16 @@ public sealed class ExternalAppServiceLifecycleTests
         return ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
     }
 
+    /// <summary>The same single service, reading a bridge built-in that only a node with an open bridge resolves.</summary>
+    private static ApplicationManifest BridgeNeedingManifest()
+    {
+        return ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web",
+                environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
+        ]);
+    }
+
     private static ApplicationManifest TwoServiceManifest()
     {
         return ExternalAppTestManifests.Manifest(
@@ -507,9 +649,10 @@ public sealed class ExternalAppServiceLifecycleTests
     }
 
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync(ApplicationManifest manifest,
-        IReadOnlyDictionary<string, string>? variables = null)
+        IReadOnlyDictionary<string, string>? variables = null,
+        bool withBridge = true)
     {
-        var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge).ConfigureAwait(false);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
                                         DisplayName: null,
                                         manifest.ManifestVersion,
@@ -524,9 +667,10 @@ public sealed class ExternalAppServiceLifecycleTests
     }
 
     private static async Task<ExternalAppServiceHarness> StoppedHarnessAsync(ApplicationManifest manifest,
-        IReadOnlyDictionary<string, string>? variables = null)
+        IReadOnlyDictionary<string, string>? variables = null,
+        bool withBridge = true)
     {
-        var harness = await RunningHarnessAsync(manifest, variables).ConfigureAwait(false);
+        var harness = await RunningHarnessAsync(manifest, variables, withBridge).ConfigureAwait(false);
         var running = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
         _ = await harness.Service.StopAsync(running.Id, running.Version).ConfigureAwait(false);

@@ -198,7 +198,12 @@ rather than discovered in the pipeline: `DeploymentPlanner.RequiresBridge` reads
 the same token regex `Plan` does, and `ExternalAppService.BridgeUnavailableFor` pairs it with whether this node
 opened a bridge. Both previews then report `BridgeUnavailable` and both commands refuse with it — so the catalog
 page does not offer an install that would fail after the row exists, and the update dialog does not offer an update
-that would fail after a working version had been stopped.
+that would fail after a working version had been stopped. `AdmitAsync` asks the same predicate for **Start** and
+**Restart**, against the INSTALLED manifest snapshot rather than the catalog entry, after the transition table and
+before the row's compare-and-swap: a bridge that closed after the install — a configuration change, a port
+collision at boot — is refused with the same 400 wording instead of failing inside the pipeline and settling the
+instance `Failed`. Stop, Reset, Uninstall, Cancel and Configure are deliberately not gated, so an operator whose
+node lost its bridge can still shut the application down and clear it.
 
 **(b) Containers may run as in-container root.** The engine passes no `--user`, deliberately: the curated images
 start as root and drop privileges through their own entrypoints, and forcing a uid breaks that and breaks a port-80

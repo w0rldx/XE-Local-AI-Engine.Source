@@ -126,6 +126,31 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>
+    ///     The same question for a stored row. The bridge check comes first so a node that opened one never pays
+    ///     the snapshot deserialize — nor inherits its failure mode — for an answer that is already "no".
+    /// </summary>
+    private bool BridgeUnavailableFor(ExternalAppInstanceSnapshot row)
+    {
+        if (_bridgeEndpoints.Current is not null)
+        {
+            return false;
+        }
+
+        try
+        {
+            return BridgeUnavailableFor(DeserializeManifest(row.ManifestSnapshotJson));
+        }
+        catch (Exception exception) when (exception is JsonException or ExternalAppManifestException)
+        {
+            // Admission cannot say whether a manifest it cannot read needs the bridge, so it does not say so: the
+            // command is admitted and the pipeline fails on the same unreadable snapshot exactly as it did before
+            // this check existed — a failure recorded on the row, not a 500 from the command, and not a bridge
+            // refusal invented for a row whose real problem is elsewhere.
+            return false;
+        }
+    }
+
+    /// <summary>
     ///     The grant for a token already in hand, so the Start path that rebuilds from a row it has just read does
     ///     not read that row a second time.
     /// </summary>
