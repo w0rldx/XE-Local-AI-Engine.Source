@@ -145,7 +145,7 @@ Opt-in live runners (nothing invokes them; ask before running, run before a test
 - `scripts/run-gpu-smoke-local.sh` — the only gate proving the GPU did the work; exit 5 = infra abort, 1 = product failed.
 - `scripts/run-tool-grammar-smoke-local.sh` — after changing any tool schema or the llama.cpp pin; its failing
   negative control is the evidence, a run without it proved nothing.
-- `scripts/run-docker-smoke-local.sh` — the three real-daemon container suites, which run ONLY under
+- `scripts/run-docker-smoke-local.sh` — the four real-daemon container suites, which run ONLY under
   `XE_REQUIRE_DOCKER_TESTS=1` and skip everywhere else. CI proves the Engine API wire shape without a daemon
   against `Testing.FakeDocker`; this proves what only a daemon can. Exit 5 = no usable daemon, 1 = product failed.
 

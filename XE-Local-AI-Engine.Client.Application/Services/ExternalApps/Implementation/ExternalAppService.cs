@@ -9,6 +9,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
@@ -57,6 +58,7 @@ internal sealed partial class ExternalAppService
     private readonly ExternalAppResourceGate _resourceGate;
     private readonly ExternalAppOperationRunner _runner;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ContainerBridgeEndpointSource _bridgeEndpoints;
     private readonly TimeProvider _timeProvider;
 
     public ExternalAppService(IServiceScopeFactory scopeFactory,
@@ -67,6 +69,7 @@ internal sealed partial class ExternalAppService
         IExternalAppEventPublisher publisher,
         INodeDataDirectory dataDirectory,
         IOptions<ExternalAppsOptions> options,
+        ContainerBridgeEndpointSource bridgeEndpoints,
         TimeProvider timeProvider,
         ILogger<ExternalAppService> logger)
     {
@@ -80,6 +83,7 @@ internal sealed partial class ExternalAppService
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _options = options.Value;
+        _bridgeEndpoints = bridgeEndpoints ?? throw new ArgumentNullException(nameof(bridgeEndpoints));
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
@@ -87,6 +91,38 @@ internal sealed partial class ExternalAppService
         // Two installations pointed at one daemon must never remove each other's containers, and the owner label
         // alone cannot tell them apart because its value is a constant.
         _installId = DockerSandboxRuntimeProvider.BuildInstallId(dataDirectory.Root);
+    }
+
+    /// <summary>
+    ///     The bridge grant for one instance, or <see langword="null" /> when this node has no open bridge or the
+    ///     instance carries no token (one installed before the bridge existed). Both halves come from different
+    ///     places — the endpoint from the composition root, the token from the encrypted row — and a grant is only
+    ///     ever built from both.
+    /// </summary>
+    private async Task<ContainerBridgeGrant?> ResolveBridgeGrantAsync(Guid instanceId, CancellationToken cancellationToken)
+    {
+        if (_bridgeEndpoints.Current is null)
+        {
+            // No bridge on this node, so nothing to read the row for.
+            return null;
+        }
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
+        var row = await store.GetAsync(instanceId, cancellationToken).ConfigureAwait(false);
+
+        return BridgeGrantFor(row?.BridgeToken);
+    }
+
+    /// <summary>
+    ///     The grant for a token already in hand, so the Start path that rebuilds from a row it has just read does
+    ///     not read that row a second time.
+    /// </summary>
+    private ContainerBridgeGrant? BridgeGrantFor(string? bridgeToken)
+    {
+        return _bridgeEndpoints.Current is { } endpoint && bridgeToken is { Length: > 0 } token
+            ? new ContainerBridgeGrant(endpoint.ContainerFacingEndpoint, token)
+            : null;
     }
 
     /// <summary>

@@ -459,6 +459,66 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Equal(expected: 6_000L, snapshot.UpdatedAtUtc);
     }
 
+    /// <summary>
+    ///     The backfill for a row installed before the bridge existed. It rides on this write rather than on a
+    ///     migration because a migration that minted credentials would be a migration writing secrets, and because
+    ///     the token and the containers that were created with it have to become true together: the commit is the
+    ///     update's recovery boundary, and a token outside it could survive a rebuild that did not.
+    /// </summary>
+    [Test]
+    public async Task CommitUpdateAsync_WithABridgeToken_SealsItOntoARowThatHadNone()
+    {
+        using var fixture = new ExternalAppTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = new ExternalAppInstanceStore(context);
+        var command = ExternalAppTestFixture.Create(withBridgeToken: false);
+        var created = await store.CreateAsync(command).ConfigureAwait(false);
+        AssertEx.Null(AssertEx.NotNull(await store.GetAsync(command.Id).ConfigureAwait(false)).BridgeToken,
+            "The row under test is the pre-bridge one, so it must start without a token.");
+
+        var minted = ExternalAppTestFixture.BridgeTokenFor(command.Id);
+        var result = await store.CommitUpdateAsync(command.Id,
+                                    created.Version,
+                                    """{"applicationId":"odysseus","manifestVersion":2}""",
+                                    ExternalAppTestFixture.SeedVariablesJson,
+                                    """{"web":{"7000":41999}}""",
+                                    manifestVersion: 2,
+                                    updatedAtUtc: 6_000,
+                                    minted)
+                                .ConfigureAwait(false);
+
+        AssertEx.True(result.Applied);
+        AssertEx.Equal(minted, AssertEx.NotNull(await store.GetAsync(command.Id).ConfigureAwait(false)).BridgeToken,
+            "The backfilled token has to read back through the decryption interceptor, or the next Start injects nothing.");
+    }
+
+    /// <summary>
+    ///     Every ordinary update passes no token, and must not blank the one the row already has: the replacement
+    ///     containers were created with it, and a row that lost it would hand the next Start a grant they do not hold.
+    /// </summary>
+    [Test]
+    public async Task CommitUpdateAsync_WithoutABridgeToken_LeavesTheRowsOwnTokenAlone()
+    {
+        using var fixture = new ExternalAppTestFixture();
+        await using var context = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        var store = new ExternalAppInstanceStore(context);
+        var command = ExternalAppTestFixture.Create();
+        var created = await store.CreateAsync(command).ConfigureAwait(false);
+
+        var result = await store.CommitUpdateAsync(command.Id,
+                                    created.Version,
+                                    """{"applicationId":"odysseus","manifestVersion":2}""",
+                                    ExternalAppTestFixture.SeedVariablesJson,
+                                    """{"web":{"7000":41999}}""",
+                                    manifestVersion: 2,
+                                    updatedAtUtc: 6_000)
+                                .ConfigureAwait(false);
+
+        AssertEx.True(result.Applied);
+        AssertEx.Equal(ExternalAppTestFixture.BridgeTokenFor(command.Id),
+            AssertEx.NotNull(await store.GetAsync(command.Id).ConfigureAwait(false)).BridgeToken);
+    }
+
     [Test]
     public async Task CommitUpdateAsync_UnderAStaleVersion_WritesNothing()
     {

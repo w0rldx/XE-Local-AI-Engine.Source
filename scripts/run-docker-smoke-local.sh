@@ -2,7 +2,7 @@
 # run-docker-smoke-local.sh — OPT-IN real-daemon smoke for the container runtime and the sandbox.
 #
 # Why this exists
-#   The three real-daemon suites used to run automatically whenever a Docker socket happened to be
+#   The real-daemon suites used to run automatically whenever a Docker socket happened to be
 #   present, and CI forced them on with XE_REQUIRE_DOCKER_TESTS=1 plus three `docker pull` steps.
 #   That made Docker Hub reachability a hard dependency of every pull request: a registry blip or a
 #   rate limit turned a perfectly good branch red for reasons that had nothing to do with it.
@@ -18,7 +18,7 @@
 #   runtime, the sandbox provider or the External Apps install path.
 #
 # THE SKIP IS THE FAILURE MODE — exit 0 alone proves nothing
-#   All three suites skip themselves when no daemon is usable, and TUnit reports a skip as success.
+#   All four suites skip themselves when no daemon is usable, and TUnit reports a skip as success.
 #   A run that skipped everything therefore exits 0 with a green summary while having verified
 #   nothing at all. This script closes that hole the same way run-e2e-local.sh and
 #   run-tool-grammar-smoke-local.sh do: it exports XE_REQUIRE_DOCKER_TESTS=1 (which turns every
@@ -88,11 +88,11 @@ cd "${PROJECT_ROOT}" || {
 
 readonly TEST_PROJECT="${PROJECT_ROOT}/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"
 
-# The three suites whose subject is a real daemon. Kept here rather than discovered, because a
+# The four suites whose subject is a real daemon. Kept here rather than discovered, because a
 # filter that silently stopped matching a renamed class is the same hollow gate as a skip.
 readonly REQUIRE_VARIABLE='XE_REQUIRE_DOCKER_TESTS'
 
-readonly SUITE_FILTER='/*/*/(ContainerRuntimeRealDaemonTests|DockerSandboxRealDaemonTests|ExternalAppRealDaemonTests)/*'
+readonly SUITE_FILTER='/*/*/(ContainerRuntimeRealDaemonTests|DockerSandboxRealDaemonTests|ExternalAppRealDaemonTests|ContainerBridgeRealDaemonTests)/*'
 
 log()  { echo "[docker-smoke] $*"; }
 infra_abort() { echo "[docker-smoke] INFRASTRUCTURE: $*" >&2; exit 5; }
@@ -240,14 +240,14 @@ fi
 # from that line rather than from matching class names, which the listing never prints.
 DISCOVERED="$(sed -n 's/^Discovered \([0-9][0-9]*\) tests\? in assembly.*/\1/p' "${LIST_FILE}" | head -1)"
 if [[ -z "${DISCOVERED}" || "${DISCOVERED}" -eq 0 ]]; then
-  step_fail "3-discovery" "the listing reported no discovered tests. Either the three suites were renamed or
+  step_fail "3-discovery" "the listing reported no discovered tests. Either the four suites were renamed or
   ${SUITE_FILTER} is wrong. This is not a pass."
   echo "[docker-smoke] --- last 20 lines of the discovery output ---" >&2
   tail -20 "${LIST_FILE}" >&2
   ledger_finalize
   exit 1
 fi
-log "discovered ${DISCOVERED} test(s) across the three real-daemon suites"
+log "discovered ${DISCOVERED} test(s) across the four real-daemon suites"
 ledger_pass "3-discovery"
 
 # Which skips this run may contain — a SET of recognised reasons, not one phrase.

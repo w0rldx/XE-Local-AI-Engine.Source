@@ -6258,7 +6258,7 @@
 				"grantedTitle": "It gets",
 				"deniedTitle": "It does not get",
 				"internet": "Internet access — yes",
-				"localNetwork": "Local network — this application can reach services on this computer (such as XE's local model server) and other devices on your network",
+				"localNetwork": "Local network — this application can reach other devices on your network. It reaches XE's local model server only through the engine's container bridge, using a token issued to this application.",
 				"storage": "Its own storage folder, managed by XE",
 				"hostFiles": {
 					"none": "No access to your personal files",

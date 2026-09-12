@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
@@ -43,6 +44,11 @@ internal static class AddNodeExternalAppsExtensions
 
         // Scoped, like every other store: it holds the node database context.
         builder.Services.AddScoped<IExternalAppInstanceStore, ExternalAppInstanceStore>();
+
+        // The container bridge's token seam, implemented HERE and consumed there — the bridge must never reference
+        // this feature, and an architecture test holds that direction. Scoped because it reads the instance store,
+        // and the middleware that calls it is resolved per request from the same scope.
+        builder.Services.AddScoped<IContainerBridgeTokenVerifier, ExternalAppBridgeTokenVerifier>();
 
         // Singletons, and each for a reason that would break if it were not one. The storage layout and the resource
         // gate are stateless readers; the instance gate IS the per-instance mutual exclusion, so a second copy would

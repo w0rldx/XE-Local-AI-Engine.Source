@@ -34,6 +34,7 @@ public sealed class ExternalAppEntityConfigurationTests
             "runtime_override",
             "runtime_provider",
             "variables_json",
+            "bridge_token",
             "published_ports_json",
             "storage_path",
             "failure_category",

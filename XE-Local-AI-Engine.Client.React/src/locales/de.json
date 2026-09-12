@@ -6258,7 +6258,7 @@
 				"grantedTitle": "Sie erhält",
 				"deniedTitle": "Sie erhält nicht",
 				"internet": "Internetzugang — ja",
-				"localNetwork": "Lokales Netzwerk — diese Anwendung kann Dienste auf diesem Computer (etwa den lokalen Modellserver von XE) und andere Geräte in Ihrem Netzwerk erreichen",
+				"localNetwork": "Lokales Netzwerk — diese Anwendung kann andere Geräte in Ihrem Netzwerk erreichen. Den lokalen Modellserver von XE erreicht sie nur über die Container-Bridge der Engine, mit einem für diese Anwendung ausgestellten Token.",
 				"storage": "Einen eigenen, von XE verwalteten Speicherordner",
 				"hostFiles": {
 					"none": "Keinen Zugriff auf Ihre persönlichen Dateien",

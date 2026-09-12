@@ -3590,6 +3590,10 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .HasColumnType("TEXT")
                         .HasColumnName("application_id");
 
+                    b.Property<byte[]>("BridgeToken")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("bridge_token");
+
                     b.Property<string>("DesiredState")
                         .IsRequired()
                         .HasMaxLength(16)

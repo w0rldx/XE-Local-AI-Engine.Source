@@ -1,7 +1,9 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 
 /// <summary>
@@ -34,6 +36,31 @@ internal static class AddNodeContainerRuntimeExtensions
 
         builder.Services.AddSingleton<IContainerRuntimeFactory, DockerContainerRuntimeFactory>();
         builder.Services.AddSingleton<IContainerRuntimeResolver, ContainerRuntimeResolver>();
+
+        // The container bridge (the one deliberately non-loopback listener). Registered here, with the rest of the
+        // runtime layer, and NOT with External Apps: the bridge must never depend on that feature, only be opened
+        // alongside it. The annotation on the port is the only bound the options carry.
+        builder.Services.AddOptions<ContainerBridgeOptions>()
+               .BindConfiguration(ContainerBridgeOptions.SectionName)
+               .ValidateDataAnnotations()
+               .ValidateOnStart();
+
+        // TryAdd, and the default says "this node has no bridge". The composition root resolves the real listener
+        // during host construction and registers it BEFORE this module runs, so its value wins; the default is what
+        // keeps the module standing up on its own, for a host that composes the services without opening a listener.
+        builder.Services.TryAddSingleton(new ContainerBridgeEndpointSource(endpoint: null));
+
+        // ONE watcher in two roles: the hosted service that keeps this computer's own addresses current, and the
+        // object the peer guard asks. A second instance would answer from a set nothing refreshes.
+        builder.Services.AddSingleton<ContainerBridgeAddressWatcher>();
+        builder.Services.AddHostedService(static services => services.GetRequiredService<ContainerBridgeAddressWatcher>());
+
+        // IMiddleware, so each is resolved from the container rather than closed over at pipeline-build time. The
+        // peer guard is a singleton because it asks only the watcher; the token middleware is SCOPED because its
+        // verifier reads the node database through a scoped store, and a singleton would capture one context for the
+        // life of the process.
+        builder.Services.AddSingleton<ContainerBridgePeerGuardMiddleware>();
+        builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 
         return builder;
     }

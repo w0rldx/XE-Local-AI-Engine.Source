@@ -24,6 +24,9 @@ internal sealed class ExternalAppTestFixture : IDisposable
     /// <summary>The secret inside <see cref="SeedVariablesJson" />, searched for in the raw file and in every ToString.</summary>
     public const string SeedSecret = "correct-horse-battery-staple";
 
+    /// <summary>The secret half of every seeded bridge token, searched for in the raw file and in every ToString.</summary>
+    public const string SeedBridgeSecret = "bridge-secret-material-not-a-real-token";
+
     private readonly NullNodeSqliteKeyHolder _keyHolder = new();
     private readonly string _root = Path.Combine(Path.GetTempPath(), "xe-external-apps-" + Guid.NewGuid().ToString("N"));
 
@@ -54,8 +57,11 @@ internal sealed class ExternalAppTestFixture : IDisposable
         string variablesJson = SeedVariablesJson,
         ExternalAppInstanceEventKind firstEventKind = ExternalAppInstanceEventKind.PermissionAccepted,
         string? firstEventDetailJson = null,
-        long createdAtUtc = 1_000) =>
-        new(id ?? Guid.NewGuid(),
+        long createdAtUtc = 1_000,
+        bool withBridgeToken = true)
+    {
+        var instanceId = id ?? Guid.NewGuid();
+        return new ExternalAppInstanceCreate(instanceId,
             applicationId,
             ManifestVersion: 1,
             SeedManifestJson,
@@ -66,7 +72,17 @@ internal sealed class ExternalAppTestFixture : IDisposable
             RuntimeOverride: null,
             createdAtUtc,
             firstEventKind,
-            firstEventDetailJson);
+            firstEventDetailJson,
+            // `false` models the one row shape that legitimately has none: an instance installed before the bridge
+            // existed. Every install this engine performs mints one.
+            withBridgeToken ? BridgeTokenFor(instanceId) : null);
+    }
+
+    /// <summary>A seeded instance's bridge token, in the real token's shape so the id half addresses its own row.</summary>
+    public static string BridgeTokenFor(Guid instanceId)
+    {
+        return instanceId.ToString("N") + "." + SeedBridgeSecret;
+    }
 
     /// <summary>
     ///     A status transition with the two fields every caller must supply and nothing else, so each test's own

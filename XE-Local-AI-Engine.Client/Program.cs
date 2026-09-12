@@ -65,6 +65,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Hosting;
     using XE_Local_AI_Engine.Client.Hubs;
     using XE_Local_AI_Engine.Client.Services.Auth;
+    using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
     using XE_Local_AI_Engine.Client.Services.Development;
     using XE_Local_AI_Engine.Client.Services.DevWorkflows;
     using XE_Local_AI_Engine.Client.Services.ExternalApps;
@@ -326,6 +327,21 @@ namespace XE_Local_AI_Engine.Client
             var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
             var isTranscriptionEnabled = builder.Configuration.GetValue($"{TranscriptionOptions.Section}:Enabled", defaultValue: true);
             var areExternalAppsEnabled = builder.Configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
+
+            // The container bridge: the engine's ONE deliberately non-loopback listener, opened so an application
+            // container on an engine-owned network can reach this node's inference surface (a container cannot reach
+            // the host's loopback, which is where everything else the engine serves lives). Both flags, because the
+            // bridge exists for application containers and a node with External Apps off has none; the code default
+            // for each is false, so a node whose configuration is missing opens no routable listener at all.
+            var bridgeEndpoint = areExternalAppsEnabled
+                ? ResolveContainerBridgeEndpoint(builder)
+                : null;
+
+            // Published BEFORE AddServices, because the bind address is resolved during host construction and the
+            // services that tell a container about the bridge are built after this line. Registered even when the
+            // bridge did not open: the services ask whether there is one, and a missing registration would be a
+            // startup failure rather than the honest "this node has no bridge".
+            builder.Services.AddSingleton(new ContainerBridgeEndpointSource(bridgeEndpoint));
             builder.AddServices(builder.Configuration);
 
             // App self-update (Velopack + anonymous public GitHub releases). Desktop-mode only: off the flag this registers nothing and the
@@ -385,7 +401,10 @@ namespace XE_Local_AI_Engine.Client
             // Loopback-only bind guard (defense-in-depth behind LocalApiSecurityMiddleware): shut down if the server bound a
             // routable address without the Security:AllowNonLoopbackBind opt-out. A no-op on every supported launch (desktop
             // binds 127.0.0.1; Aspire binds localhost and exposes externally via the DCP proxy).
-            LoopbackBindGuard.Guard(app);
+            LoopbackBindGuard.Guard(app,
+                bridgeEndpoint is null
+                    ? []
+                    : new[] { bridgeEndpoint.ListenerUrl });
 
             try
             {
@@ -463,6 +482,16 @@ namespace XE_Local_AI_Engine.Client
             // JSON shapes, while Benchmark and other ProblemDetails handlers use RFC 7807. Registered before
             // UseFastEndpoints so it wraps endpoints.
             app.UseExceptionHandler();
+
+            // FIRST branch in the pipeline, and first for a load-bearing reason: everything registered below — the
+            // security headers, the HTTPS redirect, antiforgery, the SPA bundle, the health checks, the five feature
+            // 404-gates, LocalApiSecurityMiddleware, authentication and every endpoint — belongs to the loopback
+            // listener alone. Branching the bridge port out here is what keeps the routable listener from serving any
+            // of it, and the predicate is the arrival port, so nothing inside the branch is reachable from outside it.
+            if (bridgeEndpoint is not null)
+            {
+                ContainerBridgePipeline.Map(app, bridgeEndpoint);
+            }
 
             // Apply response-wide security/correlation headers at the shared boundary before static files, health checks,
             // authentication, endpoints and SPA fallback. OnStarting ensures even short-circuit responses carry the
@@ -847,6 +876,85 @@ namespace XE_Local_AI_Engine.Client
 
 
             return new ProgramStartResult(app, ExitCode: 0);
+        }
+
+        /// <summary>
+        ///     Resolves the container bridge's listener and adds it to the host's bind URLs, or returns
+        ///     <see langword="null" /> when the bridge must not start. Never throws: a node with no usable interface
+        ///     still boots without a bridge.
+        ///     <para>
+        ///         The bridge is APPENDED to the hosting URLs rather than declared through
+        ///         <c>ConfigureKestrel(o =&gt; o.Listen(...))</c>, and that is not a style choice: an explicit Kestrel
+        ///         endpoint OVERRIDES the addresses a host was given, so a Listen call here would silently drop the
+        ///         loopback listener desktop mode and Aspire both configure through UseUrls, leaving the bridge as the
+        ///         only listener the node has. Both binds have to travel through the same mechanism.
+        ///     </para>
+        /// </summary>
+        private static ResolvedContainerBridgeEndpoint? ResolveContainerBridgeEndpoint(WebApplicationBuilder builder)
+        {
+            var options = builder.Configuration.GetSection(ContainerBridgeOptions.SectionName).Get<ContainerBridgeOptions>()
+                          ?? new ContainerBridgeOptions();
+            if (!options.Enabled)
+            {
+                return null;
+            }
+
+            var hostingUrls = builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey);
+            if (string.IsNullOrWhiteSpace(hostingUrls))
+            {
+                // Nothing to append to, and appending would then make the bridge the node's ONLY listener. Refusing
+                // to start the bridge is the fail-closed answer; the loopback surface is the one that must survive.
+                // Debug, not Warning: every supported launch configures bind URLs (desktop through UseUrls, Aspire
+                // through ASPNETCORE_URLS), so the host that reaches this is the in-memory TestServer — which has no
+                // listener for a container to reach in the first place, and must not log a warning on every boot.
+                Log.Debug("The container bridge is enabled but the host has no configured bind URLs to extend, so it was not opened.");
+                return null;
+            }
+
+            var endpoint = ContainerBridgeEndpointResolver.Resolve(options, ContainerBridgeEndpointResolver.HostRunsDockerDesktop());
+            if (endpoint is null)
+            {
+                Log.Warning("The container bridge is enabled but no usable host network interface was found (configured bind address: {BindAddress}), "
+                            + "so it was not opened. Application containers will not reach this node's inference surface.",
+                    options.BindAddress ?? "auto-detect");
+                return null;
+            }
+
+            var urls = hostingUrls.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            // Before the URL is appended, two things this machine has to agree to. Both refuse the BRIDGE and keep
+            // the node, because the loopback surface is the one that must survive: a bridge URL that cannot bind
+            // fails the whole host, since it travels in the same bind list as the loopback listener.
+            if (ContainerBridgeListenerProbe.CollidesWithHostingUrls(urls, endpoint.Port))
+            {
+                Log.Warning("The container bridge is enabled but its port {Port} is already one of this node's own bind URLs ({HostingUrls}), "
+                            + "so it was not opened: the node's own requests would arrive on a port the bridge claims. "
+                            + "Give the bridge a different '{SectionName}:{PortSetting}' or move the node's listener.",
+                    endpoint.Port, hostingUrls, ContainerBridgeOptions.SectionName, nameof(ContainerBridgeOptions.Port));
+                return null;
+            }
+
+            if (!ContainerBridgeListenerProbe.IsPortAvailable(endpoint.BindAddress, endpoint.Port))
+            {
+                Log.Warning("The container bridge is enabled but {BindAddress}:{Port} could not be bound, so it was not opened and this node "
+                            + "has no bridge. The usual cause is a SECOND node on this machine: the bridge port is a fixed default, because a "
+                            + "container is given the endpoint when it is created and must find the same port after a restart. Set "
+                            + "'{SectionName}:{PortSetting}' to a free port on the node that should have one.",
+                    endpoint.BindAddress, endpoint.Port, ContainerBridgeOptions.SectionName, nameof(ContainerBridgeOptions.Port));
+                return null;
+            }
+
+            builder.WebHost.UseUrls([.. urls, endpoint.ListenerUrl]);
+
+            // In the SAME place, because a listener without this is a listener nothing can reach: host filtering runs
+            // ahead of every middleware the composition root registers and refuses the bridge's own Host header.
+            ContainerBridgePipeline.AllowBridgeHost(builder, endpoint);
+
+            Log.Information("The container bridge listens on {ListenerUrl}; application containers reach it at {ContainerFacingEndpoint}. "
+                            + "It is the node's only non-loopback listener and refuses every peer that is not this computer.",
+                endpoint.ListenerUrl, endpoint.ContainerFacingEndpoint);
+
+            return endpoint;
         }
     }
 

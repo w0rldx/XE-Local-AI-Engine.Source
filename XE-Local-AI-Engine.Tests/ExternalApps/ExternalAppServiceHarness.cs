@@ -13,6 +13,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
@@ -180,9 +181,15 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         return AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
     }
 
+    /// <param name="withBridge">
+    ///     Whether this node opened a container bridge. False is a real node shape — the feature switched off, or a
+    ///     host with no IPv4 interface the listener can bind — and the one in which a manifest that needs the bridge
+    ///     has to be refused rather than handed an empty endpoint.
+    /// </param>
     public static async Task<ExternalAppServiceHarness> CreateAsync(ApplicationManifest manifest,
         Func<ExternalAppsOptions, ExternalAppsOptions>? configure = null,
-        long availableRamBytes = 32L * 1024 * 1024 * 1024)
+        long availableRamBytes = 32L * 1024 * 1024 * 1024,
+        bool withBridge = true)
     {
         var rootPath = Path.Combine(Path.GetTempPath(), "xe-ext-apps-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(rootPath);
@@ -232,6 +239,11 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             publisher,
             dataDirectory,
             wrapped,
+            // An OPEN bridge by default, so seeded and installed instances get the same built-ins a real node
+            // injects. `withBridge: false` is the node that opened none.
+            new ContainerBridgeEndpointSource(withBridge
+                ? new ResolvedContainerBridgeEndpoint(System.Net.IPAddress.Parse("192.0.2.10"), 18790, "192.0.2.10:18790")
+                : null),
             time,
             serviceLog);
 
@@ -291,9 +303,14 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     ///     Writes a row straight through the store and drives it to <paramref name="status" />, so a test can ask what
     ///     the state machine answers from a status no happy path passes through.
     /// </summary>
+    /// <param name="withBridgeToken">
+    ///     False writes the row an instance installed BEFORE the bridge existed has. It is the only way to reach that
+    ///     shape: install mints a token unconditionally, so nothing a test drives through the service produces one.
+    /// </param>
     public async Task<ExternalAppInstanceSnapshot> SeedAsync(ApplicationManifest manifest,
         ExternalAppInstanceStatus status,
-        ExternalAppDesiredState desiredState = ExternalAppDesiredState.Stopped)
+        ExternalAppDesiredState desiredState = ExternalAppDesiredState.Stopped,
+        bool withBridgeToken = true)
     {
         var instanceId = Guid.NewGuid();
         await using var scope = _provider.CreateAsyncScope();
@@ -310,7 +327,11 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                                          RuntimeOverride: null,
                                          CreatedAtUtc: 1,
                                          ExternalAppInstanceEventKind.PermissionAccepted,
-                                         FirstEventDetailJson: null))
+                                         FirstEventDetailJson: null,
+                                         // Seeded rows carry a bridge token because real installs do; a row without
+                                         // one models an instance installed before the bridge existed, which is a
+                                         // different case and is seeded deliberately where it is wanted.
+                                         withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null))
                                  .ConfigureAwait(false);
 
         var version = created.Version;
@@ -421,6 +442,18 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
 
         AssertEx.True(created.Applied, "The staged row must have been written, or the projection has nothing to degrade.");
         return instanceId;
+    }
+
+    /// <summary>
+    ///     Verifies a presented bridge token through the REAL verifier over the REAL store and the real encrypted
+    ///     column, rather than through a substitute: what is being asserted is that a token minted at install can be
+    ///     read back out of an AEAD-sealed row and matched, and a substituted store proves none of that.
+    /// </summary>
+    public async Task<ContainerBridgeCaller?> VerifyBridgeTokenAsync(string presentedToken)
+    {
+        await using var scope = _provider.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
+        return await new ExternalAppBridgeTokenVerifier(store).VerifyAsync(presentedToken).ConfigureAwait(false);
     }
 
     /// <summary>Reads the row straight from the database, outside the service, so a projection bug cannot hide a write bug.</summary>

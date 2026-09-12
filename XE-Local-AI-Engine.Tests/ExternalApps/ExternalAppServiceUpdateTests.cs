@@ -529,6 +529,92 @@ public sealed class ExternalAppServiceUpdateTests
                                  .Select(static container => container.Id));
     }
 
+    /// <summary>
+    ///     The Odysseus v4 → v5 shape: an instance installed before the bridge existed carries no token, and the
+    ///     manifest it is updating INTO needs one. Without a mint here the plan refuses the update over a built-in
+    ///     that has no value, and the application the user was running is the thing that pays for it.
+    ///     <para>
+    ///         The update is the one pipeline that can mint without a migration that writes secrets: it rewrites the
+    ///         row and recreates every container anyway, so the token the replacements were given and the token the
+    ///         row holds become true in the same commit.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Update_OfARowInstalledBeforeTheBridgeExisted_MintsItsTokenAndInjectsIt()
+    {
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(Version1()).ConfigureAwait(false);
+        var row = await harness.SeedAsync(Version1(), ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running, withBridgeToken: false)
+                               .ConfigureAwait(false);
+        AssertEx.Null(row.BridgeToken, "The row under test is the pre-bridge one, so it must start without a token.");
+
+        var target = ExternalAppTestManifests.Manifest(
+            [
+                ExternalAppTestManifests.Service("web",
+                    environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_API_KEY"] = "${XE_BRIDGE_TOKEN}" })
+            ],
+            manifestVersion: 2);
+        ExternalAppServiceHarness.Seed(harness.Catalog, target);
+
+        var injected = new List<string>();
+        harness.Runtime.RunFailure = specification =>
+        {
+            if (specification.Environment.TryGetValue("OPENAI_API_KEY", out var value))
+            {
+                injected.Add(value);
+            }
+
+            return null;
+        };
+
+        var admitted = await harness.Service.UpdateAsync(row.Id, row.Version, Command(target)).ConfigureAwait(false);
+        var after = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
+
+        var minted = AssertEx.NotNull(after.BridgeToken, "A row that had no token must leave the update holding one, or its next Start injects nothing.");
+        AssertEx.Contains(injected, minted, "The replacement container has to be created with the very token the row now holds.");
+
+        // Through the REAL verifier over the REAL encrypted column: a token that is written but cannot be read back
+        // and matched buys the application nothing.
+        AssertEx.Equal(row.Id, AssertEx.NotNull(await harness.VerifyBridgeTokenAsync(minted).ConfigureAwait(false)).InstanceId);
+    }
+
+    /// <summary>
+    ///     The node that opened no bridge at all — the feature switched off, or no IPv4 interface the listener can
+    ///     bind. There is nothing to mint a usable grant from, so the update IS refused; what must not happen is
+    ///     paying for that refusal with the containers of the version that was working.
+    ///     <para>
+    ///         A pipeline failure settles the row by removing this instance's containers, so a refusal discovered
+    ///         inside the pipeline is indistinguishable from one that never happened: the application is down, the
+    ///         row still describes the old version, and the retry refuses the same way. Admission is therefore the
+    ///         only placement that makes this claim true, which is why the assertions below are about the runtime
+    ///         rather than only about the status code.
+    ///     </para>
+    /// </summary>
+    [Test]
+    public async Task Update_OnANodeWithNoBridge_IntoAManifestThatNeedsOne_IsRefusedAndTearsNothingDown()
+    {
+        await using var harness = await InstalledAsync(Version1(), withBridge: false).ConfigureAwait(false);
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+
+        var target = ExternalAppTestManifests.Manifest(
+            [
+                ExternalAppTestManifests.Service("web",
+                    environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
+            ],
+            manifestVersion: 2);
+        ExternalAppServiceHarness.Seed(harness.Catalog, target);
+
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.UpdateAsync(row.Id, row.Version, Command(target))).ConfigureAwait(false);
+
+        AssertEx.Contains(refused.Message, "container bridge", message: "The operator has to read which feature is missing, not which token failed to resolve.");
+
+        var after = AssertEx.NotNull(await harness.ReadAsync(row.Id).ConfigureAwait(false));
+        AssertEx.Equal(ExternalAppInstanceStatus.Running, after.Status, "The row never leaves Running: no operation was started.");
+        AssertEx.Equal(row.Version, after.Version, "Nothing was written, so nothing bumped the version.");
+        AssertEx.Empty(harness.Runtime.StoppedGracePeriods, "A refused update must not stop a container of the version that was working.");
+        AssertEx.Empty(harness.Runtime.RemovedContainerIds, "Nor remove one: the refusal is at admission, before the runtime is asked anything.");
+    }
+
     private static ApplicationManifest Version1()
     {
         return ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
@@ -548,9 +634,10 @@ public sealed class ExternalAppServiceUpdateTests
     }
 
     private static async Task<ExternalAppServiceHarness> InstalledAsync(ApplicationManifest manifest,
-        IReadOnlyDictionary<string, string>? variables = null)
+        IReadOnlyDictionary<string, string>? variables = null,
+        bool withBridge = true)
     {
-        var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
+        var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: withBridge).ConfigureAwait(false);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
                                         DisplayName: null,
                                         manifest.ManifestVersion,

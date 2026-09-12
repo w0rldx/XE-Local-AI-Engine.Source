@@ -4,6 +4,7 @@ using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
@@ -51,6 +52,13 @@ internal sealed partial class ExternalAppService
     ///     Pull, network, ports, plan, storage, create-and-verify, start-and-verify, read back. The one path that
     ///     turns a manifest plus its variables into running containers.
     /// </summary>
+    /// <param name="bridgeGrant">
+    ///     This instance's bridge grant, or <see langword="null" /> when it has none. The CALLER resolves it, and
+    ///     deliberately: update mints a token for a row installed before the bridge existed and commits it inside the
+    ///     rebuild, so a grant read from the row here would be the null this rebuild is in the middle of replacing.
+    ///     It is also resolved once per rebuild rather than per attempt — a replan that minted a different grant
+    ///     would leave sibling containers pointing at a credential the engine no longer expects.
+    /// </param>
     /// <param name="commitBeforeStart">
     ///     Update's transactional commit, run after every replacement container is created and verified and before
     ///     any is started, and given the ports the plan chose. Null for every other caller.
@@ -60,6 +68,7 @@ internal sealed partial class ExternalAppService
         Guid instanceId,
         ApplicationManifest manifest,
         IReadOnlyDictionary<string, string> variables,
+        ContainerBridgeGrant? bridgeGrant,
         Func<IReadOnlyList<ExternalAppPublishedPort>, CancellationToken, Task>? commitBeforeStart,
         CancellationToken cancellationToken)
     {
@@ -76,7 +85,7 @@ internal sealed partial class ExternalAppService
             await CreateInstanceNetworkAsync(runtime, instanceId, cancellationToken).ConfigureAwait(false);
 
             using var hold = HoldPorts(manifest);
-            var plan = BuildPlan(manifest, instanceId, variables, identity, hold);
+            var plan = BuildPlan(manifest, instanceId, variables, identity, hold, bridgeGrant);
             PrepareStorage(instanceId, manifest);
 
             try
@@ -182,13 +191,14 @@ internal sealed partial class ExternalAppService
         Guid instanceId,
         IReadOnlyDictionary<string, string> variables,
         ResolvedContainerIdentity identity,
-        ExternalAppPortHold hold)
+        ExternalAppPortHold hold,
+        ContainerBridgeGrant? bridgeGrant)
     {
         try
         {
             // Describe rather than Prepare: the plan runs before any byte is written, so a manifest whose mounts
             // collide is refused with the instance directory still untouched.
-            return DeploymentPlanner.Plan(manifest, instanceId, _installId, variables, identity, hold.Ports, _layout.Describe(instanceId));
+            return DeploymentPlanner.Plan(manifest, instanceId, _installId, variables, identity, hold.Ports, _layout.Describe(instanceId), bridgeGrant);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {

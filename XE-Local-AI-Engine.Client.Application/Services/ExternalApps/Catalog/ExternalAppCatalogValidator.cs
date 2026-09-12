@@ -54,7 +54,8 @@ public static partial class ExternalAppCatalogValidator
     ];
 
     /// <summary>Engine-supplied tokens a manifest environment value may reference without declaring a variable.</summary>
-    public static readonly IReadOnlyList<string> BuiltInVariableNames = ["XE_UID", "XE_GID", "XE_INSTANCE_ID"];
+    public static readonly IReadOnlyList<string> BuiltInVariableNames =
+        ["XE_UID", "XE_GID", "XE_INSTANCE_ID", "XE_BRIDGE_ENDPOINT", "XE_BRIDGE_TOKEN"];
 
     /// <summary>Accepted <see cref="ApplicationVariable.Type" /> values.</summary>
     public static readonly IReadOnlyList<string> VariableTypes = ["string", "secret", "integer", "boolean", "enum"];

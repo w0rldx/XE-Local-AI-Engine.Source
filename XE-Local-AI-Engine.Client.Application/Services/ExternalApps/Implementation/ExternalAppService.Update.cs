@@ -3,7 +3,9 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
 /// <summary>
 ///     The update preview and the update pipeline. This is also the part that attaches
@@ -111,6 +113,27 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
             RequireFingerprint(target, command.ManifestVersion, command.ManifestSha256);
 
+            // The BACKFILL, and the admission-time refusal that has to come with it.
+            //
+            // A row installed before the bridge existed carries no token (Odysseus v4 → v5 is the shape), and a
+            // target whose manifest reads a bridge built-in cannot be planned without one. This is the one pipeline
+            // that can mint without a migration that writes secrets: it rewrites the row and recreates every
+            // container anyway, so CommitUpdateAsync below persists the token in the same transaction as the
+            // manifest the containers were built from. Minted whether or not this node has an open bridge, exactly
+            // as install mints it — the token is the instance's, and whether it can be USED is the endpoint's
+            // question, which BridgeGrantFor asks.
+            //
+            // The refusal is HERE rather than in the pipeline because a pipeline failure settles the row by removing
+            // this instance's containers: a target this node cannot plan would cost a working application the
+            // version it was running, and the row would still describe that version, so the retry refuses again.
+            var mintedBridgeToken = row.BridgeToken is null ? ContainerBridgeToken.Mint(instanceId) : null;
+            var bridgeGrant = BridgeGrantFor(row.BridgeToken ?? mintedBridgeToken);
+            RequireTargetIsPlannable(instanceId,
+                target,
+                variables,
+                ExternalAppContainerIdentity.Resolve(admission.Runtime.Daemon.IsRootless, _options.ContainerIdentity),
+                bridgeGrant);
+
             var added = ExternalAppEffectivePermissions.Diff(ExternalAppEffectivePermissions.From(installed),
                 ExternalAppEffectivePermissions.From(target));
             if (added.Count > 0 && !command.AcceptPermissions)
@@ -144,7 +167,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Update,
                     lease,
-                    (provider, token) => RunUpdateAsync(provider, context, target, variables, token),
+                    (provider, token) => RunUpdateAsync(provider, context, target, variables, bridgeGrant, mintedBridgeToken, token),
                     out _))
             {
                 throw new ExternalAppOperationInFlightException("An operation is already running on this instance.");
@@ -174,6 +197,8 @@ internal sealed partial class ExternalAppService : IExternalAppService
         LifecycleContext context,
         ApplicationManifest target,
         IReadOnlyDictionary<string, string> variables,
+        ContainerBridgeGrant? bridgeGrant,
+        string? mintedBridgeToken,
         CancellationToken cancellationToken)
     {
         var services = ScopedServices.From(provider);
@@ -200,6 +225,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                                                context.InstanceId,
                                                target,
                                                variables,
+                                               bridgeGrant,
                                                async (planned, token) =>
                                                {
                                                    if (committed)
@@ -217,6 +243,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                                                                                 ExternalAppPublishedPorts.Serialize(planned),
                                                                                 target.ManifestVersion,
                                                                                 Now(),
+                                                                                mintedBridgeToken,
                                                                                 token)
                                                                             .ConfigureAwait(false);
 
@@ -264,6 +291,45 @@ internal sealed partial class ExternalAppService : IExternalAppService
         finally
         {
             await DisposeRuntimeAsync(runtime).ConfigureAwait(false);
+        }
+    }
+
+    /// <summary>
+    ///     Whether the target manifest can be planned at all, asked at admission and only for the answer — the plan
+    ///     itself is discarded and the pipeline builds its own.
+    ///     <para>
+    ///         The host ports are placeholders, and they are enough: the pipeline holds real ones, and the planner
+    ///         only substitutes their numbers into <c>XE_UI_HOST_PORT_&lt;service&gt;</c>. What is being asked is
+    ///         whether the target RESOLVES — the bridge built-ins above all — and that does not depend on which port
+    ///         the allocator would hand out. Binding real ports to answer it would make admission fail for a reason
+    ///         that has nothing to do with the question.
+    ///     </para>
+    ///     <para>
+    ///         The refusal families are the ones <c>TryPlanForVerification</c> already treats as "this cannot be
+    ///         planned as it stands", re-raised as the validation exception the API renders as a 400 so the operator
+    ///         reads the planner's own message: for the bridge case, which feature is missing and which setting
+    ///         turns it on.
+    ///     </para>
+    /// </summary>
+    private void RequireTargetIsPlannable(Guid instanceId,
+        ApplicationManifest target,
+        IReadOnlyDictionary<string, string> variables,
+        ResolvedContainerIdentity identity,
+        ContainerBridgeGrant? bridgeGrant)
+    {
+        var hostPorts = target.Services
+                              .SelectMany(service => service.Ports
+                                                            .Where(static port => string.Equals(port.Role, UiPortRole, StringComparison.Ordinal))
+                                                            .Select(port => new ExternalAppHostPort(service.Name, port.ContainerPort, port.ContainerPort)))
+                              .ToList();
+
+        try
+        {
+            _ = DeploymentPlanner.Plan(target, instanceId, _installId, variables, identity, hostPorts, _layout.Describe(instanceId), bridgeGrant);
+        }
+        catch (Exception exception) when (exception is ExternalAppConfigurationException or ExternalAppManifestException or ContainerPolicyException)
+        {
+            throw new ExternalAppValidationException(exception.Message);
         }
     }
 

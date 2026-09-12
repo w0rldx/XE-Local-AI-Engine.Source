@@ -11,6 +11,13 @@ using Microsoft.AspNetCore.Hosting.Server.Features;
 ///     server actually bound and shuts the app down if any is non-loopback, unless the operator has explicitly opted out
 ///     via <see cref="AllowNonLoopbackBindKey" />.
 ///     <para>
+///         One bind is exempt by name rather than by flag: the container bridge deliberately listens on a LAN-facing
+///         address, and its resolved listener URL is passed in as the expected non-loopback bind. Naming exactly that
+///         address keeps the guard failing closed on every OTHER routable bind, which is what
+///         <see cref="AllowNonLoopbackBindKey" /> cannot do — the flag would also silence the guard for
+///         <c>/api/local/v1</c> going routable by operator error, which is the thing it exists to catch.
+///     </para>
+///     <para>
 ///         Desktop mode always binds <c>127.0.0.1</c> and Aspire dev binds <c>localhost</c> (external exposure is handled
 ///         by the DCP proxy, not the app process), so this guard is a no-op on every supported launch — it only fires when
 ///         an operator overrides the bind to a routable address. It is defense-in-depth behind
@@ -27,9 +34,15 @@ internal static class LoopbackBindGuard
     ///     opt-out flag. Reading the addresses post-start (rather than the configured URLs) reflects what Kestrel actually
     ///     bound, including an OS-assigned port and wildcard expansion.
     /// </summary>
-    internal static void Guard(WebApplication app)
+    /// <param name="app">The built application whose bound addresses are inspected once it has started.</param>
+    /// <param name="expectedNonLoopbackBinds">
+    ///     Listener URLs the app is expected to bind non-loopback (the container bridge's, when it was opened). Empty
+    ///     on every other launch, which is the posture this guard was written for.
+    /// </param>
+    internal static void Guard(WebApplication app, IReadOnlyCollection<string> expectedNonLoopbackBinds)
     {
         ArgumentNullException.ThrowIfNull(app);
+        ArgumentNullException.ThrowIfNull(expectedNonLoopbackBinds);
 
         if (app.Configuration.GetValue(AllowNonLoopbackBindKey, defaultValue: false))
         {
@@ -43,7 +56,7 @@ internal static class LoopbackBindGuard
             var addresses = server.Features.Get<IServerAddressesFeature>()?.Addresses;
             var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(LoopbackBindGuard).FullName!);
 
-            ShutDownIfBindIsRoutable(addresses, lifetime, logger);
+            ShutDownIfBindIsRoutable(addresses, expectedNonLoopbackBinds, lifetime, logger);
         });
     }
 
@@ -53,8 +66,12 @@ internal static class LoopbackBindGuard
     ///     is safe (including no resolvable addresses). Exposed for unit testing with a stub lifetime, so the exit-code
     ///     and stop behavior can be asserted without a real routable listener.
     /// </summary>
-    internal static bool ShutDownIfBindIsRoutable(IEnumerable<string>? addresses, IHostApplicationLifetime lifetime, ILogger logger)
+    internal static bool ShutDownIfBindIsRoutable(IEnumerable<string>? addresses,
+        IReadOnlyCollection<string> expectedNonLoopbackBinds,
+        IHostApplicationLifetime lifetime,
+        ILogger logger)
     {
+        ArgumentNullException.ThrowIfNull(expectedNonLoopbackBinds);
         ArgumentNullException.ThrowIfNull(lifetime);
         ArgumentNullException.ThrowIfNull(logger);
 
@@ -64,7 +81,7 @@ internal static class LoopbackBindGuard
             return false;
         }
 
-        var nonLoopback = FindNonLoopbackAddresses(addresses);
+        var nonLoopback = FindNonLoopbackAddresses(addresses, expectedNonLoopbackBinds);
         if (nonLoopback.Count == 0)
         {
             return false;
@@ -83,14 +100,70 @@ internal static class LoopbackBindGuard
     }
 
     /// <summary>
-    ///     Returns the subset of <paramref name="addresses" /> that are NOT loopback-only binds. An empty result means the
-    ///     bind is safe. Exposed for unit testing without spinning a real routable listener.
+    ///     Returns the subset of <paramref name="addresses" /> that are NOT loopback-only binds and were NOT named in
+    ///     <paramref name="expectedNonLoopbackBinds" />. An empty result means the bind is safe. Exposed for unit
+    ///     testing without spinning a real routable listener.
     /// </summary>
-    internal static IReadOnlyList<string> FindNonLoopbackAddresses(IEnumerable<string> addresses)
+    internal static IReadOnlyList<string> FindNonLoopbackAddresses(IEnumerable<string> addresses, IReadOnlyCollection<string> expectedNonLoopbackBinds)
     {
         ArgumentNullException.ThrowIfNull(addresses);
+        ArgumentNullException.ThrowIfNull(expectedNonLoopbackBinds);
 
-        return addresses.Where(static address => !IsLoopbackAddress(address)).ToArray();
+        return addresses
+               .Where(address => !IsLoopbackAddress(address) && !IsExpectedBind(address, expectedNonLoopbackBinds))
+               .ToArray();
+    }
+
+    /// <summary>
+    ///     Whether <paramref name="address" /> is one the caller declared the app would bind non-loopback. Compared by
+    ///     scheme, host and port rather than as raw text, because Kestrel reports back what it actually bound and that
+    ///     string need not be character-identical to the one it was given.
+    /// </summary>
+    private static bool IsExpectedBind(string address, IReadOnlyCollection<string> expectedNonLoopbackBinds)
+    {
+        if (expectedNonLoopbackBinds.Count == 0 || string.IsNullOrWhiteSpace(address))
+        {
+            return false;
+        }
+
+        var bound = BindingAddress.Parse(address);
+        foreach (var expected in expectedNonLoopbackBinds)
+        {
+            if (string.IsNullOrWhiteSpace(expected))
+            {
+                continue;
+            }
+
+            var declared = BindingAddress.Parse(expected);
+
+            // A wildcard is never "expected": it is not one address, and allow-listing it would exempt every
+            // interface the app bound rather than the single one the caller named. Both spellings count — the
+            // Kestrel forms ("*", "+") parse to an empty host, while "0.0.0.0" and "[::]" parse to a real one.
+            if (IsWildcardHost(declared.Host))
+            {
+                continue;
+            }
+
+            if (declared.Port == bound.Port
+                && string.Equals(declared.Host, bound.Host, StringComparison.OrdinalIgnoreCase)
+                && string.Equals(declared.Scheme, bound.Scheme, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsWildcardHost(string host)
+    {
+        if (string.IsNullOrEmpty(host))
+        {
+            return true;
+        }
+
+        var normalizedHost = host.TrimStart('[').TrimEnd(']');
+        return IPAddress.TryParse(normalizedHost, out var ip) && (ip.Equals(IPAddress.Any) || ip.Equals(IPAddress.IPv6Any));
     }
 
     private static bool IsLoopbackAddress(string address)

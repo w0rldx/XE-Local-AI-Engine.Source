@@ -246,8 +246,63 @@ middleware together keep the admin surface off the network.
 - Wildcard binds (`*`, `+`, `0.0.0.0`, `::`) are treated as non-loopback and trigger the guard; `localhost` and any loopback IP literal pass.
 - **Opt-out:** setting `Security:AllowNonLoopbackBind=true` skips the guard entirely — for an operator who has secured the surface themselves. It defaults to `false`, and no supported launch needs it (desktop binds `127.0.0.1`; Aspire dev binds `localhost` and exposes externally via the DCP proxy, not the app process), so the guard is a no-op on every supported launch and only fires on a deliberately overridden routable bind.
 
+### 3.5 The container bridge — the one deliberately non-loopback listener (`ContainerBridgePipeline`)
+
+Everything in §3.1–§3.4 describes a node that listens on loopback and nothing else. There is exactly one exception,
+and it is an exception by design rather than by oversight: an application container installed under
+[ADR 0010](../adr/0010-external-apps-container-execution.md) has its own network namespace and cannot reach the
+host's loopback at all, so the engine's whole surface — including the local model server — is unreachable from the
+containers it hosts. [ADR 0011](../adr/0011-container-bridge-listener.md) records the decision; this is what it
+means for the security posture.
+
+- **It is one listener, on one address, serving three routes.** `ContainerBridgeEndpointResolver` picks a
+  LAN-facing IPv4 address (or takes `ContainerBridge:BindAddress`, which refuses a wildcard), and
+  `ContainerBridgePipeline.Map` branches that listener out **first** in the pipeline, matching the connection's
+  whole local end (address and port) so a node whose own listener shares the bridge's port cannot have its traffic
+  claimed by the branch. Nothing else the host
+  serves — the SPA, `/api/local/v1`, the hubs, the MCP endpoint, the health checks — is reachable on it, and
+  nothing mapped inside it is reachable on the loopback listener. The branch predicate is the socket's local port,
+  which is the one fact a caller cannot forge. A node whose configured bridge port is already one of its own bind
+  URLs, or whose bridge address and port are already held by another node on the machine, opens no bridge and boots
+  with its loopback listener alone.
+- **Two independent controls run before any route.** `ContainerBridgePeerGuardMiddleware` refuses, with 403, a peer
+  that is not one of this computer's own addresses — the compensating control for the loopback-peer check that
+  cannot apply here, since accepting a non-loopback peer is the bridge's entire purpose. Then
+  `ContainerBridgeTokenMiddleware` requires the per-instance bearer token on **every** route: the peer guard admits
+  any container on an engine-owned network, so the token is what stops one application using another's bridge.
+  Every refusal is byte-identical, so a caller cannot learn which instance ids exist.
+- **`llama-server` still binds `127.0.0.1`.** The bridge forwards to it through the same
+  `LocalModelProxyForwarder` the loopback model proxy uses. No model server is published.
+- **The guard in §3.4 still fails closed.** It is handed the bridge's own listener URL as an expected non-loopback
+  bind and subtracts exactly that; any *other* routable bind still stops the process. This is deliberately not
+  `Security:AllowNonLoopbackBind`, which would silence the guard for `/api/local/v1` going routable too.
+- **`AllowedHosts` is widened with the bridge's host names**, because `HostFilteringMiddleware` is installed by an
+  `IStartupFilter` and runs ahead of every middleware the composition root registers — without it a container's
+  `Host: <lan-address>:18790` is answered 400 before the bridge branch exists. Host filtering is per host, not per
+  endpoint, so this reaches the loopback listener too; it costs nothing, because `LocalApiSecurityMiddleware`
+  checks Host and Origin against its **own** list and rejects a non-loopback peer outright, and neither check reads
+  this setting. The maintainer rule below is about that own list, not about this one.
+- **It is off unless External Apps is on.** `ContainerBridge:Enabled` is `false` in code and `true` in the shipped
+  `appsettings.json`, and the listener opens only when both flags are true.
+- **IPv4 only, and only an address this host owns.** An IPv6 `BindAddress` is rejected rather than used, and a host
+  with no IPv4 address opens no bridge; the container networks the engine creates are IPv4. A configured address no
+  interface carries is rejected as well, so a typo costs the node its bridge and not its boot — Kestrel fails the
+  whole host on a bind it cannot satisfy.
+- **Only a rootless Linux daemon is validated.** Rootless Docker source-translates a container's traffic, so it
+  reaches the bridge from one of the host's own addresses and the peer guard admits it. A **rootful** daemon does
+  not: traffic to a local address never passes POSTROUTING, so it is never masqueraded and arrives with the
+  container's own address, which the guard refuses with 403. The bridge is therefore expected to be dark there. It
+  fails closed — this is a feature that does not work, not a hole — and the peer guard's warning names the
+  hypothesis when the refused peer is private or link-local. ADR 0011 records the remedy: admit the subnets of
+  networks the engine created, still behind the per-instance token.
+- **It is not rate-limited.** `UseRateLimiter` sits below the branch, so bridge traffic bypasses it. Accepted for
+  V1 — the token is mandatory and per-instance, and the forwarder's inference lease and idle watchdog bound each
+  request — with the observable failure mode recorded in ADR 0011: a container thrashing model loads.
+
+---
+
 **Maintainer rules:**
-- Mount any new local-admin route under `/api/local/v1` so the middleware covers it; routes outside that prefix are *not* loopback-gated by this middleware.
+- Mount any new local-admin route under `/api/local/v1` so the middleware covers it; routes outside that prefix are *not* loopback-gated by this middleware. The container bridge (§3.5) is the one reviewed exception, and it carries its own peer guard and token gate in place of this middleware.
 - Keep the Origin check fail-closed — never widen `AllowedHosts` to a public address.
 - Apply an authorization policy in addition to the loopback gate; do not rely on loopback alone.
 - Do not add forwarded-headers middleware or a reverse proxy in front of this surface, and do not set `Security:AllowNonLoopbackBind` to enable a routable/headless deployment — those configurations are unsupported (§3.1).

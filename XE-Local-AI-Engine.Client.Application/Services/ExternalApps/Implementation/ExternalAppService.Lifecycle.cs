@@ -384,6 +384,7 @@ internal sealed partial class ExternalAppService
                                                context.InstanceId,
                                                manifest,
                                                ParseVariables(context.Row.VariablesJson),
+                                               BridgeGrantFor(context.Row.BridgeToken),
                                                commitBeforeStart: null,
                                                cancellationToken)
                                 .ConfigureAwait(false);
@@ -501,7 +502,7 @@ internal sealed partial class ExternalAppService
         if (plan is null || existing is null)
         {
             await RequireTeardownAsync(runtime, row.Id, cancellationToken).ConfigureAwait(false);
-            return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, commitBeforeStart: null, cancellationToken)
+            return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, BridgeGrantFor(row.BridgeToken), commitBeforeStart: null, cancellationToken)
                        .ConfigureAwait(false);
         }
 
@@ -515,7 +516,7 @@ internal sealed partial class ExternalAppService
             // port is fixed at create. Rebuilding is the only way to give it one that is free.
             _logger.LogWarning("Reusing the containers of external application instance {InstanceId} lost a host port; rebuilding.", row.Id);
             await RequireTeardownAsync(runtime, row.Id, CancellationToken.None).ConfigureAwait(false);
-            return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, commitBeforeStart: null, cancellationToken)
+            return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, BridgeGrantFor(row.BridgeToken), commitBeforeStart: null, cancellationToken)
                        .ConfigureAwait(false);
         }
     }
@@ -620,7 +621,16 @@ internal sealed partial class ExternalAppService
 
         try
         {
-            return DeploymentPlanner.Plan(manifest, row.Id, _installId, variables, identity, hostPorts, _layout.Describe(row.Id));
+            // The SAME grant the rebuild path injects. A verification plan without it would describe an
+            // environment the running containers do not have, and Start would rebuild containers that were fine.
+            return DeploymentPlanner.Plan(manifest,
+                row.Id,
+                _installId,
+                variables,
+                identity,
+                hostPorts,
+                _layout.Describe(row.Id),
+                BridgeGrantFor(row.BridgeToken));
         }
         catch (Exception exception) when (exception is ExternalAppConfigurationException or ExternalAppManifestException or ContainerPolicyException)
         {

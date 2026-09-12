@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
 ///     One installed external application: the manifest it was installed with, the values it was configured with, and
-///     where its lifecycle currently stands. Every column is plaintext structural except <see cref="VariablesJson" />,
-///     which carries the user's own secrets and is the one encrypted column in the family.
+///     where its lifecycle currently stands. Every column is plaintext structural except <see cref="VariablesJson" />
+///     and <see cref="BridgeToken" />, which carry secrets and are the two encrypted columns in the family.
 /// </summary>
 internal sealed record class ExternalAppInstance
 {
@@ -54,6 +54,25 @@ internal sealed record class ExternalAppInstance
     ///     slot. Required: an instance with no declared variables stores <c>{}</c>.
     /// </summary>
     public byte[] VariablesJson { get; set; } = [];
+
+    /// <summary>
+    ///     The container-bridge token minted for this instance at install, as plaintext while tracked in memory and
+    ///     sealed at rest by <see cref="NodeEncryptionSaveChangesInterceptor" /> under AAD column name
+    ///     <c>external_app_instance_bridge_token</c> with this row's own id in both the conversation and the record
+    ///     slot — the same binding <see cref="VariablesJson" /> carries, so a token copied onto another instance's row
+    ///     fails its tag check instead of granting that instance this one's access.
+    ///     <para>
+    ///         The PLAINTEXT is stored rather than a digest, and that is a deliberate departure from how the node
+    ///         stores its other credentials. A digest cannot be re-injected, and the token has to be: Start rebuilds
+    ///         an instance's containers from stored state, and a container's environment is immutable, so the engine
+    ///         must be able to put the SAME token back into the rebuilt container it put into the original.
+    ///     </para>
+    ///     <para>
+    ///         Nullable, and null on exactly one kind of row: an instance installed before the bridge existed. Such an
+    ///         instance has no bridge access until it is reinstalled; it is never a token that failed to mint.
+    ///     </para>
+    /// </summary>
+    public byte[]? BridgeToken { get; set; }
 
     /// <summary>
     ///     The host ports the engine bound, as <c>{"service":{"7000":41237}}</c>. Plaintext (structural): loopback port

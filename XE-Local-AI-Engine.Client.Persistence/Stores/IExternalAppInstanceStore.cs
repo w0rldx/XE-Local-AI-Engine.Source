@@ -4,9 +4,9 @@ using System.Text;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 
 /// <summary>
-///     An installed application as a reader sees it. <see cref="VariablesJson" /> is <b>decrypted</b> text, exactly as
-///     <see cref="IntegrationExecutionEventSnapshot.DetailJson" /> is — the interceptors do the sealing — which is why
-///     this record prints nothing.
+///     An installed application as a reader sees it. <see cref="VariablesJson" /> and <see cref="BridgeToken" /> are
+///     <b>decrypted</b> text, exactly as <see cref="IntegrationExecutionEventSnapshot.DetailJson" /> is — the
+///     interceptors do the sealing — which is why this record prints nothing.
 /// </summary>
 public sealed record ExternalAppInstanceSnapshot(
     Guid Id,
@@ -29,11 +29,13 @@ public sealed record ExternalAppInstanceSnapshot(
     long? StoppedAtUtc,
     long UpdatedAtUtc,
     long LastSequence,
-    long Version)
+    long Version,
+    string? BridgeToken = null)
 {
-    // VariablesJson carries the user's own credentials in the clear, so the generated ToString() would put an
-    // application's admin password into any log line that formats a snapshot. Suppressing the printer makes that
-    // impossible rather than merely forbidden; ExternalAppEncryptionTests asserts a known secret cannot appear.
+    // VariablesJson carries the user's own credentials in the clear and BridgeToken IS a credential, so the generated
+    // ToString() would put an application's admin password — or its bridge access — into any log line that formats a
+    // snapshot. Suppressing the printer makes that impossible rather than merely forbidden;
+    // ExternalAppEncryptionTests asserts a known secret cannot appear.
     //
     // `private bool PrintMembers(StringBuilder)` and never `protected override`: on a sealed record whose base is
     // object the compiler expects exactly this signature, and the override form does not compile here. That shape is
@@ -91,8 +93,9 @@ public sealed record ExternalAppStatusUpdate(
 ///     Everything an install admission writes: the row, at status <c>Installing</c> with
 ///     <c>DesiredState = Stopped</c>, and its first event at sequence 1.
 ///     <para>
-///         <see cref="VariablesJson" /> is PLAINTEXT text; the store encodes it to UTF-8 and the save interceptor
-///         seals it. An application with no declared variables passes <c>{}</c>, never null.
+///         <see cref="VariablesJson" /> and <see cref="BridgeToken" /> are PLAINTEXT text; the store encodes each to
+///         UTF-8 and the save interceptor seals both. An application with no declared variables passes <c>{}</c>,
+///         never null.
 ///     </para>
 /// </summary>
 public sealed record ExternalAppInstanceCreate(
@@ -107,9 +110,11 @@ public sealed record ExternalAppInstanceCreate(
     string? RuntimeOverride,
     long CreatedAtUtc,
     ExternalAppInstanceEventKind FirstEventKind,
-    string? FirstEventDetailJson)
+    string? FirstEventDetailJson,
+    string? BridgeToken = null)
 {
-    // Same reason and same shape as ExternalAppInstanceSnapshot's: this command carries the decrypted variables.
+    // Same reason and same shape as ExternalAppInstanceSnapshot's: this command carries the decrypted variables
+    // and the freshly minted bridge token.
 #pragma warning disable CA1822, S2325, S1172, IDE0060
     private bool PrintMembers(StringBuilder builder)
     {
@@ -173,6 +178,13 @@ public interface IExternalAppInstanceStore
     ///     leaves <c>Status</c> and <c>DesiredState</c> alone — it exists so an update's row can never be half-written,
     ///     and an <c>Applied: false</c> aborts the update before any replacement container is started.
     /// </summary>
+    /// <param name="bridgeToken">
+    ///     PLAINTEXT, and written only when it is non-null: the backfill for a row installed before the bridge
+    ///     existed, which carries none. It travels with the manifest and the variables because it belongs to the same
+    ///     recovery boundary — the update recreates every container, so the token the replacements were given and the
+    ///     token the row holds have to become true together or not at all. Null leaves the column as it stands, which
+    ///     is what every ordinary update passes.
+    /// </param>
     Task<ExternalAppStatusWriteResult> CommitUpdateAsync(Guid instanceId,
         long expectedVersion,
         string manifestSnapshotJson,
@@ -180,6 +192,7 @@ public interface IExternalAppInstanceStore
         string publishedPortsJson,
         int manifestVersion,
         long updatedAtUtc,
+        string? bridgeToken = null,
         CancellationToken cancellationToken = default);
 
     /// <summary>

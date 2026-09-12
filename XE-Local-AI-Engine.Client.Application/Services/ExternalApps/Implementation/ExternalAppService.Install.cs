@@ -4,6 +4,7 @@ using System.Text.Json;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>
@@ -171,7 +172,11 @@ internal sealed partial class ExternalAppService
             ExternalAppInstanceEventKind.PermissionAccepted,
             // Permission NAMES from the fixed vocabulary. A value has no business on an audit row that is replayed
             // into a browser.
-            JsonSerializer.Serialize(new { permissions = granted }, ExternalAppJson.Options));
+            JsonSerializer.Serialize(new { permissions = granted }, ExternalAppJson.Options),
+            // The instance's container-bridge credential, minted here and only here. It is sealed at rest by the same
+            // interceptor that seals the variables, and its revocation is the row's deletion — there is no separate
+            // revoke step, because a token whose instance no longer exists names nothing the verifier can find.
+            ContainerBridgeToken.Mint(instanceId));
 
         var written = await store.CreateAsync(create, cancellationToken).ConfigureAwait(false);
         if (!written.Applied)
@@ -209,6 +214,9 @@ internal sealed partial class ExternalAppService
                                                instanceId,
                                                manifest,
                                                variables,
+                                               // Read back rather than carried from admission: the mint happens
+                                               // inside the row write, which is the only place it is durable.
+                                               await ResolveBridgeGrantAsync(instanceId, cancellationToken).ConfigureAwait(false),
                                                commitBeforeStart: null,
                                                cancellationToken)
                                 .ConfigureAwait(false);

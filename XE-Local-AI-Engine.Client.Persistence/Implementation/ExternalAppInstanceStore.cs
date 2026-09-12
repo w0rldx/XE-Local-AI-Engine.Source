@@ -9,8 +9,9 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 /// <summary>
 ///     Persistence boundary for installed external applications and their event feed.
 ///     <para>
-///         Every method goes through EF so both encryption interceptors run — <c>variables_json</c> is an encrypted
-///         column, and only a <c>SaveChanges</c> seals it, only a materialization opens it. The compare-and-swap idiom
+///         Every method goes through EF so both encryption interceptors run — <c>variables_json</c> and
+///         <c>bridge_token</c> are encrypted columns, and only a <c>SaveChanges</c> seals them, only a materialization
+///         opens them. The compare-and-swap idiom
 ///         is <c>IntegrationExecutionStore</c>'s, verbatim: query the tracked row, compare <c>Version</c> and the
 ///         expected status set, mutate, <c>Version++</c>, save; a <see cref="DbUpdateConcurrencyException" /> is the
 ///         loser learning it lost, and any other exception clears the tracker before it propagates so the next call on
@@ -83,6 +84,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
             RuntimeOverride = command.RuntimeOverride,
             RuntimeProvider = command.RuntimeProvider,
             VariablesJson = Encoding.UTF8.GetBytes(command.VariablesJson),
+            BridgeToken = command.BridgeToken is null ? null : Encoding.UTF8.GetBytes(command.BridgeToken),
             PublishedPortsJson = "{}",
             StoragePath = command.StoragePath,
             NeedsRecreate = false,
@@ -257,6 +259,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         string publishedPortsJson,
         int manifestVersion,
         long updatedAtUtc,
+        string? bridgeToken = null,
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(manifestSnapshotJson);
@@ -269,7 +272,7 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
             return Lost;
         }
 
-        // No status, no desired state and no event: this is the update's recovery boundary, not a transition. The four
+        // No status, no desired state and no event: this is the update's recovery boundary, not a transition. The
         // columns move together or not at all, so a crash can only leave the instance wholly on the old manifest or
         // wholly on the new one.
         entity.ManifestSnapshotJson = manifestSnapshotJson;
@@ -277,6 +280,15 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
         entity.PublishedPortsJson = publishedPortsJson;
         entity.ManifestVersion = manifestVersion;
         entity.UpdatedAtUtc = updatedAtUtc;
+
+        if (bridgeToken is not null)
+        {
+            // The backfill, inside the same transaction as everything else this commit moves: the replacement
+            // containers were created with this token, so a row that kept its null would hand the next Start a
+            // grant the running containers do not have.
+            entity.BridgeToken = Encoding.UTF8.GetBytes(bridgeToken);
+        }
+
         entity.Version++;
 
         var sequence = entity.LastSequence;
@@ -435,5 +447,6 @@ public sealed class ExternalAppInstanceStore : IExternalAppInstanceStore
             entity.StoppedAtUtc,
             entity.UpdatedAtUtc,
             entity.LastSequence,
-            entity.Version);
+            entity.Version,
+            entity.BridgeToken is null ? null : Encoding.UTF8.GetString(entity.BridgeToken));
 }

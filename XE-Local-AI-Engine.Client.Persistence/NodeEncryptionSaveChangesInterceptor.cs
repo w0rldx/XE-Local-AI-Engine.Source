@@ -777,6 +777,11 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         {
             EncryptRequiredProperty(entry, entry.Property(entity => entity.VariablesJson), entry.Entity.Id, entry.Entity.Id, "external_app_instance_variables_json",
                 trackedProperties);
+
+            // Optional, not required, for one row shape only: an instance installed before the bridge existed carries
+            // no token. Every row this engine writes carries one, minted at install.
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.BridgeToken), entry.Entity.Id, entry.Entity.Id, "external_app_instance_bridge_token",
+                trackedProperties);
         }
 
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD

@@ -20,7 +20,7 @@ describe("PermissionsPanel", () => {
 
 			expect(screen.getByTestId("external-app-permission-internet").textContent).toBe("Internet access — yes");
 			expect(screen.getByTestId("external-app-permission-localNetwork").textContent).toContain(
-				"this application can reach services on this computer",
+				"only through the engine's container bridge",
 			);
 
 			// The denial wording is allowed about files, the GPU, XE's data and devices — never about the network.

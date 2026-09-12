@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using Microsoft.Extensions.Configuration;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -14,6 +15,12 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         The third assertion pins the distribution decision: no catalog refresh URL ships, so a node serves the
 ///         embedded seed until an operator configures one. A URL that appeared here would make every install of this
 ///         product fetch from it.
+///     </para>
+///     <para>
+///         The container bridge is pinned here too, and in the same two halves for the same reason. It is the node's
+///         one deliberately non-loopback listener and it is opened only alongside External Apps, so the two sections
+///         have to agree — and a code default that drifted to <see langword="true" /> would open a routable listener
+///         on a node whose configuration could not be read.
 ///     </para>
 /// </summary>
 public sealed class ExternalAppsShippedConfigurationTests
@@ -47,6 +54,44 @@ public sealed class ExternalAppsShippedConfigurationTests
 
         AssertEx.True(string.IsNullOrWhiteSpace(refreshUrl),
             $"No catalog refresh URL may ship; the bundled seed is the default source. Found '{refreshUrl}'.");
+    }
+
+    [Test]
+    public void ShippedAppSettings_TurnTheContainerBridgeOn()
+    {
+        var options = BindContainerBridge(BuildShippedConfiguration());
+
+        AssertEx.True(options.Enabled,
+            $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' must be true in the shipped {AppSettingsFileName}.");
+    }
+
+    [Test]
+    public void AnEmptyConfiguration_LeavesTheContainerBridgeOff()
+    {
+        var options = BindContainerBridge(new ConfigurationBuilder().Build());
+
+        AssertEx.False(options.Enabled,
+            "A node with no container-bridge configuration must fail closed, so the code default has to stay false.");
+    }
+
+    /// <summary>
+    ///     Nothing pins the bridge to a host or a port in the shipped file: the bind address is detected per machine
+    ///     and the port is a code default, so a shipped value here would be one every install had to agree with.
+    /// </summary>
+    [Test]
+    public void ShippedAppSettings_PinNoBridgeBindAddressOrPort()
+    {
+        var section = BuildShippedConfiguration().GetSection(ContainerBridgeOptions.SectionName);
+
+        AssertEx.True(string.IsNullOrWhiteSpace(section[nameof(ContainerBridgeOptions.BindAddress)]),
+            "The bridge bind address is detected on the machine it runs on; shipping one would pin every install to it.");
+        AssertEx.True(string.IsNullOrWhiteSpace(section[nameof(ContainerBridgeOptions.Port)]),
+            "The bridge port is the code default; shipping one would make the two disagree the first time it moved.");
+    }
+
+    private static ContainerBridgeOptions BindContainerBridge(IConfiguration configuration)
+    {
+        return configuration.GetSection(ContainerBridgeOptions.SectionName).Get<ContainerBridgeOptions>() ?? new ContainerBridgeOptions();
     }
 
     private static ExternalAppsOptions BindExternalApps(IConfiguration configuration)

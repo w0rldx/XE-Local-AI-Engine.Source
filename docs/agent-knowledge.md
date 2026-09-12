@@ -64,6 +64,49 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
 
 An incremental Release result is evidence only when projects actually compiled. Analyzer diagnostics are not replayed for skipped projects. Keep `TreatWarningsAsErrors` in Debug for compiler warnings, but do not confuse that with the analyzer wall. `XE_FULL_ANALYSIS=1` is the explicit analyzer-sensitive Debug loop. `RunAnalyzers=false` maps to csc `-skipanalyzers`; source generators still execute, so a zero-test run points to build/config/discovery, not this gate.
 
+### Host filtering runs from an `IStartupFilter`, ahead of every middleware the composition root registers
+
+A middleware you map first in `Program.cs` is not first. `HostFilteringMiddleware` is inserted by
+`HostFilteringStartupFilter`, which `ConfigureWebDefaults` registers whenever `AllowedHosts` is in configuration —
+and the shipped `appsettings.json` sets `AllowedHosts` to `localhost;127.0.0.1;[::1]`. Anything served on a
+non-loopback address is therefore answered **400 Bad Request** before your branch, your guard or your route can
+look at it, and the refusal is logged by nothing you own.
+
+- **Rule:** a listener bound to anything but loopback must have its host names added to `AllowedHosts` in the same
+  place the listener is opened. `ContainerBridgePipeline.AllowBridgeHost` is the shape.
+- **Failure prevented:** the container bridge shipped a listener no container could reach. Every loopback test
+  passed — `DefaultHttpContext` has no host filter, and an in-process `HttpClient` sends `Host: 127.0.0.1`, which is
+  allow-listed. Only a real container, over a real socket, presented a Host header the filter rejected.
+- **Diagnosis tell:** the request reaches the port but nothing of yours logs it. Capture the raw bytes
+  (`nc -l` on the bound address) before suspecting the client, the network or the container.
+- **Authority:** C1 commit 3, found by `ContainerBridgeRealDaemonTests` after commits 1 and 2 were already green.
+
+### An explicit Kestrel endpoint discards the addresses `UseUrls` was given
+
+`builder.WebHost.ConfigureKestrel(o => o.Listen(...))` does not *add* a listener. `AddressBinder.CreateStrategy`
+picks the endpoints over the addresses whenever `KestrelServerOptions.ListenOptions` is non-empty, logs
+"Overriding address(es)", and clears them.
+
+- **Rule:** to open a second listener, append its URL to the existing ones
+  (`builder.WebHost.GetSetting(WebHostDefaults.ServerUrlsKey)`, split on `;`, `UseUrls` the union). Both binds must
+  travel through one mechanism.
+- **Failure prevented:** a `Listen` call for the container bridge would have silently dropped the loopback listener
+  that desktop mode (`UseUrls($"http://{DesktopLaunch.LoopbackHost}:{port}")`) and Aspire (`ASPNETCORE_URLS`) both
+  configure — leaving the bridge as the node's only listener, with the SPA and `/api/local/v1` gone.
+- **Authority:** C1 commit 1; the plan specified `Listen` and it had to be deviated from.
+
+### `ExternalAppEntityConfigurationTests` pins the external-app instance column list
+
+`InstanceTable_MapsEveryColumnToItsSnakeCaseName` holds every column of `external_app_instances` as a literal array
+and asserts the mapped set matches it **in both directions**.
+
+- **Rule:** a new property on `ExternalAppInstance` needs that array extended in the same commit as the entity, the
+  Fluent mapping and the migration.
+- **Failure prevented:** the whole `XE-Local-AI-Engine.Client.Persistence.Tests` project goes red with "the entity
+  gained a property nobody reviewed" — which is the gate working, not a flake. Adding the column without the list
+  looks like an unrelated failure in a project you did not think you touched.
+- **Authority:** C1 commit 2, adding `bridge_token`.
+
 ### A bare `TODO` in a C# comment fails the build — in **Release**
 
 Sonar S1135 is an error under warnings-as-errors. Do not replace `TODO`/`FIXME`/`HACK`/`XXX` with another task marker. Describe the present limitation or rationale directly, and keep work tracking outside source comments. Debug may accept one of the banned markers; Release will not.
@@ -110,7 +153,7 @@ Installed runtime metadata and effective execution disagree in both directions: 
 
 **Hollow-gate controls:** the backend's `Passed!|Failed!` grep proves that MTP emitted a summary, not that a meaningful test succeeded. A unit where every test skipped still prints `Passed!`. `TZ=Europe/Berlin` stays set to expose non-UTC bugs. The grouped runner applies the summary guard per group, not per namespace. E2E remains a separate opt-in lane.
 
-CI no longer sets `XE_REQUIRE_DOCKER_TESTS=1` and no longer pre-pulls any image. The three real-daemon suites are **opt-in** and skip on the runner by design; their compensating control is that the Engine API wire shape they used to be the only proof of now runs unconditionally against `XE-Local-AI-Engine.Testing.FakeDocker`, a loopback HTTP fake the production `DockerDotNetRuntimeClient` talks to over a real socket — which needs no daemon and therefore cannot skip itself. The daemon half is gated before an RC by `scripts/run-docker-smoke-local.sh` (exit 5 = no usable daemon, 1 = product failed). This removed Docker Hub reachability as a hard dependency of the PR gate, where a registry blip or a rate limit used to turn a good branch red. **Never re-add a `docker pull` step or `XE_REQUIRE_DOCKER_TESTS` to `build-and-test.yml` to "restore" coverage: the coverage moved, it was not lost.**
+CI no longer sets `XE_REQUIRE_DOCKER_TESTS=1` and no longer pre-pulls any image. The four real-daemon suites (`ContainerBridgeRealDaemonTests` joined them with the container bridge) are **opt-in** and skip on the runner by design; their compensating control is that the Engine API wire shape they used to be the only proof of now runs unconditionally against `XE-Local-AI-Engine.Testing.FakeDocker`, a loopback HTTP fake the production `DockerDotNetRuntimeClient` talks to over a real socket — which needs no daemon and therefore cannot skip itself. The daemon half is gated before an RC by `scripts/run-docker-smoke-local.sh` (exit 5 = no usable daemon, 1 = product failed). This removed Docker Hub reachability as a hard dependency of the PR gate, where a registry blip or a rate limit used to turn a good branch red. **Never re-add a `docker pull` step or `XE_REQUIRE_DOCKER_TESTS` to `build-and-test.yml` to "restore" coverage: the coverage moved, it was not lost.**
 
 Coverage instrumentation rewrites assemblies **in place**. Concurrent covered processes must use separate cloned output trees; without coverage, processes may share the built tree. `scripts/run-tests-memory-safe.sh` keeps coverage slots inside the repository because hosting tests locate the Client source by walking upward from the test binary. An empty dynamic-instrumentation report can claim `line-rate="1"`; `merge-cobertura.py` therefore treats zero source lines as an error. Keep the report-count checks as well as the percentage baseline, and raise the baseline only when coverage improves.
 

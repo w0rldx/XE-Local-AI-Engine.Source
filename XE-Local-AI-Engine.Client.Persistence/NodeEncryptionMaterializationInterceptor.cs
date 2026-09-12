@@ -497,6 +497,11 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     externalAppInstance.Id,
                     externalAppInstance.Id,
                     "external_app_instance_variables_json");
+                externalAppInstance.BridgeToken = DecryptIfPresent(externalAppInstance.BridgeToken,
+                    context.NodeEncryptionKey.Span,
+                    externalAppInstance.Id,
+                    externalAppInstance.Id,
+                    "external_app_instance_bridge_token");
                 break;
         }
 

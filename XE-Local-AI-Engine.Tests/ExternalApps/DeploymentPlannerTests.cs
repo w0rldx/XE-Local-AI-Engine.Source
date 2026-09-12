@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
@@ -297,15 +298,136 @@ public sealed class DeploymentPlannerTests
         AssertEx.False(plan.Services[0].Specification.ToString().Contains(Secret, StringComparison.Ordinal), "A specification must not print its environment.");
     }
 
+    /// <summary>
+    ///     The two bridge built-ins arrive together, and only when the node actually opened a bridge. A container
+    ///     told an endpoint without a credential could reach the listener and be refused by it; a credential without
+    ///     an endpoint names nothing.
+    /// </summary>
+    [Test]
+    public void BuiltIns_WhenABridgeGrantIsSupplied_CarryTheEndpointAndTheToken()
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("OPENAI_BASE_URL", "http://${XE_BRIDGE_ENDPOINT}/llm/v1"))
+        ]);
+
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), bridgeGrant: new ContainerBridgeGrant("192.0.2.10:18790", "aabb.ccdd"));
+
+        AssertEx.Equal("http://192.0.2.10:18790/llm/v1", plan.Services[0].Specification.Environment["OPENAI_BASE_URL"]);
+    }
+
+    [Test]
+    public void BuiltIns_WhenABridgeGrantIsSupplied_CarryTheTokenVerbatim()
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("OPENAI_API_KEY", "${XE_BRIDGE_TOKEN}"))
+        ]);
+
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), bridgeGrant: new ContainerBridgeGrant("192.0.2.10:18790", "aabb.ccdd"));
+
+        AssertEx.Equal("aabb.ccdd", plan.Services[0].Specification.Environment["OPENAI_API_KEY"]);
+    }
+
+    /// <summary>
+    ///     Without a grant the tokens are not silently blanked: they are undeclared, and the planner refuses the
+    ///     manifest the same way it refuses any other unresolvable token. Injecting an empty endpoint instead would
+    ///     fail later, inside the container, and far less clearly.
+    /// </summary>
+    [Test]
+    [Arguments("XE_BRIDGE_ENDPOINT")]
+    [Arguments("XE_BRIDGE_TOKEN")]
+    public void BuiltIns_WithoutABridgeGrant_RefuseAManifestThatReferencesThem(string token)
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"${{{token}}}"))
+        ]);
+
+        _ = AssertEx.Throws<ExternalAppConfigurationException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)),
+            $"A node with no bridge must refuse a manifest that needs {token}, not hand the container an empty one.");
+    }
+
+    /// <summary>
+    ///     The refusal above is correct and its default message is useless for the case that will actually happen:
+    ///     the bridge switched off, or a host with no IPv4 interface it can bind. The user reads a manifest error
+    ///     about a token they have never heard of. The message has to name the bridge and the setting instead.
+    /// </summary>
+    [Test]
+    [Arguments("XE_BRIDGE_ENDPOINT")]
+    [Arguments("XE_BRIDGE_TOKEN")]
+    public void BuiltIns_WithoutABridgeGrant_SayWhichFeatureIsMissingRatherThanNamingAnUnknownToken(string token)
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"${{{token}}}"))
+        ]);
+
+        var thrown = AssertEx.Throws<ExternalAppConfigurationException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        AssertEx.Contains(thrown.Message, "container bridge", message: "The operator has to learn which feature is missing, not which token failed to resolve.");
+        AssertEx.Contains(thrown.Message, $"{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}", message: "The message must name the setting that turns the bridge on.");
+    }
+
+    /// <summary>
+    ///     The bridge message must not swallow the generic one: a token the manifest simply never declared is a
+    ///     different mistake and still has to be reported as itself.
+    /// </summary>
+    [Test]
+    public void BuiltIns_ForATokenThatIsNotABridgeName_KeepTheGenericUndeclaredMessage()
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", "${XE_NOT_A_THING}"))
+        ]);
+
+        var thrown = AssertEx.Throws<ExternalAppConfigurationException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)));
+
+        AssertEx.Contains(thrown.Message, "neither a declared variable nor a built-in", message: "An undeclared token is not a missing bridge.");
+    }
+
+    /// <summary>
+    ///     The grant is a credential, so a plan that printed it would put an application's bridge access into any log
+    ///     line that formatted one.
+    /// </summary>
+    [Test]
+    public void BridgeGrant_PrintsNothing()
+    {
+        var printed = new ContainerBridgeGrant("192.0.2.10:18790", "aabb.the-secret-half").ToString();
+
+        AssertEx.False(printed.Contains("the-secret-half", StringComparison.Ordinal), "A grant carries a live credential and must print none of it.");
+        AssertEx.True(printed.Contains(nameof(ContainerBridgeGrant), StringComparison.Ordinal));
+    }
+
+    /// <summary>
+    ///     The planner's built-in names and the catalog validator's recognised list are written as literals in two
+    ///     files. This is the assertion that keeps them from drifting apart, which would let a manifest validate and
+    ///     then fail to plan.
+    /// </summary>
+    [Test]
+    public void BuiltInNames_AreAllRecognisedByTheCatalogValidator()
+    {
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), bridgeGrant: new ContainerBridgeGrant("192.0.2.10:18790", "aabb.ccdd"));
+
+        AssertEx.NotNull(plan);
+        foreach (var name in new[] { "XE_UID", "XE_GID", "XE_INSTANCE_ID", "XE_BRIDGE_ENDPOINT", "XE_BRIDGE_TOKEN" })
+        {
+            AssertEx.Contains(ExternalAppCatalogValidator.BuiltInVariableNames, name,
+                $"The planner injects '{name}', so a manifest referencing it must validate.");
+        }
+    }
+
     private static DeploymentPlan Plan(ApplicationManifest manifest,
         IReadOnlyDictionary<string, string> variables,
-        IReadOnlyList<ExternalAppHostPort>? uiHostPorts = null)
+        IReadOnlyList<ExternalAppHostPort>? uiHostPorts = null,
+        ContainerBridgeGrant? bridgeGrant = null)
     {
         var root = Path.Combine(Path.GetTempPath(), "xe-planner", InstanceId.ToString("N"));
         var storage = new ExternalAppStoragePaths(root, Path.Combine(root, "volumes"), Path.Combine(root, "files"));
         var ports = uiHostPorts ?? DefaultPorts(manifest);
 
-        return DeploymentPlanner.Plan(manifest, InstanceId, InstallId, variables, new ResolvedContainerIdentity(1234, 5678), ports, storage);
+        return DeploymentPlanner.Plan(manifest, InstanceId, InstallId, variables, new ResolvedContainerIdentity(1234, 5678), ports, storage, bridgeGrant);
     }
 
     private static IReadOnlyList<ExternalAppHostPort> DefaultPorts(ApplicationManifest manifest)

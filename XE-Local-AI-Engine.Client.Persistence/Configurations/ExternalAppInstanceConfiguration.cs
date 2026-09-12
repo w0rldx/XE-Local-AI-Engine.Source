@@ -20,6 +20,7 @@ internal sealed class ExternalAppInstanceConfiguration : IEntityTypeConfiguratio
         builder.Property(entity => entity.RuntimeOverride).HasColumnName("runtime_override").HasMaxLength(16);
         builder.Property(entity => entity.RuntimeProvider).HasColumnName("runtime_provider").HasMaxLength(32).IsRequired();
         builder.Property(entity => entity.VariablesJson).HasColumnName("variables_json").IsRequired();
+        builder.Property(entity => entity.BridgeToken).HasColumnName("bridge_token");
         builder.Property(entity => entity.PublishedPortsJson).HasColumnName("published_ports_json").IsRequired();
         builder.Property(entity => entity.StoragePath).HasColumnName("storage_path").HasMaxLength(512).IsRequired();
         builder.Property(entity => entity.FailureCategory).HasColumnName("failure_category").HasConversion<string>().HasMaxLength(48);

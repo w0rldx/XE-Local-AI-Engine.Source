@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
@@ -498,6 +499,9 @@ public sealed class ExternalAppRealDaemonTests
                 new NoOpExternalAppEventPublisher(),
                 dataDirectory,
                 appOptions,
+                // No bridge in the real-daemon box: it exercises the container runtime, not the bridge, and a
+                // container told about an endpoint nothing is listening on would be told a falsehood.
+                new ContainerBridgeEndpointSource(endpoint: null),
                 TimeProvider.System,
                 NullLogger<ExternalAppService>.Instance);
 

@@ -167,14 +167,31 @@ Five facts a reader should not have to infer.
 
 **(a) V1 enforces no outbound network restriction.** `permissions.internet` is always `true` and
 `permissions.localNetwork` is a **disclosure**, not a control. The install panel says so in the product's own words
-— "Internet access — yes", "Local network — this application can reach services on this computer (such as XE's
-local model server) and other devices on your network" — and nothing in the engine denies either. Do not read the
-panel as an enforcement boundary. Real enforcement is a deliberate follow-up.
+— "Internet access — yes", "Local network — this application can reach other devices on your network. It reaches
+XE's local model server only through the engine's container bridge, using a token issued to this application." —
+and nothing in the engine denies the LAN half. Do not read the panel as an enforcement boundary for egress. Real
+egress enforcement is a deliberate follow-up.
 
-*A rootless-Linux caveat on the local-network wording.* The live round could not demonstrate the model-server hop
-it names: on a rootless daemon `host.docker.internal` resolves to an address that reaches nothing on the host,
-`llama-server` binds `127.0.0.1`, and `--host` is deliberately not overridable. Treat the panel sentence as the
-worst case it is meant to disclose, not as a path that exists on every platform.
+*The model-server hop is the half that IS controlled, and it did not exist until the container bridge.* A container
+has its own network namespace, so the host's loopback — where `llama-server` binds, with `--host` deliberately not
+overridable — is unreachable from inside it on every daemon; on a rootless daemon `host.docker.internal` resolves to
+a gateway address on which nothing of the host's listens, so the alias that papers over this on Docker Desktop
+papers over nothing there. The engine now opens one guarded, non-loopback listener for exactly this hop
+([ADR 0011](../adr/0011-container-bridge-listener.md), [Wiki 12 §3.5](12-security-and-privacy.md)): a same-host peer
+guard, then a mandatory per-instance bearer token, then `/llm/v1/*` forwarded to the same model proxy the loopback
+surface uses. The container is told where and with what through the built-ins `XE_BRIDGE_ENDPOINT` and
+`XE_BRIDGE_TOKEN`. An application that *discovers* model hosts rather than being configured with one cannot use it
+unattended — the token is required on every route and discovery probes are unauthenticated — which is why the
+odysseus sample surfaces the pair as `XE_MODEL_BRIDGE_URL` / `XE_MODEL_BRIDGE_TOKEN` for the user to register once.
+**Verified live on a rootless daemon** by `ContainerBridgeRealDaemonTests`. That is the whole of what is validated:
+on a **rootful** daemon a container dialling one of the host's own addresses is not source-translated, so the peer
+guard sees the container's own `172.x.y.z`, refuses it with 403 and the bridge is dark — expected, unproven in
+either direction, and recorded in ADR 0011 with the intended remedy (admitting engine-created network subnets).
+Docker Desktop is unit-tested only. The bridge is also IPv4-only, so a host with no IPv4 address opens none, and
+there is **one bridge per machine**: the port is a fixed default so a container finds the same endpoint after a
+restart, so a second node on the same box (another checkout, or a desktop node beside a dev one) finds the address
+and port taken, logs a warning and boots without a bridge rather than failing to start. Give the node that should
+have one a free `ContainerBridge:Port`.
 
 **(b) Containers may run as in-container root.** The engine passes no `--user`, deliberately: the curated images
 start as root and drop privileges through their own entrypoints, and forcing a uid breaks that and breaks a port-80

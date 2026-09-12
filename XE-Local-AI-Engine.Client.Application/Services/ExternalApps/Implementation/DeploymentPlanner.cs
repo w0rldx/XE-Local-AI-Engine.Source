@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.Containers;
+using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 
@@ -27,6 +28,12 @@ internal static partial class DeploymentPlanner
 
     private const string InstanceIdVariable = "XE_INSTANCE_ID";
 
+    /// <summary>The container-facing <c>host:port</c> of this node's bridge. Present only when the bridge is open.</summary>
+    private const string BridgeEndpointVariable = "XE_BRIDGE_ENDPOINT";
+
+    /// <summary>The instance's own bridge credential. Present only when the bridge is open.</summary>
+    private const string BridgeTokenVariable = "XE_BRIDGE_TOKEN";
+
     private const string HealthyCondition = "healthy";
 
     /// <summary>
@@ -42,7 +49,8 @@ internal static partial class DeploymentPlanner
         IReadOnlyDictionary<string, string> variables,
         ResolvedContainerIdentity identity,
         IReadOnlyList<ExternalAppHostPort> uiHostPorts,
-        ExternalAppStoragePaths storage)
+        ExternalAppStoragePaths storage,
+        ContainerBridgeGrant? bridgeGrant = null)
     {
         ArgumentNullException.ThrowIfNull(manifest);
         ArgumentNullException.ThrowIfNull(variables);
@@ -53,7 +61,7 @@ internal static partial class DeploymentPlanner
 
         var ordered = TopologicalOrder(manifest);
         var declared = manifest.Variables.ToDictionary(static variable => variable.Name, StringComparer.Ordinal);
-        var builtIns = BuildBuiltIns(instanceId, identity, uiHostPorts);
+        var builtIns = BuildBuiltIns(instanceId, identity, uiHostPorts, bridgeGrant);
         var hostSources = new Dictionary<string, string>(StringComparer.Ordinal);
 
         var services = new List<ServiceDeployment>(ordered.Count);
@@ -80,7 +88,8 @@ internal static partial class DeploymentPlanner
 
     private static Dictionary<string, string> BuildBuiltIns(Guid instanceId,
         ResolvedContainerIdentity identity,
-        IReadOnlyList<ExternalAppHostPort> uiHostPorts)
+        IReadOnlyList<ExternalAppHostPort> uiHostPorts,
+        ContainerBridgeGrant? bridgeGrant)
     {
         var builtIns = new Dictionary<string, string>(StringComparer.Ordinal)
         {
@@ -88,6 +97,15 @@ internal static partial class DeploymentPlanner
             [GroupIdVariable] = identity.GroupId.ToString(CultureInfo.InvariantCulture),
             [InstanceIdVariable] = instanceId.ToString("N", CultureInfo.InvariantCulture)
         };
+
+        // Both bridge built-ins or neither, and only when this node actually opened a bridge. A manifest that
+        // references either token on a node without one fails plan-time validation as an undeclared token, which is
+        // the honest answer: injecting an endpoint the container cannot reach would fail later and less clearly.
+        if (bridgeGrant is not null)
+        {
+            builtIns[BridgeEndpointVariable] = bridgeGrant.Endpoint;
+            builtIns[BridgeTokenVariable] = bridgeGrant.Token;
+        }
 
         // One entry per service that publishes something, carrying its FIRST published port: the token is
         // XE_UI_HOST_PORT_<service>, so a service with two published ports still has one browser-visible address.
@@ -261,6 +279,19 @@ internal static partial class DeploymentPlanner
         if (builtIns.TryGetValue(name, out var builtIn))
         {
             return builtIn;
+        }
+
+        // The bridge names first, because this is the failure an operator will actually meet: a manifest that needs
+        // the bridge, installed on a node that opened none (the feature switched off, no IPv4 address, no qualifying
+        // interface, or a bind address this host does not own). Still a validation error and still refused — an
+        // endpoint the container cannot reach would fail later and less clearly — but named for the cause rather
+        // than reported as a token the user has never heard of.
+        if (string.Equals(name, BridgeEndpointVariable, StringComparison.Ordinal)
+            || string.Equals(name, BridgeTokenVariable, StringComparison.Ordinal))
+        {
+            throw new ExternalAppConfigurationException(
+                $"Service '{serviceName}' needs the container bridge, which this node did not open, so '${{{name}}}' has no value. "
+                + $"The bridge requires '{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.");
         }
 
         // A XE_UI_HOST_PORT_<service> naming a service that publishes nothing lands here, and so does a token the
