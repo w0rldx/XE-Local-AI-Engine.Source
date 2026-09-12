@@ -2,11 +2,15 @@
 
 > Reviewed: 2026-09-11 · Code-grounded.
 
-**External Apps** installs and runs a small set of curated, containerised applications on the node — the first is
-Odysseus — so a user gets a working application on their own machine without assembling a Compose file, a registry
-login and a reverse proxy by hand. The engine owns the containers: it pulls digest-pinned images, creates a private
-network per instance, publishes ports on loopback only, keeps each instance's data in a directory it owns, and
-reconciles what it stored against what the daemon actually holds.
+**External Apps** installs and runs a small set of curated, containerised applications on the node, so a user gets a
+working application on their own machine without assembling a Compose file, a registry login and a reverse proxy by
+hand. **The shipped catalog is empty**: it ships `{"applications": []}` until the XE-owned catalog repository exists,
+so a node installs nothing today. The rich manifest the contract is exercised against is a test fixture,
+`XE-Local-AI-Engine.Client.Testing/ExternalApps/sample-catalog-manifest.json`, which is never shipped.
+
+The engine owns the containers: it pulls digest-pinned images, creates a private network per instance, publishes
+ports on loopback only, keeps each instance's data in a directory it owns, and reconciles what it stored against
+what the daemon actually holds.
 
 The module spans the whole stack: `Client.Application/Services/Containers/` (the engine-owned container runtime
 layer), `Client.Application/Services/ExternalApps/` and its `Catalog/` subfolder (the catalog, the deployment
@@ -346,11 +350,12 @@ One directory per instance, under the node data directory (or `ExternalApps:Inst
   files/<service>/<name>               read-only assets materialised from the manifest
 ```
 
-Both halves are namespaced **by service**, because `storage[].name` is unique only within a service — Odysseus
-declares `data` on two of them — so a flat layout would bind one host directory into two containers holding
-different data. Directories are created `0700`. Lexical confinement is not confinement: every component from
-`external-apps` down is checked for a symlink before it is created, written or handed out as a bind source, and
-every write goes through a temp file opened `CreateNew` rather than an in-place overwrite.
+Both halves are namespaced **by service**, because `storage[].name` is unique only within a service — an application
+can declare `data` on two of them, as the sample manifest fixture does — so a flat layout would bind one host
+directory into two containers holding different data. Directories are created `0700`. Lexical confinement is not
+confinement: every component from `external-apps` down is checked for a symlink before it is created, written or
+handed out as a bind source, and every write goes through a temp file opened `CreateNew` rather than an in-place
+overwrite.
 
 **Why an engine-owned helper container deletes the contents.** An application's in-container user is not the engine.
 Under a rootless daemon a service that creates `0700` directories as, say, uid 977 leaves them owned by a host uid

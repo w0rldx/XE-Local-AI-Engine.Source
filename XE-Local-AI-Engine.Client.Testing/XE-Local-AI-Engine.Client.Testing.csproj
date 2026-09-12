@@ -5,6 +5,12 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <!-- A test-only catalog document, embedded so every consumer reads the same bytes regardless of its own
+         working directory. It is never shipped and no catalog build produces it. -->
+    <EmbeddedResource Include="ExternalApps\sample-catalog-manifest.json"/>
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="Microsoft.Extensions.Configuration.Abstractions"/>
     <PackageReference Include="Scrutor"/>
   </ItemGroup>

@@ -111,10 +111,11 @@ committed at `HEAD` and fails when a fingerprint moved while its `manifestVersio
 `HEAD`, not the file on disk, so rebuilding several times while authoring one change never asks for a second bump.
 
 The Python and C# implementations are two independent pieces of code producing one contract, and
-`OdysseusSeedManifestTests.Seed_EveryManifest_MatchesTheFingerprintTheConverterWrote` is the **sole** proof that they
-agree: it recomputes `ExternalAppManifestFingerprint.Compute` over every shipped manifest and compares it to the value
-the converter wrote. The converter's own pytest suite can only prove the Python side is self-consistent, so a drift in
-canonicalisation shows up there and nowhere else.
+`ShippedCatalogSeedTests` is where a shipped manifest's committed `manifestSha256` is compared against a fresh
+`ExternalAppManifestFingerprint.Compute`. **The shipped catalog is empty today, so that comparison currently has
+nothing to run over** — the first application published to the catalog restores the cross-language proof, and until
+then only `SampleCatalogManifestTests` pins the C# side of the canonical form, against a fixture the converter never
+produced. The converter's own pytest suite can only prove the Python side is self-consistent.
 
 ## Permissions
 
@@ -128,7 +129,7 @@ canonicalisation shows up there and nowhere else.
 
 ## What the catalog refuses
 
-- **Docker-socket access.** Variables such as `ODYSSEUS_ENABLE_HOST_DOCKER` and `DOCKER_GID` ask the application
+- **Docker-socket access.** Variables such as `<APP>_ENABLE_HOST_DOCKER` and `DOCKER_GID` ask the application
   to drive the host's container runtime. The policy layer forbids it; drop such variables.
 - **GPU devices.** No manifest requests GPU devices in this version. An application that needs acceleration uses
   an external model backend.

@@ -10,8 +10,8 @@
 
 ## Context
 
-The product is asked to install and run a small set of curated, containerised applications — the first is Odysseus —
-so that a user gets a working application on their own machine without assembling a Compose file, a registry login and
+The product is asked to install and run a small set of curated, containerised applications — curated by XE, not by
+the user — so that a user gets a working application on their own machine without assembling a Compose file, a registry login and
 a reverse proxy by hand. Such an application is long-lived, listens on a port, keeps data between restarts, and is
 composed of several images that must find each other by name.
 

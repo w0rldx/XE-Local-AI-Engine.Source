@@ -400,7 +400,7 @@ def test_the_converter_has_no_single_application_write_mode() -> None:
     """--application filtered the applications and then wrote the filtered document over BOTH outputs, deleting
     the rest. There is no single-application mode; every write covers the whole catalog."""
     with pytest.raises(SystemExit):
-        build_catalog.main(["--application", "odysseus"])
+        build_catalog.main(["--application", "fixture"])
 
 
 def test_a_non_integral_resource_value_is_refused(tmp_path: Path) -> None:

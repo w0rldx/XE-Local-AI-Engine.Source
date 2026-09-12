@@ -628,8 +628,14 @@ def committed_document() -> str | None:
 
 
 def build_document() -> dict[str, Any]:
-    """Build the whole catalog document. Always every application: both outputs are whole-catalog files."""
-    directories = sorted(entry for entry in APPLICATIONS_DIR.iterdir() if entry.is_dir())
+    """Build the whole catalog document. Always every application: both outputs are whole-catalog files.
+
+    A catalog with no applications builds the empty document rather than raising: that is what ships today, and
+    an absent ``applications/`` directory is what a checkout of an empty catalog carries, because git records no
+    empty directory.
+    """
+    entries = APPLICATIONS_DIR.iterdir() if APPLICATIONS_DIR.is_dir() else []
+    directories = sorted(entry for entry in entries if entry.is_dir())
     return {
         "schemaVersion": SCHEMA_VERSION,
         "generatedAtUtc": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),

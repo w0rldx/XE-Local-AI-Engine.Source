@@ -10,9 +10,9 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 ///     it until the container that publishes it is created.
 ///     <para>
 ///         The engine always passes an explicit host port rather than letting the daemon assign one, because
-///         <c>XE_UI_HOST_PORT_&lt;service&gt;</c> may appear in ANOTHER service's environment — Odysseus carries a
-///         browser-visible ntfy URL — so a daemon-assigned port would not be known in time to build the environment
-///         of the container that references it.
+///         <c>XE_UI_HOST_PORT_&lt;service&gt;</c> may appear in ANOTHER service's environment — a service can carry a
+///         browser-visible URL pointing at a sibling's published port — so a daemon-assigned port would not be known
+///         in time to build the environment of the container that references it.
 ///     </para>
 /// </summary>
 /// <remarks>

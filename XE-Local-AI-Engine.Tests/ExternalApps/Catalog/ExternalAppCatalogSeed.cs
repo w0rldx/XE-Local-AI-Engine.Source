@@ -1,14 +1,14 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps.Catalog;
 
 using System.Text;
-using System.Text.Json.Nodes;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>
 ///     Reads the REAL embedded <c>external-apps-catalog.seed.json</c> resource out of the application assembly, plus
-///     the in-repo authoring output it is copied from. Shared by the provider tests (which serve the seed as a
-///     synthetic "remote" body, so no test has to hand-write a document whose <c>manifestSha256</c> would then have to
-///     be recomputed) and by the seed-content tests.
+///     the in-repo authoring output it is copied from. Used by the tests that assert what the node actually ships.
+///     A test needing a document that declares an application uses
+///     <c>XE_Local_AI_Engine.Client.Testing.ExternalApps.SampleCatalogManifest</c> instead: the shipped seed declares
+///     none.
 /// </summary>
 internal static class ExternalAppCatalogSeed
 {
@@ -26,17 +26,6 @@ internal static class ExternalAppCatalogSeed
     ///     reporting a pass.
     /// </summary>
     public static string? DistPath { get; } = FindDistPath(AppContext.BaseDirectory);
-
-    /// <summary>
-    ///     Returns the seed with a different document-level <c>generatedAtUtc</c> — the one field no manifest
-    ///     fingerprint covers, so the result is still a valid document and is distinguishable from the bundled copy.
-    /// </summary>
-    public static string WithGeneratedAtUtc(string generatedAtUtc)
-    {
-        var document = JsonNode.Parse(RawJson)!.AsObject();
-        document["generatedAtUtc"] = generatedAtUtc;
-        return document.ToJsonString();
-    }
 
     private static byte[] ReadEmbeddedSeed()
     {

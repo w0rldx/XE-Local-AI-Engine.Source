@@ -1,8 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps.Catalog;
 
-using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
-using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation;
+using XE_Local_AI_Engine.Client.Testing.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -17,14 +16,16 @@ public sealed class ExternalAppCatalogRecordPrintingTests
     [Test]
     public void ToString_OnTheCatalogRecords_PrintsNoCatalogContent()
     {
-        var document = ExternalAppCatalogBundledLoader.Load(NullLogger.Instance);
+        // The shipped seed declares no application, so the fixture is the only document that can prove a manifest
+        // does not leak: with nothing to print, every assertion below would pass vacuously.
+        var document = AssertEx.NotNull(ExternalAppCatalogValidator.Validate(SampleCatalogManifest.RawJson).Document);
         var manifest = document.Applications[0];
         var snapshot = new ExternalAppCatalogSnapshot(document,
             ExternalAppCatalogSource.Bundled,
             FetchedAtUtc: null,
             SourceUrl: null,
             LastRefreshFailure: null);
-        var cache = new StoredExternalAppCatalogCache(ExternalAppCatalogSeed.RawJson,
+        var cache = new StoredExternalAppCatalogCache(SampleCatalogManifest.RawJson,
             DateTimeOffset.UnixEpoch,
             "https://catalog.test/applications.json",
             ETag: null);

@@ -7,6 +7,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog.Implementation;
+using XE_Local_AI_Engine.Client.Testing.ExternalApps;
 using XE_Local_AI_Engine.Tests.Providers.LlamaServer;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -27,8 +28,11 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     private readonly List<IDisposable> _disposables = [];
     private readonly string _dataRoot = Path.Combine(Path.GetTempPath(), "xe-external-apps-catalog-tests", Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
 
-    /// <summary>The seed served as a synthetic remote body; only its document-level timestamp differs from the bundled copy.</summary>
-    private static string RemoteJson { get; } = ExternalAppCatalogSeed.WithGeneratedAtUtc(RemoteGeneratedAtUtc);
+    /// <summary>
+    ///     The test-only sample manifest served as a synthetic remote body. It has to declare an application: the
+    ///     bundled seed ships none, so a remote document copied from it would be indistinguishable from bundled.
+    /// </summary>
+    private static string RemoteJson { get; } = SampleCatalogManifest.WithGeneratedAtUtc(RemoteGeneratedAtUtc);
 
     public void Dispose()
     {
@@ -53,7 +57,7 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
 
         AssertEx.Equal(ExternalAppCatalogSource.Bundled, snapshot.Source);
         AssertEx.Equal(expected: 0, handler.CallCount);
-        AssertEx.Contains(snapshot.Document.Applications, manifest => string.Equals(manifest.Id, "odysseus", StringComparison.Ordinal));
+        AssertEx.Empty(snapshot.Document.Applications, "the bundled seed ships no application; serving the remote body here would show one.");
     }
 
     [Test]
@@ -378,13 +382,14 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     [Test]
     public async Task GetApplicationAsync_ReturnsTheDeclaredManifestAndNullForAnUnknownId()
     {
+        // Served from the remote body, not the bundled seed: the seed declares no application to look up.
         var handler = new CountingStubHandler(HttpStatusCode.OK, RemoteJson);
-        var provider = BuildProvider(handler, refreshUrl: null, out _);
+        var provider = BuildProvider(handler, RemoteUrl, out _);
 
-        var declared = await provider.GetApplicationAsync("odysseus", CancellationToken.None);
+        var declared = await provider.GetApplicationAsync(SampleCatalogManifest.ApplicationId, CancellationToken.None);
         var unknown = await provider.GetApplicationAsync("not-in-the-catalog", CancellationToken.None);
 
-        AssertEx.Equal("odysseus", AssertEx.NotNull(declared).Id);
+        AssertEx.Equal(SampleCatalogManifest.ApplicationId, AssertEx.NotNull(declared).Id);
         AssertEx.Null(unknown);
     }
 

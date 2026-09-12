@@ -1,0 +1,242 @@
+{
+  "applications": [
+    {
+      "description": "A hand-authored manifest that exists only to exercise the catalog contract in tests. It never ships and no catalog build produces it. Three BusyBox containers: web serves a static page on the one published loopback port, api is the health-gated dependency web waits for, and cache is the started-only dependency behind api. Every manifest feature the engine has to honour appears at least once here — both dependsOn conditions, a host-gateway extra host, per-service storage sharing one storage name, an inlined read-only file asset, a capability add-back, and one variable of each declared type.",
+      "displayName": "Sample httpd",
+      "homepage": "https://example.invalid/sample-httpd",
+      "id": "sample-httpd",
+      "license": "GPL-2.0-only",
+      "manifestSha256": "b9b4aa21f4b7a5312eb8df3f8c3a737c92cd9d2031a10095b29a214b79da9a0d",
+      "manifestVersion": 1,
+      "permissions": {
+        "gpu": "none",
+        "hostFiles": "none",
+        "internet": true,
+        "localNetwork": true
+      },
+      "requires": [
+        "containers",
+        "networks",
+        "bindStorage",
+        "loopbackPortPublishing",
+        "healthChecks",
+        "restartPolicies",
+        "logs",
+        "imagePull"
+      ],
+      "resources": {
+        "cpuHint": 1,
+        "minimumMemoryMb": 256,
+        "pidsLimit": 128,
+        "recommendedMemoryMb": 512
+      },
+      "services": [
+        {
+          "capAdd": [
+            "CHOWN",
+            "SETGID",
+            "SETUID"
+          ],
+          "command": [
+            "httpd",
+            "-f",
+            "-p",
+            "8080",
+            "-h",
+            "/var/www"
+          ],
+          "dependsOn": [
+            {
+              "condition": "healthy",
+              "service": "api"
+            }
+          ],
+          "entrypoint": null,
+          "environment": {
+            "GREETING": "${GREETING}",
+            "INSTANCE_ID": "${XE_INSTANCE_ID}",
+            "LOG_LEVEL": "${LOG_LEVEL}",
+            "PUBLIC_ORIGIN": "http://127.0.0.1:${XE_UI_HOST_PORT_web}",
+            "SAMPLE_TOKEN": "${SAMPLE_TOKEN}"
+          },
+          "extraHosts": [
+            "host-gateway"
+          ],
+          "files": [
+            {
+              "containerPath": "/etc/sample/index.html",
+              "contentBase64": "PCFkb2N0eXBlIGh0bWw+Cjx0aXRsZT5YRSBzYW1wbGUgYXBwbGljYXRpb248L3RpdGxlPgo8aDE+SXQgd29ya3MuPC9oMT4K",
+              "sha256": "a7bb0ef630b144863cce0a8155ea29ec9a77d3b8c4cd018c65ecd5087849b519",
+              "source": "files/web/index.html"
+            }
+          ],
+          "healthcheck": null,
+          "image": "docker.io/library/busybox@sha256:bd5435590acb3d528ad5137449844c43df0d50061ddd38a345b582e4c43c56a1",
+          "imageTag": "1.36.1",
+          "name": "web",
+          "ports": [
+            {
+              "containerPort": 8080,
+              "openPath": "/",
+              "preferredHostPort": 8080,
+              "role": "ui"
+            }
+          ],
+          "readOnlyRootFilesystem": false,
+          "storage": [
+            {
+              "containerPath": "/var/www",
+              "name": "data"
+            }
+          ]
+        },
+        {
+          "capAdd": [
+            "DAC_OVERRIDE"
+          ],
+          "command": [
+            "httpd",
+            "-f",
+            "-p",
+            "9000",
+            "-h",
+            "/var/lib/api"
+          ],
+          "dependsOn": [
+            {
+              "condition": "started",
+              "service": "cache"
+            }
+          ],
+          "entrypoint": null,
+          "environment": {
+            "ENABLE_LOGGING": "${ENABLE_LOGGING}",
+            "MAX_CONNECTIONS": "${MAX_CONNECTIONS}"
+          },
+          "extraHosts": [],
+          "files": [],
+          "healthcheck": {
+            "intervalSeconds": 5,
+            "retries": 20,
+            "startPeriodSeconds": 10,
+            "test": [
+              "CMD-SHELL",
+              "wget -q -O - http://localhost:9000/ >/dev/null"
+            ],
+            "timeoutSeconds": 6
+          },
+          "image": "docker.io/library/busybox@sha256:50f1ee5194388d015a60d99348751ea8146ad8e6f4d1d86ce925398884cdb8d8",
+          "imageTag": "1.36.1",
+          "name": "api",
+          "ports": [],
+          "readOnlyRootFilesystem": false,
+          "storage": [
+            {
+              "containerPath": "/var/lib/api",
+              "name": "data"
+            }
+          ]
+        },
+        {
+          "capAdd": [],
+          "command": [
+            "sh",
+            "-c",
+            "while true; do sleep 3600; done"
+          ],
+          "dependsOn": [],
+          "entrypoint": null,
+          "environment": {},
+          "extraHosts": [],
+          "files": [],
+          "healthcheck": null,
+          "image": "docker.io/library/busybox@sha256:d20d40e98e207d7bcad204cd297e8375f49eebb4b260d6383443412fc3a0c632",
+          "imageTag": "1.36.1",
+          "name": "cache",
+          "ports": [],
+          "readOnlyRootFilesystem": false,
+          "storage": [
+            {
+              "containerPath": "/var/cache/sample",
+              "name": "cache"
+            }
+          ]
+        }
+      ],
+      "summary": "A test-only sample application: BusyBox httpd behind a health-gated echo service.",
+      "testedVersion": "1.36.1",
+      "trust": "xeCatalog",
+      "variables": [
+        {
+          "advanced": false,
+          "allowedValues": null,
+          "default": "hello",
+          "description": "Text the sample page greets with.",
+          "label": "Greeting",
+          "name": "GREETING",
+          "required": false,
+          "type": "string",
+          "validation": {
+            "maxLength": 64,
+            "minLength": 1,
+            "pattern": null
+          }
+        },
+        {
+          "advanced": false,
+          "allowedValues": null,
+          "default": null,
+          "description": "Required secret. A secret never ships a default.",
+          "label": "Sample token",
+          "name": "SAMPLE_TOKEN",
+          "required": true,
+          "type": "secret",
+          "validation": {
+            "maxLength": 256,
+            "minLength": 8,
+            "pattern": null
+          }
+        },
+        {
+          "advanced": true,
+          "allowedValues": null,
+          "default": "32",
+          "description": "How many connections the echo service accepts.",
+          "label": "Maximum connections",
+          "name": "MAX_CONNECTIONS",
+          "required": false,
+          "type": "integer",
+          "validation": null
+        },
+        {
+          "advanced": true,
+          "allowedValues": null,
+          "default": "true",
+          "description": null,
+          "label": "Enable logging",
+          "name": "ENABLE_LOGGING",
+          "required": false,
+          "type": "boolean",
+          "validation": null
+        },
+        {
+          "advanced": true,
+          "allowedValues": [
+            "debug",
+            "info",
+            "warn"
+          ],
+          "default": "info",
+          "description": null,
+          "label": "Log level",
+          "name": "LOG_LEVEL",
+          "required": false,
+          "type": "enum",
+          "validation": null
+        }
+      ]
+    }
+  ],
+  "generatedAtUtc": "2026-09-12T00:00:00Z",
+  "schemaVersion": 1
+}

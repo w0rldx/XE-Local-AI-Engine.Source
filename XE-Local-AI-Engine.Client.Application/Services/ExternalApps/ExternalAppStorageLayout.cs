@@ -11,9 +11,9 @@ using XE_Local_AI_Engine.Providers.Abstractions;
 ///     The on-disk shape of one installed application instance, and the only code that creates, materialises or
 ///     deletes anything under it.
 ///     <para>
-///         Both halves are namespaced BY SERVICE. <c>storage[].name</c> is unique only within a service — Odysseus
-///         declares <c>data</c> on two of them — so a flat layout would bind one host directory into two containers
-///         holding different data.
+///         Both halves are namespaced BY SERVICE. <c>storage[].name</c> is unique only within a service — an
+///         application can declare <c>data</c> on two of them — so a flat layout would bind one host directory into
+///         two containers holding different data.
 ///     </para>
 /// </summary>
 /// <remarks>
