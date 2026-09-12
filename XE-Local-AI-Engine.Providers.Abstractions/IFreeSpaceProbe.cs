@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+namespace XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Tiny seam over free-disk-space measurement so the store's hard disk guard is unit-testable without touching a

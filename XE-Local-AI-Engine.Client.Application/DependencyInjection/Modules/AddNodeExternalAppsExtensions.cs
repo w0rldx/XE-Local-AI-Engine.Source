@@ -7,7 +7,7 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 /// <summary>

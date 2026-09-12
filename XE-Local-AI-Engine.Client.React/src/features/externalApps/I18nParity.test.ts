@@ -81,7 +81,7 @@ describe("External Apps enum label maps are complete in en.json", () => {
 		{ section: "permissions.added", members: externalAppPermissionNames },
 		// Keyed by the map's own member names, which is how `externalAppConflictMessageKey` builds the key.
 		{ section: "conflict", members: Object.keys(externalAppConflictTypes) },
-		// The seven blocked reasons, shared by install and update — `CatalogMissing` is reachable only from update.
+		// The eight blocked reasons, shared by install and update — `CatalogMissing` is reachable only from update.
 		{
 			section: "install.blocked",
 			members: [
@@ -92,6 +92,7 @@ describe("External Apps enum label maps are complete in en.json", () => {
 				"InsufficientDisk",
 				"AlreadyInstalled",
 				"CatalogMissing",
+				"BridgeUnavailable",
 			],
 		},
 	] as const;
@@ -113,11 +114,11 @@ describe("External Apps enum label maps are complete in en.json", () => {
 		}
 	});
 
-	it("gives update the same seven blocked reasons install has, by key", () => {
+	it("gives update the same eight blocked reasons install has, by key", () => {
 		const install = Object.keys(resolvePath(en as LocaleShape, "pages.externalApps.install.blocked") as LocaleShape);
 		const update = Object.keys(resolvePath(en as LocaleShape, "pages.externalApps.update.blocked") as LocaleShape);
 		expect(update.toSorted()).toEqual(install.toSorted());
-		expect(install).toHaveLength(7);
+		expect(install).toHaveLength(8);
 	});
 
 	it("never claims the network is denied, because V1 enforces no outbound restriction", () => {

@@ -103,6 +103,9 @@ describe("InstanceActions", () => {
 		expect((screen.getByTestId("external-app-action-open") as HTMLButtonElement).disabled).toBe(true);
 	});
 
+	// Stop follows the server's admission rule, not the happy path: `AdmittedStatusFor` takes it from Running, Failed
+	// and StoppedUnexpectedly, and on the two failure states it is what tears the leftover containers down. Restart
+	// stays Running-only.
 	it("offers Start for a stopped, unexpectedly stopped or failed instance, and Stop/Restart while running", () => {
 		const { unmount } = renderWithProviders(
 			<ConfirmProvider>
@@ -113,10 +116,32 @@ describe("InstanceActions", () => {
 		expect(screen.queryByTestId("external-app-action-stop")).toBeNull();
 		unmount();
 
+		for (const status of ["Failed", "StoppedUnexpectedly"] as const) {
+			const failed = renderWithProviders(
+				<ConfirmProvider>
+					<InstanceActions instance={externalAppInstance({ status })} />
+				</ConfirmProvider>,
+			);
+			expect(screen.getByTestId("external-app-action-start"), status).toBeDefined();
+			expect(screen.getByTestId("external-app-action-stop"), status).toBeDefined();
+			expect(screen.queryByTestId("external-app-action-restart"), status).toBeNull();
+			failed.unmount();
+		}
+
 		renderActions(externalAppInstance({ status: "Running" }));
 		expect(screen.getByTestId("external-app-action-stop")).toBeDefined();
 		expect(screen.getByTestId("external-app-action-restart")).toBeDefined();
 		expect(screen.queryByTestId("external-app-action-start")).toBeNull();
+	});
+
+	it("sends the rendered version as expectedVersion when stopping a failed instance", async () => {
+		const requests = capture("post", `external-apps/instances/${instanceId}/stop`, externalAppInstanceSummary());
+		renderActions(externalAppInstance({ status: "Failed", version: 11 }));
+
+		fireEvent.click(screen.getByTestId("external-app-action-stop"));
+
+		await waitFor(() => expect(requests).toHaveLength(1));
+		expect(requests[0]?.body).toEqual({ expectedVersion: 11 });
 	});
 
 	it("sends the rendered version as expectedVersion on start", async () => {

@@ -356,11 +356,11 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
                 nameof(specification));
         }
 
-        if (!specification.Image.Contains("@sha256:", StringComparison.Ordinal))
+        if (!ContainerImageReference.IsContentAddressed(specification.Image))
         {
             throw new ArgumentException(
                 $"Image '{specification.Image}' is not digest-pinned. A tag names whatever the registry last pushed, "
-                + "not the bytes the catalog approved.",
+                + "not the bytes the catalog approved; give a 'name@sha256:<digest>' reference or a bare image id.",
                 nameof(specification));
         }
 

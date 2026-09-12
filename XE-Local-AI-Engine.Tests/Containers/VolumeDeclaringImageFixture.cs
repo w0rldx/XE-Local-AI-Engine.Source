@@ -5,7 +5,6 @@ using System.Globalization;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
-using TUnit.Core.Exceptions;
 
 /// <summary>
 ///     An image whose own Dockerfile declares a <c>VOLUME</c>, built in the daemon and removed again.
@@ -18,8 +17,9 @@ using TUnit.Core.Exceptions;
 ///     <para>
 ///         The reference is <b>computed every run, never hardcoded</b>. A local build's <c>RepoDigests</c> entry
 ///         is a manifest digest over the base image, the Dockerfile bytes and the builder's own output format, so
-///         a base bump, a one-byte edit or a daemon upgrade all move it. A test carrying a copy of it would fail
-///         for a reason that has nothing to do with what it asserts.
+///         a base bump, a one-byte edit or a daemon upgrade all move it — and on a store that records no
+///         <c>RepoDigests</c> for a local build there is only the image ID, which moves for the same reasons. A
+///         test carrying a copy of either would fail for a reason that has nothing to do with what it asserts.
 ///     </para>
 /// </summary>
 public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
@@ -38,14 +38,17 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
         Reference = reference;
     }
 
-    /// <summary>The digest-pinned reference the runtime under test will accept, resolved from this build.</summary>
+    /// <summary>
+    ///     The content-addressed reference the runtime under test will accept, resolved from this build: the
+    ///     <c>RepoDigests</c> entry where the image store recorded one, otherwise the bare image ID.
+    /// </summary>
     public string Reference { get; }
 
     /// <summary>The local tag the build was given, which is what identifies the image for removal.</summary>
     public string Tag { get; }
 
     /// <summary>
-    ///     Build the image and resolve its digest-pinned reference.
+    ///     Build the image and resolve the content-addressed reference that names it.
     /// </summary>
     /// <param name="client">
     ///     A raw Docker client, whose OWNERSHIP transfers to the fixture: disposing the fixture disposes it.
@@ -88,12 +91,25 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
                     .ConfigureAwait(false);
 
         var inspected = await client.Images.InspectImageAsync(tag, cancellationToken).ConfigureAwait(false);
+
+        // RepoDigests first, the image ID second. A `name@sha256:` reference resolves THROUGH RepoDigests, and the
+        // classic overlay2 graphdriver records none for an image that was neither pulled nor pushed. The bare
+        // `sha256:<hex>` ID such a store always has is content-addressed just the same, and the runtime's guard
+        // accepts it — so this assertion is makeable on every image store rather than only on the ones that
+        // record a digest for a local build.
         var reference = inspected.RepoDigests?.FirstOrDefault();
+        if (string.IsNullOrWhiteSpace(reference))
+        {
+            reference = inspected.ID;
+        }
 
         if (string.IsNullOrWhiteSpace(reference))
         {
             await RemoveAsync(client, tag).ConfigureAwait(false);
-            throw new SkipTestException(NoDigestReason(tag));
+            throw new InvalidOperationException(
+                $"The daemon reported neither a RepoDigests entry nor an image ID for the image it has just built from '{tag}', "
+                + "so there is no reference to create a container from at all. That is an image store that did not record "
+                + "the build, not a host this assertion does not apply to.");
         }
 
         return new VolumeDeclaringImageFixture(client, tag, reference);
@@ -103,33 +119,6 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
     {
         await RemoveAsync(_client, Tag).ConfigureAwait(false);
         _client.Dispose();
-    }
-
-    /// <summary>
-    ///     Why an image store that records no <c>RepoDigests</c> for a local build cannot make this assertion,
-    ///     and why the image id is not a way around it.
-    ///     <para>
-    ///         The daemon resolves a <c>name@sha256:…</c> reference THROUGH <c>RepoDigests</c>, not by content:
-    ///         measured on Docker Engine 29.8.0 by creating from a repository name that holds the right digest
-    ///         (accepted) and from an unrelated name holding the same digest (refused). So on a store that
-    ///         records none — the classic overlay2 graphdriver never does for an image that was neither pulled
-    ///         nor pushed — there is no <c>@sha256:</c> reference at all. The image ID does resolve, but it is a
-    ///         bare <c>sha256:…</c> with no <c>@</c>, which is exactly what <c>RunContainerAsync</c>'s
-    ///         digest-pin guard refuses, and that guard is product behaviour this fixture will not bend.
-    ///     </para>
-    ///     <para>
-    ///         So the assertion is genuinely unmakeable there rather than merely inconvenient, and the reason
-    ///         carries the phrase <c>scripts/run-docker-smoke-local.sh</c> recognises, so such a box reports it as
-    ///         an assertion it cannot make rather than as a failed gate.
-    ///     </para>
-    /// </summary>
-    private static string NoDigestReason(string tag)
-    {
-        return $"SKIPPED — this daemon's image store recorded no RepoDigests for the locally built image '{tag}', and a "
-               + "name@sha256: reference resolves through RepoDigests rather than by content, so there is no digest-pinned "
-               + "reference for the runtime to accept. The image id resolves but carries no '@', which the digest-pin guard "
-               + "refuses by design. An image store that records a digest for a local build (the containerd snapshotter "
-               + "does) can make this assertion; no counterpart exists for this host.";
     }
 
     /// <summary>

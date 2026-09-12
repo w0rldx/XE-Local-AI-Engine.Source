@@ -111,6 +111,10 @@ and asserts the mapped set matches it **in both directions**.
 
 Sonar S1135 is an error under warnings-as-errors. Do not replace `TODO`/`FIXME`/`HACK`/`XXX` with another task marker. Describe the present limitation or rationale directly, and keep work tracking outside source comments. Debug may accept one of the banned markers; Release will not.
 
+### A `[GeneratedRegex]` without `matchTimeoutMilliseconds` fails the build — in **Release** only
+
+**Rule:** every `[GeneratedRegex]` names a `matchTimeoutMilliseconds` (copy the shape of `DeploymentPlanner.SubstitutionTokenRegex`). **Failure prevented:** Meziantou MA0009 is an error under the Release analyzer set and silent in Debug, so a Debug-green iteration loop hands the Release gate a red it never saw. **Authority:** `ContainerImageReference.BareImageIdRegex`, paid for in the External Apps follow-ups batch 3 (2026-09-12).
+
 ### Running backend tests
 
 - Tests use TUnit on Microsoft.Testing.Platform. Use `--treenode-filter`, not `--filter`:
@@ -568,7 +572,7 @@ llama-server override (§ llama.cpp binaries) before `dev-start.sh` for a GPU ro
 user-level `installed-runtime.json`. **That scratch `XDG_DATA_HOME` must MIRROR the real one, not be empty**: mise
 installs its toolchains under it, so a bare directory breaks the `dotnet` shim and Aspire exits 7 reporting "the
 `--apphost` option specified a project that does not exist" — a toolchain failure that reads as a missing project.
-Build it as one symlink per child of `~/.local/share`, omitting only `XE-Local-AI-Engine`. **And in Aspire dev mode
+Build it as one symlink per child of `~/.local/share`, omitting only `XE-Local-AI-Engine`. With mise 2026.8 the symlink alone is no longer enough: the shims still report "aspire is not a valid shim" and `dev-start.sh` refuses with "Could not query Aspire state safely", so also pin `MISE_DATA_DIR=$HOME/.local/share/mise` on the same invocation (paid for in the External Apps follow-ups batch 3, 2026-09-12). **And in Aspire dev mode
 `DesktopBootstrap` does not run**, so `HuggingFace:ModelsDirectory` falls back to `AppContext.BaseDirectory/models`
 and an isolated node lists no models at all; set `HuggingFace__ModelsDirectory` on the same invocation whenever the
 round needs a model. Two data traps: `agent_execution_logs` envelope rows terminalize asynchronously

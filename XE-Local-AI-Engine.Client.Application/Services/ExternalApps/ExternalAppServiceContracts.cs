@@ -33,7 +33,18 @@ public enum ExternalAppBlockedReason
     AlreadyInstalled = 5,
 
     /// <summary>The installed application is no longer in the catalog, so there is no target manifest to update to.</summary>
-    CatalogMissing = 6
+    CatalogMissing = 6,
+
+    /// <summary>
+    ///     The manifest reads the container bridge — <c>${XE_BRIDGE_ENDPOINT}</c> or <c>${XE_BRIDGE_TOKEN}</c> — and
+    ///     this node did not open one, so the deployment cannot be planned at all.
+    ///     <para>
+    ///         Both previews report it, and both commands refuse on it. The planner raises the same refusal, but it
+    ///         raises it inside the pipeline: on an install that is after the row exists, and on an update it would
+    ///         be after a version that was working had been stopped.
+    ///     </para>
+    /// </summary>
+    BridgeUnavailable = 7
 }
 
 /// <summary>

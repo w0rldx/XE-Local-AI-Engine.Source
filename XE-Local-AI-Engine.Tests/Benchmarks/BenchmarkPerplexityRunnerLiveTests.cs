@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Benchmarks;
 
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Benchmarks;
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;

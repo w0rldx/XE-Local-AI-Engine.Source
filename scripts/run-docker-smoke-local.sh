@@ -259,9 +259,9 @@ ledger_pass "3-discovery"
 #   * A PAIR, where the other half runs instead — the rootless and rootful identity-mapping tests. Exactly one
 #     applies to any daemon and the inapplicable half names its counterpart.
 #   * A LONE assertion with no counterpart at all — the inverted-identity refusal, which is only reachable on a
-#     rootless daemon, and the volume-declaring fixture, which needs an image store that records a digest for a
-#     locally built image. On a box where those do not apply the assertion is simply never made, and nothing
-#     else makes it.
+#     rootless daemon. On a box where it does not apply the assertion is simply never made, and nothing else
+#     makes it. (The volume-declaring fixture used to belong here too. It no longer skips: it falls back to the
+#     bare image id, which the runtime's guard accepts, so the assertion is makeable on every image store.)
 #
 # Refusing either would fail this runner on a perfectly good box; accepting any skip at all would reopen the
 # hollow-gate hole it exists to close. So the rule is: every skipped test must carry one of the two phrases

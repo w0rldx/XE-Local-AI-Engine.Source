@@ -31,7 +31,12 @@ public enum ContainerRestartMode
 /// </summary>
 public sealed record ContainerSpecification
 {
-    /// <summary>Digest-pinned image reference. Must contain <c>@sha256:</c>; the runtime refuses a tag before any wire call.</summary>
+    /// <summary>
+    ///     Content-addressed image reference: either <c>name@sha256:&lt;digest&gt;</c>, which is what the catalog
+    ///     ships, or a bare image id <c>sha256:&lt;64 lowercase hex&gt;</c>, which is what a daemon reports for an
+    ///     image built locally on a store that records no <c>RepoDigests</c>. The runtime refuses anything else —
+    ///     a tag above all — before any wire call. <c>ContainerImageReference.IsContentAddressed</c> is the rule.
+    /// </summary>
     public required string Image { get; init; }
 
     /// <summary>Engine-generated container name.</summary>

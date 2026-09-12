@@ -370,6 +370,48 @@ public sealed class DeploymentPlannerTests
     }
 
     /// <summary>
+    ///     <c>RequiresBridge</c> is what admission asks instead of trial-planning, so it has to agree with the
+    ///     refusal above about the same manifest: a reference to either built-in needs a grant.
+    /// </summary>
+    [Test]
+    [Arguments("XE_BRIDGE_ENDPOINT")]
+    [Arguments("XE_BRIDGE_TOKEN")]
+    public void RequiresBridge_ForAManifestThatReferencesABridgeBuiltIn_IsTrue(string token)
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"http://${{{token}}}/llm/v1"))
+        ]);
+
+        AssertEx.True(DeploymentPlanner.RequiresBridge(manifest),
+            $"A manifest that reads {token} cannot be planned without a grant, so admission has to see that coming.");
+        _ = AssertEx.Throws<ExternalAppConfigurationException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)),
+            "The two answers are about the same manifest and must not disagree.");
+    }
+
+    /// <summary>
+    ///     Only a <c>${…}</c> reference counts. A manifest that merely spells a built-in's NAME in prose, or reads
+    ///     an ordinary declared variable, plans fine without a bridge and must not be reported as needing one.
+    /// </summary>
+    [Test]
+    public void RequiresBridge_ForAManifestThatReferencesNeither_IsFalse()
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web",
+                environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["OPENAI_BASE_URL"] = "${LLM_HOST}",
+                    ["NOTE"] = "point XE_BRIDGE_ENDPOINT at this yourself"
+                })
+        ],
+            variables: [ExternalAppTestManifests.Variable("LLM_HOST", @default: "http://localhost:11434")]);
+
+        AssertEx.False(DeploymentPlanner.RequiresBridge(manifest), "Nothing here substitutes a bridge built-in.");
+        AssertEx.NotNull(Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)));
+    }
+
+    /// <summary>
     ///     The bridge message must not swallow the generic one: a token the manifest simply never declared is a
     ///     different mistake and still has to be reported as itself.
     /// </summary>

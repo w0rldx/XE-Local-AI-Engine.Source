@@ -6282,8 +6282,8 @@
 					"gpu": "Use of the graphics card",
 					"capabilities": "Additional system privileges",
 					"writableRootFilesystem": "Permission to change its own program files",
-					"publishedPorts": "Another address on this computer",
-					"extraHosts": "Additional name entries for this computer"
+					"publishedPorts": "A port on this computer (127.0.0.1) where you can open it",
+					"extraHosts": "Access to other addresses of this computer"
 				},
 				"effective": {
 					"title": "What each part gets",
@@ -6351,7 +6351,8 @@
 					"InsufficientMemory": "There is not enough memory free.",
 					"InsufficientDisk": "There is not enough disk space free.",
 					"AlreadyInstalled": "This application is already installed.",
-					"CatalogMissing": "This application is no longer offered in the catalog."
+					"CatalogMissing": "This application is no longer offered in the catalog.",
+					"BridgeUnavailable": "This application needs the container bridge, which this node has not opened. Enable the container bridge in the node's configuration (ContainerBridge:Enabled) and try again."
 				},
 				"progress": {
 					"downloading": "Downloading {{service}} — {{completed}} of {{total}} parts",
@@ -6426,7 +6427,8 @@
 					"InsufficientMemory": "There is not enough memory free.",
 					"InsufficientDisk": "There is not enough disk space free.",
 					"AlreadyInstalled": "This application is already installed.",
-					"CatalogMissing": "This application is no longer offered in the catalog."
+					"CatalogMissing": "This application is no longer offered in the catalog.",
+					"BridgeUnavailable": "The new version needs the container bridge, which this node has not opened. Enable the container bridge in the node's configuration (ContainerBridge:Enabled) and try again."
 				},
 				"succeeded": "{{name}} was updated.",
 				"failed": "{{name}} could not be updated."

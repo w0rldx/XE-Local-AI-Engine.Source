@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 /// <summary>
 ///     Production <see cref="IFreeSpaceProbe" /> backed by <see cref="DriveInfo" />.

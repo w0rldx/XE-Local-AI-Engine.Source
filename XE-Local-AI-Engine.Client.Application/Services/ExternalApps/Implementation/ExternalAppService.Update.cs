@@ -344,7 +344,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
         // alreadyInstalled is false on purpose: this application IS installed, and that is the precondition of an
         // update rather than a reason to refuse one.
-        return new InstallAdmission(BlockingReason(alreadyInstalled: false, resolution, target, missing, resources),
+        return new InstallAdmission(BlockingReason(alreadyInstalled: false, BridgeUnavailableFor(target), resolution, target, missing, resources),
             resolution,
             missing,
             resources,

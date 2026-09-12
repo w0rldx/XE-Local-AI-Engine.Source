@@ -6282,8 +6282,8 @@
 					"gpu": "Nutzung der Grafikkarte",
 					"capabilities": "Zusätzliche Systemberechtigungen",
 					"writableRootFilesystem": "Die Erlaubnis, eigene Programmdateien zu ändern",
-					"publishedPorts": "Eine weitere Adresse auf diesem Computer",
-					"extraHosts": "Zusätzliche Namenseinträge für diesen Computer"
+					"publishedPorts": "Einen Port auf diesem Computer (127.0.0.1), über den Sie die Anwendung öffnen können",
+					"extraHosts": "Zugriff auf weitere Adressen dieses Computers"
 				},
 				"effective": {
 					"title": "Was jeder Bestandteil erhält",
@@ -6351,7 +6351,8 @@
 					"InsufficientMemory": "Es ist nicht genug Arbeitsspeicher frei.",
 					"InsufficientDisk": "Es ist nicht genug Speicherplatz frei.",
 					"AlreadyInstalled": "Diese Anwendung ist bereits installiert.",
-					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten."
+					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten.",
+					"BridgeUnavailable": "Diese Anwendung benötigt die Container-Bridge, die dieser Knoten nicht geöffnet hat. Aktivieren Sie die Container-Bridge in der Konfiguration des Knotens (ContainerBridge:Enabled) und versuchen Sie es erneut."
 				},
 				"progress": {
 					"downloading": "{{service}} wird heruntergeladen — {{completed}} von {{total}} Teilen",
@@ -6426,7 +6427,8 @@
 					"InsufficientMemory": "Es ist nicht genug Arbeitsspeicher frei.",
 					"InsufficientDisk": "Es ist nicht genug Speicherplatz frei.",
 					"AlreadyInstalled": "Diese Anwendung ist bereits installiert.",
-					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten."
+					"CatalogMissing": "Diese Anwendung wird im Katalog nicht mehr angeboten.",
+					"BridgeUnavailable": "Die neue Version benötigt die Container-Bridge, die dieser Knoten nicht geöffnet hat. Aktivieren Sie die Container-Bridge in der Konfiguration des Knotens (ContainerBridge:Enabled) und versuchen Sie es erneut."
 				},
 				"succeeded": "{{name}} wurde aktualisiert.",
 				"failed": "{{name}} konnte nicht aktualisiert werden."

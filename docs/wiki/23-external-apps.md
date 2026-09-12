@@ -193,6 +193,13 @@ restart, so a second node on the same box (another checkout, or a desktop node b
 and port taken, logs a warning and boots without a bridge rather than failing to start. Give the node that should
 have one a free `ContainerBridge:Port`.
 
+A node without a bridge cannot plan a manifest that reads either built-in, and that is answered at **admission**
+rather than discovered in the pipeline: `DeploymentPlanner.RequiresBridge` reads the same substitution surface and
+the same token regex `Plan` does, and `ExternalAppService.BridgeUnavailableFor` pairs it with whether this node
+opened a bridge. Both previews then report `BridgeUnavailable` and both commands refuse with it — so the catalog
+page does not offer an install that would fail after the row exists, and the update dialog does not offer an update
+that would fail after a working version had been stopped.
+
 **(b) Containers may run as in-container root.** The engine passes no `--user`, deliberately: the curated images
 start as root and drop privileges through their own entrypoints, and forcing a uid breaks that and breaks a port-80
 bind. The boundary is the container, `cap_drop ALL`, seccomp, `no-new-privileges` and the loopback-only network —

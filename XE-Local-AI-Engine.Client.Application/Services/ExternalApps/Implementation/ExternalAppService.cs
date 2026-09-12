@@ -115,6 +115,17 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>
+    ///     Whether <paramref name="manifest" /> needs the container bridge and this node did not open one — the
+    ///     state <c>DeploymentPlanner.Plan</c> would later report as an unresolvable token. Asked at admission by
+    ///     the install and the update path alike, so a preview can render it and a command can refuse it before a
+    ///     row is written or a running version is stopped.
+    /// </summary>
+    private bool BridgeUnavailableFor(ApplicationManifest manifest)
+    {
+        return _bridgeEndpoints.Current is null && DeploymentPlanner.RequiresBridge(manifest);
+    }
+
+    /// <summary>
     ///     The grant for a token already in hand, so the Start path that rebuilds from a row it has just read does
     ///     not read that row a second time.
     /// </summary>

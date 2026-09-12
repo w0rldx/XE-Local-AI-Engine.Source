@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Providers.Abstractions;
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 
 /// <summary>
 ///     The admission gate: has this machine the memory and the disk to take one more application.

@@ -285,7 +285,7 @@ internal sealed partial class ExternalAppService
         var missing = resolution.Capabilities.FindMissing(manifest.Requires);
         var resources = await _resourceGate.EvaluateAsync(manifest, _layout.Root, cancellationToken).ConfigureAwait(false);
 
-        return new InstallAdmission(BlockingReason(existing.Count > 0, resolution, manifest, missing, resources),
+        return new InstallAdmission(BlockingReason(existing.Count > 0, BridgeUnavailableFor(manifest), resolution, manifest, missing, resources),
             resolution,
             missing,
             resources,
@@ -293,6 +293,7 @@ internal sealed partial class ExternalAppService
     }
 
     private static ExternalAppBlockedReason? BlockingReason(bool alreadyInstalled,
+        bool bridgeUnavailable,
         ContainerRuntimeResolution resolution,
         ApplicationManifest manifest,
         IReadOnlyList<string> missingCapabilities,
@@ -321,6 +322,14 @@ internal sealed partial class ExternalAppService
             return ExternalAppBlockedReason.RuntimeIncompatible;
         }
 
+        // Ahead of the resource verdict, and for the same reason already-installed leads: no amount of free memory
+        // clears it. A manifest that reads a bridge built-in cannot be planned on a node that opened no bridge, so
+        // reporting a shortage beside it would be advice about the wrong thing.
+        if (bridgeUnavailable)
+        {
+            return ExternalAppBlockedReason.BridgeUnavailable;
+        }
+
         if (resources.Satisfied)
         {
             return null;
@@ -341,6 +350,11 @@ internal sealed partial class ExternalAppService
             // The resolution's own prose, never a second description of the same state written here.
             ExternalAppBlockedReason.RuntimeUnavailable => admission.Runtime.Message,
             ExternalAppBlockedReason.InsufficientMemory or ExternalAppBlockedReason.InsufficientDisk => admission.Resources.Message,
+            // Admission's own wording, naming the same setting the planner's refusal names — the planner can add
+            // which service and which token failed, which admission has not looked at and must not invent.
+            ExternalAppBlockedReason.BridgeUnavailable =>
+                "This application reads the node's container bridge, and this node did not open one. Turn it on with "
+                + $"'{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.",
             _ => "This application cannot be installed on this node right now."
         };
 

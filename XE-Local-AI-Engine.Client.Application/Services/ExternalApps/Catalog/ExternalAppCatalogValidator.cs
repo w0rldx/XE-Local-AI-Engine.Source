@@ -5,6 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Client.Services.Containers;
 
 /// <summary>
 ///     Validates a candidate External Apps catalog document — the schema-version gate plus every content rule a
@@ -103,10 +104,15 @@ public static partial class ExternalAppCatalogValidator
     ///     Whether an image reference is pinned as <c>&lt;reference&gt;@sha256:&lt;64 lowercase hex digits&gt;</c>.
     ///     Public because the rule has a second enforcement point — the operator-configured storage helper image —
     ///     and two copies of this pattern would be two rules that could drift apart.
+    ///     <para>
+    ///         The pattern itself lives in <c>ContainerImageReference.IsDigestPinned</c>, which the container
+    ///         runtimes' own guard reads, so the catalog rule and the runtime guard are one rule. It lives THERE
+    ///         rather than here because the container layer must not depend on External Apps.
+    ///     </para>
     /// </summary>
     public static bool IsDigestPinnedImage(string? image)
     {
-        return image is not null && DigestPinnedImageRegex().IsMatch(image);
+        return ContainerImageReference.IsDigestPinned(image);
     }
 
     /// <summary>Parses and validates <paramref name="rawJson" />. Never throws — a parse failure is a validation failure.</summary>
@@ -1436,9 +1442,6 @@ public static partial class ExternalAppCatalogValidator
 
     [GeneratedRegex(@"\A[A-Za-z_][A-Za-z0-9_]*\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex IdentifierRegex();
-
-    [GeneratedRegex(@"\A[^\s@]+@sha256:[0-9a-f]{64}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
-    private static partial Regex DigestPinnedImageRegex();
 
     [GeneratedRegex(@"\A[0-9a-f]{64}\z", RegexOptions.CultureInvariant, matchTimeoutMilliseconds: 1000)]
     private static partial Regex Sha256HexRegex();

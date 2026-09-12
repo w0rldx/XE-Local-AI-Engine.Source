@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Benchmarks;
 
 using System.Globalization;
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
+using XE_Local_AI_Engine.Providers.Abstractions;
 
 public sealed class BenchmarkKldCacheOptions
 {

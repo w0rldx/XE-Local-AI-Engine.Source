@@ -100,8 +100,8 @@ describe("PermissionsPanel", () => {
 		const added = screen.getByTestId("external-app-permissions-added");
 		expect(added.textContent).toContain("Additional system privileges");
 		expect(added.textContent).toContain("Permission to change its own program files");
-		expect(added.textContent).toContain("Another address on this computer");
-		expect(added.textContent).toContain("Additional name entries for this computer");
+		expect(added.textContent).toContain("A port on this computer (127.0.0.1) where you can open it");
+		expect(added.textContent).toContain("Access to other addresses of this computer");
 		unmount();
 
 		renderWithProviders(<PermissionsPanel permissions={externalAppPermissions()} addedPermissions={["seccompProfile"]} />);
@@ -136,7 +136,7 @@ describe("PermissionsPanel", () => {
 		const web = screen.getByTestId("external-app-permission-part-web");
 		expect(web.textContent).toContain("Part: web");
 		expect(web.textContent).toContain("Additional system privileges");
-		expect(web.textContent).toContain("Another address on this computer");
+		expect(web.textContent).toContain("A port on this computer (127.0.0.1) where you can open it");
 
 		// `worker` holds neither, which is exactly the case an application-level block hides.
 		const worker = screen.getByTestId("external-app-permission-part-worker");
@@ -158,7 +158,7 @@ describe("PermissionsPanel", () => {
 
 		const web = screen.getByTestId("external-app-permission-part-web");
 		expect(web.textContent).toContain("Permission to change its own program files");
-		expect(web.textContent).toContain("Additional name entries for this computer");
+		expect(web.textContent).toContain("Access to other addresses of this computer");
 	});
 
 	// The four aggregates are the SERVER's verdict. This fixture makes them disagree with the services map on purpose:
@@ -180,7 +180,7 @@ describe("PermissionsPanel", () => {
 			"Permission to change its own program files",
 		);
 		expect(screen.getByTestId("external-app-permission-effective-extraHosts").textContent).toContain(
-			"Additional name entries for this computer",
+			"Access to other addresses of this computer",
 		);
 		expect(screen.queryByTestId("external-app-permission-effective-capabilities")).toBeNull();
 		expect(screen.queryByTestId("external-app-permission-effective-publishedPorts")).toBeNull();

@@ -157,38 +157,40 @@ export function InstanceActions({ instance, onUpdate, compact = false, "data-tes
 				</Button>
 			) : null}
 
-			{status === "Running" ? (
-				<>
-					<Button
-						variant="default"
-						loading={stop.isPending}
-						onClick={withVersion((version) =>
-							stop.mutate(
-								{ path: { instanceId }, body: { expectedVersion: version } },
-								{ onSuccess: announce("stopped"), onError },
-							),
-						)}
-						data-testid="external-app-action-stop"
-					>
-						{t(`${keyPrefix}.stop`)}
-					</Button>
-					{/* The installed table offers Open / Start / Stop / Details only: Restart is a detail-page action. */}
-					{compact ? null : (
-						<Button
-							variant="default"
-							loading={restart.isPending}
-							onClick={withVersion((version) =>
-								restart.mutate(
-									{ path: { instanceId }, body: { expectedVersion: version } },
-									{ onSuccess: announce("restarted"), onError },
-								),
-							)}
-							data-testid="external-app-action-restart"
-						>
-							{t(`${keyPrefix}.restart`)}
-						</Button>
+			{/* Stop is offered wherever the server admits it — `AdmittedStatusFor` takes Running, Failed and
+			    StoppedUnexpectedly, because a failed run leaves containers behind that only Stop tears down. */}
+			{status === "Running" || status === "Failed" || status === "StoppedUnexpectedly" ? (
+				<Button
+					variant="default"
+					loading={stop.isPending}
+					onClick={withVersion((version) =>
+						stop.mutate(
+							{ path: { instanceId }, body: { expectedVersion: version } },
+							{ onSuccess: announce("stopped"), onError },
+						),
 					)}
-				</>
+					data-testid="external-app-action-stop"
+				>
+					{t(`${keyPrefix}.stop`)}
+				</Button>
+			) : null}
+
+			{/* Restart stays Running-only, and the installed table offers Open / Start / Stop / Details only: Restart is
+			    a detail-page action. */}
+			{status === "Running" && !compact ? (
+				<Button
+					variant="default"
+					loading={restart.isPending}
+					onClick={withVersion((version) =>
+						restart.mutate(
+							{ path: { instanceId }, body: { expectedVersion: version } },
+							{ onSuccess: announce("restarted"), onError },
+						),
+					)}
+					data-testid="external-app-action-restart"
+				>
+					{t(`${keyPrefix}.restart`)}
+				</Button>
 			) : null}
 
 			{instance.updateAvailable === true && !busy && !compact ? (

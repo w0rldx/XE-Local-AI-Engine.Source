@@ -384,7 +384,7 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
                 nameof(specification));
         }
 
-        if (!specification.Image.Contains("@sha256:", StringComparison.Ordinal))
+        if (!ContainerImageReference.IsContentAddressed(specification.Image))
         {
             throw new ArgumentException($"Image '{specification.Image}' is not digest-pinned.", nameof(specification));
         }

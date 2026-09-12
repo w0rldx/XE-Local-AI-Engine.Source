@@ -116,6 +116,33 @@ public sealed class ExternalAppServiceInstallTests
         AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.InsufficientMemory));
     }
 
+    /// <summary>
+    ///     Install is refused for the same reason an update is, and at the same place: the manifest reads a bridge
+    ///     built-in this node cannot supply. Left to the pipeline it would fail after the row exists, leaving a
+    ///     failed instance where the catalog page could simply have said the node cannot run this.
+    /// </summary>
+    [Test]
+    public async Task Install_OnANodeWithNoBridge_ForAManifestThatNeedsOne_IsRefusedAndThePreviewSaysSoFirst()
+    {
+        var manifest = ExternalAppTestManifests.Manifest(
+        [
+            ExternalAppTestManifests.Service("web",
+                environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
+        ]);
+
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
+
+        var preview = await harness.Service.PreviewInstallAsync(manifest.Id).ConfigureAwait(false);
+        AssertEx.False(preview.CanInstall, "The catalog page must not offer an install the pipeline cannot finish.");
+        AssertEx.Equal(ExternalAppBlockedReason.BridgeUnavailable, preview.BlockedReason);
+
+        var failure = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.InstallAsync(Command(manifest))).ConfigureAwait(false);
+
+        AssertEx.Contains(failure.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
+        AssertEx.Contains(failure.Message, "container bridge", message: "The operator has to read which feature is missing.");
+    }
+
     [Test]
     public async Task Install_WithAMissingRequiredVariable_NamesItAndNeverItsValue()
     {

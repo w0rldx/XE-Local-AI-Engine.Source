@@ -118,6 +118,28 @@ internal static partial class DeploymentPlanner
     }
 
     /// <summary>
+    ///     Whether this manifest can be planned only on a node that opened the container bridge: some environment
+    ///     value substitutes <c>${XE_BRIDGE_ENDPOINT}</c> or <c>${XE_BRIDGE_TOKEN}</c>, and
+    ///     <see cref="BuildBuiltIns" /> supplies neither without a grant, so <see cref="Plan" /> would refuse it.
+    ///     <para>
+    ///         It reads the surface <see cref="Plan" /> substitutes — service environment values — through the same
+    ///         token regex, so admission and the planner cannot answer differently about one manifest. Admission
+    ///         asks it rather than calling <see cref="Plan" />: a preview holds only the variables carried forward,
+    ///         so a target that adds a newly required variable would fail a trial plan for a reason the dialog
+    ///         exists to let the operator fix.
+    ///     </para>
+    /// </summary>
+    internal static bool RequiresBridge(ApplicationManifest manifest)
+    {
+        ArgumentNullException.ThrowIfNull(manifest);
+
+        return manifest.Services
+                       .SelectMany(static service => service.Environment.Values)
+                       .SelectMany(static value => SubstitutionTokenRegex().Matches(value ?? string.Empty))
+                       .Any(static match => match.Groups["name"].Value is BridgeEndpointVariable or BridgeTokenVariable);
+    }
+
+    /// <summary>
     ///     The deployment order by name alone, for a caller that needs the order and nothing else a plan carries —
     ///     a stop, which reverses it. Exposed so that caller does not have to build a whole plan, and with it a
     ///     container identity it has no daemon to resolve against, to read one list back out.

@@ -53,6 +53,9 @@ public enum ContainerRuntimeUnderTest
 public sealed class ContainerRuntimeContractTests
 {
     private const string Digest = "@sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
+    /// <summary>A bare image id: what a daemon reports for an image its store recorded no <c>RepoDigests</c> for.</summary>
+    private const string BareImageId = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
     private const string Image = "ghcr.io/example/app" + Digest;
     private const string NetworkName = "xe-app-instance-1-net";
 
@@ -113,6 +116,74 @@ public sealed class ContainerRuntimeContractTests
         var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
         {
             Image = "ghcr.io/example/app:1.2.3"
+        }));
+
+        AssertEx.Equal("specification", failure.ParamName);
+        AssertEx.Contains(failure.Message, "not digest-pinned");
+        AssertNothingWasCreated(client);
+    }
+
+    /// <summary>
+    ///     A bare image id names its bytes as surely as a digest-pinned reference does, so the guard lets it
+    ///     through. It is the only reference a daemon has for an image built locally on a store that records no
+    ///     <c>RepoDigests</c>, and refusing it cost <see cref="VolumeDeclaringImageFixture" /> its assertion there.
+    /// </summary>
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient)]
+    public async Task RunContainer_WithABareImageId_IsNotRefusedByTheDigestGuard(ContainerRuntimeUnderTest implementation)
+    {
+        await using var client = Create(implementation);
+
+        // Past the guard is the assertion, and the exception TYPE carries it: what stops the call is the daemon,
+        // not this layer. The fake 404s an image it was never seeded; the production client cannot reach its
+        // socket. The guard firing would be an ArgumentException, which this would report as the wrong type.
+        var failure = await AssertEx.ThrowsAsync<DockerRuntimeException>(() => client.RunContainerAsync(Specification() with
+        {
+            Image = BareImageId
+        }));
+
+        AssertEx.NotEmpty(failure.Message);
+    }
+
+    /// <summary>
+    ///     The near-misses of both accepted forms. Each is one edit away from a reference that names bytes, and a
+    ///     <c>Contains</c>-shaped check or an unanchored regex would let at least one of them through.
+    /// </summary>
+    [Test]
+    // One hex digit short of an id. The length is the whole check.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "sha256:000000000000000000000000000000000000000000000000000000000000000")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "sha256:000000000000000000000000000000000000000000000000000000000000000")]
+    // Uppercase hex. A daemon writes image ids in lowercase, and accepting both spellings would make one image
+    // answer to two references.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    // 64 hex with no algorithm prefix names nothing a daemon resolves.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "0000000000000000000000000000000000000000000000000000000000000000")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "0000000000000000000000000000000000000000000000000000000000000000")]
+    // The digest half's own near-misses. A Contains("@sha256:") test admits every one of the first three, and each
+    // names no bytes at all: the separator is present and the digest behind it is absent, truncated or not hex.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "ghcr.io/example/app@sha256:")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "ghcr.io/example/app@sha256:")]
+    [Arguments(ContainerRuntimeUnderTest.Fake, "ghcr.io/example/app@sha256:zz")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "ghcr.io/example/app@sha256:zz")]
+    [Arguments(ContainerRuntimeUnderTest.Fake, "ghcr.io/example/app@sha256:000000000000000000000000000000000000000000000000000000000000000")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "ghcr.io/example/app@sha256:000000000000000000000000000000000000000000000000000000000000000")]
+    // A digest with no repository in front of it. The daemon resolves a name@sha256: reference through the NAME,
+    // so a reference that is only the separator and the digest names nothing.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "@sha256:0000000000000000000000000000000000000000000000000000000000000000")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "@sha256:0000000000000000000000000000000000000000000000000000000000000000")]
+    // Uppercase, on the digest half too: one image must not answer to two spellings.
+    [Arguments(ContainerRuntimeUnderTest.Fake, "ghcr.io/example/app@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    [Arguments(ContainerRuntimeUnderTest.DockerClient, "ghcr.io/example/app@sha256:AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA")]
+    public async Task RunContainer_WithAMalformedImageId_IsRefusedBeforeAnyWireCall(ContainerRuntimeUnderTest implementation,
+        string image)
+    {
+        await using var client = Create(implementation);
+
+        var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.RunContainerAsync(Specification() with
+        {
+            Image = image
         }));
 
         AssertEx.Equal("specification", failure.ParamName);

@@ -7,6 +7,7 @@ using System.Runtime.ExceptionServices;
 using System.Security.Cryptography;
 using Microsoft.Extensions.Logging;
 using Microsoft.Win32.SafeHandles;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;

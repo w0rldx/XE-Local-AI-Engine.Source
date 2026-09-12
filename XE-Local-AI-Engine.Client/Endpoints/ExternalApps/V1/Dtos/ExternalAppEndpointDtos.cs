@@ -210,9 +210,10 @@ public sealed record ExternalAppVariableValidationView(int? MinLength, int? MaxL
 /// <param name="BlockedReason">
 ///     Why <paramref name="CanInstall" /> is false, as the <c>ExternalAppBlockedReason</c> name: <c>GpuNotSupported</c>
 ///     | <c>RuntimeIncompatible</c> | <c>RuntimeUnavailable</c> | <c>InsufficientMemory</c> | <c>InsufficientDisk</c> |
-///     <c>AlreadyInstalled</c> | <c>CatalogMissing</c>. Null when the install can proceed. The install path cannot
-///     produce <c>CatalogMissing</c> and the update path cannot produce <c>AlreadyInstalled</c>, but one closed
-///     vocabulary means the SPA ships seven labels once instead of two overlapping sets.
+///     <c>AlreadyInstalled</c> | <c>CatalogMissing</c> | <c>BridgeUnavailable</c>. Null when the install can proceed.
+///     The install path cannot produce <c>CatalogMissing</c> and the update path cannot produce
+///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
+///     overlapping sets.
 /// </param>
 public sealed record ExternalAppInstallPreview(string ApplicationId,
     int ManifestVersion,

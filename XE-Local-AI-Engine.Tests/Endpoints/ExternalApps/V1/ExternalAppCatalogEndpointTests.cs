@@ -304,7 +304,7 @@ public sealed class ExternalAppCatalogEndpointTests
     }
 
     /// <summary>
-    ///     All seven <c>ExternalAppBlockedReason</c> names cross as written, so the SPA ships seven labels once rather
+    ///     All eight <c>ExternalAppBlockedReason</c> names cross as written, so the SPA ships eight labels once rather
     ///     than two overlapping sets for install and update.
     /// </summary>
     [Test]
@@ -315,6 +315,7 @@ public sealed class ExternalAppCatalogEndpointTests
     [Arguments(ExternalAppBlockedReason.InsufficientDisk, "InsufficientDisk")]
     [Arguments(ExternalAppBlockedReason.AlreadyInstalled, "AlreadyInstalled")]
     [Arguments(ExternalAppBlockedReason.CatalogMissing, "CatalogMissing")]
+    [Arguments(ExternalAppBlockedReason.BridgeUnavailable, "BridgeUnavailable")]
     public async Task GetInstallPreview_WhenBlocked_CarriesTheReasonName(ExternalAppBlockedReason reason, string expected)
     {
         var apps = Substitute.For<IExternalAppService>();

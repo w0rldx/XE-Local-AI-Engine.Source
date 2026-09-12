@@ -595,12 +595,7 @@ public sealed class ExternalAppServiceUpdateTests
         await using var harness = await InstalledAsync(Version1(), withBridge: false).ConfigureAwait(false);
         var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
-        var target = ExternalAppTestManifests.Manifest(
-            [
-                ExternalAppTestManifests.Service("web",
-                    environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
-            ],
-            manifestVersion: 2);
+        var target = BridgeNeedingVersion2();
         ExternalAppServiceHarness.Seed(harness.Catalog, target);
 
         var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
@@ -613,6 +608,70 @@ public sealed class ExternalAppServiceUpdateTests
         AssertEx.Equal(row.Version, after.Version, "Nothing was written, so nothing bumped the version.");
         AssertEx.Empty(harness.Runtime.StoppedGracePeriods, "A refused update must not stop a container of the version that was working.");
         AssertEx.Empty(harness.Runtime.RemovedContainerIds, "Nor remove one: the refusal is at admission, before the runtime is asked anything.");
+    }
+
+    /// <summary>
+    ///     The preview and the command have to agree about the same manifest. They are two code paths — one
+    ///     reports, the other refuses — and a preview that offered an update the command then rejects with a 400 is
+    ///     the dialog handing the operator a button that cannot work.
+    /// </summary>
+    [Test]
+    public async Task PreviewUpdate_OnANodeWithNoBridge_IntoAManifestThatNeedsOne_IsBlockedRatherThanOffered()
+    {
+        await using var harness = await InstalledAsync(Version1(), withBridge: false).ConfigureAwait(false);
+        var row = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
+        ExternalAppServiceHarness.Seed(harness.Catalog, BridgeNeedingVersion2());
+
+        var preview = await harness.Service.PreviewUpdateAsync(row.Id).ConfigureAwait(false);
+
+        AssertEx.False(preview.CanUpdate, "A target this node cannot plan must not be offered as updatable.");
+        AssertEx.Equal(ExternalAppBlockedReason.BridgeUnavailable, preview.BlockedReason);
+
+        // The same manifest through the command, so the two definitions cannot drift apart in silence.
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
+            () => harness.Service.UpdateAsync(row.Id, row.Version, Command(BridgeNeedingVersion2()))).ConfigureAwait(false);
+
+        AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
+    }
+
+    [Test]
+    public async Task PreviewUpdate_OnANodeWithABridge_IntoAManifestThatNeedsOne_CanUpdate()
+    {
+        await using var harness = await InstalledAsync(Version1()).ConfigureAwait(false);
+        ExternalAppServiceHarness.Seed(harness.Catalog, BridgeNeedingVersion2());
+
+        var preview = await harness.Service.PreviewUpdateAsync(harness.InstalledId).ConfigureAwait(false);
+
+        AssertEx.True(preview.CanUpdate, "The node opened a bridge, so the target's built-ins resolve.");
+        AssertEx.Null(preview.BlockedReason);
+    }
+
+    /// <summary>
+    ///     Already current still carries no blocked reason, bridge or no bridge: nothing is wrong, and the two
+    ///     version members say it. Reporting one here would put a red state on an instance that is simply up to date.
+    /// </summary>
+    [Test]
+    public async Task PreviewUpdate_WhenABridgeNeedingCatalogEntryIsNotNewer_CarriesNoBlockedReason()
+    {
+        await using var harness = await InstalledAsync(Version1(), withBridge: false).ConfigureAwait(false);
+        ExternalAppServiceHarness.Seed(harness.Catalog, BridgeNeedingVersion2() with { ManifestVersion = 1 });
+
+        var preview = await harness.Service.PreviewUpdateAsync(harness.InstalledId).ConfigureAwait(false);
+
+        AssertEx.False(preview.CanUpdate, "There is no newer version to update to.");
+        AssertEx.Null(preview.BlockedReason);
+        AssertEx.Equal(preview.CurrentManifestVersion, preview.TargetManifestVersion);
+    }
+
+    /// <summary>Version 2, differing from <see cref="Version2" /> only in that it reads a bridge built-in.</summary>
+    private static ApplicationManifest BridgeNeedingVersion2()
+    {
+        return ExternalAppTestManifests.Manifest(
+            [
+                ExternalAppTestManifests.Service("web",
+                    environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
+            ],
+            manifestVersion: 2);
     }
 
     private static ApplicationManifest Version1()

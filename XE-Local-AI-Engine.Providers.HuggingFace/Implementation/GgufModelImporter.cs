@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
 
 using System.Security.Cryptography;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
-using XE_Local_AI_Engine.Providers.HuggingFace.Contracts;
 using XE_Local_AI_Engine.Providers.HuggingFace.Options;
 
 internal sealed class GgufModelImporter(
