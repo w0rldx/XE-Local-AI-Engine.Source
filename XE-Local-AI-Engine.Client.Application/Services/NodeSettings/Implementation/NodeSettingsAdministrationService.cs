@@ -70,7 +70,9 @@ internal sealed class NodeSettingsAdministrationService(
         // too, including on the rejection paths that never reach a write.
         return await ValidateAndSaveAsync(record => merge(record) with
             {
-                MachineKey = record.MachineKey
+                MachineKey = record.MachineKey,
+                TranscriptionSelectedModelId = record.TranscriptionSelectedModelId,
+                TranscriptionIdleTimeoutMinutes = record.TranscriptionIdleTimeoutMinutes
             },
             current,
             cancellationToken).ConfigureAwait(false);
@@ -232,7 +234,9 @@ internal sealed class NodeSettingsAdministrationService(
 
                                                 return apply(latest) with
                                                 {
-                                                    MachineKey = latest.MachineKey
+                                                    MachineKey = latest.MachineKey,
+                                                    TranscriptionSelectedModelId = latest.TranscriptionSelectedModelId,
+                                                    TranscriptionIdleTimeoutMinutes = latest.TranscriptionIdleTimeoutMinutes
                                                 };
                                             },
                                             cancellationToken)

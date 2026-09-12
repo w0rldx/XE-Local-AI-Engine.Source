@@ -43,6 +43,15 @@ public sealed partial record StoredNodeSettings
 
     public const int MaxLlamaIdleTimeToLiveSeconds = 86400;
 
+    /// <summary>Default idle time-to-live for the whisper.cpp transcription daemon, in minutes.</summary>
+    public const int DefaultTranscriptionIdleTimeoutMinutes = 15;
+
+    /// <summary>Lower clamp for <see cref="TranscriptionIdleTimeoutMinutes" />.</summary>
+    public const int MinTranscriptionIdleTimeoutMinutes = 1;
+
+    /// <summary>Upper clamp for <see cref="TranscriptionIdleTimeoutMinutes" />.</summary>
+    public const int MaxTranscriptionIdleTimeoutMinutes = 240;
+
     /// <summary>Keep-model-warm is opt-in; an absent stored value stays off.</summary>
     public const bool DefaultKeepModelWarmEnabled = false;
 
@@ -491,6 +500,25 @@ public sealed partial record StoredNodeSettings
     ///     current node settings; no restart needed).
     /// </summary>
     public NodeUsageRateSettings? UsageRates { get; init; }
+
+    /// <summary>
+    ///     The operator's explicit whisper model choice. <see langword="null" /> (the default) means "use the hardware
+    ///     recommendation", which is why an absent value is not a missing one.
+    ///     <para>
+    ///         LOCAL-ONLY: deliberately absent from the node-settings wire DTO, so a save that maps a request onto a
+    ///         fresh record must carry it over from the stored one or it is erased.
+    ///     </para>
+    /// </summary>
+    public string? TranscriptionSelectedModelId { get; init; }
+
+    /// <summary>
+    ///     Idle time-to-live for the whisper.cpp daemon, in minutes. <see langword="null" /> (absent) reads as
+    ///     <see cref="DefaultTranscriptionIdleTimeoutMinutes" />; <c>NodeSettingsStore.Normalize</c> clamps to
+    ///     <see cref="MinTranscriptionIdleTimeoutMinutes" />..<see cref="MaxTranscriptionIdleTimeoutMinutes" />.
+    ///     Applies on the next node restart (read once when the runtime options are seeded).
+    ///     <para>LOCAL-ONLY, exactly as <see cref="TranscriptionSelectedModelId" /> is.</para>
+    /// </summary>
+    public int? TranscriptionIdleTimeoutMinutes { get; init; }
 
     /// <summary>
     ///     Which container runtime application containers use: <c>auto</c> (the default) or <c>docker</c>.

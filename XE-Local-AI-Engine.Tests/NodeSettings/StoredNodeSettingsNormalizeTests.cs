@@ -746,6 +746,56 @@ public sealed class StoredNodeSettingsNormalizeTests : IDisposable
         AssertEx.True(before.SequenceEqual(after), "UpdateAsync must not rewrite a present-but-unreadable settings file.");
     }
 
+    [Test]
+    [Arguments(0)]
+    [Arguments(-5)]
+    [Arguments(241)]
+    [Arguments(100000)]
+    public async Task Normalize_TranscriptionIdleTimeoutOutOfRange_ClampsToDefault(int configured)
+    {
+        // Out of range falls back to null so the accessor re-seeds it, exactly as every other clamped member does.
+        var reloaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            TranscriptionIdleTimeoutMinutes = configured
+        });
+
+        AssertEx.Null(reloaded.TranscriptionIdleTimeoutMinutes,
+            $"{configured} is outside 1..240 and must not be persisted as an effective value.");
+    }
+
+    [Test]
+    [Arguments(1)]
+    [Arguments(15)]
+    [Arguments(240)]
+    public async Task Normalize_TranscriptionIdleTimeoutInRange_IsKept(int configured)
+    {
+        var reloaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            TranscriptionIdleTimeoutMinutes = configured
+        });
+
+        AssertEx.Equal(configured, reloaded.TranscriptionIdleTimeoutMinutes);
+    }
+
+    [Test]
+    public async Task Normalize_TranscriptionSelectedModelId_IsTrimmedToNull()
+    {
+        var reloaded = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            TranscriptionSelectedModelId = "   "
+        });
+
+        AssertEx.Null(reloaded.TranscriptionSelectedModelId,
+            "A blank selection is no selection; null is what makes the node fall back to the recommendation.");
+
+        var kept = await SaveAndReloadAsync(new StoredNodeSettings
+        {
+            TranscriptionSelectedModelId = "  large-v3-turbo  "
+        });
+
+        AssertEx.Equal("large-v3-turbo", kept.TranscriptionSelectedModelId);
+    }
+
     private async Task<StoredNodeSettings> SaveAndReloadAsync(StoredNodeSettings settings)
     {
         using var store = NewStore();

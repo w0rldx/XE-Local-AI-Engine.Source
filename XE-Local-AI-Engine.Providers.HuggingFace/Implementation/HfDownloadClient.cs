@@ -53,7 +53,12 @@ internal sealed class HfDownloadClient
     // Resume cursors — and the commit that wrote them — kept beside the .part by BOTH download paths. The ".part" tail
     // is deliberate: it makes the file match the "*.part" glob that GgufAcquisitionArtifactStartupReaper already
     // sweeps, so an abandoned download leaves nothing the existing startup cleanup misses.
-    private const string RangeSidecarSuffix = ".ranges.part";
+    internal const string RangeSidecarSuffix = ".ranges.part";
+
+    // The in-progress file this client writes beside every destination. Internal because a caller that decides whether
+    // to reuse an already-published destination has to be able to recognise the orphan left beside it, and a second
+    // copy of the literal in another file is exactly the drift that would leave those bytes behind forever.
+    internal const string PartSuffix = ".part";
     private readonly IHfDownloadMetrics _downloadMetrics;
     private readonly IFreeSpaceProbe _freeSpaceProbe;
 
@@ -112,7 +117,7 @@ internal sealed class HfDownloadClient
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ArgumentException.ThrowIfNullOrWhiteSpace(destinationPath);
 
-        var partPath = destinationPath + ".part";
+        var partPath = destinationPath + PartSuffix;
         var directory = Path.GetDirectoryName(destinationPath)
                         ?? throw new InvalidOperationException("The model destination path has no directory.");
         Directory.CreateDirectory(directory);

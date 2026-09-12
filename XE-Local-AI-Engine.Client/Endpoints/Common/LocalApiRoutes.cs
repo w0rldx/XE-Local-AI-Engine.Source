@@ -582,6 +582,34 @@ public static class LocalApiRoutes
     }
 
     /// <summary>
+    ///     Local audio transcription: the whisper.cpp runtime, its managed source build, and the model catalogue.
+    ///     The whole surface is gated on <c>Transcription:Enabled</c> by request-path middleware in <c>Program</c>
+    ///     that answers 404 for anything under <see cref="Root" />; the session routes arrive in a later slice under
+    ///     the same root, so the gate already covers them.
+    /// </summary>
+    public static class Transcription
+    {
+        /// <summary>The prefix the feature gate matches; every route below sits under it.</summary>
+        public const string Root = "transcription";
+
+        // Managed whisper.cpp runtime and its Linux source-build orchestration.
+        public const string Runtime = "transcription/runtime";
+        public const string RuntimeEject = "transcription/runtime/eject";
+        public const string RuntimeRecommendation = "transcription/runtime/recommendation";
+        public const string RuntimeSourceBuild = "transcription/runtime/source-build";
+        public const string RuntimeSourceBuildPrerequisites = "transcription/runtime/source-build/prerequisites";
+        public const string RuntimeSourceBuildStatus = "transcription/runtime/source-build/status";
+        public const string RuntimeSourceBuildCancel = "transcription/runtime/source-build/cancel";
+        public const string RuntimeSourceBuildRemove = "transcription/runtime/source-build/remove";
+
+        // Whisper weight catalogue: what exists, what is installed, what is downloading, and which one is selected.
+        public const string Models = "transcription/models";
+        public const string ModelDownloads = "transcription/models/downloads";
+        public const string ModelDownloadCancel = "transcription/models/downloads/cancel";
+        public const string ModelSelect = "transcription/models/select";
+    }
+
+    /// <summary>
     ///     App self-update routes (Velopack). Status reads the cached snapshot (<c>?refresh=true</c> forces a check with a
     ///     10-minute floor); apply downloads + applies + relaunches. Desktop-mode only;
     ///     Operator-gated.

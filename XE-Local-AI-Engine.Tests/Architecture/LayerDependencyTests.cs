@@ -17,6 +17,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 using XE_Local_AI_Engine.WindowsLauncher;
 using Extensions = Microsoft.Extensions.Hosting.Extensions;
@@ -51,6 +52,7 @@ public sealed class LayerDependencyTests
     private const string CodexOAuthNamespace = "XE_Local_AI_Engine.Providers.CodexOAuth";
     private const string CapabilitiesNamespace = "XE_Local_AI_Engine.Providers.Capabilities";
     private const string StableDiffusionCppNamespace = "XE_Local_AI_Engine.Providers.StableDiffusionCpp";
+    private const string WhisperCppNamespace = "XE_Local_AI_Engine.Providers.WhisperCpp";
     private const string AbstractionsNamespace = "XE_Local_AI_Engine.Providers.Abstractions";
     private const string AiAgentNamespace = "XE_Local_AI_Engine.AI.Agent";
 
@@ -65,6 +67,7 @@ public sealed class LayerDependencyTests
     private static readonly Assembly CapabilitiesAssembly = typeof(CapabilitiesServiceCollectionExtensions).Assembly;
     private static readonly Assembly StableDiffusionCppAssembly = typeof(IStableDiffusionBinaryManager).Assembly;
     private static readonly Assembly TrainingAssembly = typeof(ITrainingRuntimeService).Assembly;
+    private static readonly Assembly WhisperCppAssembly = typeof(WhisperCppReleasePins).Assembly;
     private static readonly Assembly AbstractionsAssembly = typeof(ILocalModelProvider).Assembly;
     private static readonly Assembly ContractsAssembly = typeof(MessageRole).Assembly;
     private static readonly Assembly AiAgentAssembly = typeof(IInvocationAgentFactory).Assembly;
@@ -113,6 +116,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
+                "XE-Local-AI-Engine.Providers.WhisperCpp",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             ["XE-Local-AI-Engine.Client.Persistence"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
@@ -146,7 +150,8 @@ public sealed class LayerDependencyTests
             ],
             ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] = [],
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
-            ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
+            ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            ["XE-Local-AI-Engine.Providers.WhisperCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
         };
 
     private static readonly IReadOnlyDictionary<Assembly, string[]> ApprovedInternalAssemblyReferences =
@@ -179,6 +184,7 @@ public sealed class LayerDependencyTests
             [OpenAICompatibleCoreAssembly] = [],
             [StableDiffusionCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [TrainingAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
+            [WhisperCppAssembly] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             [ApplicationAssembly] =
             [
                 "XE-Local-AI-Engine.AI.Agent",
@@ -195,6 +201,7 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
+                "XE-Local-AI-Engine.Providers.WhisperCpp",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ],
             [HostAssembly] =
@@ -212,6 +219,10 @@ public sealed class LayerDependencyTests
                 "XE-Local-AI-Engine.Providers.Ollama",
                 "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
                 "XE-Local-AI-Engine.Providers.Training",
+                // The Client ASSEMBLY acquires this reference because its transcription endpoints bind the provider's
+                // contracts, even though the Client csproj does not reference the project (references are transitive
+                // through Client.Application) — the same position StableDiffusionCpp already holds.
+                "XE-Local-AI-Engine.Providers.WhisperCpp",
                 "XE-Local-AI-Engine.ServiceDefaults"
             ]
         };
@@ -325,7 +336,8 @@ public sealed class LayerDependencyTests
             OllamaNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
-            CapabilitiesNamespace);
+            CapabilitiesNamespace,
+            WhisperCppNamespace);
     }
 
     [Test]
@@ -338,7 +350,8 @@ public sealed class LayerDependencyTests
             OllamaNamespace,
             LlamaServerNamespace,
             CodexOAuthNamespace,
-            CapabilitiesNamespace);
+            CapabilitiesNamespace,
+            WhisperCppNamespace);
     }
 
     [Test]
@@ -365,7 +378,23 @@ public sealed class LayerDependencyTests
             LlamaServerNamespace,
             HuggingFaceNamespace,
             CodexOAuthNamespace,
-            CapabilitiesNamespace);
+            CapabilitiesNamespace,
+            WhisperCppNamespace);
+    }
+
+    [Test]
+    public void WhisperCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
+    {
+        AssertNoDependency(WhisperCppAssembly,
+            WhisperCppNamespace,
+            ClientNamespace,
+            PersistenceNamespace,
+            OllamaNamespace,
+            LlamaServerNamespace,
+            HuggingFaceNamespace,
+            CodexOAuthNamespace,
+            CapabilitiesNamespace,
+            StableDiffusionCppNamespace);
     }
 
     [Test]
@@ -424,7 +453,8 @@ public sealed class LayerDependencyTests
             HuggingFaceNamespace,
             CodexOAuthNamespace,
             CapabilitiesNamespace,
-            OpenAICompatNamespace);
+            OpenAICompatNamespace,
+            WhisperCppNamespace);
     }
 
     [Test]
@@ -439,7 +469,8 @@ public sealed class LayerDependencyTests
             HuggingFaceNamespace,
             CodexOAuthNamespace,
             CapabilitiesNamespace,
-            StableDiffusionCppNamespace);
+            StableDiffusionCppNamespace,
+            WhisperCppNamespace);
     }
 
     /// <summary>

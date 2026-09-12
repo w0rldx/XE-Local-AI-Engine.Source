@@ -175,6 +175,13 @@ public interface INodeRuntimeSettings
     /// <inheritdoc cref="GetLlamaIdleTimeToLiveAsync" />
     TimeSpan GetLlamaIdleTimeToLive();
 
+    /// <summary>
+    ///     The effective idle time-to-live for the whisper.cpp transcription daemon (stored &gt;
+    ///     <c>Transcription:IdleTimeoutMinutes</c> &gt; 15 minutes). Synchronous only: its one caller is the host-build
+    ///     factory that seeds the runtime options.
+    /// </summary>
+    TimeSpan GetTranscriptionIdleTimeout();
+
     /// <inheritdoc cref="GetMaxResponseSizeMbAsync" />
     int GetMaxResponseSizeMb();
 

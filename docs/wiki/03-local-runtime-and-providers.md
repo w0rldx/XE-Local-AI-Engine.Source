@@ -10,6 +10,8 @@ The big picture: there is **no Docker** and **no container sandbox** in the infe
 
 > **The second supervised runtime.** `llama-server` is not the only child process the node owns: `XE-Local-AI-Engine.Providers.StableDiffusionCpp` supervises `sd-server` (stable-diffusion.cpp) the same way — pinned binary acquisition, one resident daemon per model on a private loopback port range, OS-specific tree-kill containment, stale-daemon reaper. It implements `IImageRuntime`, **not** `ILocalModelProvider`, so it sits outside every seam described on this page and is documented end-to-end in [14-image-generation.md](14-image-generation.md). The one place the two runtimes meet is the shared GPU-load admission gate (§2.5).
 
+> **The third supervised runtime.** `XE-Local-AI-Engine.Providers.WhisperCpp` supervises `whisper-server` (whisper.cpp) the same way — pinned, hash-verified binary acquisition, one resident daemon on a private loopback port range (18300–18399), OS-specific tree-kill containment, a startup stale-daemon reaper and an idle-TTL reaper. It implements neither `ILocalModelProvider` nor `IChatClient`: it publishes `IWhisperTranscriber` and `IWhisperServerSupervisor`, so it sits outside every seam described on this page. Like the image runtime it meets the others at the shared GPU-load admission gate (§2.5), and it stays out of the `CapacityService` byte ledger. See §3 below.
+
 ---
 
 ## 1. The provider seam: `Providers.Abstractions`
@@ -333,6 +335,36 @@ Three properties are load-bearing:
 ### `Providers.Ollama` — present, de-orchestrated from Aspire dev
 
 `OllamaLocalModelProvider` (`ProviderName = "ollama"`) still fully implements `ILocalModelProvider` over `IOllamaApiClient` (OllamaSharp): list/pull/delete/warm/unload + `CreateChatClient`/`CreateEmbeddingGenerator`. It remains a real, registered provider — but llama.cpp is the dev runtime, so **Ollama is no longer orchestrated by Aspire in dev** (see [11-hosting-and-deployment.md](11-hosting-and-deployment.md)). Notable detail: `AddOllamaLocalModelProvider` sets a short **750 ms `SocketsHttpHandler.ConnectTimeout`** so a probe against an absent Ollama daemon (desktop mode) fails fast instead of stalling on the OS connect timeout; `OllamaConnectFailureHandler` translates a fired connect-timeout (`OperationCanceledException`) into `HttpRequestException` so "Ollama unreachable" handling is uniform. The 5-minute `HttpClient.Timeout` still covers genuine long pulls. `OllamaModelCapabilityClient` implements `IModelCapabilityClient` as thin pass-throughs over the API client.
+
+### `Providers.WhisperCpp` — the supervised speech-to-text runtime
+
+`WhisperServerProcessSupervisor` owns the node's single resident `whisper-server` child process. Deliberately ONE daemon,
+unlike the image runtime's per-model dictionary: a node has one selected transcription model, and the server serializes
+every request on a single mutex, so a second daemon could never serve anyone faster. Readiness is a port accept followed
+by the server's health route — never a line on stdout, which is fully buffered off a TTY and has been observed absent
+while the port was already live. A 503 there means "loading a model" and keeps the poll going, which is also what covers
+an in-place model switch.
+
+Three things are worth knowing before changing it:
+
+- **No flag, route or JSON shape escapes the project.** The engine sees `IWhisperTranscriber` (a seekable audio stream
+  plus options in, timed segments plus a detected language out) and `IWhisperServerSupervisor`. `WhisperServerArgumentBuilder`
+  is the only place flag names live, and the daemon is deliberately never launched with its audio-conversion flag: that
+  would write every request's bytes to disk, including live audio, which the feature's privacy contract forbids.
+  Transcoding containers the daemon cannot decode is an engine-side job, reported as `supportsTranscode` on the status.
+- **A transcription lease is model- AND generation-bound.** Ensure-then-lease is two steps and the daemon is mutable, so
+  another caller can switch its model in between; the generation moves on every spawn and every successful switch, which
+  is what makes the pair unambiguous. Holding a lease is also what makes an eject, a source build or a source-build
+  remove answer `409 runtime-busy` rather than racing an in-flight request.
+- **GPU loads serialize through the shared admission gate** for both a spawn and an in-place switch — an in-place load
+  initialises GPU weights exactly as a spawn does — and a CPU backend bypasses it entirely.
+
+`WhisperModelCatalog` is a static table of seven Whisper weights plus the pinned Silero VAD file, with real byte sizes
+and real digests; `WhisperModelRecommendation` picks a row from a `HardwareProfile` with 25 % headroom and caps a CPU
+backend at the Small tier. Upstream ships prebuilt binaries only on its nightly `b<n>` tags and publishes no Linux CUDA
+asset, so Linux NVIDIA resolves the CPU tarball and the CUDA lane is a managed source build or the
+`XE_WHISPERCPP_SERVER_PATH` override. The whole surface is gated by `Transcription:Enabled` and every route is
+Operator-gated.
 
 ### `Providers.Capabilities` — hardware probing
 

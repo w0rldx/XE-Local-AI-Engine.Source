@@ -34,6 +34,7 @@
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompat\XE-Local-AI-Engine.Providers.OpenAICompat.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.WhisperCpp\XE-Local-AI-Engine.Providers.WhisperCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
   </ItemGroup>
 
@@ -44,6 +45,7 @@
 
   <ItemGroup>
     <Content Include="Fixtures\*.json" CopyToOutputDirectory="PreserveNewest"/>
+    <Content Include="Fixtures\Transcription\*" CopyToOutputDirectory="PreserveNewest"/>
   </ItemGroup>
 
 </Project>

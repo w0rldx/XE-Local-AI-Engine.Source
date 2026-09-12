@@ -92,6 +92,7 @@
          future ProjectReference prune would silently remove. -->
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.OpenAICompatible.Core\XE-Local-AI-Engine.Providers.OpenAICompatible.Core.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.StableDiffusionCpp\XE-Local-AI-Engine.Providers.StableDiffusionCpp.csproj"/>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.WhisperCpp\XE-Local-AI-Engine.Providers.WhisperCpp.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Training\XE-Local-AI-Engine.Providers.Training.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.ServiceDefaults\XE-Local-AI-Engine.ServiceDefaults.csproj"/>
     <ProjectReference Include="..\XE-Local-AI-Engine.AI.Contracts\XE-Local-AI-Engine.AI.Contracts.csproj"/>

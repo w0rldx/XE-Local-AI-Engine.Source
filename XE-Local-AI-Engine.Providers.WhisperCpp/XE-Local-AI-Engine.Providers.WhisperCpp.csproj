@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <RootNamespace>XE_Local_AI_Engine.Providers.WhisperCpp</RootNamespace>
+    <!-- Required by LibraryImport source-gen marshalling stubs (Linux killpg + Windows Job Object P/Invoke). -->
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Extensions.Http.Resilience"/>
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions"/>
+    <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\XE-Local-AI-Engine.Providers.Abstractions\XE-Local-AI-Engine.Providers.Abstractions.csproj"/>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Tests exercise deterministic OS/arch asset selection, process hardening and the bring-your-own override
+         through internal seams so they never spawn a real whisper-server or download a binary. -->
+    <InternalsVisibleTo Include="XE-Local-AI-Engine.Tests" />
+  </ItemGroup>
+
+</Project>

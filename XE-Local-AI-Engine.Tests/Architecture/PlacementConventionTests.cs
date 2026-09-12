@@ -16,6 +16,7 @@ using XE_Local_AI_Engine.Providers.OpenAICompat.Implementation;
 using XE_Local_AI_Engine.Providers.OpenAICompatible.Core;
 using XE_Local_AI_Engine.Providers.StableDiffusionCpp.Contracts;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Tests.Testing;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
 // ArchUnitNET.Domain declares its own Assembly type; every Assembly below is the CLR one.
@@ -60,7 +61,12 @@ public sealed class PlacementConventionTests
         typeof(ExternalOpenAiModelProvider).Assembly,
         typeof(OpenAICompatibleClientFactory).Assembly,
         typeof(IStableDiffusionBinaryManager).Assembly,
-        typeof(ITrainingRuntimeService).Assembly
+        typeof(ITrainingRuntimeService).Assembly,
+        // Anchored on a public static class rather than the binary-manager interface the other providers use: the
+        // project was enrolled here in the commit that added it to the solution, before that interface existed. The
+        // marker stays as it is — it identifies the assembly just as well, and swapping it would churn this list for
+        // no gain.
+        typeof(WhisperCppReleasePins).Assembly
     ];
 
     // FastEndpoints and FluentValidation are loaded as well, and are NOT under test: AreAssignableTo(Type) resolves
@@ -77,9 +83,12 @@ public sealed class PlacementConventionTests
     {
         var publicInterfaces = ProviderAssemblies.Sum(assembly => assembly.GetExportedTypes().Count(type => type.IsInterface));
 
-        // Non-vacuity: a broken marker or an empty load would otherwise report "no violations" as a pass.
-        AssertEx.True(publicInterfaces >= 50,
-            $"Expected at least fifty public provider interfaces to scan; found {publicInterfaces}. The assembly markers or the loader are broken.");
+        // Non-vacuity: a broken marker or an empty load would otherwise report "no violations" as a pass. Raised from
+        // fifty once the whisper.cpp provider's contract surface was complete; the real count is seventy-seven, and
+        // the floor sits a little under it because it exists to catch a loader that returned nothing, not to notice
+        // that one interface was refactored away.
+        AssertEx.True(publicInterfaces >= 70,
+            $"Expected at least seventy public provider interfaces to scan; found {publicInterfaces}. The assembly markers or the loader are broken.");
 
         foreach (var assembly in ProviderAssemblies)
         {
@@ -98,8 +107,9 @@ public sealed class PlacementConventionTests
         var optionsClasses = ProviderAssemblies.Sum(assembly =>
             assembly.GetExportedTypes().Count(type => type.IsClass && type.Name.EndsWith("Options", StringComparison.Ordinal)));
 
-        AssertEx.True(optionsClasses >= 8,
-            $"Expected at least eight public provider *Options classes to scan; found {optionsClasses}. The assembly markers or the loader are broken.");
+        // Raised from eight alongside the interface floor above, for the same reason: the real count is twelve.
+        AssertEx.True(optionsClasses >= 11,
+            $"Expected at least eleven public provider *Options classes to scan; found {optionsClasses}. The assembly markers or the loader are broken.");
 
         foreach (var assembly in ProviderAssemblies)
         {

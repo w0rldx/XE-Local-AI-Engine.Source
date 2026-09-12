@@ -516,6 +516,29 @@ public sealed class NodeSettingsAdministrationServiceTests
     }
 
     [Test]
+    public async Task SaveTrustedMerged_WhenTheRequestOmitsTheTranscriptionMembers_PreservesTheStoredOnes()
+    {
+        // Both transcription members are LOCAL-ONLY: the wire DTO cannot carry them, so the endpoint's merged record
+        // always arrives without them. Saving it verbatim would silently reset the operator's model choice and idle
+        // timeout every time any unrelated setting was saved.
+        var store = NewSubstituteStore(new StoredNodeSettings
+        {
+            TranscriptionSelectedModelId = "large-v3-turbo",
+            TranscriptionIdleTimeoutMinutes = 42
+        });
+        var service = CreateService(store);
+
+        var result = await service.SaveTrustedMergedAsync(_ => new StoredNodeSettings
+        {
+            ChatCacheReuse = 512
+        }).ConfigureAwait(false);
+
+        AssertEx.True(result.Updated);
+        AssertEx.Equal("large-v3-turbo", AssertEx.NotNull(result.Settings.TranscriptionSelectedModelId));
+        AssertEx.Equal(expected: 42, result.Settings.TranscriptionIdleTimeoutMinutes);
+    }
+
+    [Test]
     public async Task SaveTrustedMerged_WhenTheMachineKeyIsMintedBetweenTheLoadAndTheWrite_PersistsTheMintedOne()
     {
         // The save reads the settings, validates, and only then writes; IMachineKeyProvider mints on the same node and

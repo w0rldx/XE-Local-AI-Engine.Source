@@ -65,13 +65,14 @@ Provider projects reference `Providers.Abstractions` and, for the two that speak
 | `XE-Local-AI-Engine.Providers.CodexOAuth` | ChatGPT/Codex OAuth cloud chat provider. | — |
 | `XE-Local-AI-Engine.Providers.Capabilities` | Sanitized hardware profiling (CPU/RAM/GPU/VRAM/disk) behind `IHardwareProfiler`, consumed by model-fit and runtime auditing. | `HardwareProfiler`, `CapabilitiesServiceCollectionExtensions` |
 | `XE-Local-AI-Engine.Providers.StableDiffusionCpp` | Local image-generation provider and supervised `sd-server` runtime. | — |
+| `XE-Local-AI-Engine.Providers.WhisperCpp` | Local speech-to-text provider and supervised `whisper-server` runtime: pinned binary acquisition, one resident daemon on its own loopback range (18300-18399), health-route readiness, idle-TTL reaping and the static Whisper weight catalogue. Implements neither `ILocalModelProvider` nor `IChatClient` — it publishes `IWhisperTranscriber` and `IWhisperServerSupervisor`. | `WhisperServerProcessSupervisor.cs`, `WhisperCppReleasePins.cs` |
 | `XE-Local-AI-Engine.Providers.Training` | Local fine-tuning runtime (Linux only): provisions a uv-managed Python environment and spawns/supervises the training process behind `ITrainingRuntimeService` / `ITrainingProcessSpawner`, with its own libc tree-kill process-group handle. Implements neither `ILocalModelProvider` nor `IChatClient`. See [18-training.md](18-training.md). | `TrainingRuntimeService.cs`, `UvBinaryAcquirer.cs`, `LinuxTrainingProcessSpawner.cs` |
 
 ### Tests & support
 
 | Project | SDK / kind | Role |
 |---|---|---|
-| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`), and `Testing.FakeOllama`. |
+| `XE-Local-AI-Engine.Tests` | `Exe`, MTP | Main unit suite. References `Client`, `WindowsLauncher`, `Client.Application`, `ServiceDefaults`, every concrete provider project (`Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `StableDiffusionCpp`, `Training`, `WhisperCpp`), and `Testing.FakeOllama`. |
 | `XE-Local-AI-Engine.Tests.E2ETests` | `Exe`, MTP | End-to-end suite. References `Client`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, plus `Testing.FakeOllama` and `Client.Testing` fixtures. See [13-testing-and-validation.md](13-testing-and-validation.md). |
 | `XE-Local-AI-Engine.AI.Agent.Tests` | `Exe`, MTP | Unit suite scoped to `AI.Agent`. |
 | `XE-Local-AI-Engine.Client.Persistence.Tests` | `Exe`, MTP | Persistence/migration suite. References `Client.Application`, `Client.Persistence`, `Client`. |
@@ -95,11 +96,11 @@ Solid arrows are `ProjectReference` edges (verified from each `.csproj`).
             │  │  └────► AI.Agent ◄─────────┘  │  │  │  │
             │  └───────► Client.Persistence ◄──┘  │  │  │
             │                                      │  │  │
-            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training}
+            └► Providers.Ollama ──┐   Providers.{Llama,HF,Codex,Capabilities,Ollama,SDcpp,Training,WhisperCpp}
                                   ▼                │  │  │
                        Providers.Abstractions ◄────┴──┴──┘ ◄── Client.Persistence (benchmark contracts)
                                   ▲
-  Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training
+  Capabilities / CodexOAuth / HuggingFace / LlamaServer / Ollama / OpenAICompat / StableDiffusionCpp / Training / WhisperCpp
      (each references ONLY Abstractions; LlamaServer + OpenAICompat also ► OpenAICompatible.Core, a leaf)
 
 AppHost ──► Client            (orchestrates; not referenced back)
@@ -113,9 +114,9 @@ orchestration dependencies; provider implementations converge on `Providers.Abst
 
 Notable edges:
 
-- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Training`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
+- **`Client.Application` is the hub of the product graph** — it references every `Providers.*` project (`Abstractions`, `Capabilities`, `CodexOAuth`, `HuggingFace`, `LlamaServer`, `Ollama`, `OpenAICompat`, `StableDiffusionCpp`, `Training`, `WhisperCpp`), `Client.Persistence`, `AI.Agent`, `ServiceDefaults`, and `AI.Contracts`.
 - **`Client` (Web) references a narrower set** — `AI.Agent`, `Client.Application`, `Client.Persistence`, `Providers.Abstractions`, `Providers.Ollama`, `ServiceDefaults`, `AI.Contracts`. It reaches the other providers transitively through `Client.Application`; only `Ollama` is referenced directly at the web layer (legacy direct dependency).
-- **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `StableDiffusionCpp`, and `Training`), with ONE reviewed exception: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice. `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
+- **Providers reference `Providers.Abstractions` only** (verified for `Capabilities`, `CodexOAuth`, `HuggingFace`, `Ollama`, `StableDiffusionCpp`, `Training`, and `WhisperCpp`), with ONE reviewed exception: `LlamaServer` and `OpenAICompat` also reference the leaf `Providers.OpenAICompatible.Core` so the OpenAI wire layer exists once instead of twice. `Capabilities` is the only provider that another non-abstraction project depends on beyond the normal app/test edges.
 - **`Providers.Abstractions` and `AI.Contracts` are leaves** (no outbound project references) — the bottom of the layering. `Client.Persistence` sits one step above: its only project reference is `Providers.Abstractions`.
 - **`AppHost` references `Client`** for dev orchestration but nothing references `AppHost`.
 - **`WindowsLauncher` is an assembly leaf.** It references no product project; the packaged launcher starts the published `Client` executable as a child process after Velopack lifecycle handling.
@@ -134,7 +135,7 @@ Notable edges:
                                        ▲
                               concrete providers (LlamaServer, HuggingFace,
                               Ollama, CodexOAuth, Capabilities,
-                              StableDiffusionCpp, Training)
+                              StableDiffusionCpp, Training, WhisperCpp)
    Shared, depended-on by all:  AI.Contracts (DTOs/enums/events),
                                 ServiceDefaults (telemetry/resilience)
 ```

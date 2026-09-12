@@ -71,6 +71,7 @@ namespace XE_Local_AI_Engine.Client
     using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
     using XE_Local_AI_Engine.Client.Services.Integrations;
     using XE_Local_AI_Engine.Client.Services.Proxy;
+    using XE_Local_AI_Engine.Client.Services.Transcription;
     using XE_Local_AI_Engine.Client.Services.WorkSessions;
 
     /// <summary>
@@ -323,6 +324,7 @@ namespace XE_Local_AI_Engine.Client
             var areWorkSessionsEnabled = builder.Configuration.GetValue($"{WorkSessionOptions.Section}:Enabled", defaultValue: false);
             var areDevWorkflowsEnabled = builder.Configuration.GetValue($"{DevWorkflowOptions.Section}:Enabled", defaultValue: false);
             var areGraphWorkflowsEnabled = builder.Configuration.GetValue($"{GraphWorkflowOptions.Section}:Enabled", defaultValue: true);
+            var isTranscriptionEnabled = builder.Configuration.GetValue($"{TranscriptionOptions.Section}:Enabled", defaultValue: true);
             var areExternalAppsEnabled = builder.Configuration.GetValue($"{ExternalAppsOptions.SectionName}:Enabled", defaultValue: false);
             builder.AddServices(builder.Configuration);
 
@@ -592,6 +594,26 @@ namespace XE_Local_AI_Engine.Client
                 app.Use(async (context, next) =>
                 {
                     if (context.Request.Path.StartsWithSegments(graphWorkflowPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = StatusCodes.Status404NotFound;
+                        return;
+                    }
+
+                    await next(context).ConfigureAwait(false);
+                });
+            }
+
+            if (!isTranscriptionEnabled)
+            {
+                // The same posture as the three blocks above, and for the same reasons. The endpoints and the session
+                // routes a later slice adds stay DISCOVERED with the feature off, so the OpenAPI document — and the
+                // client generated from it — is identical on every node; only behaviour is gated. Registered ahead of
+                // local API security and authentication so the switch answers 404 before anything can answer 403,
+                // which is what keeps it from being probed by status code.
+                var transcriptionPath = new PathString($"/{LocalApiRoutes.Prefix}/{LocalApiRoutes.Transcription.Root}");
+                app.Use(async (context, next) =>
+                {
+                    if (context.Request.Path.StartsWithSegments(transcriptionPath, StringComparison.OrdinalIgnoreCase))
                     {
                         context.Response.StatusCode = StatusCodes.Status404NotFound;
                         return;

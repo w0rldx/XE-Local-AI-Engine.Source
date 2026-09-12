@@ -4,6 +4,7 @@ using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Configuration;
 using XE_Local_AI_Engine.Client.Services.AgentHome;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 
 /// <summary>
@@ -27,6 +28,7 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     private readonly int _agentHomeCommandTimeoutSeed;
     private readonly int _agentHomePrepareTimeoutSeed;
     private readonly int _orchestrationIdleTimeoutSeed;
+    private readonly int _transcriptionIdleTimeoutMinutesSeed;
     private readonly string _ollamaEndpointSeed;
     private readonly INodeSettingsStore _store;
     private readonly IReadOnlyList<string> _toolCapableModelsSeed;
@@ -64,6 +66,14 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         // IOptions<OrchestrationAgentOptions> here would make the accessor depend on the option it configures.
         _orchestrationIdleTimeoutSeed = configuration.GetValue<int?>("Agent:Orchestration:IdleTimeoutSeconds")
                                         ?? StoredNodeSettings.DefaultOrchestrationIdleTimeoutSeconds;
+
+        // Read from configuration rather than IOptions<TranscriptionOptions> for the same reason the Hugging Face
+        // seeds are: the transcription options are registered by a module that not every host or test context runs,
+        // and this accessor is constructed in all of them.
+        var configuredTranscriptionIdleTimeout = configuration.GetValue<int?>($"{TranscriptionOptions.Section}:IdleTimeoutMinutes");
+        _transcriptionIdleTimeoutMinutesSeed = configuredTranscriptionIdleTimeout is > 0
+            ? configuredTranscriptionIdleTimeout.Value
+            : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes;
 
         // HuggingFaceOptions is registered as a plain singleton only after AddHuggingFaceGgufStore runs, which is not
         // guaranteed in every host/test context, so the HF seeds are read from configuration directly (mirroring the
@@ -251,6 +261,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
     public TimeSpan GetLlamaIdleTimeToLive() =>
         ResolveLlamaIdleTimeToLive(LoadStored());
 
+    public TimeSpan GetTranscriptionIdleTimeout() =>
+        ResolveTranscriptionIdleTimeout(LoadStored());
+
     public int GetMaxResponseSizeMb() =>
         ResolveMaxResponseSizeMb(LoadStored());
 
@@ -304,6 +317,9 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
 
     private static TimeSpan ResolveLlamaIdleTimeToLive(StoredNodeSettings stored) =>
         TimeSpan.FromSeconds(stored.LlamaIdleTimeToLiveSeconds ?? StoredNodeSettings.DefaultLlamaIdleTimeToLiveSeconds);
+
+    private TimeSpan ResolveTranscriptionIdleTimeout(StoredNodeSettings stored) =>
+        TimeSpan.FromMinutes(stored.TranscriptionIdleTimeoutMinutes ?? _transcriptionIdleTimeoutMinutesSeed);
 
     private static bool ResolveKeepModelWarmEnabled(StoredNodeSettings stored) =>
         stored.KeepModelWarmEnabled ?? StoredNodeSettings.DefaultKeepModelWarmEnabled;
