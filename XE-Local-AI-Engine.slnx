@@ -40,6 +40,7 @@
         <Project Path="XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj"/>
     </Folder>
     <Folder Name="/Tests/Fixture/">
+        <Project Path="XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"/>
         <Project Path="XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"/>
     </Folder>
 </Solution>

@@ -39,9 +39,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         daemon with nothing of ours on it.
 ///     </para>
 ///     <para>
-///         An unavailable daemon <b>skips with a reason</b> and never passes. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c>
-///         where a daemon is promised and the skip becomes a failure: "these did not run" is an environment fact on
-///         a laptop and a broken gate on a machine that has Docker.
+///         <b>Opt-in.</b> Nothing runs here unless <c>XE_REQUIRE_DOCKER_TESTS=1</c>; without it every test skips
+///         with a reason naming <c>scripts/run-docker-smoke-local.sh</c>, which is how they are meant to be run.
+///         With it set, an unusable daemon is a FAILURE rather than a skip — "these tests did not run" is an
+///         environment fact on a laptop and a broken gate on a machine that promised Docker.
 ///     </para>
 /// </summary>
 public sealed class ExternalAppRealDaemonTests
@@ -294,6 +295,8 @@ public sealed class ExternalAppRealDaemonTests
 
     private static async Task<ContainerRuntimeOptions> ResolveUsableDaemonAsync()
     {
+        RequireOptIn();
+
         var attempts = new List<string>();
 
         foreach (var candidate in DaemonCandidates())
@@ -353,17 +356,35 @@ public sealed class ExternalAppRealDaemonTests
     }
 
     /// <summary>
-    ///     How a missing prerequisite is reported: a skip naming what was missing, or — under
-    ///     <c>XE_REQUIRE_DOCKER_TESTS=1</c> — a failure. Both carry the same reason, so only the verdict changes.
+    ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
+    ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
+    ///     <para>
+    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
+    ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
+    ///     </para>
+    /// </summary>
+    private static void RequireOptIn()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal))
+        {
+            throw new SkipTestException($"SKIPPED — opt-in: set {RequireDockerVariable}=1 (scripts/run-docker-smoke-local.sh) to run "
+                                        + "the real-daemon tests for the External Apps install path. CI covers the wire shape without a daemon through "
+                                        + "XE-Local-AI-Engine.Testing.FakeDocker; these prove what only a real daemon can.");
+        }
+    }
+
+    /// <summary>
+    ///     Always a failure, never a skip: <see cref="RequireOptIn" /> has already turned away a run that did not
+    ///     ask for a daemon, so reaching here means one was PROMISED and is not usable.
     /// </summary>
     private static Exception Unavailable(string reason)
     {
         var message = reason + " These are the ONLY tests that put a whole application through the real service against a real daemon; "
                              + "a green run without them is not evidence that an installed application would start.";
 
-        return string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal)
-            ? new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}")
-            : new SkipTestException($"SKIPPED — {message}");
+        return new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}");
     }
 
     /// <summary>

@@ -1,9 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
+using System.Diagnostics.CodeAnalysis;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
+using XE_Local_AI_Engine.Testing.FakeDocker;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Which <see cref="IContainerRuntime" /> a contract case runs against.</summary>
@@ -13,7 +15,14 @@ public enum ContainerRuntimeUnderTest
     Fake,
 
     /// <summary>The production Docker client, built against an endpoint that does not exist.</summary>
-    DockerClient
+    DockerClient,
+
+    /// <summary>
+    ///     The production Docker client against a <c>FakeDockerServer</c> that answers. Used only by the post-guard
+    ///     cases: a guard that fires before the first wire call needs no daemon behind it, and starting one to prove
+    ///     otherwise would be pure overhead.
+    /// </summary>
+    FakeServer
 }
 
 /// <summary>
@@ -26,19 +35,26 @@ public enum ContainerRuntimeUnderTest
 ///         exactly that implementation.
 ///     </para>
 ///     <para>
-///         Every case here is a refusal that happens BEFORE the first wire call, which is what lets the production
-///         client run without a daemon — both implementations are built against the same non-existent socket, and a
-///         guard that started talking to it would fail here with a transport error rather than pass. Refusals the
-///         daemon itself makes on state it holds — an image that was never pulled, a network that was never created,
-///         a name already taken — are not contract cases: on the production side they are 404s and 409s off the wire.
-///         They stay in <c>ContainerRuntimeFakeContractTests</c> (the fake's own promise) and in
-///         <c>ContainerRuntimeRealDaemonTests</c> (the daemon's).
+///         The suite is in two halves. The pre-wire half is every refusal that happens BEFORE the first wire call,
+///         which is what lets the production client run without a daemon — <c>Fake</c> and <c>DockerClient</c> are
+///         built against the same non-existent socket, and a guard that started talking to it would fail here with a
+///         transport error rather than pass.
+///     </para>
+///     <para>
+///         The post-guard half is the refusals the daemon itself makes on state it holds — an image that was never
+///         pulled, a network that was never created, a name already taken. Those used to be uncontracted, asserted
+///         only against the in-memory fake's own promise, because the production side had no daemon to answer them.
+///         It has one now: the <c>FakeServer</c> arm puts a <c>FakeDockerServer</c> behind the real client, so the
+///         fake's lies and a daemon's 404s and 409s are pinned to each other. <c>DockerClient</c> takes no rows in
+///         that half — a socket that does not exist cannot answer — and <c>FakeServer</c> takes none in the pre-wire
+///         half, where starting a server to test a guard that fires before any HTTP call is pure overhead.
 ///     </para>
 /// </summary>
 public sealed class ContainerRuntimeContractTests
 {
     private const string Digest = "@sha256:0000000000000000000000000000000000000000000000000000000000000000";
     private const string Image = "ghcr.io/example/app" + Digest;
+    private const string NetworkName = "xe-app-instance-1-net";
 
     /// <summary>
     ///     A socket that does not exist, shared by both implementations. Constructing a client opens nothing, so the
@@ -202,7 +218,7 @@ public sealed class ContainerRuntimeContractTests
 
         var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => client.CreateNetworkAsync(new ContainerNetworkSpecification
         {
-            Name = "xe-app-instance-1-net",
+            Name = NetworkName,
             Labels = new Dictionary<string, string>(StringComparer.Ordinal),
             Internal = false
         }));
@@ -275,6 +291,96 @@ public sealed class ContainerRuntimeContractTests
         await RefusesAsync<ArgumentNullException>("request", () => client.ReadLogsAsync("container-1", request: null!));
     }
 
+    // ---------------------------------------------------------------------------------------------------------
+    // Post-guard cases. Everything above refuses before the first wire call and needs no daemon; everything below
+    // needs one behind the guard, which is what the FakeServer arm supplies. These are the promises the in-memory
+    // fake makes about daemon-held state — an image that was never pulled, a network that was never created, a name
+    // already taken — asserted against the production client too, so the fake's lies and the daemon's answers cannot
+    // drift apart unnoticed. Only the shared half is asserted here: the fake names the offending image or network in
+    // its message and the production client names the status code, so the status word is what both promise.
+    // ---------------------------------------------------------------------------------------------------------
+
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.FakeServer)]
+    public async Task RunContainer_WithAnImageTheDaemonDoesNotHave_IsRefusedAsNotFound(ContainerRuntimeUnderTest implementation)
+    {
+        await using var box = await PostGuardBox.CreateAsync(implementation);
+        box.SeedNetwork();
+
+        var failure = await AssertEx.ThrowsAsync<DockerRuntimeException>(() => box.Runtime.RunContainerAsync(Specification()));
+
+        AssertEx.Contains(failure.Message, "NotFound");
+        AssertEx.Equal(expected: 0, box.CreatedContainerCount, "A refused create left a container behind.");
+    }
+
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.FakeServer)]
+    public async Task RunContainer_OnANetworkThatWasNeverCreated_IsRefusedAsNotFound(ContainerRuntimeUnderTest implementation)
+    {
+        await using var box = await PostGuardBox.CreateAsync(implementation);
+        box.SeedImage();
+
+        var failure = await AssertEx.ThrowsAsync<DockerRuntimeException>(() => box.Runtime.RunContainerAsync(Specification()));
+
+        AssertEx.Contains(failure.Message, "NotFound");
+        AssertEx.Equal(expected: 0, box.CreatedContainerCount);
+    }
+
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.FakeServer)]
+    public async Task RunContainer_UnderANameAlreadyTaken_IsRefusedAsAConflict(ContainerRuntimeUnderTest implementation)
+    {
+        await using var box = await PostGuardBox.CreateAsync(implementation);
+        box.SeedImage();
+        box.SeedNetwork();
+
+        var first = await box.Runtime.RunContainerAsync(Specification());
+
+        var failure = await AssertEx.ThrowsAsync<DockerRuntimeException>(() => box.Runtime.RunContainerAsync(Specification()));
+        AssertEx.Contains(failure.Message, "Conflict");
+        AssertEx.Equal(expected: 1, box.CreatedContainerCount);
+
+        // The name is free again once the container is gone, which is what lets a rebuild recreate it.
+        await box.Runtime.RemoveContainerAsync(first);
+        AssertEx.NotNullOrEmpty(await box.Runtime.RunContainerAsync(Specification()));
+    }
+
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.FakeServer)]
+    public async Task StopContainer_OnAnAlreadyStoppedContainer_ReturnsFalse(ContainerRuntimeUnderTest implementation)
+    {
+        await using var box = await PostGuardBox.CreateAsync(implementation);
+        box.SeedImage();
+        box.SeedNetwork();
+
+        var containerId = await box.Runtime.RunContainerAsync(Specification());
+        await box.Runtime.StartContainerAsync(containerId);
+
+        AssertEx.True(await box.Runtime.StopContainerAsync(containerId, TimeSpan.FromSeconds(5)),
+            "The first stop of a running container reported that it was already stopped.");
+        // False is "it was already stopped", an answer and not an error: a teardown must run twice without the
+        // second run looking like a failure.
+        AssertEx.False(await box.Runtime.StopContainerAsync(containerId, TimeSpan.FromSeconds(5)));
+    }
+
+    [Test]
+    [Arguments(ContainerRuntimeUnderTest.Fake)]
+    [Arguments(ContainerRuntimeUnderTest.FakeServer)]
+    public async Task RemoveNetwork_OnAMissingNetwork_IsNotAnError(ContainerRuntimeUnderTest implementation)
+    {
+        await using var box = await PostGuardBox.CreateAsync(implementation);
+
+        await box.Runtime.RemoveNetworkAsync("a-network-that-never-existed");
+
+        // Already gone is the state the caller wanted. The assertion is that the call returned at all, so the next
+        // line proves the runtime is still usable rather than left in a faulted state by a swallowed 404.
+        AssertEx.Empty(await box.Runtime.ListNetworksAsync(Labels()));
+    }
+
     /// <summary>
     ///     The refusal, pinned by the parameter it names as well as by its type. Type alone passes on a wrong
     ///     reason: an <see cref="ArgumentException" /> the BCL or Docker.DotNet raised while building a URI out of a
@@ -322,6 +428,104 @@ public sealed class ContainerRuntimeContractTests
         };
     }
 
+    /// <summary>
+    ///     A runtime with a daemon behind it, plus the two seeding calls the post-guard cases need, over both
+    ///     implementations. Seeding is the one thing the two do differently — the in-memory fake is told directly, the
+    ///     production client's daemon is told through the fake server's state — and everything else is the same calls
+    ///     in the same order.
+    /// </summary>
+    private sealed class PostGuardBox : IAsyncDisposable
+    {
+        private readonly FakeDockerRuntimeClient? _inMemory;
+        private readonly FakeDockerRuntimeBox? _server;
+
+        private PostGuardBox(FakeDockerRuntimeClient? inMemory, FakeDockerRuntimeBox? server)
+        {
+            _inMemory = inMemory;
+            _server = server;
+        }
+
+        public IContainerRuntime Runtime => (IContainerRuntime?)_inMemory ?? _server!.Runtime;
+
+        /// <summary>How many containers the daemon holds, so "refused before anything was created" is assertable.</summary>
+        public int CreatedContainerCount => _inMemory?.CreatedContainerIds.Count ?? _server!.State.Containers.Count;
+
+        [SuppressMessage("Reliability",
+            "CA2000:Dispose objects before losing scope",
+            Justification = "Ownership transfers to the returned box, whose DisposeAsync releases both halves and which every caller holds with `await using`. The catch below covers the window before that transfer.")]
+        public static async Task<PostGuardBox> CreateAsync(ContainerRuntimeUnderTest implementation)
+        {
+            FakeDockerRuntimeClient? inMemory = null;
+            FakeDockerRuntimeBox? server = null;
+
+            try
+            {
+                switch (implementation)
+                {
+                    case ContainerRuntimeUnderTest.Fake:
+                        inMemory = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(UnreachableEndpoint,
+                            DockerDaemonEndpointSource.Configuration));
+                        break;
+                    case ContainerRuntimeUnderTest.FakeServer:
+                        server = await FakeDockerRuntimeBox.StartAsync();
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(implementation),
+                            implementation,
+                            "Only the implementations that can answer a wire call belong in a post-guard case.");
+                }
+
+                return new PostGuardBox(inMemory, server);
+            }
+            catch
+            {
+                // Ownership has not transferred to the box yet, so whichever half was built is this method's to
+                // release.
+                if (inMemory is not null)
+                {
+                    await inMemory.DisposeAsync();
+                }
+
+                if (server is not null)
+                {
+                    await server.DisposeAsync();
+                }
+
+                throw;
+            }
+        }
+
+        public void SeedImage()
+        {
+            _inMemory?.SeedExistingImage(Image);
+            _server?.State.SeedImage(Image);
+        }
+
+        public void SeedNetwork()
+        {
+            _inMemory?.SeedExistingNetwork(new ContainerNetworkSpecification
+            {
+                Name = NetworkName,
+                Labels = Labels(),
+                Internal = false
+            });
+            _server?.State.SeedNetwork(NetworkName, Labels());
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (_inMemory is not null)
+            {
+                await _inMemory.DisposeAsync();
+            }
+
+            if (_server is not null)
+            {
+                await _server.DisposeAsync();
+            }
+        }
+    }
+
     private static Dictionary<string, string> Labels()
     {
         return new Dictionary<string, string>(StringComparer.Ordinal)
@@ -345,7 +549,7 @@ public sealed class ContainerRuntimeContractTests
             CapabilitiesToAdd = [],
             SecurityOptions = ["no-new-privileges:true"],
             ReadOnlyRootFilesystem = false,
-            NetworkName = "xe-app-instance-1-net",
+            NetworkName = NetworkName,
             NetworkAliases = ["odysseus"],
             RestartMode = ContainerRestartMode.UnlessStopped,
             MemoryBytes = 0,

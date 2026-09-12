@@ -395,7 +395,7 @@ until an operator configures a URL. The planned XE-owned catalog repository does
 - [React Client](10-react-client.md) — the `externalApps` feature.
 - [Data & Persistence](08-data-and-persistence.md) — the two tables and the encrypted variables column.
 - [Security & Privacy](12-security-and-privacy.md) — §7 for the container policy in the security narrative.
-- [Testing & Validation](13-testing-and-validation.md) — the real-daemon suites and `XE_REQUIRE_DOCKER_TESTS`.
+- [Testing & Validation](13-testing-and-validation.md) — the fake Docker server that covers the wire shape in CI, and the opt-in real-daemon suites behind `XE_REQUIRE_DOCKER_TESTS=1` / `scripts/run-docker-smoke-local.sh`.
 - [Project Layout](02-project-layout.md) — `catalog/external-apps/` as a non-project folder.
 - [ADR 0010](../adr/0010-external-apps-container-execution.md) — the decision this module implements.
 - [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) and

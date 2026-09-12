@@ -48,7 +48,8 @@ Solution: `XE-Local-AI-Engine.slnx`. Full layout and dependency rules: `docs/wik
 - `XE-Local-AI-Engine.WindowsLauncher` — Velopack entry point; starts the published host as a child process, no project refs.
 - `XE-Local-AI-Engine.Client.React` — the SPA. Has its own `AGENTS.md` for frontend-only rules.
 - `XE-Local-AI-Engine.Tests`, `AI.Agent.Tests`, `Client.Persistence.Tests` — TUnit; `Tests.E2ETests` — Playwright, opt-in.
-- `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests.
+- `Client.Testing` — shared host fixtures; `Testing.FakeOllama` — in-memory fake model server used by tests;
+  `Testing.FakeDocker` — in-memory fake Docker Engine API so the container tests need no daemon.
 - `scripts/` — dev lifecycle, validation gates, smoke runners. `publish/` — packaging. `tools/training/` — the
   shipped Python training runtime (own `pyproject.toml`; never `uv sync` inside it).
 
@@ -144,6 +145,9 @@ Opt-in live runners (nothing invokes them; ask before running, run before a test
 - `scripts/run-gpu-smoke-local.sh` — the only gate proving the GPU did the work; exit 5 = infra abort, 1 = product failed.
 - `scripts/run-tool-grammar-smoke-local.sh` — after changing any tool schema or the llama.cpp pin; its failing
   negative control is the evidence, a run without it proved nothing.
+- `scripts/run-docker-smoke-local.sh` — the three real-daemon container suites, which run ONLY under
+  `XE_REQUIRE_DOCKER_TESTS=1` and skip everywhere else. CI proves the Engine API wire shape without a daemon
+  against `Testing.FakeDocker`; this proves what only a daemon can. Exit 5 = no usable daemon, 1 = product failed.
 
 ## Conventions that bite
 

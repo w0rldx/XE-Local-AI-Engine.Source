@@ -25,9 +25,10 @@ using OS = TUnit.Core.Enums.OS;
 ///         daemon honours a flag, and a daemon cannot be asked to dishonour one.
 ///     </para>
 ///     <para>
-///         An unavailable daemon <b>skips with a reason</b> and never passes. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c>
-///         where a daemon is promised and the skip becomes a failure, because "these tests did not run" is an
-///         environment fact on a laptop and a broken gate on a machine that has Docker.
+///         <b>Opt-in.</b> Nothing runs here unless <c>XE_REQUIRE_DOCKER_TESTS=1</c>; without it every test skips
+///         with a reason naming <c>scripts/run-docker-smoke-local.sh</c>, which is how they are meant to be run.
+///         With it set, an unusable daemon is a FAILURE rather than a skip — "these tests did not run" is an
+///         environment fact on a laptop and a broken gate on a machine that promised Docker.
 ///     </para>
 /// </summary>
 public sealed class ContainerRuntimeRealDaemonTests
@@ -72,97 +73,6 @@ public sealed class ContainerRuntimeRealDaemonTests
         AssertEx.Equal(last.LayerCount, last.CompletedLayers,
             $"The pull returned with layers still outstanding ({last.CompletedLayers} of {last.LayerCount} complete), "
             + "so the final snapshot is not the pull's last state.");
-    }
-
-    [Test]
-    public async Task RealDaemon_PullImage_WithATagRatherThanADigest_IsRefusedBeforeAnyWireCall()
-    {
-        // Enforced here and not only by the catalog: a tag lets a different image answer to the same name, and the
-        // daemon has no way to tell the caller that what it pulled is not what was reviewed.
-        await using var box = await NewBoxAsync();
-
-        await AssertEx.ThrowsAsync<ArgumentException>(() => box.Runtime.PullImageAsync("busybox:1.37", progress: null));
-    }
-
-    [Test]
-    public async Task RealDaemon_ADigestPinnedImageThatIsAbsent_FailsWithAClassifiedNotFound()
-    {
-        await using var box = await NewBoxAsync();
-        var absent = "busybox@sha256:" + new string('0', count: 64);
-
-        var exception = await AssertEx.ThrowsAsync<DockerRuntimeException>(
-            () => box.Runtime.RunContainerAsync(box.Specification(absent)));
-
-        // Classified rather than raw: a create that failed because the image is not there names an operator action,
-        // and an unclassified transport error names none.
-        AssertEx.NotNullOrEmpty(exception.Message);
-    }
-
-    [Test]
-    public async Task RealDaemon_CreateNetwork_IsFoundByItsLabelsAndIsIdempotent()
-    {
-        // Re-entrancy after a crash: the reconciler re-creates a network it may already have created, and the second
-        // call must return the same id rather than leave two networks wearing one name.
-        await using var box = await NewBoxAsync();
-
-        var first = await box.CreateNetworkAsync();
-        var second = await box.Runtime.CreateNetworkAsync(box.NetworkSpecification());
-
-        AssertEx.Equal(first, second);
-
-        var found = await box.Runtime.ListNetworksAsync(box.Labels);
-        AssertEx.Equal(expected: 1, found.Count, "The label filter found something other than exactly this test's network.");
-        AssertEx.Equal(first, found[0]);
-    }
-
-    [Test]
-    public async Task RealDaemon_CreateNetwork_OverAForeignNetworkOfTheSameName_ThrowsContainerPolicyException()
-    {
-        // A name conflict is not proof of ownership. Without this check a network someone else created — carrying the
-        // name an installed application happens to use — would silently become the network that application's
-        // containers join, which makes the instance and install labels a security input rather than bookkeeping.
-        await using var box = await NewBoxAsync();
-
-        var foreignId = await box.CreateForeignNetworkAsync();
-
-        var exception = await AssertEx.ThrowsAsync<ContainerPolicyException>(
-            () => box.Runtime.CreateNetworkAsync(box.NetworkSpecification()));
-
-        AssertEx.Equal(ContainerPolicyException.ForeignNetworkReason, exception.Reason);
-        AssertEx.Contains(exception.Message, box.NetworkName);
-
-        // Refused, not repaired: removing a network this engine does not own is a worse answer than declining.
-        AssertEx.Contains(await box.ListAllNetworkIdsAsync(), foreignId,
-            "The foreign network was removed. A refusal must not delete someone else's network.");
-    }
-
-    [Test]
-    public async Task RealDaemon_RequestedPortBindings_ArePresentBeforeStart_AndEffectivePortsOnlyAfter()
-    {
-        // The two-pass verification a later slice depends on. Before start the daemon knows what was asked and has
-        // assigned nothing; after start it knows both. A verifier reading one member for both questions would either
-        // pass a container whose port was never published or fail one that was.
-        await using var box = await NewBoxAsync();
-
-        var containerId = await LoopbackPort.BindWithRetryAsync(async candidate =>
-            {
-                var created = await box.RunAsync(box.SpecificationOnPort(candidate));
-
-                var beforeStart = await box.Runtime.InspectAsync(created);
-                AssertEx.Equal(expected: 1, beforeStart.RequestedPortBindings.Count);
-                AssertEx.Equal(ServedPort, beforeStart.RequestedPortBindings[0].ContainerPort);
-                AssertEx.Equal("127.0.0.1", beforeStart.RequestedPortBindings[0].HostIp);
-                AssertEx.Empty(beforeStart.PublishedPorts, "A container that was never started reported a published port.");
-
-                return await box.TryStartAsync(created) ? created : null;
-            },
-            maxAttempts: 2);
-
-        var afterStart = await box.Runtime.InspectAsync(containerId);
-
-        AssertEx.Equal(expected: 1, afterStart.RequestedPortBindings.Count);
-        AssertEx.Equal(expected: 1, afterStart.PublishedPorts.Count);
-        AssertEx.Equal(ServedPort, afterStart.PublishedPorts[0].ContainerPort);
     }
 
     [Test]
@@ -290,93 +200,6 @@ public sealed class ContainerRuntimeRealDaemonTests
     }
 
     [Test]
-    public async Task RealDaemon_ReadLogs_ReturnsBothStreamsDemultiplexedAndHonoursTheCeilings()
-    {
-        // The daemon frames a non-TTY log stream with an eight-byte header per chunk, six of whose bytes are NUL for
-        // any realistic chunk size. A read that returned those bytes would put binary into an operator-facing log
-        // view, and the framing is invisible to a fake.
-        await using var box = await NewBoxAsync();
-
-        var specification = box.Specification() with
-        {
-            Entrypoint = ["sh", "-c", "i=1; while [ $i -le 500 ]; do echo \"out-$i\"; echo \"err-$i\" >&2; i=$((i+1)); done"],
-            PublishedPorts = [],
-            Healthcheck = null
-        };
-
-        var containerId = await box.RunAsync(specification);
-        await box.StartAsync(containerId);
-        await PollAsync(async () => (await box.Runtime.InspectAsync(containerId)).State.Running,
-            static running => !running,
-            DaemonDeadline,
-            "the log-writing container to exit");
-
-        var whole = await box.Runtime.ReadLogsAsync(containerId, new ContainerLogRequest
-        {
-            TailLines = 2000
-        });
-
-        AssertEx.Contains(whole.Text, "out-500");
-        AssertEx.Contains(whole.Text, "err-500");
-        AssertEx.False(whole.Text.Contains('\0', StringComparison.Ordinal),
-            "The log text carries stream-framing bytes, so the multiplexed stream reached the caller undemultiplexed.");
-
-        var tail = await box.Runtime.ReadLogsAsync(containerId, new ContainerLogRequest
-        {
-            TailLines = 10
-        });
-        AssertEx.True(tail.LineCount <= 10, $"A ten-line tail returned {tail.LineCount} lines.");
-
-        var clipped = await box.Runtime.ReadLogsAsync(containerId, new ContainerLogRequest
-        {
-            TailLines = 2000,
-            MaxBytes = 256
-        });
-        AssertEx.True(clipped.Truncated, "A 256-byte ceiling over a thousand lines did not report truncation.");
-    }
-
-    [Test]
-    public async Task RealDaemon_StopContainer_HonoursTheGracePeriodAndIsIdempotent()
-    {
-        await using var box = await NewBoxAsync();
-        var containerId = await box.RunFixtureContainerAsync(start: true);
-
-        var stopped = await box.Runtime.StopContainerAsync(containerId, TimeSpan.FromSeconds(5));
-        AssertEx.True(stopped, "The first stop of a running container reported that it was already stopped.");
-
-        var inspection = await box.Runtime.InspectAsync(containerId);
-        AssertEx.False(inspection.State.Running);
-        AssertEx.Equal("exited", inspection.State.Status);
-
-        // False is the daemon's own answer, not an error: a reconciler that stops what it finds must be able to run
-        // twice without the second run looking like a failure.
-        AssertEx.False(await box.Runtime.StopContainerAsync(containerId, TimeSpan.FromSeconds(5)));
-    }
-
-    [Test]
-    public async Task RealDaemon_RestartPolicy_ReadsBackAsUnlessStoppedOrNo()
-    {
-        await using var box = await NewBoxAsync();
-
-        var none = await box.RunAsync(box.Specification() with
-        {
-            RestartMode = ContainerRestartMode.None,
-            PublishedPorts = [],
-            Healthcheck = null
-        });
-        var unlessStopped = await box.RunAsync(box.Specification() with
-        {
-            Name = box.NextName(),
-            RestartMode = ContainerRestartMode.UnlessStopped,
-            PublishedPorts = [],
-            Healthcheck = null
-        });
-
-        AssertEx.Equal(ContainerRestartMode.None, (await box.Runtime.InspectAsync(none)).RestartMode);
-        AssertEx.Equal(ContainerRestartMode.UnlessStopped, (await box.Runtime.InspectAsync(unlessStopped)).RestartMode);
-    }
-
-    [Test]
     public async Task RealDaemon_ExtraHosts_ReadsBackHostGateway()
     {
         // host-gateway is a daemon-resolved alias rather than an address, so only a real daemon can say whether it
@@ -401,9 +224,15 @@ public sealed class ContainerRuntimeRealDaemonTests
         // a later slice compares its plan against.
         await using var box = await NewBoxAsync();
 
+        // Built here rather than pulled: the assertion is about what the daemon does with a VOLUME instruction,
+        // and two lines of Dockerfile over the BusyBox base the suite already holds produce the same anonymous
+        // mount a 16 MB registry image would. The reference is whatever this build resolved to — a local build's
+        // manifest digest moves with the base, the Dockerfile bytes and the daemon, so it is never hardcoded.
+        await using var fixtureImage = await box.BuildVolumeDeclaringImageAsync();
+
         var volumesBefore = await box.ListVolumeNamesAsync();
 
-        var containerId = await box.RunAsync(box.Specification(ContainerRuntimeTestImages.VolumeDeclaringImage) with
+        var containerId = await box.RunAsync(box.Specification(fixtureImage.Reference) with
         {
             Entrypoint = ["sh", "-c", "while true; do sleep 1; done"],
             Mounts = [],
@@ -417,7 +246,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         // The reference the container was created with, not the resolved image id the daemon also reports. A verifier
         // compares this against the digest-pinned reference an application manifest names, and the id matches nothing
         // it holds.
-        AssertEx.Equal(ContainerRuntimeTestImages.VolumeDeclaringImage,
+        AssertEx.Equal(fixtureImage.Reference,
             inspection.Image,
             "The inspected image is not the digest-pinned reference the container was created with.");
 
@@ -530,27 +359,6 @@ public sealed class ContainerRuntimeRealDaemonTests
     }
 
     [Test]
-    public async Task RealDaemon_RemoveNetwork_WhileAttached_Fails_ThenSucceedsAfterRemoval_AndAMissingNetworkIsNotAnError()
-    {
-        // Teardown ordering, made observable. A reconciler that removed the network first would leave a container
-        // attached to nothing and no error to say so.
-        await using var box = await NewBoxAsync();
-        var containerId = await box.RunFixtureContainerAsync(start: true);
-
-        await AssertEx.ThrowsAsync<DockerRuntimeException>(() => box.Runtime.RemoveNetworkAsync(box.NetworkName));
-
-        await box.Runtime.StopContainerAsync(containerId, TimeSpan.FromSeconds(5));
-        await box.RemoveContainerAsync(containerId);
-        await box.Runtime.RemoveNetworkAsync(box.NetworkName);
-        box.ForgetNetwork();
-
-        AssertEx.Empty(await box.Runtime.ListNetworksAsync(box.Labels), "The network survived its own removal.");
-
-        // Idempotent: a missing network is the state the caller wanted, so removing it again is not a failure.
-        await box.Runtime.RemoveNetworkAsync(box.NetworkName);
-    }
-
-    [Test]
     public async Task RealDaemon_ListContainersDetailed_ReportsTheStoppedContainerAndItsExitCode()
     {
         // The assertion the fake cannot make. A container stopped outside this engine stays listed as `exited`, and
@@ -583,16 +391,6 @@ public sealed class ContainerRuntimeRealDaemonTests
             "A stopped container was not listed, so an application stopped outside XE would look uninstalled.");
         AssertEx.Equal("exited", exited.State);
         AssertEx.Equal(expected: 7, exited.ExitCode);
-    }
-
-    [Test]
-    public async Task RealDaemon_ListContainersDetailed_RefusesAnEmptyLabelFilter()
-    {
-        // An empty filter lists every container on the daemon, including ones this engine did not create.
-        await using var box = await NewBoxAsync();
-
-        await AssertEx.ThrowsAsync<ArgumentException>(
-            () => box.Runtime.ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)));
     }
 
     /// <summary>
@@ -640,6 +438,8 @@ public sealed class ContainerRuntimeRealDaemonTests
 
     private static async Task<ContainerRuntimeOptions> ResolveUsableDaemonAsync()
     {
+        RequireOptIn();
+
         var attempts = new List<string>();
 
         foreach (var candidate in DaemonCandidates())
@@ -714,45 +514,59 @@ public sealed class ContainerRuntimeRealDaemonTests
     }
 
     /// <summary>
-    ///     Make both pinned images present, through the PRODUCTION pull. CI pre-pulls them as their own steps so a
-    ///     registry blip fails there as infrastructure; this is what keeps a fresh laptop from skipping the suite.
+    ///     Make the one pulled image present, through the PRODUCTION pull. Nothing pre-pulls it: this suite is
+    ///     opt-in, so the first run on a fresh machine pays the pull here rather than in a CI step.
     /// </summary>
     private static async Task EnsureImagesAsync(ContainerRuntimeOptions options)
     {
         await using var runtime = ContainerBox.CreateRuntime(options);
 
-        foreach (var image in new[] { ContainerRuntimeTestImages.Busybox, ContainerRuntimeTestImages.VolumeDeclaringImage })
+        if (await runtime.ImageExistsAsync(ContainerRuntimeTestImages.Busybox))
         {
-            if (await runtime.ImageExistsAsync(image))
-            {
-                continue;
-            }
+            return;
+        }
 
-            try
-            {
-                await runtime.PullImageAsync(image, progress: null);
-            }
-            catch (DockerRuntimeException exception)
-            {
-                throw Unavailable($"the pinned test image '{image}' is not on this daemon and pulling it failed ({exception.Message}). "
-                                  + $"Run `docker pull {image}` and re-run.");
-            }
+        try
+        {
+            await runtime.PullImageAsync(ContainerRuntimeTestImages.Busybox, progress: null);
+        }
+        catch (DockerRuntimeException exception)
+        {
+            throw Unavailable($"the pinned test image '{ContainerRuntimeTestImages.Busybox}' is not on this daemon and pulling it "
+                              + $"failed ({exception.Message}). Run `docker pull {ContainerRuntimeTestImages.Busybox}` and re-run.");
         }
     }
 
     /// <summary>
-    ///     How a missing prerequisite is reported: a skip that names what was missing, or — under
-    ///     <c>XE_REQUIRE_DOCKER_TESTS=1</c> — a failure. Both carry the same reason, so the output reads the same
-    ///     either way and only the verdict changes.
+    ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
+    ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
+    ///     <para>
+    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
+    ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
+    ///     </para>
+    /// </summary>
+    private static void RequireOptIn()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal))
+        {
+            throw new SkipTestException($"SKIPPED — opt-in: set {RequireDockerVariable}=1 (scripts/run-docker-smoke-local.sh) to run "
+                                        + "the real-daemon tests for the application-container runtime. CI covers the wire shape without a daemon through "
+                                        + "XE-Local-AI-Engine.Testing.FakeDocker; these prove what only a real daemon can.");
+        }
+    }
+
+    /// <summary>
+    ///     Always a failure, never a skip: <see cref="RequireOptIn" /> has already turned away a run that did not
+    ///     ask for a daemon, so reaching here means one was PROMISED and is not usable.
     /// </summary>
     private static Exception Unavailable(string reason)
     {
         var message = reason + " These are the ONLY tests that prove the application-container runtime works against a real daemon; "
                              + "a green run without them is not evidence that an installed application would start.";
 
-        return string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal)
-            ? new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}")
-            : new SkipTestException($"SKIPPED — {message}");
+        return new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}");
     }
 
     /// <summary>One container that started, together with the host port it was asked to bind.</summary>
@@ -929,26 +743,13 @@ public sealed class ContainerRuntimeRealDaemonTests
         }
 
         /// <summary>
-        ///     A bridge network with this test's name and NONE of its labels, created through the raw client so the
-        ///     runtime under test cannot have been the thing that made it.
+        ///     Build the volume-declaring fixture image on this box's daemon. Through the RAW client on purpose:
+        ///     the product never builds an image, so <c>IContainerRuntime</c> has no build member and must not
+        ///     grow one to make a test shorter.
         /// </summary>
-        public async Task<string> CreateForeignNetworkAsync()
+        public async Task<VolumeDeclaringImageFixture> BuildVolumeDeclaringImageAsync()
         {
-            using var raw = RawClient();
-            var created = await raw.Networks.CreateNetworkAsync(new NetworksCreateParameters
-            {
-                Name = NetworkName,
-                Driver = "bridge"
-            });
-
-            _foreignNetworks.Add(created.ID);
-            return created.ID;
-        }
-
-        public async Task<IReadOnlyList<string>> ListAllNetworkIdsAsync()
-        {
-            using var raw = RawClient();
-            return [.. (await raw.Networks.ListNetworksAsync()).Select(static network => network.ID)];
+            return await VolumeDeclaringImageFixture.BuildAsync(RawClient());
         }
 
         public async Task<IReadOnlyList<string>> ListVolumeNamesAsync()
@@ -1115,12 +916,6 @@ public sealed class ContainerRuntimeRealDaemonTests
         {
             await Runtime.RemoveContainerAsync(containerId);
             _containers.Remove(containerId);
-        }
-
-        /// <summary>Stop tracking the network, after a test removed it itself.</summary>
-        public void ForgetNetwork()
-        {
-            _networkId = null;
         }
 
         public async Task<bool> IsRootlessAsync()

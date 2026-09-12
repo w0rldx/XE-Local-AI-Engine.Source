@@ -23,9 +23,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         be made to dishonour one on request.
 ///     </para>
 ///     <para>
-///         An unavailable daemon <b>skips with a reason</b> and never passes. A suite
-///         that went green because it quietly skipped the only tests exercising isolation would be worse than a red
-///         one, so every skip below names what was missing and how to supply it.
+///         <b>Opt-in.</b> Nothing runs here unless <c>XE_REQUIRE_DOCKER_TESTS=1</c>; without it every test skips
+///         with a reason naming <c>scripts/run-docker-smoke-local.sh</c>, which is how they are meant to be run.
+///         With it set, an unusable daemon is a FAILURE rather than a skip — "these tests did not run" is an
+///         environment fact on a laptop and a broken gate on a machine that promised Docker.
 ///     </para>
 /// </summary>
 public sealed class DockerSandboxRealDaemonTests
@@ -56,29 +57,6 @@ public sealed class DockerSandboxRealDaemonTests
     ///     result that cannot differ. A skip decided here is rethrown to each awaiting test unchanged.
     /// </summary>
     private static readonly Lazy<Task<ContainerSandboxOptions>> DaemonGate = new(ResolveUsableDaemonAsync);
-
-    [Test]
-    public async Task RealDaemon_Preflight_ReachesTheDaemonAndPinsIt()
-    {
-        var options = await RequireDaemonAsync();
-        using var attestationRoot = new TemporaryDirectory();
-
-        using var store = new DockerDaemonAttestationStore(new FixedNodeDataDirectory(attestationRoot.Path),
-            NullLogger<DockerDaemonAttestationStore>.Instance);
-        var service = new DockerDaemonPreflightService(new StaticOptionsMonitor<ContainerSandboxOptions>(options),
-            new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options)),
-            store,
-            new FixedTimeProvider(FixedNow),
-            NullLogger<DockerDaemonPreflightService>.Instance);
-
-        var preflight = await service.InspectAsync();
-
-        AssertEx.Equal(DockerDaemonPreflightStatus.Ready, preflight.Status);
-        var observed = AssertEx.NotNull(preflight.ObservedDaemon);
-        AssertEx.NotNullOrEmpty(observed.DaemonId);
-        AssertEx.NotNullOrEmpty(observed.ServerVersion);
-        AssertEx.Equal(AssertEx.NotNull(preflight.PinnedDaemon).DaemonId, observed.DaemonId);
-    }
 
     [Test]
     public async Task RealDaemon_CreatedContainer_ReadsBackEveryHardeningGuarantee()
@@ -338,24 +316,6 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     [Test]
-    public async Task RealDaemon_CopyInto_RefusesADestinationThatEscapesTheWorkspace()
-    {
-        var options = await RequireDaemonAsync();
-        await using var fixture = await ContainerFixture.CreateAsync(options);
-        var source = Path.Combine(fixture.WorkspaceRoot, "..", "escape-source.txt");
-        await File.WriteAllTextAsync(source, "should-not-land");
-
-        await AssertEx.ThrowsAsync<UnauthorizedAccessException>(() => fixture.Provider.CopyIntoAsync(fixture.Handle,
-            new SandboxCopyRequest
-            {
-                SourcePath = source,
-                DestinationPath = "/../escaped.txt"
-            }));
-
-        AssertEx.False(File.Exists(Path.Combine(fixture.WorkspaceRoot, "..", "escaped.txt")));
-    }
-
-    [Test]
     public async Task RealDaemon_CopyInto_RefusesToWriteThroughASymlinkThePreviousCommandPlanted()
     {
         // Not hypothetical: the container can create the symlink, and it is the HOST that resolves it when the engine
@@ -438,25 +398,6 @@ public sealed class DockerSandboxRealDaemonTests
             await ProbeAsync(fixture, "wget -T2 -q -O- http://1.1.1.1 >/dev/null 2>&1 && echo NET-OK || echo NET-BLOCKED"));
 
         // Everything else the hardening contract requires still holds on the denied container.
-        AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
-    }
-
-    [Test]
-    public async Task RealDaemon_WhenUnrestrictedIsRequested_TheContainerIsCreatedOnTheDefaultBridge()
-    {
-        // Development Mode still requests this — for its WARM RESTORE sandbox, the short-lived one that fills the
-        // package cache from the base commit before the agent-facing sandbox is created. The agent-facing
-        // sandbox asks for `None` (see the test above); this posture did not become dead, it moved. Egress itself is
-        // not asserted here — that would make the suite depend on this machine having working outbound DNS — but the
-        // applied network mode is read back off the daemon, which is the guarantee the provider makes.
-        var options = await RequireDaemonAsync();
-        await using var fixture = await ContainerFixture.CreateAsync(options, SandboxNetworkPolicy.Unrestricted);
-
-        var settings = await fixture.Client.InspectContainerAsync(fixture.ContainerId);
-
-        AssertEx.Equal("bridge", settings.NetworkMode);
-        AssertEx.NotEqual("host", settings.NetworkMode);
-        // Everything else the contract requires still holds; only egress moved.
         AssertEx.Empty(DockerSandboxHardening.FindViolations(fixture.Specification, settings, fixture.DaemonIsRootless));
     }
 
@@ -618,8 +559,12 @@ public sealed class DockerSandboxRealDaemonTests
         var options = await RequireDaemonAsync();
         if (!await IsRootlessAsync(options))
         {
+            // No counterpart exists for this host: unlike the rootless/rootful identity PAIR, there is no rootful
+            // half of this assertion to run instead. The phrase is the one scripts/run-docker-smoke-local.sh
+            // recognises, so a rootful box reports this as an assertion it cannot make rather than as a failure.
             throw new SkipTestException("SKIPPED — this daemon is not rootless, so an in-container uid maps straight through and there is no "
-                                        + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon.");
+                                        + "mis-mapping to reproduce. The inverted-identity case is only reachable against a rootless daemon, "
+                                        + "and no counterpart exists for this host.");
         }
 
         var mismatched = options with
@@ -751,25 +696,6 @@ public sealed class DockerSandboxRealDaemonTests
         AssertEx.Equal("[core]\n", await File.ReadAllTextAsync(Path.Combine(fixture.WorkspaceRoot, ".git", "config")));
     }
 
-    [Test]
-    public async Task RealDaemon_KillAsync_RemovesTheContainerFromTheDaemon()
-    {
-        var options = await RequireDaemonAsync();
-        var fixture = await ContainerFixture.CreateAsync(options);
-        var containerId = fixture.ContainerId;
-
-        await fixture.Provider.KillAsync(fixture.Handle);
-
-        var probeClient = new DockerDotNetRuntimeClientFactory(new StaticOptionsMonitor<ContainerSandboxOptions>(options))
-            .Create(DockerDaemonEndpointResolver.Resolve(options));
-        await using (probeClient)
-        {
-            await AssertEx.ThrowsAsync<DockerRuntimeException>(() => probeClient.InspectContainerAsync(containerId));
-        }
-
-        await fixture.DisposeAsync();
-    }
-
     /// <summary>
     ///     Skip-with-reason gate. Never returns a "daemon is fine" default and never lets a test pass without one — the
     ///     reason string is written to be read in CI output by someone wondering why the isolation tests are silent.
@@ -786,6 +712,8 @@ public sealed class DockerSandboxRealDaemonTests
     /// </summary>
     private static async Task<ContainerSandboxOptions> ResolveUsableDaemonAsync()
     {
+        RequireOptIn();
+
         var options = DockerSandboxHardeningTests.Options() with
         {
             Image = TestImage,
@@ -927,18 +855,35 @@ public sealed class DockerSandboxRealDaemonTests
     }
 
     /// <summary>
-    ///     How a missing prerequisite is reported: a skip that names what was missing, or — when
-    ///     <c>XE_REQUIRE_DOCKER_TESTS=1</c> — a failure. Both carry the same reason, so the CI output reads the same
-    ///     either way; only the verdict changes.
+    ///     The one switch. Set <c>XE_REQUIRE_DOCKER_TESTS=1</c> and these tests run, failing rather than skipping
+    ///     when no daemon is usable; leave it unset and they skip with a reason naming the runner.
+    ///     <para>
+    ///         They used to run whenever a socket happened to be present, and CI forced them on. That made Docker
+    ///         Hub reachability a hard dependency of every pull request, for suites whose wire-shape half is now
+    ///         covered without a daemon by the fake server. What is left here is what only a real daemon can settle,
+    ///         and that belongs to an opt-in pre-RC smoke rather than to the PR gate.
+    ///     </para>
+    /// </summary>
+    private static void RequireOptIn()
+    {
+        if (!string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal))
+        {
+            throw new SkipTestException($"SKIPPED — opt-in: set {RequireDockerVariable}=1 (scripts/run-docker-smoke-local.sh) to run "
+                                        + "the real-daemon tests for the sandbox hardening contract. CI covers the wire shape without a daemon through "
+                                        + "XE-Local-AI-Engine.Testing.FakeDocker; these prove what only a real daemon can.");
+        }
+    }
+
+    /// <summary>
+    ///     Always a failure, never a skip: <see cref="RequireOptIn" /> has already turned away a run that did not
+    ///     ask for a daemon, so reaching here means one was PROMISED and is not usable.
     /// </summary>
     private static Exception Unavailable(string reason)
     {
         var message = reason + " These are the ONLY tests that prove the §3.8 hardening contract holds against a real daemon; "
                              + "a green run without them is not evidence of isolation.";
 
-        return string.Equals(Environment.GetEnvironmentVariable(RequireDockerVariable), "1", StringComparison.Ordinal)
-            ? new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}")
-            : new SkipTestException($"SKIPPED — {message}");
+        return new InvalidOperationException($"REQUIRED — {RequireDockerVariable}=1, so this is a failure rather than a skip: {message}");
     }
 
     /// <summary>Whether the reachable daemon reports itself rootless, read through the same probe production uses.</summary>
@@ -1170,45 +1115,5 @@ public sealed class DockerSandboxRealDaemonTests
             var settings = await client.InspectContainerAsync(containerName);
             return settings.ContainerId;
         }
-    }
-
-    private sealed class TemporaryDirectory : IDisposable
-    {
-        public TemporaryDirectory()
-        {
-            Path = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "xe-docker-tests", Guid.NewGuid().ToString("N"));
-            Directory.CreateDirectory(Path);
-        }
-
-        public string Path { get; }
-
-        public void Dispose()
-        {
-            try
-            {
-                if (Directory.Exists(Path))
-                {
-                    Directory.Delete(Path, recursive: true);
-                }
-            }
-            catch (IOException)
-            {
-                // Best-effort teardown of a temp tree.
-            }
-            catch (UnauthorizedAccessException)
-            {
-                // Best-effort teardown of a temp tree.
-            }
-        }
-    }
-
-    private sealed class FixedNodeDataDirectory : INodeDataDirectory
-    {
-        public FixedNodeDataDirectory(string root)
-        {
-            Root = root;
-        }
-
-        public string Root { get; }
     }
 }

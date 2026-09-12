@@ -108,7 +108,9 @@ internal sealed class PullProgressAggregator
         // One narration line does carry an id and is not a layer. The daemon opens every pull with a line whose
         // status begins as below and whose id is the tag or digest that was asked for. Folding it in would add a
         // layer that never completes, so a finished pull would report n of n plus one layers forever — which is
-        // exactly what ContainerRuntimeRealDaemonTests caught against a real daemon and no fake could produce.
+        // exactly what ContainerRuntimeRealDaemonTests caught against a real daemon. The fake Docker server now
+        // reproduces this line deliberately, so the fold is covered without a daemon; the real-daemon test remains
+        // the sentinel for the daemon REWORDING it, which no fake can be.
         if (message.Status.StartsWith("Pulling from", StringComparison.Ordinal))
         {
             return;
