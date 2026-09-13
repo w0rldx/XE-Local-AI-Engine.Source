@@ -503,6 +503,35 @@ public sealed class NodeEncryptionMaterializationInterceptor : IMaterializationI
                     externalAppInstance.Id,
                     "external_app_instance_bridge_token");
                 break;
+            case TranscriptionSession transcriptionSession:
+                transcriptionSession.Title = DecryptIfPresent(transcriptionSession.Title,
+                    context.NodeEncryptionKey.Span,
+                    transcriptionSession.Id,
+                    transcriptionSession.Id,
+                    "transcription_session_title");
+                transcriptionSession.ConfigJson = NodePayloadProtector.Decrypt(transcriptionSession.ConfigJson,
+                    context.NodeEncryptionKey.Span,
+                    transcriptionSession.Id,
+                    transcriptionSession.Id,
+                    "transcription_session_config_json");
+                transcriptionSession.ErrorCode = DecryptIfPresent(transcriptionSession.ErrorCode,
+                    context.NodeEncryptionKey.Span,
+                    transcriptionSession.Id,
+                    transcriptionSession.Id,
+                    "transcription_session_error_code");
+                transcriptionSession.ErrorMessage = DecryptIfPresent(transcriptionSession.ErrorMessage,
+                    context.NodeEncryptionKey.Span,
+                    transcriptionSession.Id,
+                    transcriptionSession.Id,
+                    "transcription_session_error_message");
+                break;
+            case TranscriptSegment transcriptSegment:
+                transcriptSegment.Text = NodePayloadProtector.Decrypt(transcriptSegment.Text,
+                    context.NodeEncryptionKey.Span,
+                    transcriptSegment.SessionId,
+                    transcriptSegment.Id,
+                    "transcript_segment_text");
+                break;
         }
 
         return entity;

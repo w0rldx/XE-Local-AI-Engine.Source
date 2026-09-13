@@ -269,6 +269,298 @@ export const zXeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateRequ
 	status: z.string().optional(),
 });
 
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto = z.enum([
+	"running",
+	"completed",
+	"cancelled",
+	"failed",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse = z.object({
+	phase: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto,
+	completedBytes: z.int().nullish(),
+	totalBytes: z.int().nullish(),
+	partIndex: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	partCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	sanitizedError: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse = z.object({
+	modelId: z.string(),
+	accepted: z.boolean(),
+	alreadyInFlight: z.boolean().nullish(),
+	status: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest = z.object({
+	modelId: z.string().min(1),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionRouteRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto = z.enum(["cpu", "cuda"]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto = z.enum(["official", "custom"]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto = z.enum([
+	"enginePinned",
+	"defaultBranch",
+	"explicitCommit",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse = z.object({
+	buildId: z.guid(),
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+	source: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto,
+	repository: z.string(),
+	revisionMode: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto,
+	requestedCommit: z.string().nullish(),
+	resolvedCommit: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse = z.object({
+	phase: z.string(),
+	isRunning: z.boolean(),
+	terminal: z.boolean(),
+	logStartSequence: z.int(),
+	logLines: z.array(z.string()),
+	sanitizedError: z.string().nullish(),
+	currentBuild: zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse.nullish(),
+	startedAtUtc: z.int().nullish(),
+	completedAtUtc: z.int().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest = z.object({
+	accepted: z.boolean().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse = z.object({
+	id: z.guid(),
+	title: z.string().nullish(),
+	status: z.string(),
+	sourceKind: z.string(),
+	modelId: z.string(),
+	detectedLanguage: z.string().nullish(),
+	durationMs: z.int().nullish(),
+	segmentCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	createdAtUtc: z.int(),
+	updatedAtUtc: z.int(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse = z.object({
+	id: z.guid(),
+	seq: z.int(),
+	startMs: z.int(),
+	endMs: z.int(),
+	text: z.string(),
+	channel: z.string(),
+	confidence: z.number().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse = z.object({
+	languageMode: z.string(),
+	languageOverride: z.string().nullish(),
+	translate: z.boolean(),
+	maxWindowSeconds: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	channelAttribution: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse = z.object({
+	session: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse,
+	segments: z.array(zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse),
+	config: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse,
+	errorCode: z.string().nullish(),
+	errorMessage: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest = z.object({
+	title: z.string().nullish(),
+	sourceKind: z.string(),
+	modelId: z.string().nullish(),
+	languageMode: z.string().optional(),
+	languageOverride: z.string().nullish(),
+	translate: z.boolean().optional(),
+	maxWindowSeconds: z.int().gte(2).lte(10).optional(),
+	channelAttribution: z.boolean().optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto = z.enum([
+	"stopped",
+	"starting",
+	"ready",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto = z.enum(["pinned", "managed", "byo"]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto = z.enum([
+	"active",
+	"invalid",
+]);
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse = z.object({
+	validity: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto,
+	desiredBackend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+	sourceRepository: z.string(),
+	sourceCommit: z.string(),
+	sourceSelection: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto,
+	sourceRevisionMode: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto,
+	sourceRequestedCommit: z.string().nullish(),
+	installedAtUtc: z.int(),
+	invalidReason: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse = z.object({
+	activeTranscriptionCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	spawnReadinessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	residentProcessCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	mutationReserved: z.boolean(),
+	evictionReserved: z.boolean(),
+	isBusy: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse = z.object({
+	enabled: z.boolean(),
+	state: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto,
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto.nullish(),
+	binarySource: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto.nullish(),
+	binaryVersion: z.string().nullish(),
+	loadedModelId: z.string().nullish(),
+	selectedModelId: z.string().nullish(),
+	recommendedModelId: z.string(),
+	supportsTranscode: z.boolean(),
+	idleTimeoutMinutes: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+	vadInstalled: z.boolean(),
+	managedRuntime: zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse.nullish(),
+	activity: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	activity: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse = z.object({
+	recommendedModelId: z.string(),
+	tier: z.string(),
+	approximateVramBytes: z.int(),
+	approximateRamBytes: z.int(),
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse = z.object({
+	key: z.string(),
+	satisfied: z.boolean(),
+	detail: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse = z.object({
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+	items: z.array(zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse),
+	canBuild: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1GetWhisperCppSourceBuildPrerequisitesRequest = z.record(
+	z.string(),
+	z.never(),
+);
+
+/**
+ * the dto used to send an error response to the client
+ */
+export const zFastEndpointsErrorResponse = z.object({
+	statusCode: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.optional()
+		.default(400),
+	message: z.string().optional().default("One or more errors occurred!"),
+	errors: z.record(z.string(), z.array(z.string())).optional(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelResponse = z.object({
+	id: z.string(),
+	tier: z.string(),
+	sizeBytes: z.int(),
+	approximateVramBytes: z.int(),
+	approximateRamBytes: z.int(),
+	englishOnly: z.boolean(),
+	installed: z.boolean(),
+	download: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse.nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse = z.object({
+	models: z.array(zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelResponse),
+	selectedModelId: z.string().nullish(),
+	recommendedModelId: z.string(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse = z.object({
+	items: z.array(zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse),
+	totalCount: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" }),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsRequest = z.record(z.string(), z.never());
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest = z.object({
+	modelId: z.string().nullish(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse = z.object({
+	started: z.boolean(),
+	status: zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse,
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest = z.object({
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+	source: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto,
+	repository: z.string().nullish(),
+	commit: z.string().nullish(),
+	acknowledgeCustomSourceRisk: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse = z.object({
+	reason: z.string(),
+	message: z.string(),
+	detectedContainer: z.string(),
+	supportedContainers: z.array(z.string()),
+	ffmpegRequired: z.boolean(),
+});
+
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest = z.object({
+	file: z.string().min(1),
+});
+
 export const zXeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse = z.object({
 	key: z.string(),
 	satisfied: z.boolean(),
@@ -411,20 +703,6 @@ export const zXeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunReque
 	licenseConfirmed: z.boolean(),
 	options: zXeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload.nullish(),
 	linkedModelName: z.string().nullish(),
-});
-
-/**
- * the dto used to send an error response to the client
- */
-export const zFastEndpointsErrorResponse = z.object({
-	statusCode: z
-		.int()
-		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
-		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
-		.optional()
-		.default(400),
-	message: z.string().optional().default("One or more errors occurred!"),
-	errors: z.record(z.string(), z.array(z.string())).optional(),
 });
 
 export const zXeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse = z.object({
@@ -7734,6 +8012,160 @@ export const zSaveTutorialStateBody = zXeLocalAiEngineClientEndpointsTutorialSta
  * No Content
  */
 export const zSaveTutorialStateResponse = z.void();
+
+export const zCancelTranscriptionModelDownloadBody =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;
+
+/**
+ * Success
+ */
+export const zCancelTranscriptionModelDownloadResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse;
+
+export const zCancelTranscriptionSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zCancelTranscriptionSessionResponse = z.void();
+
+export const zCancelWhisperCppSourceBuildBody = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zCancelWhisperCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+
+export const zListTranscriptionSessionsQuery = z.object({
+	limit: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+	offset: z
+		.int()
+		.min(-2147483648, { error: "Invalid value: Expected int32 to be >= -2147483648" })
+		.max(2147483647, { error: "Invalid value: Expected int32 to be <= 2147483647" })
+		.nullish(),
+});
+
+/**
+ * Success
+ */
+export const zListTranscriptionSessionsResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse;
+
+export const zCreateTranscriptionSessionBody = zXeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest;
+
+/**
+ * Success
+ */
+export const zCreateTranscriptionSessionResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
+
+export const zDeleteTranscriptionSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * No Content
+ */
+export const zDeleteTranscriptionSessionResponse = z.void();
+
+export const zGetTranscriptionSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zGetTranscriptionSessionResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
+
+export const zEjectTranscriptionRuntimeBody = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zEjectTranscriptionRuntimeResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse;
+
+/**
+ * Success
+ */
+export const zGetTranscriptionRecommendationResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse;
+
+/**
+ * Success
+ */
+export const zGetTranscriptionRuntimeStatusResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse;
+
+export const zGetWhisperCppSourceBuildPrerequisitesQuery = z.object({
+	backend: zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto,
+});
+
+/**
+ * Success
+ */
+export const zGetWhisperCppSourceBuildPrerequisitesResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse;
+
+/**
+ * Success
+ */
+export const zGetWhisperCppSourceBuildStatusResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+
+/**
+ * Success
+ */
+export const zListTranscriptionModelsResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse;
+
+export const zRemoveWhisperCppSourceBuildBody = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+
+/**
+ * Success
+ */
+export const zRemoveWhisperCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+
+export const zSelectTranscriptionModelBody = zXeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest;
+
+/**
+ * Success
+ */
+export const zSelectTranscriptionModelResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse;
+
+export const zStartTranscriptionModelDownloadBody =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;
+
+/**
+ * Accepted
+ */
+export const zStartTranscriptionModelDownloadResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse;
+
+export const zStartWhisperCppSourceBuildBody = zXeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest;
+
+/**
+ * Success
+ */
+export const zStartWhisperCppSourceBuildResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse;
+
+export const zUploadTranscriptionAudioBody = zXeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest;
+
+export const zUploadTranscriptionAudioPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zUploadTranscriptionAudioResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
 
 /**
  * Success

@@ -7223,6 +7223,115 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         });
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TranscriptSegment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<int>("Channel")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("channel");
+
+                    b.Property<double?>("Confidence")
+                        .HasColumnType("REAL")
+                        .HasColumnName("confidence");
+
+                    b.Property<long>("EndMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("end_ms");
+
+                    b.Property<long>("Seq")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("seq");
+
+                    b.Property<Guid>("SessionId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("session_id");
+
+                    b.Property<long>("StartMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("start_ms");
+
+                    b.Property<byte[]>("Text")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SessionId", "Seq")
+                        .IsUnique()
+                        .HasDatabaseName("ux_transcript_segments_session_seq");
+
+                    b.ToTable("transcript_segments", (string)null);
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TranscriptionSession", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("ConfigJson")
+                        .IsRequired()
+                        .HasColumnType("BLOB")
+                        .HasColumnName("config_json");
+
+                    b.Property<long>("CreatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DetectedLanguage")
+                        .HasMaxLength(16)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("detected_language");
+
+                    b.Property<long?>("DurationMs")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("duration_ms");
+
+                    b.Property<byte[]>("ErrorCode")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("error_code");
+
+                    b.Property<byte[]>("ErrorMessage")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("error_message");
+
+                    b.Property<string>("ModelId")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("model_id");
+
+                    b.Property<int>("SourceKind")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("source_kind");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("status");
+
+                    b.Property<byte[]>("Title")
+                        .HasColumnType("BLOB")
+                        .HasColumnName("title");
+
+                    b.Property<long>("UpdatedAtUtc")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("updated_at_utc");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAtUtc");
+
+                    b.HasIndex("Status");
+
+                    b.ToTable("transcription_sessions", (string)null);
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkillResource", b =>
                 {
                     b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.AgentSkill", null)
@@ -7756,11 +7865,25 @@ namespace XE_Local_AI_Engine.Client.Persistence.Migrations.NodeChatDb
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TranscriptSegment", b =>
+                {
+                    b.HasOne("XE_Local_AI_Engine.Client.Persistence.Entities.TranscriptionSession", null)
+                        .WithMany("Segments")
+                        .HasForeignKey("SessionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.NodeConversation", b =>
                 {
                     b.Navigation("Messages");
 
                     b.Navigation("ToolEvents");
+                });
+
+            modelBuilder.Entity("XE_Local_AI_Engine.Client.Persistence.Entities.TranscriptionSession", b =>
+                {
+                    b.Navigation("Segments");
                 });
 #pragma warning restore 612, 618
         }

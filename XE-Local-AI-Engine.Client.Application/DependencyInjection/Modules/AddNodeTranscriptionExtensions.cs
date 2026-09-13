@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using XE_Local_AI_Engine.Client.Persistence.Implementation;
+using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
@@ -50,6 +52,19 @@ internal static class AddNodeTranscriptionExtensions
         builder.Services.AddWhisperCppRuntime();
 
         builder.Services.AddSingleton<ITranscriptionRuntimeService, TranscriptionRuntimeService>();
+
+        // Persistence boundary for the session registry. Scoped: one NodeChatDbContext per operation (title, config
+        // and segment text are encrypted at rest by the node encryption interceptor on save).
+        builder.Services.AddScoped<ITranscriptionSessionStore, TranscriptionSessionStore>();
+
+        // Engine-side ogg/m4a/webm to 16 kHz mono WAV conversion. Singleton: availability probes PATH for ffmpeg once
+        // at construction, and that same answer is what the runtime status publishes as its transcode capability.
+        builder.Services.AddSingleton<IAudioTranscoder, FfmpegAudioTranscoder>();
+
+        // The transcription service. Singleton: the in-flight cancellation registry must outlive the request that
+        // started a transcription, and it composes the singleton whisper runtime; it opens its own scope per store
+        // operation.
+        builder.Services.AddSingleton<ITranscriptionService, TranscriptionService>();
 
         return builder;
     }

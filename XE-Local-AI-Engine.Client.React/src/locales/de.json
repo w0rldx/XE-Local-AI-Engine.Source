@@ -144,7 +144,8 @@
 		"integrationKeys": "API-Schlüssel",
 		"externalAppsGroup": "Externe Apps",
 		"externalAppsCatalog": "Katalog",
-		"externalAppsInstalled": "Installiert"
+		"externalAppsInstalled": "Installiert",
+		"transcription": "Transkription"
 	},
 	"chat": {
 		"thoughts": "Gedanken",
@@ -6526,6 +6527,100 @@
 			},
 			"notChosen": "Nicht gewählt",
 			"saveError": "Ihre Auswahl konnte nicht gespeichert werden. Versuchen Sie es erneut."
+		},
+		"transcription": {
+			"title": "Transkription",
+			"subtitle": "Transkribiere eine Audioaufnahme lokal mit whisper.cpp. Audio wird nie gespeichert — nur das Transkript bleibt erhalten.",
+			"loadFailed": "Die Transkriptionssitzungen konnten nicht geladen werden.",
+			"retry": "Erneut versuchen",
+			"empty": "Noch keine Transkriptionen. Lade eine Aufnahme hoch, um ein Transkript mit Zeitmarken zu erhalten.",
+			"create": {
+				"open": "Neue Transkription",
+				"first": "Erste Aufnahme transkribieren"
+			},
+			"status": {
+				"Created": "Erstellt",
+				"Transcribing": "Wird transkribiert",
+				"Completed": "Abgeschlossen",
+				"Failed": "Fehlgeschlagen",
+				"Cancelled": "Abgebrochen"
+			},
+			"source": {
+				"File": "Datei",
+				"Microphone": "Mikrofon",
+				"SystemAudio": "Systemaudio",
+				"MicrophoneAndSystem": "Mikrofon + System"
+			},
+			"channel": {
+				"You": "Du",
+				"Others": "Andere"
+			},
+			"list": {
+				"title": "Sitzungen",
+				"untitled": "Aufnahme ohne Titel",
+				"delete": "Sitzung löschen",
+				"deleteFailed": "Die Sitzung konnte nicht gelöscht werden.",
+				"meta_one": "{{count}} Segment · {{created}}",
+				"meta_other": "{{count}} Segmente · {{created}}",
+				"deleteTitle": "Transkription löschen",
+				"deleteDescription": "„{{name}}“ und das zugehörige Transkript löschen? Die Aufnahme wurde nie gespeichert, das ist also die einzige Kopie und es lässt sich nicht rückgängig machen."
+			},
+			"dialog": {
+				"title": "Neue Transkription",
+				"sourceLabel": "Quelle",
+				"sourceComingSoon": "Live-Aufnahme von Mikrofon und Systemaudio folgt in einer späteren Version.",
+				"fileLabel": "Aufnahme",
+				"fileDescription": "WAV, MP3 und FLAC werden direkt gelesen; OGG, M4A und WebM benötigen ffmpeg auf diesem Rechner.",
+				"filePlaceholder": "Audiodatei auswählen",
+				"languageLabel": "Sprache",
+				"languageAuto": "Automatisch erkennen",
+				"translateLabel": "Ins Englische übersetzen",
+				"translateDescription": "Die Sprache transkribieren und das Ergebnis ins Englische übersetzen.",
+				"maxWindowLabel": "Aufnahmefenster (Sekunden)",
+				"maxWindowDescription": "Wie viel Audio jedes Live-Segment abdeckt.",
+				"channelAttributionLabel": "Kanäle zuordnen",
+				"channelAttributionDescription": "Jedes Segment dir oder den anderen zuordnen. Benötigt Mikrofon und Systemaudio.",
+				"submit": "Transkribieren",
+				"createFailed": "Die Transkriptionssitzung konnte nicht erstellt werden.",
+				"uploadFailed": "Die Aufnahme konnte nicht hochgeladen werden.",
+				"unsupportedContainer": "Dieser Node kann diesen Audio-Container nicht lesen. Unterstützt: {{containers}}.",
+				"uploadProgress": "Upload-Fortschritt",
+				"unsupportedContainerFfmpeg": "Dieser Node benötigt ffmpeg, um diesen Audio-Container zu lesen. Installiere ffmpeg und versuche es erneut oder verwende eines von {{containers}}."
+			},
+			"runtime": {
+				"title": "Whisper-Laufzeit",
+				"loadFailed": "Der Status der Transkriptions-Laufzeit konnte nicht geladen werden.",
+				"state": {
+					"stopped": "Gestoppt",
+					"starting": "Startet",
+					"ready": "Bereit"
+				},
+				"backend": "Backend: {{backend}}",
+				"backendNotStarted": "Das Backend steht fest, sobald die Laufzeit zum ersten Mal startet.",
+				"model": "Modell: {{model}}",
+				"modelRecommended": "Es wird das empfohlene Modell verwendet — es ist keines festgelegt.",
+				"vadInstalled": "Sprachaktivitätserkennung installiert.",
+				"vadMissing": "Sprachaktivitätserkennung ist nicht installiert.",
+				"managed": {
+					"active": "Verwalteter Build installiert.",
+					"invalid": "Der verwaltete Build ist ungültig und wird neu gebaut."
+				},
+				"downloading": "{{model}} wird heruntergeladen…",
+				"eject": "Entladen",
+				"ejectFailed": "Die Laufzeit konnte nicht entladen werden."
+			},
+			"session": {
+				"untitled": "Aufnahme ohne Titel",
+				"subtitle": "Das festgeschriebene Transkript dieser Aufnahme.",
+				"loadFailed": "Die Transkriptionssitzung konnte nicht geladen werden.",
+				"model": "Modell: {{model}}",
+				"detectedLanguage": "Erkannte Sprache: {{language}}",
+				"transcript": "Transkript",
+				"noSegments": "Noch kein Transkript.",
+				"cancel": "Abbrechen",
+				"cancelFailed": "Die Transkription konnte nicht abgebrochen werden.",
+				"sendToChat": "An den Chat senden"
+			}
 		}
 	},
 	"components": {

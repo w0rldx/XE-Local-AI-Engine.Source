@@ -251,6 +251,269 @@ export type XeLocalAiEngineClientEndpointsTutorialStateV1SaveTutorialStateReques
 	status?: string;
 };
 
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse = {
+	modelId: string;
+	accepted: boolean;
+	alreadyInFlight?: boolean | null;
+	status?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse = {
+	phase: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto;
+	completedBytes?: number | null;
+	totalBytes?: number | null;
+	partIndex?: number | null;
+	partCount?: number | null;
+	sanitizedError?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto =
+	| "running"
+	| "completed"
+	| "cancelled"
+	| "failed";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest = {
+	modelId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionRouteRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse = {
+	phase: string;
+	isRunning: boolean;
+	terminal: boolean;
+	logStartSequence: number;
+	logLines: Array<string>;
+	sanitizedError?: string | null;
+	currentBuild?: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse | null;
+	startedAtUtc?: number | null;
+	completedAtUtc?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse = {
+	buildId: string;
+	backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+	source: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto;
+	repository: string;
+	revisionMode: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto;
+	requestedCommit?: string | null;
+	resolvedCommit?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto = "cpu" | "cuda";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto = "official" | "custom";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto =
+	| "enginePinned"
+	| "defaultBranch"
+	| "explicitCommit";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest = {
+	accepted?: boolean | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse = {
+	session: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse;
+	segments: Array<XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse>;
+	config: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse;
+	errorCode?: string | null;
+	errorMessage?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse = {
+	id: string;
+	title?: string | null;
+	status: string;
+	sourceKind: string;
+	modelId: string;
+	detectedLanguage?: string | null;
+	durationMs?: number | null;
+	segmentCount: number;
+	createdAtUtc: number;
+	updatedAtUtc: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptSegmentResponse = {
+	id: string;
+	seq: number;
+	startMs: number;
+	endMs: number;
+	text: string;
+	channel: string;
+	confidence?: number | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse = {
+	languageMode: string;
+	languageOverride?: string | null;
+	translate: boolean;
+	maxWindowSeconds: number;
+	channelAttribution: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest = {
+	title?: string | null;
+	sourceKind: string;
+	modelId?: string | null;
+	languageMode?: string;
+	languageOverride?: string | null;
+	translate?: boolean;
+	maxWindowSeconds?: number;
+	channelAttribution?: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse = {
+	enabled: boolean;
+	state: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto;
+	backend?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto | null;
+	binarySource?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto | null;
+	binaryVersion?: string | null;
+	loadedModelId?: string | null;
+	selectedModelId?: string | null;
+	recommendedModelId: string;
+	supportsTranscode: boolean;
+	idleTimeoutMinutes: number;
+	vadInstalled: boolean;
+	managedRuntime?: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse | null;
+	activity: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto = "stopped" | "starting" | "ready";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto = "pinned" | "managed" | "byo";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse = {
+	validity: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto;
+	desiredBackend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+	sourceRepository: string;
+	sourceCommit: string;
+	sourceSelection: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto;
+	sourceRevisionMode: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto;
+	sourceRequestedCommit?: string | null;
+	installedAtUtc: number;
+	invalidReason?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto = "active" | "invalid";
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse = {
+	activeTranscriptionCount: number;
+	spawnReadinessCount: number;
+	residentProcessCount: number;
+	mutationReserved: boolean;
+	evictionReserved: boolean;
+	isBusy: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse = {
+	reason: string;
+	message: string;
+	activity: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse = {
+	recommendedModelId: string;
+	tier: string;
+	approximateVramBytes: number;
+	approximateRamBytes: number;
+	backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse = {
+	backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+	items: Array<XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse>;
+	canBuild: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse = {
+	key: string;
+	satisfied: boolean;
+	detail: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1GetWhisperCppSourceBuildPrerequisitesRequest = {
+	[key: string]: never;
+};
+
+/**
+ * the dto used to send an error response to the client
+ */
+export type FastEndpointsErrorResponse = {
+	/**
+	 * the http status code sent to the client. default is 400.
+	 */
+	statusCode?: number;
+	/**
+	 * the message for the error response
+	 */
+	message?: string;
+	/**
+	 * the collection of errors for the current context
+	 */
+	errors?: {
+		[key: string]: Array<string>;
+	};
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse = {
+	models: Array<XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelResponse>;
+	selectedModelId?: string | null;
+	recommendedModelId: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelResponse = {
+	id: string;
+	tier: string;
+	sizeBytes: number;
+	approximateVramBytes: number;
+	approximateRamBytes: number;
+	englishOnly: boolean;
+	installed: boolean;
+	download?: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse = {
+	items: Array<XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse>;
+	totalCount: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsRequest = {
+	[key: string]: never;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest = {
+	modelId?: string | null;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse = {
+	started: boolean;
+	status: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest = {
+	backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+	source: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto;
+	repository?: string | null;
+	commit?: string | null;
+	acknowledgeCustomSourceRisk: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse = {
+	reason: string;
+	message: string;
+	detectedContainer: string;
+	supportedContainers: Array<string>;
+	ffmpegRequired: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest = {
+	file: Blob | File;
+};
+
 export type XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse = {
 	canInstall: boolean;
 	items: Array<XeLocalAiEngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisiteItemResponse>;
@@ -359,26 +622,6 @@ export type XeLocalAiEngineClientEndpointsTrainingRunsV1CreateTrainingRunRequest
 	licenseConfirmed: boolean;
 	options?: XeLocalAiEngineClientEndpointsTrainingRunsV1TrainingRunOptionsPayload | null;
 	linkedModelName?: string | null;
-};
-
-/**
- * the dto used to send an error response to the client
- */
-export type FastEndpointsErrorResponse = {
-	/**
-	 * the http status code sent to the client. default is 400.
-	 */
-	statusCode?: number;
-	/**
-	 * the message for the error response
-	 */
-	message?: string;
-	/**
-	 * the collection of errors for the current context
-	 */
-	errors?: {
-		[key: string]: Array<string>;
-	};
 };
 
 export type XeLocalAiEngineClientEndpointsTrainingRunsV1ListTrainingRunsResponse = {
@@ -6821,6 +7064,588 @@ export type SaveTutorialStateResponses = {
 };
 
 export type SaveTutorialStateResponse = SaveTutorialStateResponses[keyof SaveTutorialStateResponses];
+
+export type CancelTranscriptionModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/models/downloads/cancel";
+};
+
+export type CancelTranscriptionModelDownloadErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelTranscriptionModelDownloadError =
+	CancelTranscriptionModelDownloadErrors[keyof CancelTranscriptionModelDownloadErrors];
+
+export type CancelTranscriptionModelDownloadResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse;
+};
+
+export type CancelTranscriptionModelDownloadResponse =
+	CancelTranscriptionModelDownloadResponses[keyof CancelTranscriptionModelDownloadResponses];
+
+export type CancelTranscriptionSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/cancel";
+};
+
+export type CancelTranscriptionSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type CancelTranscriptionSessionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type CancelTranscriptionSessionResponse = CancelTranscriptionSessionResponses[keyof CancelTranscriptionSessionResponses];
+
+export type CancelWhisperCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/source-build/cancel";
+};
+
+export type CancelWhisperCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CancelWhisperCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+};
+
+export type CancelWhisperCppSourceBuildResponse =
+	CancelWhisperCppSourceBuildResponses[keyof CancelWhisperCppSourceBuildResponses];
+
+export type ListTranscriptionSessionsData = {
+	body?: never;
+	path?: never;
+	query?: {
+		limit?: number | null;
+		offset?: number | null;
+	};
+	url: "/api/local/v1/transcription/sessions";
+};
+
+export type ListTranscriptionSessionsErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListTranscriptionSessionsError = ListTranscriptionSessionsErrors[keyof ListTranscriptionSessionsErrors];
+
+export type ListTranscriptionSessionsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse;
+};
+
+export type ListTranscriptionSessionsResponse = ListTranscriptionSessionsResponses[keyof ListTranscriptionSessionsResponses];
+
+export type CreateTranscriptionSessionData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/sessions";
+};
+
+export type CreateTranscriptionSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type CreateTranscriptionSessionError = CreateTranscriptionSessionErrors[keyof CreateTranscriptionSessionErrors];
+
+export type CreateTranscriptionSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
+};
+
+export type CreateTranscriptionSessionResponse = CreateTranscriptionSessionResponses[keyof CreateTranscriptionSessionResponses];
+
+export type DeleteTranscriptionSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}";
+};
+
+export type DeleteTranscriptionSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type DeleteTranscriptionSessionResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type DeleteTranscriptionSessionResponse = DeleteTranscriptionSessionResponses[keyof DeleteTranscriptionSessionResponses];
+
+export type GetTranscriptionSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}";
+};
+
+export type GetTranscriptionSessionErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type GetTranscriptionSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
+};
+
+export type GetTranscriptionSessionResponse = GetTranscriptionSessionResponses[keyof GetTranscriptionSessionResponses];
+
+export type EjectTranscriptionRuntimeData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/eject";
+};
+
+export type EjectTranscriptionRuntimeErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse;
+};
+
+export type EjectTranscriptionRuntimeError = EjectTranscriptionRuntimeErrors[keyof EjectTranscriptionRuntimeErrors];
+
+export type EjectTranscriptionRuntimeResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse;
+};
+
+export type EjectTranscriptionRuntimeResponse = EjectTranscriptionRuntimeResponses[keyof EjectTranscriptionRuntimeResponses];
+
+export type GetTranscriptionRecommendationData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/recommendation";
+};
+
+export type GetTranscriptionRecommendationErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTranscriptionRecommendationResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse;
+};
+
+export type GetTranscriptionRecommendationResponse =
+	GetTranscriptionRecommendationResponses[keyof GetTranscriptionRecommendationResponses];
+
+export type GetTranscriptionRuntimeStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime";
+};
+
+export type GetTranscriptionRuntimeStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetTranscriptionRuntimeStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse;
+};
+
+export type GetTranscriptionRuntimeStatusResponse =
+	GetTranscriptionRuntimeStatusResponses[keyof GetTranscriptionRuntimeStatusResponses];
+
+export type GetWhisperCppSourceBuildPrerequisitesData = {
+	body?: never;
+	path?: never;
+	query: {
+		backend: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionBackendDto;
+	};
+	url: "/api/local/v1/transcription/runtime/source-build/prerequisites";
+};
+
+export type GetWhisperCppSourceBuildPrerequisitesErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetWhisperCppSourceBuildPrerequisitesError =
+	GetWhisperCppSourceBuildPrerequisitesErrors[keyof GetWhisperCppSourceBuildPrerequisitesErrors];
+
+export type GetWhisperCppSourceBuildPrerequisitesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse;
+};
+
+export type GetWhisperCppSourceBuildPrerequisitesResponse =
+	GetWhisperCppSourceBuildPrerequisitesResponses[keyof GetWhisperCppSourceBuildPrerequisitesResponses];
+
+export type GetWhisperCppSourceBuildStatusData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/source-build/status";
+};
+
+export type GetWhisperCppSourceBuildStatusErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type GetWhisperCppSourceBuildStatusResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+};
+
+export type GetWhisperCppSourceBuildStatusResponse =
+	GetWhisperCppSourceBuildStatusResponses[keyof GetWhisperCppSourceBuildStatusResponses];
+
+export type ListTranscriptionModelsData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/models";
+};
+
+export type ListTranscriptionModelsErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListTranscriptionModelsResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse;
+};
+
+export type ListTranscriptionModelsResponse = ListTranscriptionModelsResponses[keyof ListTranscriptionModelsResponses];
+
+export type RemoveWhisperCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/source-build/remove";
+};
+
+export type RemoveWhisperCppSourceBuildErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse;
+};
+
+export type RemoveWhisperCppSourceBuildError = RemoveWhisperCppSourceBuildErrors[keyof RemoveWhisperCppSourceBuildErrors];
+
+export type RemoveWhisperCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
+};
+
+export type RemoveWhisperCppSourceBuildResponse =
+	RemoveWhisperCppSourceBuildResponses[keyof RemoveWhisperCppSourceBuildResponses];
+
+export type SelectTranscriptionModelData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/models/select";
+};
+
+export type SelectTranscriptionModelErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type SelectTranscriptionModelError = SelectTranscriptionModelErrors[keyof SelectTranscriptionModelErrors];
+
+export type SelectTranscriptionModelResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse;
+};
+
+export type SelectTranscriptionModelResponse = SelectTranscriptionModelResponses[keyof SelectTranscriptionModelResponses];
+
+export type StartTranscriptionModelDownloadData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/models/downloads";
+};
+
+export type StartTranscriptionModelDownloadErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type StartTranscriptionModelDownloadError =
+	StartTranscriptionModelDownloadErrors[keyof StartTranscriptionModelDownloadErrors];
+
+export type StartTranscriptionModelDownloadResponses = {
+	/**
+	 * Accepted
+	 */
+	202: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse;
+};
+
+export type StartTranscriptionModelDownloadResponse =
+	StartTranscriptionModelDownloadResponses[keyof StartTranscriptionModelDownloadResponses];
+
+export type StartWhisperCppSourceBuildData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/runtime/source-build";
+};
+
+export type StartWhisperCppSourceBuildErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse;
+};
+
+export type StartWhisperCppSourceBuildError = StartWhisperCppSourceBuildErrors[keyof StartWhisperCppSourceBuildErrors];
+
+export type StartWhisperCppSourceBuildResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse;
+};
+
+export type StartWhisperCppSourceBuildResponse = StartWhisperCppSourceBuildResponses[keyof StartWhisperCppSourceBuildResponses];
+
+export type UploadTranscriptionAudioData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/file";
+};
+
+export type UploadTranscriptionAudioErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsProblemDetails;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	415: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse;
+};
+
+export type UploadTranscriptionAudioError = UploadTranscriptionAudioErrors[keyof UploadTranscriptionAudioErrors];
+
+export type UploadTranscriptionAudioResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse;
+};
+
+export type UploadTranscriptionAudioResponse = UploadTranscriptionAudioResponses[keyof UploadTranscriptionAudioResponses];
 
 export type GetTrainingRuntimePrerequisitesData = {
 	body?: never;

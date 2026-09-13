@@ -6,6 +6,7 @@ using System.Net.Http.Json;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using XE_Local_AI_Engine.Tests.Endpoints.Transcription;
 using XE_Local_AI_Engine.Tests.Testing;
 using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 
@@ -14,6 +15,13 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     persistence, and a traversal-laden client file name is reduced to a safe leaf on a successful upload (the
 ///     server-generated storage path is never influenced by the client string).
 /// </summary>
+/// <remarks>
+///     Keyed <c>[NotInParallel]</c> because the oversize case posts a 2 MB form file, which spills into the same
+///     process-wide framework temp directory <c>TranscriptionUploadStreamingTests</c> watches as its sentinel. These
+///     are the only two classes in the assembly that post past the spill threshold; letting them overlap would read
+///     this test's spill as a leak from the transcription upload path.
+/// </remarks>
+[NotInParallel(TranscriptionUploadStreamingTests.FrameworkTempSentinelKey)]
 public sealed class ConversationUploadEndpointTests
 {
     /// <summary>

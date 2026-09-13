@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 
 import { useDeveloperModeStore } from "@/core/dev-tools/stores/DeveloperModeStore";
 import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
+import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
 import { ChatAttachmentChips } from "@/features/chat/components/ChatAttachmentChips";
 import { ChatComposerToolbar } from "@/features/chat/components/ChatInputArea/ChatComposerToolbar";
 import { ChatSamplingOptionsDialog } from "@/features/chat/components/ChatSamplingOptionsDialog";
@@ -149,6 +150,10 @@ export function ChatInputArea({
 	const [isDragActive, setDragActive] = useState(false);
 	// Read developer mode directly from the global store — avoids prop-drilling through ChatDisplayShell.
 	const developerMode = useDeveloperModeStore((state) => state.developerMode);
+	// Same reasoning for the pending composer text: it is written by a page in another feature (a transcript sent
+	// from a transcription session) and arrives across a navigation, so there is no prop path to drill it down.
+	const pendingComposerText = usePendingComposerTextStore((state) => state.pendingText);
+	const consumePendingComposerText = usePendingComposerTextStore((state) => state.actions.consume);
 	const trimmed = content.trim();
 	const reasoningEnabled = reasoningEffort !== "none";
 	const reasoningMenuDisabled = disabled || isSending || availableReasoningEfforts.length <= 1;
@@ -197,6 +202,23 @@ export function ChatInputArea({
 			pendingFocusCaret.current = canonical.length;
 		},
 	});
+
+	// Drains whatever another page staged for the composer. `consume` empties the store, so a remount of this
+	// component cannot insert the same text a second time; an existing draft keeps exactly one space between it and
+	// the appended text.
+	useEffect(() => {
+		if (pendingComposerText.length === 0) {
+			return;
+		}
+		const staged = consumePendingComposerText();
+		if (staged.length === 0) {
+			return;
+		}
+		setContent((current) => {
+			const draft = current.trimEnd();
+			return draft.length === 0 ? staged : `${draft} ${staged}`;
+		});
+	}, [pendingComposerText, consumePendingComposerText]);
 
 	useEffect(() => {
 		const caret = pendingFocusCaret.current;

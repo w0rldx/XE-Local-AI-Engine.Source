@@ -58,7 +58,11 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             managedRuntime,
             NormalizeSelection(settings.TranscriptionSelectedModelId),
             recommended.Id,
-            settings.TranscriptionIdleTimeoutMinutes ?? StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes,
+            // The EFFECTIVE idle timeout, not the stored default: the supervisor's TTL is seeded from
+            // Transcription:IdleTimeoutMinutes when no operator value is stored (NodeRuntimeSettings.GetTranscriptionIdleTimeout),
+            // so reporting the bare default here showed 15 while the reaper was firing at the configured value.
+            settings.TranscriptionIdleTimeoutMinutes
+            ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
             _pathResolver.IsVadInstalled());
     }
 

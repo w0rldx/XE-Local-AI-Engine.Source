@@ -113,6 +113,8 @@ describe("nodeCapabilities", () => {
 			graphWorkflows: "/graph-workflows",
 			externalApps: "/external-apps/catalog",
 			externalAppsInstalled: "/external-apps/installed",
+			transcription: "/transcription",
+			transcriptionSession: "/transcription/$sessionId",
 			diagnostics: "/diagnostics",
 		});
 	});

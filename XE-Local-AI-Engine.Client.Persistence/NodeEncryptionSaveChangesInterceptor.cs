@@ -787,6 +787,24 @@ public sealed class NodeEncryptionSaveChangesInterceptor : SaveChangesIntercepto
         // The two artifact tables add nothing here on purpose: the bytes live on disk under the blob store's own AAD
         // column (dev_workflow_artifact_blob), and every column that stays in the row is structural.
 
+        // Transcription sessions are session-scoped: the AAD binds the session's own id as both the session and record
+        // component, the same self-consistent layout a conversation title uses. The config blob is required (a session
+        // with no options stores `{}`); title and the error pair only encrypt when present.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TranscriptionSession>())
+        {
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.Title), entry.Entity.Id, entry.Entity.Id, "transcription_session_title", trackedProperties);
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.ConfigJson), entry.Entity.Id, entry.Entity.Id, "transcription_session_config_json", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.ErrorCode), entry.Entity.Id, entry.Entity.Id, "transcription_session_error_code", trackedProperties);
+            EncryptOptionalProperty(entry, entry.Property(entity => entity.ErrorMessage), entry.Entity.Id, entry.Entity.Id, "transcription_session_error_message", trackedProperties);
+        }
+
+        // A transcript row binds (sessionId, segmentId), so a ciphertext moved to another row — or to another session —
+        // fails its tag check instead of reading back as that session's transcript.
+        foreach (var entry in nodeContext.ChangeTracker.Entries<TranscriptSegment>())
+        {
+            EncryptRequiredProperty(entry, entry.Property(entity => entity.Text), entry.Entity.SessionId, entry.Entity.Id, "transcript_segment_text", trackedProperties);
+        }
+
         if (trackedProperties.Count > 0)
         {
             _pendingRestores[nodeContext] = trackedProperties;

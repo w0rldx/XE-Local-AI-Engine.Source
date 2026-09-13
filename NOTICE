@@ -41,6 +41,18 @@ components detected in a particular build.
      Supervised as `llama-server`; the default local chat runtime.
    - stable-diffusion.cpp — MIT — https://github.com/leejet/stable-diffusion.cpp
      Supervised as `sd-server` for local image generation.
+   - whisper.cpp — MIT — https://github.com/ggml-org/whisper.cpp
+     Supervised as `whisper-server` for local audio transcription. Prebuilt
+     assets come from the pinned nightly release tag recorded in
+     `WhisperCppReleasePins.PinnedTag`; managed source builds check out the
+     pinned commit in `WhisperCppReleasePins.PinnedSourceCommitSha`
+     (927cfce34f31707e17f2bff35c349632fb9e2c3a, the peeled commit of tag
+     v1.9.4).
+   - Silero VAD — MIT — https://github.com/snakers4/silero-vad
+     The voice-activity model `whisper-server` is launched with. The ggml
+     conversion the application downloads (`ggml-silero-v6.2.0.bin`) is
+     distributed through the Hugging Face repository `ggml-org/whisper-vad`;
+     see `WhisperModelCatalog.VadRepoId` / `VadFileName`.
 
 4. Vendored agent persona templates
 
@@ -56,7 +68,9 @@ components detected in a particular build.
    distributed with the product. They are downloaded by the user, from the
    publisher the user selects, and are governed by whatever license or usage
    terms that publisher attaches to them. Neither LICENSE nor this NOTICE grants
-   any right in them.
+   any right in them. The same applies to the Whisper speech-recognition weights
+   (ggml `.bin` files) the transcription runtime downloads on demand from
+   Hugging Face, and to the Silero voice-activity file it downloads beside them.
 
 6. Weak-copyleft shipped component — UTF.Unknown (MPL-1.1)
 

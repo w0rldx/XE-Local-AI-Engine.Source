@@ -199,6 +199,10 @@ public sealed class NodeChatDbContext : DbContext
 
     internal DbSet<ExternalAppInstanceEvent> ExternalAppInstanceEvents => Set<ExternalAppInstanceEvent>();
 
+    internal DbSet<TranscriptionSession> TranscriptionSessions => Set<TranscriptionSession>();
+
+    internal DbSet<TranscriptSegment> TranscriptSegments => Set<TranscriptSegment>();
+
     internal ReadOnlyMemory<byte> NodeEncryptionKey => _nodeSqliteKeyHolder.Key;
 
     /// <summary>
@@ -490,5 +494,7 @@ public sealed class NodeChatDbContext : DbContext
         modelBuilder.ApplyConfiguration(new GraphWorkflowRunEventConfiguration());
         modelBuilder.ApplyConfiguration(new ExternalAppInstanceConfiguration());
         modelBuilder.ApplyConfiguration(new ExternalAppInstanceEventConfiguration());
+        modelBuilder.ApplyConfiguration(new TranscriptionSessionConfiguration());
+        modelBuilder.ApplyConfiguration(new TranscriptSegmentConfiguration());
     }
 }

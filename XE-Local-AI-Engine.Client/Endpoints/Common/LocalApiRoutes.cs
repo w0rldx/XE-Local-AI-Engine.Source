@@ -607,6 +607,12 @@ public static class LocalApiRoutes
         public const string ModelDownloads = "transcription/models/downloads";
         public const string ModelDownloadCancel = "transcription/models/downloads/cancel";
         public const string ModelSelect = "transcription/models/select";
+
+        // Transcription sessions: the transcript rows an operator keeps, their lifecycle, and the batch file upload.
+        public const string Sessions = "transcription/sessions";
+        public const string SessionById = "transcription/sessions/{sessionId}";
+        public const string SessionCancel = "transcription/sessions/{sessionId}/cancel";
+        public const string SessionFile = "transcription/sessions/{sessionId}/file";
     }
 
     /// <summary>

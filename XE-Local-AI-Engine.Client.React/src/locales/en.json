@@ -144,7 +144,8 @@
 		"integrationKeys": "API Keys",
 		"externalAppsGroup": "External Apps",
 		"externalAppsCatalog": "Catalog",
-		"externalAppsInstalled": "Installed"
+		"externalAppsInstalled": "Installed",
+		"transcription": "Transcription"
 	},
 	"chat": {
 		"thoughts": "Thoughts",
@@ -6526,6 +6527,100 @@
 			},
 			"notChosen": "Not chosen",
 			"saveError": "Could not save your choice. Try again."
+		},
+		"transcription": {
+			"title": "Transcription",
+			"subtitle": "Transcribe an audio recording locally with whisper.cpp. Audio is never stored — only the transcript is kept.",
+			"loadFailed": "Could not load transcription sessions.",
+			"retry": "Retry",
+			"empty": "No transcriptions yet. Upload a recording to get a timestamped transcript.",
+			"create": {
+				"open": "New transcription",
+				"first": "Transcribe your first recording"
+			},
+			"status": {
+				"Created": "Created",
+				"Transcribing": "Transcribing",
+				"Completed": "Completed",
+				"Failed": "Failed",
+				"Cancelled": "Cancelled"
+			},
+			"source": {
+				"File": "File",
+				"Microphone": "Microphone",
+				"SystemAudio": "System audio",
+				"MicrophoneAndSystem": "Microphone + system"
+			},
+			"channel": {
+				"You": "You",
+				"Others": "Others"
+			},
+			"list": {
+				"title": "Sessions",
+				"untitled": "Untitled recording",
+				"delete": "Delete session",
+				"deleteFailed": "Could not delete the session.",
+				"meta_one": "{{count}} segment · {{created}}",
+				"meta_other": "{{count}} segments · {{created}}",
+				"deleteTitle": "Delete transcription",
+				"deleteDescription": "Delete '{{name}}' and its transcript? The recording was never stored, so this is the only copy and it cannot be undone."
+			},
+			"dialog": {
+				"title": "New transcription",
+				"sourceLabel": "Source",
+				"sourceComingSoon": "Live microphone and system-audio capture arrive in a later release.",
+				"fileLabel": "Recording",
+				"fileDescription": "WAV, MP3 and FLAC are read directly; OGG, M4A and WebM need ffmpeg on this computer.",
+				"filePlaceholder": "Choose an audio file",
+				"languageLabel": "Language",
+				"languageAuto": "Detect automatically",
+				"translateLabel": "Translate to English",
+				"translateDescription": "Transcribe the speech and translate the result into English.",
+				"maxWindowLabel": "Capture window (seconds)",
+				"maxWindowDescription": "How much audio each live segment covers.",
+				"channelAttributionLabel": "Attribute channels",
+				"channelAttributionDescription": "Label each segment as you or the others. Needs both microphone and system audio.",
+				"submit": "Transcribe",
+				"createFailed": "Could not create the transcription session.",
+				"uploadFailed": "Could not upload the recording.",
+				"unsupportedContainer": "This node cannot read that audio container. Supported: {{containers}}.",
+				"uploadProgress": "Upload progress",
+				"unsupportedContainerFfmpeg": "This node needs ffmpeg to read that audio container. Install ffmpeg and try again, or use one of {{containers}}."
+			},
+			"runtime": {
+				"title": "Whisper runtime",
+				"loadFailed": "Could not load the transcription runtime status.",
+				"state": {
+					"stopped": "Stopped",
+					"starting": "Starting",
+					"ready": "Ready"
+				},
+				"backend": "Backend: {{backend}}",
+				"backendNotStarted": "Backend resolves when the runtime first starts.",
+				"model": "Model: {{model}}",
+				"modelRecommended": "Using the recommended model — no model has been pinned.",
+				"vadInstalled": "Voice-activity detection installed.",
+				"vadMissing": "Voice-activity detection is not installed.",
+				"managed": {
+					"active": "Managed build installed.",
+					"invalid": "The managed build is invalid and will be rebuilt."
+				},
+				"downloading": "Downloading {{model}}…",
+				"eject": "Eject",
+				"ejectFailed": "Could not eject the runtime."
+			},
+			"session": {
+				"untitled": "Untitled recording",
+				"subtitle": "The committed transcript for this recording.",
+				"loadFailed": "Could not load the transcription session.",
+				"model": "Model: {{model}}",
+				"detectedLanguage": "Detected language: {{language}}",
+				"transcript": "Transcript",
+				"noSegments": "No transcript yet.",
+				"cancel": "Cancel",
+				"cancelFailed": "Could not cancel the transcription.",
+				"sendToChat": "Send to chat"
+			}
 		}
 	},
 	"components": {

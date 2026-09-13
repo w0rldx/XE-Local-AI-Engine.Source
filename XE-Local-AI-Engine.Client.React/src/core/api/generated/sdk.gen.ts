@@ -105,6 +105,15 @@ import type {
 	CancelTrainingRunData,
 	CancelTrainingRunErrors,
 	CancelTrainingRunResponses,
+	CancelTranscriptionModelDownloadData,
+	CancelTranscriptionModelDownloadErrors,
+	CancelTranscriptionModelDownloadResponses,
+	CancelTranscriptionSessionData,
+	CancelTranscriptionSessionErrors,
+	CancelTranscriptionSessionResponses,
+	CancelWhisperCppSourceBuildData,
+	CancelWhisperCppSourceBuildErrors,
+	CancelWhisperCppSourceBuildResponses,
 	CancelWorkSessionData,
 	CancelWorkSessionErrors,
 	CancelWorkSessionResponses,
@@ -222,6 +231,9 @@ import type {
 	CreateTrainingRunData,
 	CreateTrainingRunErrors,
 	CreateTrainingRunResponses,
+	CreateTranscriptionSessionData,
+	CreateTranscriptionSessionErrors,
+	CreateTranscriptionSessionResponses,
 	CreateWorkSessionData,
 	CreateWorkSessionErrors,
 	CreateWorkSessionResponses,
@@ -330,6 +342,9 @@ import type {
 	DeleteTrainingDefinitionData,
 	DeleteTrainingDefinitionErrors,
 	DeleteTrainingDefinitionResponses,
+	DeleteTranscriptionSessionData,
+	DeleteTranscriptionSessionErrors,
+	DeleteTranscriptionSessionResponses,
 	DeleteWorkSessionData,
 	DeleteWorkSessionErrors,
 	DeleteWorkSessionResponses,
@@ -369,6 +384,9 @@ import type {
 	EjectRunningModelData,
 	EjectRunningModelErrors,
 	EjectRunningModelResponses,
+	EjectTranscriptionRuntimeData,
+	EjectTranscriptionRuntimeErrors,
+	EjectTranscriptionRuntimeResponses,
 	EnableAutoConnectData,
 	EnableAutoConnectErrors,
 	EnableAutoConnectResponses,
@@ -684,9 +702,24 @@ import type {
 	GetTrainingRuntimeStatusData,
 	GetTrainingRuntimeStatusErrors,
 	GetTrainingRuntimeStatusResponses,
+	GetTranscriptionRecommendationData,
+	GetTranscriptionRecommendationErrors,
+	GetTranscriptionRecommendationResponses,
+	GetTranscriptionRuntimeStatusData,
+	GetTranscriptionRuntimeStatusErrors,
+	GetTranscriptionRuntimeStatusResponses,
+	GetTranscriptionSessionData,
+	GetTranscriptionSessionErrors,
+	GetTranscriptionSessionResponses,
 	GetTutorialStateData,
 	GetTutorialStateErrors,
 	GetTutorialStateResponses,
+	GetWhisperCppSourceBuildPrerequisitesData,
+	GetWhisperCppSourceBuildPrerequisitesErrors,
+	GetWhisperCppSourceBuildPrerequisitesResponses,
+	GetWhisperCppSourceBuildStatusData,
+	GetWhisperCppSourceBuildStatusErrors,
+	GetWhisperCppSourceBuildStatusResponses,
 	GetWorkSessionArtifactContentData,
 	GetWorkSessionArtifactContentErrors,
 	GetWorkSessionArtifactContentResponses,
@@ -906,6 +939,12 @@ import type {
 	ListTrainingSamplesData,
 	ListTrainingSamplesErrors,
 	ListTrainingSamplesResponses,
+	ListTranscriptionModelsData,
+	ListTranscriptionModelsErrors,
+	ListTranscriptionModelsResponses,
+	ListTranscriptionSessionsData,
+	ListTranscriptionSessionsErrors,
+	ListTranscriptionSessionsResponses,
 	ListWorkSessionArtifactsData,
 	ListWorkSessionArtifactsErrors,
 	ListWorkSessionArtifactsResponses,
@@ -1039,6 +1078,9 @@ import type {
 	RemoveTrainingRuntimeData,
 	RemoveTrainingRuntimeErrors,
 	RemoveTrainingRuntimeResponses,
+	RemoveWhisperCppSourceBuildData,
+	RemoveWhisperCppSourceBuildErrors,
+	RemoveWhisperCppSourceBuildResponses,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationErrors,
 	RenameNodeChatConversationResponses,
@@ -1108,6 +1150,9 @@ import type {
 	SelectLocalModelData,
 	SelectLocalModelErrors,
 	SelectLocalModelResponses,
+	SelectTranscriptionModelData,
+	SelectTranscriptionModelErrors,
+	SelectTranscriptionModelResponses,
 	SetHfTokenData,
 	SetHfTokenErrors,
 	SetHfTokenResponses,
@@ -1171,6 +1216,12 @@ import type {
 	StartTrainingRuntimeInstallData,
 	StartTrainingRuntimeInstallErrors,
 	StartTrainingRuntimeInstallResponses,
+	StartTranscriptionModelDownloadData,
+	StartTranscriptionModelDownloadErrors,
+	StartTranscriptionModelDownloadResponses,
+	StartWhisperCppSourceBuildData,
+	StartWhisperCppSourceBuildErrors,
+	StartWhisperCppSourceBuildResponses,
 	StartWorkSessionData,
 	StartWorkSessionErrors,
 	StartWorkSessionResponses,
@@ -1267,6 +1318,9 @@ import type {
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentErrors,
 	UploadKnowledgeDocumentResponses,
+	UploadTranscriptionAudioData,
+	UploadTranscriptionAudioErrors,
+	UploadTranscriptionAudioResponses,
 	ValidateExecutableData,
 	ValidateExecutableErrors,
 	ValidateExecutableResponses,
@@ -1343,6 +1397,12 @@ import {
 	zCancelTrainingDatasetResponse,
 	zCancelTrainingRunPath,
 	zCancelTrainingRunResponse,
+	zCancelTranscriptionModelDownloadBody,
+	zCancelTranscriptionModelDownloadResponse,
+	zCancelTranscriptionSessionPath,
+	zCancelTranscriptionSessionResponse,
+	zCancelWhisperCppSourceBuildBody,
+	zCancelWhisperCppSourceBuildResponse,
 	zCancelWorkSessionPath,
 	zCancelWorkSessionResponse,
 	zClearBenchmarkFidelityCachePath,
@@ -1423,6 +1483,8 @@ import {
 	zCreateTrainingDefinitionResponse,
 	zCreateTrainingRunBody,
 	zCreateTrainingRunResponse,
+	zCreateTranscriptionSessionBody,
+	zCreateTranscriptionSessionResponse,
 	zCreateWorkSessionBody,
 	zCreateWorkSessionResponse,
 	zCreateWorkspaceBody,
@@ -1509,6 +1571,8 @@ import {
 	zDeleteTrainingDefinitionBody,
 	zDeleteTrainingDefinitionPath,
 	zDeleteTrainingDefinitionResponse,
+	zDeleteTranscriptionSessionPath,
+	zDeleteTranscriptionSessionResponse,
 	zDeleteWorkSessionPath,
 	zDeleteWorkSessionResponse,
 	zDeleteWorkspacePath,
@@ -1532,6 +1596,8 @@ import {
 	zEjectImageRuntimeResponse,
 	zEjectRunningModelBody,
 	zEjectRunningModelResponse,
+	zEjectTranscriptionRuntimeBody,
+	zEjectTranscriptionRuntimeResponse,
 	zEnableAutoConnectResponse,
 	zEnableScheduledJobPath,
 	zEnableScheduledJobResponse,
@@ -1715,7 +1781,14 @@ import {
 	zGetTrainingRunResponse,
 	zGetTrainingRuntimePrerequisitesResponse,
 	zGetTrainingRuntimeStatusResponse,
+	zGetTranscriptionRecommendationResponse,
+	zGetTranscriptionRuntimeStatusResponse,
+	zGetTranscriptionSessionPath,
+	zGetTranscriptionSessionResponse,
 	zGetTutorialStateResponse,
+	zGetWhisperCppSourceBuildPrerequisitesQuery,
+	zGetWhisperCppSourceBuildPrerequisitesResponse,
+	zGetWhisperCppSourceBuildStatusResponse,
 	zGetWorkSessionArtifactContentPath,
 	zGetWorkSessionArtifactContentResponse,
 	zGetWorkSessionPath,
@@ -1840,6 +1913,9 @@ import {
 	zListTrainingSamplesPath,
 	zListTrainingSamplesQuery,
 	zListTrainingSamplesResponse,
+	zListTranscriptionModelsResponse,
+	zListTranscriptionSessionsQuery,
+	zListTranscriptionSessionsResponse,
 	zListWorkSessionArtifactsPath,
 	zListWorkSessionArtifactsQuery,
 	zListWorkSessionArtifactsResponse,
@@ -1934,6 +2010,8 @@ import {
 	zRemoveStableDiffusionCppSourceBuildBody,
 	zRemoveStableDiffusionCppSourceBuildResponse,
 	zRemoveTrainingRuntimeResponse,
+	zRemoveWhisperCppSourceBuildBody,
+	zRemoveWhisperCppSourceBuildResponse,
 	zRenameNodeChatConversationBody,
 	zRenameNodeChatConversationPath,
 	zRenameNodeChatConversationResponse,
@@ -1986,6 +2064,8 @@ import {
 	zSearchKnowledgeResponse,
 	zSelectLocalModelBody,
 	zSelectLocalModelResponse,
+	zSelectTranscriptionModelBody,
+	zSelectTranscriptionModelResponse,
 	zSetHfTokenBody,
 	zSetHfTokenResponse,
 	zSetMcpServerEnabledBody,
@@ -2036,6 +2116,10 @@ import {
 	zStartTrainingExportPath,
 	zStartTrainingExportResponse,
 	zStartTrainingRuntimeInstallResponse,
+	zStartTranscriptionModelDownloadBody,
+	zStartTranscriptionModelDownloadResponse,
+	zStartWhisperCppSourceBuildBody,
+	zStartWhisperCppSourceBuildResponse,
 	zStartWorkSessionPath,
 	zStartWorkSessionResponse,
 	zStopExternalAppBody,
@@ -2124,6 +2208,9 @@ import {
 	zUploadConversationFileResponse,
 	zUploadKnowledgeDocumentBody,
 	zUploadKnowledgeDocumentResponse,
+	zUploadTranscriptionAudioBody,
+	zUploadTranscriptionAudioPath,
+	zUploadTranscriptionAudioResponse,
 	zValidateExecutableBody,
 	zValidateExecutableResponse,
 	zValidateGraphWorkflowDefinitionBody,
@@ -2796,6 +2883,589 @@ export const saveTutorialState = <ThrowOnError extends boolean = false>(
 		...options,
 		headers: {
 			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const cancelTranscriptionModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<CancelTranscriptionModelDownloadData, ThrowOnError>,
+): RequestResult<CancelTranscriptionModelDownloadResponses, CancelTranscriptionModelDownloadErrors, ThrowOnError> =>
+	(options.client ?? client).post<
+		CancelTranscriptionModelDownloadResponses,
+		CancelTranscriptionModelDownloadErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelTranscriptionModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelTranscriptionModelDownloadResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/models/downloads/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const cancelTranscriptionSession = <ThrowOnError extends boolean = false>(
+	options: Options<CancelTranscriptionSessionData, ThrowOnError>,
+): RequestResult<CancelTranscriptionSessionResponses, CancelTranscriptionSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelTranscriptionSessionResponses, CancelTranscriptionSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zCancelTranscriptionSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zCancelTranscriptionSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/cancel",
+		...options,
+	});
+
+export const cancelWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<CancelWhisperCppSourceBuildData, ThrowOnError>,
+): RequestResult<CancelWhisperCppSourceBuildResponses, CancelWhisperCppSourceBuildErrors, ThrowOnError> =>
+	(options.client ?? client).post<CancelWhisperCppSourceBuildResponses, CancelWhisperCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCancelWhisperCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCancelWhisperCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/source-build/cancel",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const listTranscriptionSessions = <ThrowOnError extends boolean = false>(
+	options?: Options<ListTranscriptionSessionsData, ThrowOnError>,
+): RequestResult<ListTranscriptionSessionsResponses, ListTranscriptionSessionsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListTranscriptionSessionsResponses, ListTranscriptionSessionsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zListTranscriptionSessionsQuery.optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListTranscriptionSessionsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions",
+		...options,
+	});
+
+export const createTranscriptionSession = <ThrowOnError extends boolean = false>(
+	options: Options<CreateTranscriptionSessionData, ThrowOnError>,
+): RequestResult<CreateTranscriptionSessionResponses, CreateTranscriptionSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<CreateTranscriptionSessionResponses, CreateTranscriptionSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zCreateTranscriptionSessionBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zCreateTranscriptionSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const deleteTranscriptionSession = <ThrowOnError extends boolean = false>(
+	options: Options<DeleteTranscriptionSessionData, ThrowOnError>,
+): RequestResult<DeleteTranscriptionSessionResponses, DeleteTranscriptionSessionErrors, ThrowOnError> =>
+	(options.client ?? client).delete<DeleteTranscriptionSessionResponses, DeleteTranscriptionSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zDeleteTranscriptionSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zDeleteTranscriptionSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}",
+		...options,
+	});
+
+export const getTranscriptionSession = <ThrowOnError extends boolean = false>(
+	options: Options<GetTranscriptionSessionData, ThrowOnError>,
+): RequestResult<GetTranscriptionSessionResponses, GetTranscriptionSessionErrors, ThrowOnError> =>
+	(options.client ?? client).get<GetTranscriptionSessionResponses, GetTranscriptionSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zGetTranscriptionSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTranscriptionSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}",
+		...options,
+	});
+
+export const ejectTranscriptionRuntime = <ThrowOnError extends boolean = false>(
+	options: Options<EjectTranscriptionRuntimeData, ThrowOnError>,
+): RequestResult<EjectTranscriptionRuntimeResponses, EjectTranscriptionRuntimeErrors, ThrowOnError> =>
+	(options.client ?? client).post<EjectTranscriptionRuntimeResponses, EjectTranscriptionRuntimeErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zEjectTranscriptionRuntimeBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zEjectTranscriptionRuntimeResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/eject",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const getTranscriptionRecommendation = <ThrowOnError extends boolean = false>(
+	options?: Options<GetTranscriptionRecommendationData, ThrowOnError>,
+): RequestResult<GetTranscriptionRecommendationResponses, GetTranscriptionRecommendationErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetTranscriptionRecommendationResponses, GetTranscriptionRecommendationErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTranscriptionRecommendationResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/recommendation",
+		...options,
+	});
+
+export const getTranscriptionRuntimeStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetTranscriptionRuntimeStatusData, ThrowOnError>,
+): RequestResult<GetTranscriptionRuntimeStatusResponses, GetTranscriptionRuntimeStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetTranscriptionRuntimeStatusResponses, GetTranscriptionRuntimeStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetTranscriptionRuntimeStatusResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime",
+		...options,
+	});
+
+export const getWhisperCppSourceBuildPrerequisites = <ThrowOnError extends boolean = false>(
+	options: Options<GetWhisperCppSourceBuildPrerequisitesData, ThrowOnError>,
+): RequestResult<GetWhisperCppSourceBuildPrerequisitesResponses, GetWhisperCppSourceBuildPrerequisitesErrors, ThrowOnError> =>
+	(options.client ?? client).get<
+		GetWhisperCppSourceBuildPrerequisitesResponses,
+		GetWhisperCppSourceBuildPrerequisitesErrors,
+		ThrowOnError
+	>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: zGetWhisperCppSourceBuildPrerequisitesQuery,
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetWhisperCppSourceBuildPrerequisitesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/source-build/prerequisites",
+		...options,
+	});
+
+export const getWhisperCppSourceBuildStatus = <ThrowOnError extends boolean = false>(
+	options?: Options<GetWhisperCppSourceBuildStatusData, ThrowOnError>,
+): RequestResult<GetWhisperCppSourceBuildStatusResponses, GetWhisperCppSourceBuildStatusErrors, ThrowOnError> =>
+	(options?.client ?? client).get<GetWhisperCppSourceBuildStatusResponses, GetWhisperCppSourceBuildStatusErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zGetWhisperCppSourceBuildStatusResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/source-build/status",
+		...options,
+	});
+
+export const listTranscriptionModels = <ThrowOnError extends boolean = false>(
+	options?: Options<ListTranscriptionModelsData, ThrowOnError>,
+): RequestResult<ListTranscriptionModelsResponses, ListTranscriptionModelsErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListTranscriptionModelsResponses, ListTranscriptionModelsErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListTranscriptionModelsResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/models",
+		...options,
+	});
+
+export const removeWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<RemoveWhisperCppSourceBuildData, ThrowOnError>,
+): RequestResult<RemoveWhisperCppSourceBuildResponses, RemoveWhisperCppSourceBuildErrors, ThrowOnError> =>
+	(options.client ?? client).post<RemoveWhisperCppSourceBuildResponses, RemoveWhisperCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zRemoveWhisperCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zRemoveWhisperCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/source-build/remove",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const selectTranscriptionModel = <ThrowOnError extends boolean = false>(
+	options: Options<SelectTranscriptionModelData, ThrowOnError>,
+): RequestResult<SelectTranscriptionModelResponses, SelectTranscriptionModelErrors, ThrowOnError> =>
+	(options.client ?? client).post<SelectTranscriptionModelResponses, SelectTranscriptionModelErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zSelectTranscriptionModelBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zSelectTranscriptionModelResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/models/select",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startTranscriptionModelDownload = <ThrowOnError extends boolean = false>(
+	options: Options<StartTranscriptionModelDownloadData, ThrowOnError>,
+): RequestResult<StartTranscriptionModelDownloadResponses, StartTranscriptionModelDownloadErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartTranscriptionModelDownloadResponses, StartTranscriptionModelDownloadErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartTranscriptionModelDownloadBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartTranscriptionModelDownloadResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/models/downloads",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const startWhisperCppSourceBuild = <ThrowOnError extends boolean = false>(
+	options: Options<StartWhisperCppSourceBuildData, ThrowOnError>,
+): RequestResult<StartWhisperCppSourceBuildResponses, StartWhisperCppSourceBuildErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartWhisperCppSourceBuildResponses, StartWhisperCppSourceBuildErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartWhisperCppSourceBuildBody,
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartWhisperCppSourceBuildResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/runtime/source-build",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
+	});
+
+export const uploadTranscriptionAudio = <ThrowOnError extends boolean = false>(
+	options: Options<UploadTranscriptionAudioData, ThrowOnError>,
+): RequestResult<UploadTranscriptionAudioResponses, UploadTranscriptionAudioErrors, ThrowOnError> =>
+	(options.client ?? client).post<UploadTranscriptionAudioResponses, UploadTranscriptionAudioErrors, ThrowOnError>({
+		...formDataBodySerializer,
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zUploadTranscriptionAudioBody,
+					path: zUploadTranscriptionAudioPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zUploadTranscriptionAudioResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/file",
+		...options,
+		headers: {
+			"Content-Type": null,
 			...options.headers,
 		},
 	});

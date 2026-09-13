@@ -256,6 +256,103 @@ public sealed class OpenApiDocumentTests
     }
 
     [Test]
+    public async Task LocalOpenApiDocument_DescribesTranscriptionSessionSurface()
+    {
+        var factory = Factory;
+        using var client = factory.CreateClient();
+        using var response = await client.GetAsync("/openapi/local/v1/v1.json").ConfigureAwait(false);
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        await using var responseStream = await response.Content.ReadAsStreamAsync().ConfigureAwait(false);
+        using var document = await JsonDocument.ParseAsync(responseStream).ConfigureAwait(false);
+        var paths = document.RootElement.GetProperty("paths");
+
+        // The four session paths carry six operations. They are declared on every node, feature switch or not, so the
+        // generated client does not depend on the node that produced the spec.
+        AssertResponses(paths, "/api/local/v1/transcription/sessions", "get", ["200", "400"]);
+        AssertResponses(paths, "/api/local/v1/transcription/sessions", "post", ["200", "400"]);
+        AssertResponses(paths, "/api/local/v1/transcription/sessions/{sessionId}", "get", ["200", "404"]);
+        AssertResponses(paths, "/api/local/v1/transcription/sessions/{sessionId}", "delete", ["204", "404"]);
+        AssertResponses(paths, "/api/local/v1/transcription/sessions/{sessionId}/cancel", "post", ["204", "404"]);
+        AssertResponses(paths, "/api/local/v1/transcription/sessions/{sessionId}/file", "post", ["200", "400", "404", "415"]);
+
+        // The upload declares a multipart body even though nothing binds one: form auto-binding is off so the audio is
+        // never buffered to a framework temp file, which leaves the metadata as the only description of the request.
+        var uploadContent = paths.GetProperty("/api/local/v1/transcription/sessions/{sessionId}/file")
+                                 .GetProperty("post")
+                                 .GetProperty("requestBody")
+                                 .GetProperty("content");
+        AssertEx.True(uploadContent.TryGetProperty("multipart/form-data", out _),
+            "The audio upload must declare a multipart/form-data body.");
+
+        var schemas = document.RootElement.GetProperty("components").GetProperty("schemas");
+        AssertSchemaProperties(schemas, "TranscriptionSessionDetailResponse", ["session", "segments", "config", "errorCode", "errorMessage"]);
+        AssertSchemaProperties(schemas, "TranscriptionSessionSummaryResponse", ["id", "title", "status", "sourceKind", "modelId", "segmentCount"]);
+        AssertSchemaProperties(schemas, "TranscriptSegmentResponse", ["seq", "startMs", "endMs", "text", "channel"]);
+        AssertSchemaProperties(schemas,
+            "TranscriptionUnsupportedContainerResponse",
+            ["reason", "message", "detectedContainer", "supportedContainers", "ffmpegRequired"]);
+
+        AssertUploadSchemaRequiresTheFile(schemas);
+        AssertCreateSessionSchemaKeepsTheLanguageOverrideOptional(schemas);
+    }
+
+    /// <summary>
+    ///     The upload's <c>file</c> member is required and non-nullable on the wire.
+    /// </summary>
+    /// <remarks>
+    ///     Nothing binds it — form auto-binding is off so the audio is never buffered to a framework temp file — which
+    ///     makes the schema metadata the ONLY description of the request, and it was describing an endpoint that does
+    ///     not exist: the handler answers 400 for a form carrying no file, while the document said the file could be
+    ///     absent or null. A generated client types its request body off exactly this, so the pin belongs here rather
+    ///     than in a comment on a property that is never read.
+    /// </remarks>
+    private static void AssertUploadSchemaRequiresTheFile(JsonElement schemas)
+    {
+        var schema = FindSchema(schemas, "UploadTranscriptionAudioRequest");
+        var required = schema.TryGetProperty("required", out var requiredElement)
+            ? requiredElement.EnumerateArray().Select(static member => member.GetString()).ToArray()
+            : [];
+
+        AssertEx.Contains(required, "file", $"The uploaded file must be required on the wire; required = [{string.Join(", ", required)}].");
+
+        var file = schema.GetProperty("properties").GetProperty("file");
+        AssertEx.False(file.TryGetProperty("nullable", out var nullable) && nullable.GetBoolean(),
+            "A nullable file describes a request the endpoint refuses with a 400.");
+    }
+
+    /// <summary>
+    ///     <c>languageOverride</c> is only required when <c>languageMode</c> is <c>override</c>, and a conditional rule
+    ///     must not reach the schema at all.
+    /// </summary>
+    /// <remarks>
+    ///     A real pin, because the leak has already happened once: written as a block
+    ///     <c>When(pred, () =&gt; RuleFor(...).NotEmpty().Length(2, 8))</c>, FastEndpoints' validation schema processor
+    ///     saw an UNCONDITIONAL rule and published the member as <c>required</c> with <c>minLength: 2</c>. The
+    ///     generated client then refused every <c>languageMode: "auto"</c> create request before it left the browser —
+    ///     a break no backend test could see, because the server was answering correctly the whole time. Only the
+    ///     chained <c>.When(...)</c> form sets the per-component condition the processor reads.
+    /// </remarks>
+    private static void AssertCreateSessionSchemaKeepsTheLanguageOverrideOptional(JsonElement schemas)
+    {
+        var schema = FindSchema(schemas, "CreateTranscriptionSessionRequest");
+        var required = schema.TryGetProperty("required", out var requiredElement)
+            ? requiredElement.EnumerateArray().Select(static entry => entry.GetString()).ToArray()
+            : [];
+
+        // The control: without it this would pass against a schema that required nothing at all.
+        AssertEx.Contains(required, "sourceKind", "sourceKind is unconditionally required and must stay in the schema.");
+
+        AssertEx.False(required.Contains("languageOverride"),
+            "languageOverride must not be required: it is conditional on languageMode, and a required member here "
+            + "makes the generated client refuse every languageMode 'auto' create request.");
+
+        var languageOverride = schema.GetProperty("properties").GetProperty("languageOverride");
+        AssertEx.False(languageOverride.TryGetProperty("minLength", out _),
+            "A conditional minimum length must not reach the schema either — it fails the same requests client-side.");
+    }
+
+    [Test]
     public async Task LocalOpenApiDocument_DescribesImageRuntimeSourceBuildSurface()
     {
         var factory = Factory;

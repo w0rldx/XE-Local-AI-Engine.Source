@@ -1264,6 +1264,927 @@
         ]
       }
     },
+    "/api/local/v1/transcription/models/downloads/cancel": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "cancelTranscriptionModelDownload",
+        "requestBody": {
+          "x-name": "TranscriptionModelDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/sessions/{sessionId}/cancel": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "cancelTranscriptionSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/source-build/cancel": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "cancelWhisperCppSourceBuild",
+        "requestBody": {
+          "x-name": "TranscriptionRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/sessions": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "createTranscriptionSession",
+        "requestBody": {
+          "x-name": "CreateTranscriptionSessionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "listTranscriptionSessions",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "schema": {
+              "type": "integer",
+              "format": "int32",
+              "nullable": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/sessions/{sessionId}": {
+      "delete": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "deleteTranscriptionSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "getTranscriptionSession",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/eject": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "ejectTranscriptionRuntime",
+        "requestBody": {
+          "x-name": "TranscriptionRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/recommendation": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "getTranscriptionRecommendation",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "getTranscriptionRuntimeStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/source-build/prerequisites": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "getWhisperCppSourceBuildPrerequisites",
+        "parameters": [
+          {
+            "name": "backend",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "allOf": [
+                {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+                }
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/source-build/status": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "getWhisperCppSourceBuildStatus",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/models": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "listTranscriptionModels",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/source-build/remove": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "removeWhisperCppSourceBuild",
+        "requestBody": {
+          "x-name": "TranscriptionRuntimeActionRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/models/select": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "selectTranscriptionModel",
+        "requestBody": {
+          "x-name": "SelectTranscriptionModelRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelListResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/models/downloads": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "startTranscriptionModelDownload",
+        "requestBody": {
+          "x-name": "TranscriptionModelDownloadRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "202": {
+            "description": "Accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/runtime/source-build": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "startWhisperCppSourceBuild",
+        "requestBody": {
+          "x-name": "StartWhisperCppSourceBuildRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/sessions/{sessionId}/file": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "uploadTranscriptionAudio",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "UploadTranscriptionAudioRequest",
+          "description": "",
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FastEndpointsProblemDetails"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
+          },
+          "415": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/training/runtime/prerequisites": {
       "get": {
         "tags": [
@@ -23432,6 +24353,930 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelId",
+          "accepted"
+        ],
+        "properties": {
+          "modelId": {
+            "type": "string"
+          },
+          "accepted": {
+            "type": "boolean"
+          },
+          "alreadyInFlight": {
+            "type": "boolean",
+            "nullable": true
+          },
+          "status": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase"
+        ],
+        "properties": {
+          "phase": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto"
+          },
+          "completedBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "totalBytes": {
+            "type": "integer",
+            "nullable": true
+          },
+          "partIndex": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "partCount": {
+            "type": "integer",
+            "format": "int32",
+            "nullable": true
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadPhaseDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Running",
+          "Completed",
+          "Cancelled",
+          "Failed"
+        ],
+        "enum": [
+          "running",
+          "completed",
+          "cancelled",
+          "failed"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "modelId"
+        ],
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "minLength": 1,
+            "nullable": false
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionRouteRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "phase",
+          "isRunning",
+          "terminal",
+          "logStartSequence",
+          "logLines"
+        ],
+        "properties": {
+          "phase": {
+            "type": "string"
+          },
+          "isRunning": {
+            "type": "boolean"
+          },
+          "terminal": {
+            "type": "boolean"
+          },
+          "logStartSequence": {
+            "type": "integer"
+          },
+          "logLines": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "sanitizedError": {
+            "type": "string",
+            "nullable": true
+          },
+          "currentBuild": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse"
+              }
+            ]
+          },
+          "startedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          },
+          "completedAtUtc": {
+            "type": "integer",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildDescriptorResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "buildId",
+          "backend",
+          "source",
+          "repository",
+          "revisionMode"
+        ],
+        "properties": {
+          "buildId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string"
+          },
+          "revisionMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto"
+          },
+          "requestedCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "resolvedCommit": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Cpu",
+          "Cuda"
+        ],
+        "enum": [
+          "cpu",
+          "cuda"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Official",
+          "Custom"
+        ],
+        "enum": [
+          "official",
+          "custom"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "EnginePinned",
+          "DefaultBranch",
+          "ExplicitCommit"
+        ],
+        "enum": [
+          "enginePinned",
+          "defaultBranch",
+          "explicitCommit"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "accepted": {
+            "type": "boolean",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionDetailResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "session",
+          "segments",
+          "config"
+        ],
+        "properties": {
+          "session": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse"
+          },
+          "segments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptSegmentResponse"
+            }
+          },
+          "config": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse"
+          },
+          "errorCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "errorMessage": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "status",
+          "sourceKind",
+          "modelId",
+          "segmentCount",
+          "createdAtUtc",
+          "updatedAtUtc"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "status": {
+            "type": "string"
+          },
+          "sourceKind": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string"
+          },
+          "detectedLanguage": {
+            "type": "string",
+            "nullable": true
+          },
+          "durationMs": {
+            "type": "integer",
+            "nullable": true
+          },
+          "segmentCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "createdAtUtc": {
+            "type": "integer"
+          },
+          "updatedAtUtc": {
+            "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptSegmentResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "seq",
+          "startMs",
+          "endMs",
+          "text",
+          "channel"
+        ],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "guid"
+          },
+          "seq": {
+            "type": "integer"
+          },
+          "startMs": {
+            "type": "integer"
+          },
+          "endMs": {
+            "type": "integer"
+          },
+          "text": {
+            "type": "string"
+          },
+          "channel": {
+            "type": "string"
+          },
+          "confidence": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionConfigResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "languageMode",
+          "translate",
+          "maxWindowSeconds",
+          "channelAttribution"
+        ],
+        "properties": {
+          "languageMode": {
+            "type": "string"
+          },
+          "languageOverride": {
+            "type": "string",
+            "nullable": true
+          },
+          "translate": {
+            "type": "boolean"
+          },
+          "maxWindowSeconds": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "channelAttribution": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sourceKind"
+        ],
+        "properties": {
+          "title": {
+            "type": "string",
+            "nullable": true
+          },
+          "sourceKind": {
+            "type": "string"
+          },
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "languageMode": {
+            "type": "string"
+          },
+          "languageOverride": {
+            "type": "string",
+            "nullable": true
+          },
+          "translate": {
+            "type": "boolean"
+          },
+          "maxWindowSeconds": {
+            "type": "integer",
+            "format": "int32",
+            "maximum": 10,
+            "minimum": 2
+          },
+          "channelAttribution": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enabled",
+          "state",
+          "recommendedModelId",
+          "supportsTranscode",
+          "idleTimeoutMinutes",
+          "vadInstalled",
+          "activity"
+        ],
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "state": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto"
+          },
+          "backend": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+              }
+            ]
+          },
+          "binarySource": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto"
+              }
+            ]
+          },
+          "binaryVersion": {
+            "type": "string",
+            "nullable": true
+          },
+          "loadedModelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "selectedModelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "recommendedModelId": {
+            "type": "string"
+          },
+          "supportsTranscode": {
+            "type": "boolean"
+          },
+          "idleTimeoutMinutes": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "vadInstalled": {
+            "type": "boolean"
+          },
+          "managedRuntime": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse"
+              }
+            ]
+          },
+          "activity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeStateDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Stopped",
+          "Starting",
+          "Ready"
+        ],
+        "enum": [
+          "stopped",
+          "starting",
+          "ready"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBinarySourceDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Pinned",
+          "Managed",
+          "BringYourOwn"
+        ],
+        "enum": [
+          "pinned",
+          "managed",
+          "byo"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "validity",
+          "desiredBackend",
+          "sourceRepository",
+          "sourceCommit",
+          "sourceSelection",
+          "sourceRevisionMode",
+          "installedAtUtc"
+        ],
+        "properties": {
+          "validity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto"
+          },
+          "desiredBackend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+          },
+          "sourceRepository": {
+            "type": "string"
+          },
+          "sourceCommit": {
+            "type": "string"
+          },
+          "sourceSelection": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto"
+          },
+          "sourceRevisionMode": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceRevisionModeDto"
+          },
+          "sourceRequestedCommit": {
+            "type": "string",
+            "nullable": true
+          },
+          "installedAtUtc": {
+            "type": "integer"
+          },
+          "invalidReason": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionInstalledRuntimeValidityDto": {
+        "type": "string",
+        "description": "",
+        "x-enumNames": [
+          "Active",
+          "Invalid"
+        ],
+        "enum": [
+          "active",
+          "invalid"
+        ]
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "activeTranscriptionCount",
+          "spawnReadinessCount",
+          "residentProcessCount",
+          "mutationReserved",
+          "evictionReserved",
+          "isBusy"
+        ],
+        "properties": {
+          "activeTranscriptionCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "spawnReadinessCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "residentProcessCount": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "mutationReserved": {
+            "type": "boolean"
+          },
+          "evictionReserved": {
+            "type": "boolean"
+          },
+          "isBusy": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message",
+          "activity"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "activity": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelRecommendationResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "recommendedModelId",
+          "tier",
+          "approximateVramBytes",
+          "approximateRamBytes",
+          "backend"
+        ],
+        "properties": {
+          "recommendedModelId": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "approximateVramBytes": {
+            "type": "integer"
+          },
+          "approximateRamBytes": {
+            "type": "integer"
+          },
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisitesResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "items",
+          "canBuild"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse"
+            }
+          },
+          "canBuild": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildPrerequisiteItemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "key",
+          "satisfied",
+          "detail"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "satisfied": {
+            "type": "boolean"
+          },
+          "detail": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1GetWhisperCppSourceBuildPrerequisitesRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "FastEndpointsErrorResponse": {
+        "type": "object",
+        "description": "the dto used to send an error response to the client",
+        "additionalProperties": false,
+        "properties": {
+          "statusCode": {
+            "type": "integer",
+            "description": "the http status code sent to the client. default is 400.",
+            "format": "int32",
+            "default": 400
+          },
+          "message": {
+            "type": "string",
+            "description": "the message for the error response",
+            "default": "One or more errors occurred!"
+          },
+          "errors": {
+            "type": "object",
+            "description": "the collection of errors for the current context",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "models",
+          "recommendedModelId"
+        ],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelResponse"
+            }
+          },
+          "selectedModelId": {
+            "type": "string",
+            "nullable": true
+          },
+          "recommendedModelId": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "tier",
+          "sizeBytes",
+          "approximateVramBytes",
+          "approximateRamBytes",
+          "englishOnly",
+          "installed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "tier": {
+            "type": "string"
+          },
+          "sizeBytes": {
+            "type": "integer"
+          },
+          "approximateVramBytes": {
+            "type": "integer"
+          },
+          "approximateRamBytes": {
+            "type": "integer"
+          },
+          "englishOnly": {
+            "type": "boolean"
+          },
+          "installed": {
+            "type": "boolean"
+          },
+          "download": {
+            "nullable": true,
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelDownloadStatusResponse"
+              }
+            ]
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1ListTranscriptionSessionsResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "items",
+          "totalCount"
+        ],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSessionSummaryResponse"
+            }
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1ListTranscriptionSessionsRequest": {
+        "type": "object",
+        "additionalProperties": false
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1SelectTranscriptionModelRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "modelId": {
+            "type": "string",
+            "nullable": true
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "started",
+          "status"
+        ],
+        "properties": {
+          "started": {
+            "type": "boolean"
+          },
+          "status": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "backend",
+          "source",
+          "acknowledgeCustomSourceRisk"
+        ],
+        "properties": {
+          "backend": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionBackendDto"
+          },
+          "source": {
+            "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionSourceSelectionDto"
+          },
+          "repository": {
+            "type": "string",
+            "nullable": true
+          },
+          "commit": {
+            "type": "string",
+            "nullable": true
+          },
+          "acknowledgeCustomSourceRisk": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionUnsupportedContainerResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message",
+          "detectedContainer",
+          "supportedContainers",
+          "ffmpegRequired"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "detectedContainer": {
+            "type": "string"
+          },
+          "supportedContainers": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "ffmpegRequired": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1UploadTranscriptionAudioRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "file"
+        ],
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "minLength": 1
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsTrainingRuntimeV1TrainingRuntimePrerequisitesResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -23857,34 +25702,6 @@
           "linkedModelName": {
             "type": "string",
             "nullable": true
-          }
-        }
-      },
-      "FastEndpointsErrorResponse": {
-        "type": "object",
-        "description": "the dto used to send an error response to the client",
-        "additionalProperties": false,
-        "properties": {
-          "statusCode": {
-            "type": "integer",
-            "description": "the http status code sent to the client. default is 400.",
-            "format": "int32",
-            "default": 400
-          },
-          "message": {
-            "type": "string",
-            "description": "the message for the error response",
-            "default": "One or more errors occurred!"
-          },
-          "errors": {
-            "type": "object",
-            "description": "the collection of errors for the current context",
-            "additionalProperties": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            }
           }
         }
       },

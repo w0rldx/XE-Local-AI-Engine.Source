@@ -85,6 +85,12 @@ export interface NodeCapabilityConfig {
 	// decides whether the surface is OFFERED, and it is compile-time: the backend switch can neither reveal these
 	// routes nor hide them. On since S5 flipped it ahead of its live browser round.
 	readonly externalApps: boolean;
+	// Local audio transcription (whisper.cpp): upload a recording, get a timestamped transcript. Gates the nav child
+	// and the two /transcription routes. Shipped under the PREVIEW nav group next to Image Generation — the runtime is
+	// a child process that is not yet verified end-to-end, and live capture only arrives in a later slice. The node
+	// ALSO has its own `Transcription:Enabled` switch, which 404s the API — this flag only decides whether the surface
+	// is offered, and it is compile-time.
+	readonly transcription: boolean;
 }
 
 export const nodeCapabilities: NodeCapabilityConfig = {
@@ -173,6 +179,9 @@ export const nodeCapabilities: NodeCapabilityConfig = {
 	// list or a detail page until it is true. Flipped BEFORE the round; the backend `ExternalApps:Enabled` default
 	// follows it, after the round has passed on this tree.
 	externalApps: true,
+	// On by default so the Preview group offers it; the backend `Transcription:Enabled` switch remains the operational
+	// kill switch.
+	transcription: true,
 };
 
 export const nodeRoutePaths = {
@@ -227,6 +236,10 @@ export const nodeRoutePaths = {
 	// on Installed and on every detail route. The detail route is /external-apps/instances/{instanceId}.
 	externalApps: "/external-apps/catalog",
 	externalAppsInstalled: "/external-apps/installed",
+	// Audio transcription — gated on nodeCapabilities.transcription. The detail route carries the router's own
+	// `$sessionId` placeholder because it is a navigation target with a param, not a link destination.
+	transcription: "/transcription",
+	transcriptionSession: "/transcription/$sessionId",
 	// Local-only diagnostics panel (frontend error snapshots) — always available.
 	diagnostics: "/diagnostics",
 } as const;

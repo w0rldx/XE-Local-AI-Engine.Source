@@ -247,15 +247,16 @@ describe("navigationLinks", () => {
 		]);
 	});
 
-	it("groups Image Generation, Development Mode and Workflow Runs under the Preview group as a pure toggle", () => {
+	it("groups Image Generation, Development Mode, Workflow Runs and Transcription under the Preview group as a pure toggle", () => {
 		const preview = navigationLinks.find((link) => link.id === "preview");
 
-		// Preview is a group (no own route); the three experimental surfaces are its children.
+		// Preview is a group (no own route); the experimental surfaces are its children.
 		expect(preview?.to).toBeUndefined();
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
 			nodeRoutePaths.devWorkflows,
+			nodeRoutePaths.transcription,
 		]);
 	});
 
@@ -272,7 +273,11 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ images: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.development, nodeRoutePaths.devWorkflows]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.development,
+			nodeRoutePaths.devWorkflows,
+			nodeRoutePaths.transcription,
+		]);
 		// It must not reappear as a top-level entry either.
 		expect(gatedLinks.some((link) => link.id === "images")).toBe(false);
 	});
@@ -281,7 +286,11 @@ describe("navigationLinks", () => {
 		const { navigationLinks: gatedLinks } = await mockCapabilities({ devWorkflows: false });
 		const preview = gatedLinks.find((link) => link.id === "preview");
 
-		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([nodeRoutePaths.images, nodeRoutePaths.development]);
+		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
+			nodeRoutePaths.images,
+			nodeRoutePaths.development,
+			nodeRoutePaths.transcription,
+		]);
 	});
 
 	// Graph Workflows ships ON since S4 and is a TOP-LEVEL entry, not a Preview child (R3): it replaced Open Canvas,
@@ -300,11 +309,12 @@ describe("navigationLinks", () => {
 		expect(navigationLinks.map((link) => link.id).indexOf("graphWorkflows")).toBe(
 			navigationLinks.map((link) => link.id).indexOf("preview") + 1,
 		);
-		// ...and NOT a child of the Preview group, which keeps exactly its three remaining children.
+		// ...and NOT a child of the Preview group, which keeps exactly its own remaining children.
 		expect(preview?.links?.map((nestedLink) => nestedLink.to)).toEqual([
 			nodeRoutePaths.images,
 			nodeRoutePaths.development,
 			nodeRoutePaths.devWorkflows,
+			nodeRoutePaths.transcription,
 		]);
 	});
 
@@ -313,6 +323,7 @@ describe("navigationLinks", () => {
 			images: false,
 			development: false,
 			devWorkflows: false,
+			transcription: false,
 		});
 
 		expect(gatedLinks.some((link) => link.id === "preview")).toBe(false);

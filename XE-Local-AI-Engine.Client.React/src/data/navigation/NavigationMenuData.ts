@@ -42,7 +42,8 @@ type NavigationCapabilityKey =
 	| "devWorkflows"
 	| "graphWorkflows"
 	| "integrations"
-	| "externalApps";
+	| "externalApps"
+	| "transcription";
 
 interface INavigationNestedLink {
 	translationKey: string;
@@ -179,9 +180,9 @@ const allNavigationLinks: INavigationLink[] = [
 		],
 	},
 	// Preview group: collects experimental / preview features under one menu point. Image Generation
-	// (stable-diffusion.cpp), Development Mode (the registered-source worktree workflow) and Workflow Runs live
-	// here — none of the three is confidently verified end-to-end yet, so each is presented as a preview surface
-	// rather than a flagship top-level entry.
+	// (stable-diffusion.cpp), Development Mode (the registered-source worktree workflow), Workflow Runs and
+	// Transcription (whisper.cpp) live here — none of them is confidently verified end-to-end yet, so each is
+	// presented as a preview surface rather than a flagship top-level entry.
 	// Each child carries its OWN capability (the group itself is ungated, like Models / Automation), so turning one
 	// capability off drops only that child and the generic empty-group filter below removes the group once every
 	// child is off. That keeps every child's nav visibility exactly aligned with its route's own capability redirect.
@@ -195,6 +196,7 @@ const allNavigationLinks: INavigationLink[] = [
 			// Labelled "Workflow Runs", not "Development Workflows" (C42): sitting next to "Development" the module name
 			// reads as its sibling, and the two are not siblings — this one lists work items, their runs and their nodes.
 			{ translationKey: "navigation.devWorkflows", to: nodeRoutePaths.devWorkflows, capability: "devWorkflows" },
+			{ translationKey: "navigation.transcription", to: nodeRoutePaths.transcription, capability: "transcription" },
 		],
 	},
 	// Graph Workflows is a TOP-LEVEL entry, not a Preview child: it is the successor to the retired Open Canvas and

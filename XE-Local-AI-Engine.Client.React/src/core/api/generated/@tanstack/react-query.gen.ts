@@ -42,6 +42,9 @@ import {
 	cancelStableDiffusionCppSourceBuild,
 	cancelTrainingDataset,
 	cancelTrainingRun,
+	cancelTranscriptionModelDownload,
+	cancelTranscriptionSession,
+	cancelWhisperCppSourceBuild,
 	cancelWorkSession,
 	clearBenchmarkFidelityCache,
 	clearBenchmarkRunScore,
@@ -81,6 +84,7 @@ import {
 	createToolMock,
 	createTrainingDefinition,
 	createTrainingRun,
+	createTranscriptionSession,
 	createWorkSession,
 	createWorkspace,
 	decideDevWorkflowNodeRun,
@@ -117,6 +121,7 @@ import {
 	deleteTrainingArtifact,
 	deleteTrainingDataset,
 	deleteTrainingDefinition,
+	deleteTranscriptionSession,
 	deleteWorkSession,
 	deleteWorkspace,
 	detectDevelopmentRepositoryProfile,
@@ -130,6 +135,7 @@ import {
 	draftSkill,
 	ejectImageRuntime,
 	ejectRunningModel,
+	ejectTranscriptionRuntime,
 	enableAutoConnect,
 	enableScheduledJob,
 	ensureLlamaCppBinary,
@@ -235,7 +241,12 @@ import {
 	getTrainingRunDefaults,
 	getTrainingRuntimePrerequisites,
 	getTrainingRuntimeStatus,
+	getTranscriptionRecommendation,
+	getTranscriptionRuntimeStatus,
+	getTranscriptionSession,
 	getTutorialState,
+	getWhisperCppSourceBuildPrerequisites,
+	getWhisperCppSourceBuildStatus,
 	getWorkSession,
 	getWorkSessionArtifactContent,
 	harvestGoldenConversations,
@@ -309,6 +320,8 @@ import {
 	listTrainingDefinitions,
 	listTrainingRuns,
 	listTrainingSamples,
+	listTranscriptionModels,
+	listTranscriptionSessions,
 	listWorkSessionArtifacts,
 	listWorkSessionCheckpoints,
 	listWorkSessionEvents,
@@ -355,6 +368,7 @@ import {
 	removeLlamaCppSourceBuild,
 	removeStableDiffusionCppSourceBuild,
 	removeTrainingRuntime,
+	removeWhisperCppSourceBuild,
 	renameNodeChatConversation,
 	reorderBenchmarkTaskItems,
 	resetExternalApp,
@@ -378,6 +392,7 @@ import {
 	scoreBenchmarkRun,
 	searchKnowledge,
 	selectLocalModel,
+	selectTranscriptionModel,
 	setHfToken,
 	setMcpServerEnabled,
 	setNodeChatConversationMemoryExcluded,
@@ -399,6 +414,8 @@ import {
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
 	startTrainingRuntimeInstall,
+	startTranscriptionModelDownload,
+	startWhisperCppSourceBuild,
 	startWorkSession,
 	stopExternalApp,
 	suggestComparison,
@@ -431,6 +448,7 @@ import {
 	updateWorkSession,
 	uploadConversationFile,
 	uploadKnowledgeDocument,
+	uploadTranscriptionAudio,
 	validateExecutable,
 	validateGraphWorkflowDefinition,
 	validationProblemProbe,
@@ -509,6 +527,13 @@ import type {
 	CancelTrainingDatasetResponse,
 	CancelTrainingRunData,
 	CancelTrainingRunResponse,
+	CancelTranscriptionModelDownloadData,
+	CancelTranscriptionModelDownloadError,
+	CancelTranscriptionModelDownloadResponse,
+	CancelTranscriptionSessionData,
+	CancelTranscriptionSessionResponse,
+	CancelWhisperCppSourceBuildData,
+	CancelWhisperCppSourceBuildResponse,
 	CancelWorkSessionData,
 	CancelWorkSessionError,
 	CancelWorkSessionResponse,
@@ -611,6 +636,9 @@ import type {
 	CreateTrainingRunData,
 	CreateTrainingRunError,
 	CreateTrainingRunResponse,
+	CreateTranscriptionSessionData,
+	CreateTranscriptionSessionError,
+	CreateTranscriptionSessionResponse,
 	CreateWorkSessionData,
 	CreateWorkSessionError,
 	CreateWorkSessionResponse,
@@ -700,6 +728,8 @@ import type {
 	DeleteTrainingDatasetResponse,
 	DeleteTrainingDefinitionData,
 	DeleteTrainingDefinitionResponse,
+	DeleteTranscriptionSessionData,
+	DeleteTranscriptionSessionResponse,
 	DeleteWorkSessionData,
 	DeleteWorkSessionError,
 	DeleteWorkSessionResponse,
@@ -735,6 +765,9 @@ import type {
 	EjectImageRuntimeResponse,
 	EjectRunningModelData,
 	EjectRunningModelResponse,
+	EjectTranscriptionRuntimeData,
+	EjectTranscriptionRuntimeError,
+	EjectTranscriptionRuntimeResponse,
 	EnableAutoConnectData,
 	EnableAutoConnectResponse,
 	EnableScheduledJobData,
@@ -967,8 +1000,19 @@ import type {
 	GetTrainingRuntimePrerequisitesResponse,
 	GetTrainingRuntimeStatusData,
 	GetTrainingRuntimeStatusResponse,
+	GetTranscriptionRecommendationData,
+	GetTranscriptionRecommendationResponse,
+	GetTranscriptionRuntimeStatusData,
+	GetTranscriptionRuntimeStatusResponse,
+	GetTranscriptionSessionData,
+	GetTranscriptionSessionResponse,
 	GetTutorialStateData,
 	GetTutorialStateResponse,
+	GetWhisperCppSourceBuildPrerequisitesData,
+	GetWhisperCppSourceBuildPrerequisitesError,
+	GetWhisperCppSourceBuildPrerequisitesResponse,
+	GetWhisperCppSourceBuildStatusData,
+	GetWhisperCppSourceBuildStatusResponse,
 	GetWorkSessionArtifactContentData,
 	GetWorkSessionArtifactContentError,
 	GetWorkSessionArtifactContentResponse,
@@ -1135,6 +1179,11 @@ import type {
 	ListTrainingRunsResponse,
 	ListTrainingSamplesData,
 	ListTrainingSamplesResponse,
+	ListTranscriptionModelsData,
+	ListTranscriptionModelsResponse,
+	ListTranscriptionSessionsData,
+	ListTranscriptionSessionsError,
+	ListTranscriptionSessionsResponse,
 	ListWorkSessionArtifactsData,
 	ListWorkSessionArtifactsError,
 	ListWorkSessionArtifactsResponse,
@@ -1250,6 +1299,9 @@ import type {
 	RemoveTrainingRuntimeData,
 	RemoveTrainingRuntimeError,
 	RemoveTrainingRuntimeResponse,
+	RemoveWhisperCppSourceBuildData,
+	RemoveWhisperCppSourceBuildError,
+	RemoveWhisperCppSourceBuildResponse,
 	RenameNodeChatConversationData,
 	RenameNodeChatConversationError,
 	RenameNodeChatConversationResponse,
@@ -1310,6 +1362,9 @@ import type {
 	SelectLocalModelData,
 	SelectLocalModelError,
 	SelectLocalModelResponse,
+	SelectTranscriptionModelData,
+	SelectTranscriptionModelError,
+	SelectTranscriptionModelResponse,
 	SetHfTokenData,
 	SetHfTokenResponse,
 	SetMcpServerEnabledData,
@@ -1368,6 +1423,12 @@ import type {
 	StartTrainingRuntimeInstallData,
 	StartTrainingRuntimeInstallError,
 	StartTrainingRuntimeInstallResponse,
+	StartTranscriptionModelDownloadData,
+	StartTranscriptionModelDownloadError,
+	StartTranscriptionModelDownloadResponse,
+	StartWhisperCppSourceBuildData,
+	StartWhisperCppSourceBuildError,
+	StartWhisperCppSourceBuildResponse,
 	StartWorkSessionData,
 	StartWorkSessionError,
 	StartWorkSessionResponse,
@@ -1451,6 +1512,9 @@ import type {
 	UploadConversationFileResponse,
 	UploadKnowledgeDocumentData,
 	UploadKnowledgeDocumentResponse,
+	UploadTranscriptionAudioData,
+	UploadTranscriptionAudioError,
+	UploadTranscriptionAudioResponse,
 	ValidateExecutableData,
 	ValidateExecutableResponse,
 	ValidateGraphWorkflowDefinitionData,
@@ -1942,6 +2006,487 @@ export const saveTutorialStateMutation = (
 	return mutationOptions;
 };
 
+export const cancelTranscriptionModelDownloadMutation = (
+	options?: Partial<Options<CancelTranscriptionModelDownloadData>>,
+): UseMutationOptions<
+	CancelTranscriptionModelDownloadResponse,
+	AxiosError<CancelTranscriptionModelDownloadError>,
+	Options<CancelTranscriptionModelDownloadData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CancelTranscriptionModelDownloadResponse,
+		AxiosError<CancelTranscriptionModelDownloadError>,
+		Options<CancelTranscriptionModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelTranscriptionModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelTranscriptionSessionMutation = (
+	options?: Partial<Options<CancelTranscriptionSessionData>>,
+): UseMutationOptions<CancelTranscriptionSessionResponse, AxiosError<DefaultError>, Options<CancelTranscriptionSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		CancelTranscriptionSessionResponse,
+		AxiosError<DefaultError>,
+		Options<CancelTranscriptionSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelTranscriptionSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const cancelWhisperCppSourceBuildMutation = (
+	options?: Partial<Options<CancelWhisperCppSourceBuildData>>,
+): UseMutationOptions<
+	CancelWhisperCppSourceBuildResponse,
+	AxiosError<DefaultError>,
+	Options<CancelWhisperCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CancelWhisperCppSourceBuildResponse,
+		AxiosError<DefaultError>,
+		Options<CancelWhisperCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await cancelWhisperCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const listTranscriptionSessionsQueryKey = (options?: Options<ListTranscriptionSessionsData>) =>
+	createQueryKey("listTranscriptionSessions", options);
+
+export const listTranscriptionSessionsOptions = (options?: Options<ListTranscriptionSessionsData>) =>
+	queryOptions<
+		ListTranscriptionSessionsResponse,
+		AxiosError<ListTranscriptionSessionsError>,
+		ListTranscriptionSessionsResponse,
+		ReturnType<typeof listTranscriptionSessionsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listTranscriptionSessions({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listTranscriptionSessionsQueryKey(options),
+	});
+
+const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
+	queryKey: QueryKey<Options>,
+	page: K,
+) => {
+	const params = { ...queryKey[0] };
+	if (page.body) {
+		params.body = {
+			...(queryKey[0].body as any),
+			...(page.body as any),
+		};
+	}
+	if (page.headers) {
+		params.headers = {
+			...queryKey[0].headers,
+			...page.headers,
+		};
+	}
+	if (page.path) {
+		params.path = {
+			...(queryKey[0].path as any),
+			...(page.path as any),
+		};
+	}
+	if (page.query) {
+		params.query = {
+			...(queryKey[0].query as any),
+			...(page.query as any),
+		};
+	}
+	return params as unknown as typeof page;
+};
+
+export const listTranscriptionSessionsInfiniteQueryKey = (
+	options?: Options<ListTranscriptionSessionsData>,
+): QueryKey<Options<ListTranscriptionSessionsData>> => createQueryKey("listTranscriptionSessions", options, true);
+
+export const listTranscriptionSessionsInfiniteOptions = (options?: Options<ListTranscriptionSessionsData>) => {
+	const opts = infiniteQueryOptions<
+		ListTranscriptionSessionsResponse,
+		AxiosError<ListTranscriptionSessionsError>,
+		InfiniteData<ListTranscriptionSessionsResponse>,
+		QueryKey<Options<ListTranscriptionSessionsData>>,
+		number | null | Pick<QueryKey<Options<ListTranscriptionSessionsData>>[0], "body" | "headers" | "path" | "query">
+	>(
+		// @ts-ignore
+		{
+			queryFn: async ({ pageParam, queryKey, signal }) => {
+				// @ts-ignore
+				const page: Pick<QueryKey<Options<ListTranscriptionSessionsData>>[0], "body" | "headers" | "path" | "query"> =
+					typeof pageParam === "object"
+						? pageParam
+						: {
+								query: {
+									offset: pageParam,
+								},
+							};
+				const params = createInfiniteParams(queryKey, page);
+				const { data } = await listTranscriptionSessions({
+					...options,
+					...params,
+					signal,
+					throwOnError: true,
+				});
+				return data;
+			},
+			queryKey: listTranscriptionSessionsInfiniteQueryKey(options),
+		},
+	);
+	return opts as Omit<typeof opts, "initialData">;
+};
+
+export const createTranscriptionSessionMutation = (
+	options?: Partial<Options<CreateTranscriptionSessionData>>,
+): UseMutationOptions<
+	CreateTranscriptionSessionResponse,
+	AxiosError<CreateTranscriptionSessionError>,
+	Options<CreateTranscriptionSessionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		CreateTranscriptionSessionResponse,
+		AxiosError<CreateTranscriptionSessionError>,
+		Options<CreateTranscriptionSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await createTranscriptionSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const deleteTranscriptionSessionMutation = (
+	options?: Partial<Options<DeleteTranscriptionSessionData>>,
+): UseMutationOptions<DeleteTranscriptionSessionResponse, AxiosError<DefaultError>, Options<DeleteTranscriptionSessionData>> => {
+	const mutationOptions: UseMutationOptions<
+		DeleteTranscriptionSessionResponse,
+		AxiosError<DefaultError>,
+		Options<DeleteTranscriptionSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await deleteTranscriptionSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getTranscriptionSessionQueryKey = (options: Options<GetTranscriptionSessionData>) =>
+	createQueryKey("getTranscriptionSession", options);
+
+export const getTranscriptionSessionOptions = (options: Options<GetTranscriptionSessionData>) =>
+	queryOptions<
+		GetTranscriptionSessionResponse,
+		AxiosError<DefaultError>,
+		GetTranscriptionSessionResponse,
+		ReturnType<typeof getTranscriptionSessionQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTranscriptionSession({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTranscriptionSessionQueryKey(options),
+	});
+
+export const ejectTranscriptionRuntimeMutation = (
+	options?: Partial<Options<EjectTranscriptionRuntimeData>>,
+): UseMutationOptions<
+	EjectTranscriptionRuntimeResponse,
+	AxiosError<EjectTranscriptionRuntimeError>,
+	Options<EjectTranscriptionRuntimeData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		EjectTranscriptionRuntimeResponse,
+		AxiosError<EjectTranscriptionRuntimeError>,
+		Options<EjectTranscriptionRuntimeData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await ejectTranscriptionRuntime({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const getTranscriptionRecommendationQueryKey = (options?: Options<GetTranscriptionRecommendationData>) =>
+	createQueryKey("getTranscriptionRecommendation", options);
+
+export const getTranscriptionRecommendationOptions = (options?: Options<GetTranscriptionRecommendationData>) =>
+	queryOptions<
+		GetTranscriptionRecommendationResponse,
+		AxiosError<DefaultError>,
+		GetTranscriptionRecommendationResponse,
+		ReturnType<typeof getTranscriptionRecommendationQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTranscriptionRecommendation({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTranscriptionRecommendationQueryKey(options),
+	});
+
+export const getTranscriptionRuntimeStatusQueryKey = (options?: Options<GetTranscriptionRuntimeStatusData>) =>
+	createQueryKey("getTranscriptionRuntimeStatus", options);
+
+export const getTranscriptionRuntimeStatusOptions = (options?: Options<GetTranscriptionRuntimeStatusData>) =>
+	queryOptions<
+		GetTranscriptionRuntimeStatusResponse,
+		AxiosError<DefaultError>,
+		GetTranscriptionRuntimeStatusResponse,
+		ReturnType<typeof getTranscriptionRuntimeStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getTranscriptionRuntimeStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getTranscriptionRuntimeStatusQueryKey(options),
+	});
+
+export const getWhisperCppSourceBuildPrerequisitesQueryKey = (options: Options<GetWhisperCppSourceBuildPrerequisitesData>) =>
+	createQueryKey("getWhisperCppSourceBuildPrerequisites", options);
+
+export const getWhisperCppSourceBuildPrerequisitesOptions = (options: Options<GetWhisperCppSourceBuildPrerequisitesData>) =>
+	queryOptions<
+		GetWhisperCppSourceBuildPrerequisitesResponse,
+		AxiosError<GetWhisperCppSourceBuildPrerequisitesError>,
+		GetWhisperCppSourceBuildPrerequisitesResponse,
+		ReturnType<typeof getWhisperCppSourceBuildPrerequisitesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWhisperCppSourceBuildPrerequisites({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWhisperCppSourceBuildPrerequisitesQueryKey(options),
+	});
+
+export const getWhisperCppSourceBuildStatusQueryKey = (options?: Options<GetWhisperCppSourceBuildStatusData>) =>
+	createQueryKey("getWhisperCppSourceBuildStatus", options);
+
+export const getWhisperCppSourceBuildStatusOptions = (options?: Options<GetWhisperCppSourceBuildStatusData>) =>
+	queryOptions<
+		GetWhisperCppSourceBuildStatusResponse,
+		AxiosError<DefaultError>,
+		GetWhisperCppSourceBuildStatusResponse,
+		ReturnType<typeof getWhisperCppSourceBuildStatusQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await getWhisperCppSourceBuildStatus({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: getWhisperCppSourceBuildStatusQueryKey(options),
+	});
+
+export const listTranscriptionModelsQueryKey = (options?: Options<ListTranscriptionModelsData>) =>
+	createQueryKey("listTranscriptionModels", options);
+
+export const listTranscriptionModelsOptions = (options?: Options<ListTranscriptionModelsData>) =>
+	queryOptions<
+		ListTranscriptionModelsResponse,
+		AxiosError<DefaultError>,
+		ListTranscriptionModelsResponse,
+		ReturnType<typeof listTranscriptionModelsQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listTranscriptionModels({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listTranscriptionModelsQueryKey(options),
+	});
+
+export const removeWhisperCppSourceBuildMutation = (
+	options?: Partial<Options<RemoveWhisperCppSourceBuildData>>,
+): UseMutationOptions<
+	RemoveWhisperCppSourceBuildResponse,
+	AxiosError<RemoveWhisperCppSourceBuildError>,
+	Options<RemoveWhisperCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		RemoveWhisperCppSourceBuildResponse,
+		AxiosError<RemoveWhisperCppSourceBuildError>,
+		Options<RemoveWhisperCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await removeWhisperCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const selectTranscriptionModelMutation = (
+	options?: Partial<Options<SelectTranscriptionModelData>>,
+): UseMutationOptions<
+	SelectTranscriptionModelResponse,
+	AxiosError<SelectTranscriptionModelError>,
+	Options<SelectTranscriptionModelData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		SelectTranscriptionModelResponse,
+		AxiosError<SelectTranscriptionModelError>,
+		Options<SelectTranscriptionModelData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await selectTranscriptionModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startTranscriptionModelDownloadMutation = (
+	options?: Partial<Options<StartTranscriptionModelDownloadData>>,
+): UseMutationOptions<
+	StartTranscriptionModelDownloadResponse,
+	AxiosError<StartTranscriptionModelDownloadError>,
+	Options<StartTranscriptionModelDownloadData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartTranscriptionModelDownloadResponse,
+		AxiosError<StartTranscriptionModelDownloadError>,
+		Options<StartTranscriptionModelDownloadData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startTranscriptionModelDownload({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startWhisperCppSourceBuildMutation = (
+	options?: Partial<Options<StartWhisperCppSourceBuildData>>,
+): UseMutationOptions<
+	StartWhisperCppSourceBuildResponse,
+	AxiosError<StartWhisperCppSourceBuildError>,
+	Options<StartWhisperCppSourceBuildData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartWhisperCppSourceBuildResponse,
+		AxiosError<StartWhisperCppSourceBuildError>,
+		Options<StartWhisperCppSourceBuildData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startWhisperCppSourceBuild({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const uploadTranscriptionAudioMutation = (
+	options?: Partial<Options<UploadTranscriptionAudioData>>,
+): UseMutationOptions<
+	UploadTranscriptionAudioResponse,
+	AxiosError<UploadTranscriptionAudioError>,
+	Options<UploadTranscriptionAudioData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		UploadTranscriptionAudioResponse,
+		AxiosError<UploadTranscriptionAudioError>,
+		Options<UploadTranscriptionAudioData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await uploadTranscriptionAudio({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
 export const getTrainingRuntimePrerequisitesQueryKey = (options?: Options<GetTrainingRuntimePrerequisitesData>) =>
 	createQueryKey("getTrainingRuntimePrerequisites", options);
 
@@ -2054,38 +2599,6 @@ export const listTrainingRunsOptions = (options: Options<ListTrainingRunsData>) 
 		},
 		queryKey: listTrainingRunsQueryKey(options),
 	});
-
-const createInfiniteParams = <K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">>(
-	queryKey: QueryKey<Options>,
-	page: K,
-) => {
-	const params = { ...queryKey[0] };
-	if (page.body) {
-		params.body = {
-			...(queryKey[0].body as any),
-			...(page.body as any),
-		};
-	}
-	if (page.headers) {
-		params.headers = {
-			...queryKey[0].headers,
-			...page.headers,
-		};
-	}
-	if (page.path) {
-		params.path = {
-			...(queryKey[0].path as any),
-			...(page.path as any),
-		};
-	}
-	if (page.query) {
-		params.query = {
-			...(queryKey[0].query as any),
-			...(page.query as any),
-		};
-	}
-	return params as unknown as typeof page;
-};
 
 export const listTrainingRunsInfiniteQueryKey = (
 	options: Options<ListTrainingRunsData>,
