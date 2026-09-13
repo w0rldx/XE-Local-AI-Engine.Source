@@ -101,16 +101,17 @@ public static class AudioContainerSniffer
         container is AudioContainer.Ogg or AudioContainer.Mp4 or AudioContainer.Matroska;
 
     /// <summary>The media type to declare for a file of this container.</summary>
-    public static string MediaTypeFor(AudioContainer container) => container switch
-    {
-        AudioContainer.Wav => "audio/wav",
-        AudioContainer.Mp3 => "audio/mpeg",
-        AudioContainer.Flac => "audio/flac",
-        AudioContainer.Ogg => "audio/ogg",
-        AudioContainer.Mp4 => "audio/mp4",
-        AudioContainer.Matroska => "audio/webm",
-        _ => "application/octet-stream"
-    };
+    public static string MediaTypeFor(AudioContainer container) =>
+        container switch
+        {
+            AudioContainer.Wav => "audio/wav",
+            AudioContainer.Mp3 => "audio/mpeg",
+            AudioContainer.Flac => "audio/flac",
+            AudioContainer.Ogg => "audio/ogg",
+            AudioContainer.Mp4 => "audio/mp4",
+            AudioContainer.Matroska => "audio/webm",
+            _ => "application/octet-stream"
+        };
 
     private static bool StartsWith(ReadOnlySpan<byte> header, ReadOnlySpan<byte> signature) =>
         header.Length >= signature.Length && header[..signature.Length].SequenceEqual(signature);

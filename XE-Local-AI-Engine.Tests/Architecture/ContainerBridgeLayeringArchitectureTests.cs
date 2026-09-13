@@ -79,11 +79,11 @@ public sealed class ContainerBridgeLayeringArchitectureTests
         }
 
         AssertEx.Empty(FindBannedSymbols("""
-                                            var caller = await _verifier.VerifyAsync(presented, context.RequestAborted);
-                                            var endpoint = ContainerBridgeEndpointResolver.Resolve(options, desktop);
-                                            context.Features.Set(new ContainerBridgeCaller(instanceId));
-                                            builder.Services.AddSingleton<ContainerBridgeAddressWatcher>();
-                                        """),
+                                             var caller = await _verifier.VerifyAsync(presented, context.RequestAborted);
+                                             var endpoint = ContainerBridgeEndpointResolver.Resolve(options, desktop);
+                                             context.Features.Set(new ContainerBridgeCaller(instanceId));
+                                             builder.Services.AddSingleton<ContainerBridgeAddressWatcher>();
+                                         """),
             "The bridge's own vocabulary must not trip the guard, or the slice that uses it cannot be written.");
     }
 

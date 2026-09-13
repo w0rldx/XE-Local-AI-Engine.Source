@@ -67,7 +67,8 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     }
 
     /// <inheritdoc />
-    public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) => _supervisor.EvictAsync(ct);
+    public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) =>
+        _supervisor.EvictAsync(ct);
 
     /// <inheritdoc />
     public async Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct)

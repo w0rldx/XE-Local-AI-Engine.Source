@@ -284,7 +284,10 @@ public sealed class ExternalAppCatalogEndpointTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.PreviewInstallAsync(ExternalAppEndpointPayloads.ApplicationId, Arg.Any<CancellationToken>())
-            .Returns(ExternalAppEndpointPayloads.Preview(ExternalAppEndpointPayloads.Manifest() with { Services = [] }));
+            .Returns(ExternalAppEndpointPayloads.Preview(ExternalAppEndpointPayloads.Manifest() with
+            {
+                Services = []
+            }));
 
         await using var factory = Factory(apps: apps);
 
@@ -510,7 +513,10 @@ public sealed class ExternalAppCatalogEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.RuntimeRefresh,
-                                       new { acknowledgeDaemonId = "daemon-abc" })
+                                       new
+                                       {
+                                           acknowledgeDaemonId = "daemon-abc"
+                                       })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -570,7 +576,10 @@ public sealed class ExternalAppCatalogEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.RuntimeRefresh,
-                                       new { acknowledgeDaemonId = "daemon-abc" })
+                                       new
+                                       {
+                                           acknowledgeDaemonId = "daemon-abc"
+                                       })
                                    .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -590,8 +599,7 @@ public sealed class ExternalAppCatalogEndpointTests
 
         var catalog = Substitute.For<IApplicationCatalogProvider>();
         catalog.RefreshAsync(Arg.Any<CancellationToken>())
-               .Returns(new ExternalAppCatalogRefreshResult(
-                   ExternalAppEndpointPayloads.CatalogSnapshot(ExternalAppCatalogSource.RemoteLastGood, Failure),
+               .Returns(new ExternalAppCatalogRefreshResult(ExternalAppEndpointPayloads.CatalogSnapshot(ExternalAppCatalogSource.RemoteLastGood, Failure),
                    Failure));
 
         var apps = Substitute.For<IExternalAppService>();

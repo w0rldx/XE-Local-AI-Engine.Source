@@ -4,7 +4,8 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 /// <summary>What one service of an application is granted, as opposed to what the application as a whole declares.</summary>
-public sealed record ExternalAppServicePermissions(string ServiceName,
+public sealed record ExternalAppServicePermissions(
+    string ServiceName,
     IReadOnlySet<string> Capabilities,
     bool WritableRootFilesystem,
     IReadOnlySet<string> PublishedPorts,
@@ -21,7 +22,8 @@ public sealed record ExternalAppServicePermissions(string ServiceName,
 ///     already is. The application-level flags stay application-level because that is how the manifest declares
 ///     them.
 /// </remarks>
-public sealed record ExternalAppEffectivePermissions(bool Internet,
+public sealed record ExternalAppEffectivePermissions(
+    bool Internet,
     bool LocalNetwork,
     string HostFiles,
     string Gpu,

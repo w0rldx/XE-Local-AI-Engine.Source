@@ -20,8 +20,7 @@ public sealed class StaleWhisperServerReaperTests
         var foreign = OperatingSystem.IsWindows()
             ? @"C:\Program Files\SomeOtherApp\whisper-server.exe"
             : "/opt/some-other-app/whisper-server";
-        var scanner = new FakeStaleWhisperServerProcessScanner(
-        [
+        var scanner = new FakeStaleWhisperServerProcessScanner([
             new StaleWhisperServerProcess(4242, ours),
             new StaleWhisperServerProcess(4243, foreign)
         ]);
@@ -112,7 +111,8 @@ public sealed class StaleWhisperServerReaperTests
             return candidates;
         }
 
-        public void KillProcessTree(int pid) => KilledPids.Add(pid);
+        public void KillProcessTree(int pid) =>
+            KilledPids.Add(pid);
     }
 
     private sealed class ThrowingStaleWhisperServerProcessScanner : IStaleWhisperServerProcessScanner
@@ -125,6 +125,7 @@ public sealed class StaleWhisperServerReaperTests
             throw new InvalidOperationException("The process table could not be read.");
         }
 
-        public void KillProcessTree(int pid) => throw new InvalidOperationException("The scan failed, so no kill can follow.");
+        public void KillProcessTree(int pid) =>
+            throw new InvalidOperationException("The scan failed, so no kill can follow.");
     }
 }

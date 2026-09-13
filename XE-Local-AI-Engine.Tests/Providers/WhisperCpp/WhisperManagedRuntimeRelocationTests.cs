@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
+using System.ComponentModel;
 using System.Diagnostics;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -73,7 +74,7 @@ public sealed class WhisperManagedRuntimeRelocationTests
             }
 
             entries.AddRange(line[(open + 1)..close]
-                             .Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
+                .Split(':', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries));
         }
 
         return entries;
@@ -85,7 +86,7 @@ public sealed class WhisperManagedRuntimeRelocationTests
         {
             return (await RunAsync("readelf", "--version")).ExitCode == 0;
         }
-        catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException or IOException)
+        catch (Exception exception) when (exception is Win32Exception or InvalidOperationException or IOException)
         {
             return false;
         }

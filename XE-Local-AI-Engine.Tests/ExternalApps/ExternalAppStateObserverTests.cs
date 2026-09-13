@@ -99,7 +99,10 @@ public sealed class ExternalAppStateObserverTests
     public async Task Observer_WhenTheFeatureIsDisabled_DoesNothing()
     {
         var manifest = SingleServiceManifest();
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with { Enabled = false }).ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with
+        {
+            Enabled = false
+        }).ConfigureAwait(false);
         using var observer = harness.CreateObserver();
 
         await observer.PollOnceAsync(CancellationToken.None).ConfigureAwait(false);
@@ -162,9 +165,7 @@ public sealed class ExternalAppStateObserverTests
         await harness.Runtime.RemoveContainerAsync(harness.Runtime.CreatedContainerIds[0]).ConfigureAwait(false);
         harness.Time.Advance(TimeSpan.FromSeconds(15));
 
-        await AssertEx.EventuallyAsync(
-                          () => harness.ReadAsync(harness.InstalledId).GetAwaiter().GetResult() is
-                              { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
+        await AssertEx.EventuallyAsync(() => harness.ReadAsync(harness.InstalledId).GetAwaiter().GetResult() is { Status: ExternalAppInstanceStatus.StoppedUnexpectedly },
                           TestBudgets.Contended,
                           "One interval elapsed and the observer never noticed the missing container.")
                       .ConfigureAwait(false);
@@ -218,8 +219,7 @@ public sealed class ExternalAppStateObserverTests
 
     private static ApplicationManifest TwoServiceManifest()
     {
-        return ExternalAppTestManifests.Manifest(
-        [
+        return ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)]),
             ExternalAppTestManifests.Service("sidecar",
                 dependsOn: [new ApplicationDependency("web", "started")],

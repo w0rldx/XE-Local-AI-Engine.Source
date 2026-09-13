@@ -12,9 +12,7 @@ using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
-using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -152,7 +150,10 @@ public sealed class ExternalAppsModuleRegistrationTests
             values["ExternalApps:InstanceRoot"] = instanceRoot;
         }
 
-        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings { EnvironmentName = Environments.Development });
+        var builder = Host.CreateApplicationBuilder(new HostApplicationBuilderSettings
+        {
+            EnvironmentName = Environments.Development
+        });
 
         // ValidateOnBuild off, ValidateScopes on: whole-graph validation would walk registrations from modules this
         // test deliberately does not compose, which is a different test's job and needs the whole host.

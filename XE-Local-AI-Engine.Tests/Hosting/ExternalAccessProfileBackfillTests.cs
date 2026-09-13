@@ -109,16 +109,16 @@ public sealed class ExternalAccessProfileBackfillTests
     public async Task NodeWithExplicitSwitchesAndNoProfile_KeepsItsSwitchesAndStaysUndecided()
     {
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-switches-no-profile",
-                  """
-                  {
-                    "autoCheckApplicationUpdates": false,
-                    "autoCheckRuntimeUpdates": false,
-                    "autoProvisionFirstRunModel": false
-                  }
-                  """,
-                  expectedProfile: null,
-                  expectedSwitches: false)
-              .ConfigureAwait(false);
+                """
+                {
+                  "autoCheckApplicationUpdates": false,
+                  "autoCheckRuntimeUpdates": false,
+                  "autoProvisionFirstRunModel": false
+                }
+                """,
+                expectedProfile: null,
+                expectedSwitches: false)
+            .ConfigureAwait(false);
     }
 
     [Test]
@@ -127,17 +127,17 @@ public sealed class ExternalAccessProfileBackfillTests
         // "Offline" is unrecognised — the comparison is ordinal — so the normaliser hands the backfill "pending" beside
         // three false switches. Pending IS undecided: the gated services keep waiting and nothing is stamped.
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-junk-profile",
-                  """
-                  {
-                    "externalAccessProfile": "Offline",
-                    "autoCheckApplicationUpdates": false,
-                    "autoCheckRuntimeUpdates": false,
-                    "autoProvisionFirstRunModel": false
-                  }
-                  """,
-                  StoredNodeSettings.ExternalAccessProfilePending,
-                  expectedSwitches: false)
-              .ConfigureAwait(false);
+                """
+                {
+                  "externalAccessProfile": "Offline",
+                  "autoCheckApplicationUpdates": false,
+                  "autoCheckRuntimeUpdates": false,
+                  "autoProvisionFirstRunModel": false
+                }
+                """,
+                StoredNodeSettings.ExternalAccessProfilePending,
+                expectedSwitches: false)
+            .ConfigureAwait(false);
     }
 
     // The regression the round-2 review bought: a settings file holding ONLY an unrecognised profile. Nulling it made
@@ -147,18 +147,21 @@ public sealed class ExternalAccessProfileBackfillTests
     public async Task NodeWithAJunkProfileAndNoSwitches_IsReadAsPendingAndNotBackfilled()
     {
         await AssertTheBackfillLeavesTheRecordAlone("xe-backfill-junk-profile-only",
-                  """
-                  { "externalAccessProfile": "Offline" }
-                  """,
-                  StoredNodeSettings.ExternalAccessProfilePending,
-                  expectedSwitches: null)
-              .ConfigureAwait(false);
+                """
+                { "externalAccessProfile": "Offline" }
+                """,
+                StoredNodeSettings.ExternalAccessProfilePending,
+                expectedSwitches: null)
+            .ConfigureAwait(false);
     }
 
     [Test]
     public async Task NodeWithOnlyOneSwitchPresent_StaysUndecided()
     {
-        var store = new FakeNodeSettingsStore(new StoredNodeSettings { AutoCheckRuntimeUpdates = true });
+        var store = new FakeNodeSettingsStore(new StoredNodeSettings
+        {
+            AutoCheckRuntimeUpdates = true
+        });
         using var provider = BuildProvider(store, SetupCompleted());
 
         await Backfill(provider).ConfigureAwait(false);
@@ -219,8 +222,7 @@ public sealed class ExternalAccessProfileBackfillTests
             var before = await File.ReadAllBytesAsync(settingsPath).ConfigureAwait(false);
 
             using var store = new NodeSettingsStore(new FakeNodeDataDirectory(root), NullLogger<NodeSettingsStore>.Instance);
-            var externalStore = new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection(
-                ExternalProviderTestData.ConnectionId,
+            var externalStore = new FakeExternalProviderStore(ExternalProviderRegistryTests.Connection(ExternalProviderTestData.ConnectionId,
                 models: [ExternalProviderTestData.WireId],
                 supportsTools: true));
             var mapStore = new InMemoryCoordinatedModelProviderMapStore();
@@ -335,8 +337,7 @@ public sealed class ExternalAccessProfileBackfillTests
         {
             services.AddSingleton(externalProviderStore);
             services.AddSingleton<ICoordinatedModelProviderMapStore>(mapStore ?? new InMemoryCoordinatedModelProviderMapStore());
-            services.AddSingleton<IModelProviderMapLeaseCoordinator>(
-                new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
+            services.AddSingleton<IModelProviderMapLeaseCoordinator>(new ModelProviderMapLeaseCoordinator(new KeyedCompositeLockDomain()));
             services.AddSingleton(Substitute.For<ILocalModelProviderResolver>());
             services.AddSingleton(Substitute.For<ILocalChatClientCacheInvalidator>());
             services.AddScoped<IExternalProviderReconciler, ExternalProviderReconciler>();

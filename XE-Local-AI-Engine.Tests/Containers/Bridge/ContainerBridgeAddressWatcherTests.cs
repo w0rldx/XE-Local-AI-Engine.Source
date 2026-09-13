@@ -62,7 +62,10 @@ public sealed class ContainerBridgeAddressWatcherTests
     public async Task Watcher_AsAHostedService_RereadsTheHostsAddressesOnceEveryInterval()
     {
         var time = new ManualTimeProvider();
-        var addresses = new List<IPAddress> { IPAddress.Parse("192.168.1.10") };
+        var addresses = new List<IPAddress>
+        {
+            IPAddress.Parse("192.168.1.10")
+        };
         using var watcher = CreateWatcher(time, () => addresses.ToArray());
 
         await watcher.StartAsync(CancellationToken.None).ConfigureAwait(false);
@@ -93,7 +96,10 @@ public sealed class ContainerBridgeAddressWatcherTests
     public async Task Watcher_WhenTheBridgeIsOff_ArmsNoTimer()
     {
         var time = new ManualTimeProvider();
-        using var watcher = new ContainerBridgeAddressWatcher(Options.Create(new ContainerBridgeOptions { Enabled = false }),
+        using var watcher = new ContainerBridgeAddressWatcher(Options.Create(new ContainerBridgeOptions
+            {
+                Enabled = false
+            }),
             time,
             NullLogger<ContainerBridgeAddressWatcher>.Instance,
             static () => [IPAddress.Parse("192.168.1.10")]);
@@ -108,7 +114,10 @@ public sealed class ContainerBridgeAddressWatcherTests
 
     private static ContainerBridgeAddressWatcher CreateWatcher(TimeProvider timeProvider, Func<IReadOnlyList<IPAddress>> addressSource)
     {
-        return new ContainerBridgeAddressWatcher(Options.Create(new ContainerBridgeOptions { Enabled = true }),
+        return new ContainerBridgeAddressWatcher(Options.Create(new ContainerBridgeOptions
+            {
+                Enabled = true
+            }),
             timeProvider,
             NullLogger<ContainerBridgeAddressWatcher>.Instance,
             addressSource);

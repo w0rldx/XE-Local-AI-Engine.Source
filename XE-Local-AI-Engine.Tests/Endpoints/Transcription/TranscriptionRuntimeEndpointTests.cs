@@ -63,7 +63,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         // the runtime at all. Without this field the operator sees only a failed start and no cause.
         var service = new StubTranscriptionRuntimeService
         {
-            Runtime = StoppedRuntime() with { VadInstalled = vadInstalled }
+            Runtime = StoppedRuntime() with
+            {
+                VadInstalled = vadInstalled
+            }
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -160,7 +163,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/eject", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/eject", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -182,7 +188,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/eject", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/eject", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -224,7 +233,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         using var forbidden = new HttpRequestMessage(new HttpMethod(method), $"{ApiPrefix}/{route}");
         if (method == "POST")
         {
-            forbidden.Content = JsonContent.Create(new { accepted = true });
+            forbidden.Content = JsonContent.Create(new
+            {
+                accepted = true
+            });
         }
 
         factory.AddNonOperatorBearerToken(forbidden);
@@ -238,7 +250,10 @@ public sealed class TranscriptionRuntimeEndpointTests
         using var allowed = new HttpRequestMessage(new HttpMethod(method), $"{ApiPrefix}/{route}");
         if (method == "POST")
         {
-            allowed.Content = JsonContent.Create(new { accepted = true });
+            allowed.Content = JsonContent.Create(new
+            {
+                accepted = true
+            });
         }
 
         factory.AddNodeBearerToken(allowed);
@@ -311,7 +326,8 @@ public sealed class TranscriptionRuntimeEndpointTests
 
         public int EjectCallCount { get; private set; }
 
-        public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) => Task.FromResult(Runtime);
+        public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) =>
+            Task.FromResult(Runtime);
 
         public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct)
         {
@@ -322,11 +338,13 @@ public sealed class TranscriptionRuntimeEndpointTests
         public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
             Task.FromResult(new TranscriptionModelCatalogView([], SelectedModelId: null, Recommended.Id));
 
-        public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) => Task.FromResult(Recommended);
+        public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) =>
+            Task.FromResult(Recommended);
 
         public Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct) =>
             Task.FromResult(new TranscriptionModelCatalogView([], modelId, Recommended.Id));
 
-        public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) => Task.FromResult(Recommended.Id);
+        public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
+            Task.FromResult(Recommended.Id);
     }
 }

@@ -154,8 +154,7 @@ public sealed class ExternalAppCatalogValidatorTests
     [Test]
     public void Validate_MalformedJson_DoesNotThrow()
     {
-        AssertEx.DoesNotThrow(
-            () => _ = ExternalAppCatalogValidator.Validate("{ \"applications\": [ "),
+        AssertEx.DoesNotThrow(() => _ = ExternalAppCatalogValidator.Validate("{ \"applications\": [ "),
             "the validator must convert a parse failure into a validation failure");
 
         var result = ExternalAppCatalogValidator.Validate("{ \"applications\": [ ");
@@ -185,8 +184,7 @@ public sealed class ExternalAppCatalogValidatorTests
         const string sparse = """{"schemaVersion":1,"generatedAtUtc":"2026-09-05T00:00:00Z","applications":[{"id":"ab"}]}""";
 
         ExternalAppCatalogValidationResult? result = null;
-        AssertEx.DoesNotThrow(
-            () => result = ExternalAppCatalogValidator.Validate(sparse),
+        AssertEx.DoesNotThrow(() => result = ExternalAppCatalogValidator.Validate(sparse),
             "a document that omits every collection must fail validation, not throw");
 
         AssertEx.False(AssertEx.NotNull(result).IsValid);
@@ -658,8 +656,11 @@ public sealed class ExternalAppCatalogValidatorTests
         var cycle = MutateValid(document =>
         {
             Service(document, index: 0)["dependsOn"]!.AsArray()[0]!["condition"] = "started";
-            Service(document, index: 1)["dependsOn"] = new JsonArray(
-                new JsonObject { ["service"] = "app", ["condition"] = "started" });
+            Service(document, index: 1)["dependsOn"] = new JsonArray(new JsonObject
+            {
+                ["service"] = "app",
+                ["condition"] = "started"
+            });
         });
         AssertError(cycle, "applications[0].services[0] participates in a dependsOn cycle.");
     }
@@ -741,7 +742,12 @@ public sealed class ExternalAppCatalogValidatorTests
             variable["type"] = "integer";
             variable[AllowedValuesKey] = null;
             variable[DefaultKey] = "123456";
-            variable[ValidationKey] = new JsonObject { ["minLength"] = 1, ["maxLength"] = 3, ["pattern"] = null };
+            variable[ValidationKey] = new JsonObject
+            {
+                ["minLength"] = 1,
+                ["maxLength"] = 3,
+                ["pattern"] = null
+            };
         });
 
         AssertError(result, "applications[0].variables[1].default does not satisfy the declared type/validation.");
@@ -756,7 +762,12 @@ public sealed class ExternalAppCatalogValidatorTests
             variable["type"] = "boolean";
             variable[AllowedValuesKey] = null;
             variable[DefaultKey] = "true";
-            variable[ValidationKey] = new JsonObject { ["minLength"] = 8, ["maxLength"] = null, ["pattern"] = null };
+            variable[ValidationKey] = new JsonObject
+            {
+                ["minLength"] = 8,
+                ["maxLength"] = null,
+                ["pattern"] = null
+            };
         });
 
         AssertError(result, "applications[0].variables[1].default does not satisfy the declared type/validation.");
@@ -769,7 +780,12 @@ public sealed class ExternalAppCatalogValidatorTests
         var result = MutateValid(document =>
         {
             var variable = Variable(document, index: 1);
-            variable[ValidationKey] = new JsonObject { ["minLength"] = null, ["maxLength"] = null, ["pattern"] = "^slow$" };
+            variable[ValidationKey] = new JsonObject
+            {
+                ["minLength"] = null,
+                ["maxLength"] = null,
+                ["pattern"] = "^slow$"
+            };
         });
 
         AssertError(result, "applications[0].variables[1].default does not satisfy the declared type/validation.");
@@ -963,8 +979,7 @@ public sealed class ExternalAppCatalogValidatorTests
     private static void AssertError(ExternalAppCatalogValidationResult result, string expected)
     {
         AssertEx.False(result.IsValid, $"expected a rejection but the document validated; expected error '{expected}'");
-        AssertEx.Contains(
-            result.Errors,
+        AssertEx.Contains(result.Errors,
             error => error.Contains(expected, StringComparison.Ordinal),
             $"expected an error containing '{expected}' but got: {string.Join(" | ", result.Errors)}");
     }

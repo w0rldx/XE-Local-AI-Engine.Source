@@ -89,7 +89,6 @@ public sealed class WhisperServerRuntimeOverrideOptions
             return WhisperBackend.Cpu;
         }
 
-        throw new InvalidOperationException(
-            $"The environment variable '{BackendEnvironmentVariable}' is set to an unrecognized whisper.cpp acceleration backend. Use one of: cpu, cuda.");
+        throw new InvalidOperationException($"The environment variable '{BackendEnvironmentVariable}' is set to an unrecognized whisper.cpp acceleration backend. Use one of: cpu, cuda.");
     }
 }

@@ -109,8 +109,7 @@ public sealed class WhisperServerReadinessProbeTests
         using var cts = new CancellationTokenSource();
         await cts.CancelAsync();
 
-        await AssertEx.ThrowsAsync<OperationCanceledException>(
-            () => probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), cts.Token));
+        await AssertEx.ThrowsAsync<OperationCanceledException>(() => probe.WaitForReadyAsync(BaseAddress, TimeSpan.FromSeconds(5), cts.Token));
     }
 
     private sealed class SequenceHandler(Func<int, HttpResponseMessage> responder) : HttpMessageHandler

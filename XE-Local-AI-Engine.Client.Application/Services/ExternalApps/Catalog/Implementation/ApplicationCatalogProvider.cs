@@ -428,7 +428,10 @@ internal sealed class ApplicationCatalogProvider : IApplicationCatalogProvider, 
 
     private ExternalAppCatalogRefreshResult Keep(string? failureMessage)
     {
-        _current = _current with { LastRefreshFailure = failureMessage };
+        _current = _current with
+        {
+            LastRefreshFailure = failureMessage
+        };
         return new ExternalAppCatalogRefreshResult(_current, failureMessage);
     }
 

@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
+using System.Globalization;
+using System.Text;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
@@ -503,7 +505,10 @@ public sealed class ContainerRuntimeFakeContractTests
         var client = EmptyDaemon();
         client.SeedExistingImage(Image);
 
-        var containerId = await client.RunContainerAsync(Specification() with { NetworkName = networkName });
+        var containerId = await client.RunContainerAsync(Specification() with
+        {
+            NetworkName = networkName
+        });
 
         AssertEx.NotNullOrEmpty(containerId);
     }
@@ -603,7 +608,7 @@ public sealed class ContainerRuntimeFakeContractTests
         var containerId = await client.RunContainerAsync(Specification());
         for (var line = 0; line < 500; line++)
         {
-            client.LogLines.Add("line-" + line.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            client.LogLines.Add("line-" + line.ToString(CultureInfo.InvariantCulture));
         }
 
         var tailed = await client.ReadLogsAsync(containerId, new ContainerLogRequest
@@ -619,7 +624,7 @@ public sealed class ContainerRuntimeFakeContractTests
         AssertEx.Equal(expected: 10, tailed.LineCount);
         AssertEx.False(tailed.Truncated);
         AssertEx.True(bounded.Truncated);
-        AssertEx.Equal(expected: 64, System.Text.Encoding.UTF8.GetByteCount(bounded.Text));
+        AssertEx.Equal(expected: 64, Encoding.UTF8.GetByteCount(bounded.Text));
     }
 
     [Test]

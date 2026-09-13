@@ -156,7 +156,11 @@ public sealed class ContainerBridgePipelineTests
             ContainerBridgePipeline.AllowBridgeHost(builder, endpoint);
             builder.Services.AddSingleton(new ContainerBridgeEndpointSource(endpoint));
 
-            var bridgeOptions = Options.Create(new ContainerBridgeOptions { Enabled = true, Port = port });
+            var bridgeOptions = Options.Create(new ContainerBridgeOptions
+            {
+                Enabled = true,
+                Port = port
+            });
             builder.Services.AddSingleton(bridgeOptions);
 
             // The real peer guard over the real watcher: a loopback client IS this computer, so the guard passing is
@@ -175,8 +179,7 @@ public sealed class ContainerBridgePipelineTests
             builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 
             var models = Substitute.For<IGgufModelStore>();
-            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(
-            [
+            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
                 new LocalModelDescriptor
                 {
                     ModelName = ModelName,
@@ -196,7 +199,10 @@ public sealed class ContainerBridgePipelineTests
             ContainerBridgePipeline.Map(app, endpoint);
             await app.StartAsync().ConfigureAwait(false);
 
-            var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}")
+            };
             return new BridgeHost(app, client, watcher, models, validToken);
         }
 

@@ -37,7 +37,11 @@ public sealed class TranscriptionNoAudioPersistenceTests
     [Test]
     public void TranscriptionEntities_ExposeNoAudioBearingMember()
     {
-        foreach (var entityType in new[] { typeof(TranscriptionSession), typeof(TranscriptSegment) })
+        foreach (var entityType in new[]
+                 {
+                     typeof(TranscriptionSession),
+                     typeof(TranscriptSegment)
+                 })
         {
             foreach (var property in entityType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance))
             {

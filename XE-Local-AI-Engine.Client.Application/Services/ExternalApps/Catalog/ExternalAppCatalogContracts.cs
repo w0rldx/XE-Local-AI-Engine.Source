@@ -62,7 +62,6 @@ public sealed record ApplicationManifest(
 #pragma warning restore CA1822, S2325, S1172, IDE0060
 }
 
-
 /// <summary>
 ///     One container of an application. <see cref="Name" /> is the DNS alias on the instance network;
 ///     <see cref="Image" /> is always digest-pinned; <see cref="Environment" /> values may carry
@@ -230,7 +229,6 @@ public sealed record ExternalAppCatalogSnapshot(
 #pragma warning restore CA1822, S2325, S1172, IDE0060
 }
 
-
 /// <summary>
 ///     Outcome of an explicit refresh: the snapshot now being served plus the failure message when the fetch or its
 ///     validation failed and the provider fell back. Both members are <see langword="null" />-free on success
@@ -281,26 +279,26 @@ public static class ExternalAppManifestFingerprint
         switch (node)
         {
             case JsonObject jsonObject:
-            {
-                var sorted = new JsonObject();
-                foreach (var property in jsonObject.OrderBy(entry => entry.Key, StringComparer.Ordinal))
                 {
-                    sorted[property.Key] = Canonicalize(property.Value?.DeepClone());
-                }
+                    var sorted = new JsonObject();
+                    foreach (var property in jsonObject.OrderBy(entry => entry.Key, StringComparer.Ordinal))
+                    {
+                        sorted[property.Key] = Canonicalize(property.Value?.DeepClone());
+                    }
 
-                return sorted;
-            }
+                    return sorted;
+                }
 
             case JsonArray jsonArray:
-            {
-                var ordered = new JsonArray();
-                foreach (var item in jsonArray)
                 {
-                    ordered.Add(Canonicalize(item?.DeepClone()));
-                }
+                    var ordered = new JsonArray();
+                    foreach (var item in jsonArray)
+                    {
+                        ordered.Add(Canonicalize(item?.DeepClone()));
+                    }
 
-                return ordered;
-            }
+                    return ordered;
+                }
 
             default:
                 return node?.DeepClone();

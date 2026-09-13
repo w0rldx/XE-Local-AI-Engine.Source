@@ -5,7 +5,6 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Fake;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
-using XE_Local_AI_Engine.Testing.FakeDocker;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>Which <see cref="IContainerRuntime" /> a contract case runs against.</summary>
@@ -56,6 +55,7 @@ public sealed class ContainerRuntimeContractTests
 
     /// <summary>A bare image id: what a daemon reports for an image its store recorded no <c>RepoDigests</c> for.</summary>
     private const string BareImageId = "sha256:0000000000000000000000000000000000000000000000000000000000000000";
+
     private const string Image = "ghcr.io/example/app" + Digest;
     private const string NetworkName = "xe-app-instance-1-net";
 
@@ -343,7 +343,10 @@ public sealed class ContainerRuntimeContractTests
         await RefusesAsync<ArgumentException>("imageReference", () => client.ImageExistsAsync("  "));
         await RefusesAsync<ArgumentException>("imageReference", () => client.PullImageAsync("  ", progress: null));
         await RefusesAsync<ArgumentException>("networkNameOrId", () => client.RemoveNetworkAsync("  "));
-        await RefusesAsync<ArgumentException>("containerId", () => client.ReadLogsAsync("  ", new ContainerLogRequest { TailLines = 10 }));
+        await RefusesAsync<ArgumentException>("containerId", () => client.ReadLogsAsync("  ", new ContainerLogRequest
+        {
+            TailLines = 10
+        }));
         await RefusesAsync<ArgumentException>("containerId", () => client.ProbeWritablePathAsync("  ", "/data"));
         await RefusesAsync<ArgumentException>("containerPath", () => client.ProbeWritablePathAsync("container-1", "  "));
     }
@@ -523,7 +526,8 @@ public sealed class ContainerRuntimeContractTests
 
         [SuppressMessage("Reliability",
             "CA2000:Dispose objects before losing scope",
-            Justification = "Ownership transfers to the returned box, whose DisposeAsync releases both halves and which every caller holds with `await using`. The catch below covers the window before that transfer.")]
+            Justification =
+                "Ownership transfers to the returned box, whose DisposeAsync releases both halves and which every caller holds with `await using`. The catch below covers the window before that transfer.")]
         public static async Task<PostGuardBox> CreateAsync(ContainerRuntimeUnderTest implementation)
         {
             FakeDockerRuntimeClient? inMemory = null;

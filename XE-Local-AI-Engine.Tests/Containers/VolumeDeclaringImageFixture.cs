@@ -106,10 +106,9 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
         if (string.IsNullOrWhiteSpace(reference))
         {
             await RemoveAsync(client, tag).ConfigureAwait(false);
-            throw new InvalidOperationException(
-                $"The daemon reported neither a RepoDigests entry nor an image ID for the image it has just built from '{tag}', "
-                + "so there is no reference to create a container from at all. That is an image store that did not record "
-                + "the build, not a host this assertion does not apply to.");
+            throw new InvalidOperationException($"The daemon reported neither a RepoDigests entry nor an image ID for the image it has just built from '{tag}', "
+                                                + "so there is no reference to create a container from at all. That is an image store that did not record "
+                                                + "the build, not a host this assertion does not apply to.");
         }
 
         return new VolumeDeclaringImageFixture(client, tag, reference);
@@ -132,15 +131,15 @@ public sealed class VolumeDeclaringImageFixture : IAsyncDisposable
 
         var archive = new MemoryStream();
         using (var writer = new TarWriter(archive, TarEntryFormat.Pax, leaveOpen: true))
-        using (var content = new MemoryStream(dockerfile))
-        {
-            var entry = new PaxTarEntry(TarEntryType.RegularFile, "Dockerfile")
+            using (var content = new MemoryStream(dockerfile))
             {
-                DataStream = content
-            };
+                var entry = new PaxTarEntry(TarEntryType.RegularFile, "Dockerfile")
+                {
+                    DataStream = content
+                };
 
-            writer.WriteEntry(entry);
-        }
+                writer.WriteEntry(entry);
+            }
 
         archive.Position = 0;
         return archive;

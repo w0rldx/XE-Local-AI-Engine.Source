@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Integration;
 
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -63,8 +64,8 @@ public sealed class WhisperRuntimeLiveSmokeTests
             "The fixture's digest changed: every recorded golden response in this feature is derived from these bytes.");
 
         // RIFF/WAVE header: 16 kHz, mono, 16-bit PCM. Asserted from the bytes rather than trusted from the file name.
-        AssertEx.Equal("RIFF", System.Text.Encoding.ASCII.GetString(bytes, index: 0, count: 4));
-        AssertEx.Equal("WAVE", System.Text.Encoding.ASCII.GetString(bytes, index: 8, count: 4));
+        AssertEx.Equal("RIFF", Encoding.ASCII.GetString(bytes, index: 0, count: 4));
+        AssertEx.Equal("WAVE", Encoding.ASCII.GetString(bytes, index: 8, count: 4));
         AssertEx.Equal(expected: 1, BitConverter.ToInt16(bytes, startIndex: 22), "The clip must be mono.");
         AssertEx.Equal(expected: 16_000, BitConverter.ToInt32(bytes, startIndex: 24), "The clip must be 16 kHz.");
         AssertEx.Equal(expected: 16, BitConverter.ToInt16(bytes, startIndex: 34), "The clip must be 16-bit PCM.");
@@ -188,6 +189,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
 
     private sealed class StaticBackendSelector(WhisperBackend backend) : IWhisperBackendSelector
     {
-        public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) => Task.FromResult(backend);
+        public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) =>
+            Task.FromResult(backend);
     }
 }

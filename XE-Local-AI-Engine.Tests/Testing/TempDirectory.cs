@@ -20,7 +20,8 @@ internal sealed class TempDirectory : IDisposable
     public string Path { get; }
 
     /// <summary>A path inside this directory. The file itself is not created.</summary>
-    public string FilePath(string relativePath) => System.IO.Path.Combine(Path, relativePath);
+    public string FilePath(string relativePath) =>
+        System.IO.Path.Combine(Path, relativePath);
 
     public void Dispose()
     {

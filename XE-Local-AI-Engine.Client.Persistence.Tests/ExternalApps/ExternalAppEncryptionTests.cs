@@ -186,7 +186,7 @@ public sealed class ExternalAppEncryptionTests
         _ = await store.CreateAsync(command).ConfigureAwait(false);
 
         var stored = await fixture.RawScalarAsync("SELECT detail_json FROM external_app_instance_events WHERE instance_id = $id;",
-                                       sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))
+                                      sqlCommand => sqlCommand.Parameters.AddWithValue("$id", command.Id))
                                   .ConfigureAwait(false);
 
         AssertEx.Equal("""{"acceptedPermissions":["internet"]}""", AssertEx.NotNull(stored as string), "detail_json is a TEXT column with no interceptor entry, by design.");

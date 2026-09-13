@@ -2,9 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 
 using System.Collections.Concurrent;
 using System.Diagnostics.CodeAnalysis;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
 
 /// <summary>Which operation a background entry is running. Reported so a cancel can say what it stopped.</summary>
 public enum ExternalAppOperationKind

@@ -94,7 +94,10 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
             Status = TranscriptionSessionStatus.Created,
             SourceKind = Enum.Parse<TranscriptionSourceKind>(string.IsNullOrWhiteSpace(input.SourceKind) ? "File" : input.SourceKind, ignoreCase: true),
             ModelId = input.ModelId ?? "ggml-tiny",
-            ConfigJson = JsonSerializer.Serialize(input.Config ?? new TranscriptionSessionConfig { LanguageMode = "auto" }, ConfigJsonOptions),
+            ConfigJson = JsonSerializer.Serialize(input.Config ?? new TranscriptionSessionConfig
+            {
+                LanguageMode = "auto"
+            }, ConfigJsonOptions),
             SegmentCount = 0,
             Segments = []
         };
@@ -118,8 +121,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         LastLimit = limit;
         LastOffset = offset;
 
-        return Task.FromResult(new TranscriptionSessionPage(
-        [
+        return Task.FromResult(new TranscriptionSessionPage([
             new TranscriptionSessionSummaryView
             {
                 Id = Guid.NewGuid(),
@@ -134,7 +136,8 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         ], TotalCount));
     }
 
-    public Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken) => Task.FromResult(DeleteResult);
+    public Task<bool> DeleteSessionAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        Task.FromResult(DeleteResult);
 
     public Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
     {

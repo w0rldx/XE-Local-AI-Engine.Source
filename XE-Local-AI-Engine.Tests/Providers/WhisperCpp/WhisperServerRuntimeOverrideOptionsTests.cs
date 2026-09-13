@@ -33,8 +33,7 @@ public sealed class WhisperServerRuntimeOverrideOptionsTests
     {
         using var environment = new OverrideEnvironment("/opt/whisper/whisper-server", "vulkan");
 
-        var exception = AssertEx.Throws<InvalidOperationException>(
-            () => WhisperServerRuntimeOverrideOptions.FromEnvironment());
+        var exception = AssertEx.Throws<InvalidOperationException>(() => WhisperServerRuntimeOverrideOptions.FromEnvironment());
 
         AssertEx.Contains(exception.Message,
             WhisperServerRuntimeOverrideOptions.BackendEnvironmentVariable,

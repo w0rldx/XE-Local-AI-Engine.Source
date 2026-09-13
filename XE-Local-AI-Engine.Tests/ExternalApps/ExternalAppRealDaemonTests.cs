@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using System.Globalization;
-using System.Net.Http;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
@@ -23,10 +22,11 @@ using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
+using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.HuggingFace.Implementation;
-using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Containers;
+using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -105,15 +105,15 @@ public sealed class ExternalAppRealDaemonTests
 
         // Stop keeps the containers and the network: it is not a teardown.
         var stopped = await box.RunAsync(ExternalAppInstanceStatus.Stopped,
-                              (service, id, version) => service.StopAsync(id, version))
-                          .ConfigureAwait(false);
+                                   (service, id, version) => service.StopAsync(id, version))
+                               .ConfigureAwait(false);
         AssertEx.Equal(ExternalAppDesiredState.Stopped, stopped.DesiredState);
         AssertEx.Equal(expected: 2, (await box.ListByServiceAsync().ConfigureAwait(false)).Count, "Stop removed containers; it must only stop them.");
 
         // Start again: the same host port comes back, because the containers are reused rather than rebuilt.
         var started = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                              (service, id, version) => service.StartAsync(id, version))
-                          .ConfigureAwait(false);
+                                   (service, id, version) => service.StartAsync(id, version))
+                               .ConfigureAwait(false);
         AssertEx.Equal(ExternalAppDesiredState.Running, started.DesiredState);
 
         var afterRestart = await box.Service.GetAsync(installed).ConfigureAwait(false);
@@ -125,8 +125,8 @@ public sealed class ExternalAppRealDaemonTests
         await File.WriteAllTextAsync(marker, "gone after a reset").ConfigureAwait(false);
 
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                            (service, id, version) => service.ResetAsync(id, version))
-                        .ConfigureAwait(false);
+                                 (service, id, version) => service.ResetAsync(id, version))
+                             .ConfigureAwait(false);
         AssertEx.Equal(ExternalAppDesiredState.Running, reset.DesiredState, "Reset restores the desired state it found, and the instance was running.");
         AssertEx.False(File.Exists(marker), "Reset must wipe the instance's writable volume.");
 
@@ -225,8 +225,8 @@ public sealed class ExternalAppRealDaemonTests
 
         // Reset: the wipe goes through the helper, and the rebuilt container recreates the same directory.
         var reset = await box.RunAsync(ExternalAppInstanceStatus.Running,
-                            (service, id, version) => service.ResetAsync(id, version))
-                        .ConfigureAwait(false);
+                                 (service, id, version) => service.ResetAsync(id, version))
+                             .ConfigureAwait(false);
 
         AssertEx.False(File.Exists(marker), "The reset did not wipe the volumes directory the 0700 subtree lives in.");
         await AwaitPrivateDirectoryAsync(privateDirectory).ConfigureAwait(false);
@@ -291,7 +291,10 @@ public sealed class ExternalAppRealDaemonTests
             yield break;
         }
 
-        yield return options with { DaemonEndpoint = "unix://" + userSocket };
+        yield return options with
+        {
+            DaemonEndpoint = "unix://" + userSocket
+        };
     }
 
     private static async Task<ContainerRuntimeOptions> ResolveUsableDaemonAsync()
@@ -329,7 +332,7 @@ public sealed class ExternalAppRealDaemonTests
         }
 
         throw Unavailable("no usable Docker daemon. Tried " + string.Join(" | ", attempts)
-                          + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
+                                                            + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
     }
 
     /// <summary>
@@ -397,7 +400,9 @@ public sealed class ExternalAppRealDaemonTests
     private sealed class RealDaemonBox : IAsyncDisposable
     {
         private readonly ExternalAppStorageLayout _layout;
+
         private readonly ApplicationManifest _manifest;
+
         // Held as a bare IDisposable and never as the typed lifetime: a CancellationToken source in scope makes
         // every call in this fixture look to S8949 like one that forgot to thread a token.
         private readonly IDisposable _lifetimeHandle;
@@ -512,7 +517,7 @@ public sealed class ExternalAppRealDaemonTests
                 lifetime,
                 runtimeOptions,
                 root,
-                XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation.DockerSandboxRuntimeProvider.BuildInstallId(root),
+                DockerSandboxRuntimeProvider.BuildInstallId(root),
                 manifest);
         }
 
@@ -531,12 +536,12 @@ public sealed class ExternalAppRealDaemonTests
             while (true)
             {
                 var admitted = await Service.InstallAsync(new InstallCommand(_manifest.Id,
-                                              DisplayName: null,
-                                              _manifest.ManifestVersion,
-                                              _manifest.ManifestSha256,
-                                              new Dictionary<string, string>(StringComparer.Ordinal),
-                                              AcceptPermissions: true))
-                                          .ConfigureAwait(false);
+                                                DisplayName: null,
+                                                _manifest.ManifestVersion,
+                                                _manifest.ManifestSha256,
+                                                new Dictionary<string, string>(StringComparer.Ordinal),
+                                                AcceptPermissions: true))
+                                            .ConfigureAwait(false);
 
                 InstanceId = admitted.Id;
                 var row = await SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
@@ -626,7 +631,10 @@ public sealed class ExternalAppRealDaemonTests
         /// <summary>Reads the served document over the published loopback binding — the proof an inspect cannot give.</summary>
         public static async Task<string> FetchAsync(int hostPort)
         {
-            using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
+            using var client = new HttpClient
+            {
+                Timeout = TimeSpan.FromSeconds(10)
+            };
             var address = new Uri(string.Create(CultureInfo.InvariantCulture, $"http://127.0.0.1:{hostPort}/index.html"));
 
             // The daemon publishes the binding the instant the container starts, but busybox's httpd needs a moment

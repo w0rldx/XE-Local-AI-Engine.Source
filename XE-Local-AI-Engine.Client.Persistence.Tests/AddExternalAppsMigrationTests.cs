@@ -98,11 +98,11 @@ public sealed class AddExternalAppsMigrationTests
     private static async Task<string> ColumnTypeAsync(MigrationSchemaProbe probe, string tableName, string columnName)
     {
         var type = await probe.ScalarAsync("SELECT type FROM pragma_table_info($table) WHERE name = $column;",
-                                   command =>
-                                   {
-                                       _ = command.Parameters.AddWithValue("$table", tableName);
-                                       _ = command.Parameters.AddWithValue("$column", columnName);
-                                   })
+                                  command =>
+                                  {
+                                      _ = command.Parameters.AddWithValue("$table", tableName);
+                                      _ = command.Parameters.AddWithValue("$column", columnName);
+                                  })
                               .ConfigureAwait(false);
         return AssertEx.NotNull(type as string, $"{tableName}.{columnName} does not exist.");
     }

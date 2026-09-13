@@ -37,8 +37,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     public void Prepare_CreatesOneVolumeDirectoryPerServiceAndStorageName()
     {
         var layout = CreateLayout();
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")]),
             ExternalAppTestManifests.Service("db", storage: [new ApplicationStorage("data", "/var/lib/data")], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -241,8 +240,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     public void DeleteVolumes_RemovesTheWritableTreeAndKeepsTheAssets()
     {
         var layout = CreateLayout();
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app",
                 storage: [new ApplicationStorage("data", "/data")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/app/settings.yml", "server: on")])
@@ -311,8 +309,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
         SymlinkSupport.EnsureSupported();
 
         var layout = CreateLayout();
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
         var paths = layout.Prepare(_instanceId, manifest);
         var plan = PlanFor(layout, manifest);
 
@@ -332,8 +329,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     public void VerifyBindSources_OnThePathsPrepareJustWrote_Passes()
     {
         var layout = CreateLayout();
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app",
                 storage: [new ApplicationStorage("data", "/data")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/app/settings.yml", "server: on")])
@@ -407,7 +403,6 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
 
     private static ApplicationManifest ManifestWithAsset(string source, string content)
     {
-        return ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", files: [ExternalAppTestManifests.File(source, "/app/settings.yml", content)])]);
+        return ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", files: [ExternalAppTestManifests.File(source, "/app/settings.yml", content)])]);
     }
 }

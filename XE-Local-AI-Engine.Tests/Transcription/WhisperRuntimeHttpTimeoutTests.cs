@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Transcription;
 using System.Diagnostics;
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -213,7 +214,7 @@ public sealed class WhisperRuntimeHttpTimeoutTests
                     }
 
                     var response = $"HTTP/1.1 {(int)_status} X\r\nContent-Length: 0\r\nConnection: close\r\n\r\n";
-                    await stream.WriteAsync(System.Text.Encoding.ASCII.GetBytes(response), ct).ConfigureAwait(false);
+                    await stream.WriteAsync(Encoding.ASCII.GetBytes(response), ct).ConfigureAwait(false);
                     await stream.FlushAsync(ct).ConfigureAwait(false);
                 }
                 catch (Exception exception) when (exception is OperationCanceledException or IOException or SocketException or ObjectDisposedException)

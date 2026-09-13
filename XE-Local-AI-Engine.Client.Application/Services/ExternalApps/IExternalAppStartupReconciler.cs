@@ -15,7 +15,8 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps;
 ///         pass carries on, because one unjudgeable instance must not cost every later row its verdict.
 ///     </para>
 /// </summary>
-public sealed record ExternalAppReconcileSummary(int RowsInspected,
+public sealed record ExternalAppReconcileSummary(
+    int RowsInspected,
     int RowsChanged,
     int OrphansRemoved,
     int ForeignInstallContainers,

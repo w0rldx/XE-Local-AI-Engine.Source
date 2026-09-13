@@ -6,6 +6,7 @@ using System.Net;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
+using System.Text;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
@@ -32,8 +33,7 @@ public sealed class WhisperCppBinaryManagerTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 2, handler.CallCount, "A corrupt download must be re-downloaded exactly once.");
         AssertEx.False(exception.Message.Contains(cache.Path, StringComparison.Ordinal),
@@ -60,8 +60,7 @@ public sealed class WhisperCppBinaryManagerTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
 
-        await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
+        await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
 
         AssertEx.False(Directory.Exists(Path.Combine(cache.Path, "whisper.cpp", WhisperCppReleasePins.PinnedTag, "cpu")),
             "A failed verification must leave no extracted backend directory behind.");
@@ -164,8 +163,7 @@ public sealed class WhisperCppBinaryManagerTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new WhisperCppBinaryManager(http, cache.Path, WhisperCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, overrideOptions);
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount, "A broken override must never reach acquisition.");
         AssertEx.Contains(exception.Message, "does not point to an existing file", StringComparison.Ordinal);
@@ -196,8 +194,7 @@ public sealed class WhisperCppBinaryManagerTests
                 Backend = WhisperBackend.Cuda
             });
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Contains(exception.Message, "not executable", StringComparison.Ordinal);
@@ -207,8 +204,7 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_TombstonedManagedRecord_Throws_NeverFallsBackToPrebuilt()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(
-            WhisperInstalledRuntimeValidity.Invalid,
+        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Invalid,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
@@ -231,8 +227,7 @@ public sealed class WhisperCppBinaryManagerTests
             overrideOptions: null,
             store);
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Contains(exception.Message, "rebuilt or removed", StringComparison.Ordinal);
@@ -242,8 +237,7 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_ManagedRecordForAnotherBackend_Throws_NeverServesContradictingBytes()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(
-            WhisperInstalledRuntimeValidity.Active,
+        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
@@ -265,8 +259,7 @@ public sealed class WhisperCppBinaryManagerTests
             overrideOptions: null,
             store);
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cpu, CancellationToken.None));
 
         AssertEx.Equal(expected: 0, handler.CallCount);
         AssertEx.Contains(exception.Message, "backend is unavailable", StringComparison.Ordinal);
@@ -276,8 +269,7 @@ public sealed class WhisperCppBinaryManagerTests
     public async Task EnsureBinary_ManagedRecordWithAMissingBinary_IsTombstonedAndTheSignalCleared()
     {
         using var cache = new TempCacheDir();
-        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(
-            WhisperInstalledRuntimeValidity.Active,
+        var store = new StubInstalledRuntimeStore(new WhisperInstalledRuntimeState(WhisperInstalledRuntimeValidity.Active,
             WhisperBackend.Cuda,
             WhisperCppSourceBuildRequestValidation.OfficialRepository,
             WhisperCppReleasePins.PinnedSourceCommitSha,
@@ -302,8 +294,7 @@ public sealed class WhisperCppBinaryManagerTests
             store,
             signal);
 
-        await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
+        await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => manager.EnsureBinaryAsync(WhisperBackend.Cuda, CancellationToken.None));
 
         AssertEx.Equal(WhisperInstalledRuntimeValidity.Invalid, AssertEx.NotNull(store.LastWritten).Validity,
             "A managed runtime whose binary cannot be validated must be tombstoned, not silently ignored.");
@@ -324,14 +315,14 @@ public sealed class WhisperCppBinaryManagerTests
     {
         var payload = new MemoryStream();
         using (var gzip = new GZipStream(payload, CompressionMode.Compress, leaveOpen: true))
-        using (var tar = new TarWriter(gzip, TarEntryFormat.Pax, leaveOpen: true))
-        {
-            var entry = new PaxTarEntry(TarEntryType.RegularFile, entryPath)
+            using (var tar = new TarWriter(gzip, TarEntryFormat.Pax, leaveOpen: true))
             {
-                DataStream = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
-            };
-            tar.WriteEntry(entry);
-        }
+                var entry = new PaxTarEntry(TarEntryType.RegularFile, entryPath)
+                {
+                    DataStream = new MemoryStream(Encoding.UTF8.GetBytes(content))
+                };
+                tar.WriteEntry(entry);
+            }
 
         return payload.ToArray();
     }
@@ -378,7 +369,8 @@ public sealed class WhisperCppBinaryManagerTests
 
         public WhisperInstalledRuntimeState? LastWritten { get; private set; }
 
-        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) => Task.FromResult(_state);
+        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) =>
+            Task.FromResult(_state);
 
         public Task WriteAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
         {

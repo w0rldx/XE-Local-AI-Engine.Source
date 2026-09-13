@@ -134,8 +134,8 @@ internal sealed class WhisperServerTranscriber(
         try
         {
 #pragma warning disable CA2000 // MultipartFormDataContent takes ownership of every part it is given and disposes them
-                              // with itself; the caller disposes the multipart. The catch below covers the only window
-                              // in which a part could be orphaned, which is a failure partway through building it.
+            // with itself; the caller disposes the multipart. The catch below covers the only window
+            // in which a part could be orphaned, which is a failure partway through building it.
             // Wrapped, because MultipartFormDataContent disposes every part it owns and StreamContent disposes the
             // stream it was given: handing it the caller's handle directly would close a stream this adapter promises
             // not to touch, and the caller is the one that owns and deletes the temp file behind it.
@@ -240,20 +240,26 @@ internal sealed class WhisperServerTranscriber(
             set => inner.Position = value;
         }
 
-        public override void Flush() => inner.Flush();
+        public override void Flush() =>
+            inner.Flush();
 
-        public override int Read(byte[] buffer, int offset, int count) => inner.Read(buffer, offset, count);
+        public override int Read(byte[] buffer, int offset, int count) =>
+            inner.Read(buffer, offset, count);
 
-        public override int Read(Span<byte> buffer) => inner.Read(buffer);
+        public override int Read(Span<byte> buffer) =>
+            inner.Read(buffer);
 
         public override ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default) =>
             inner.ReadAsync(buffer, cancellationToken);
 
-        public override long Seek(long offset, SeekOrigin origin) => inner.Seek(offset, origin);
+        public override long Seek(long offset, SeekOrigin origin) =>
+            inner.Seek(offset, origin);
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
 
         // Dispose is deliberately NOT overridden. Stream's own teardown knows nothing about the wrapped handle, so
         // inheriting it is exactly the required behaviour: the multipart content disposes this wrapper and the

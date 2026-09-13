@@ -189,7 +189,8 @@ public sealed class FfmpegAudioTranscoderTests
 
     private sealed class TempDir : IDisposable
     {
-        public TempDir() => _ = Directory.CreateDirectory(Path);
+        public TempDir() =>
+            _ = Directory.CreateDirectory(Path);
 
         public string Path { get; } = System.IO.Path.Combine(System.IO.Path.GetTempPath(), $"xe-ffmpeg-{Guid.NewGuid():N}");
 

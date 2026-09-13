@@ -30,7 +30,8 @@ public sealed record ExternalAppChanged(Guid InstanceId, long Sequence, string K
 /// </summary>
 public sealed record ExternalAppPullProgress(Guid InstanceId, string Service, int LayerCount, int CompletedLayers, long Bytes);
 
-public sealed record ExternalAppSubscriptionSnapshot(Guid InstanceId,
+public sealed record ExternalAppSubscriptionSnapshot(
+    Guid InstanceId,
     string Status,
     string DesiredState,
     string? FailureCategory,

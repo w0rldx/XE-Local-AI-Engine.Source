@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Text;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 
@@ -90,7 +91,7 @@ public sealed class WhisperCppSourceBuildPrerequisiteProbe : IWhisperCppSourceBu
         isolationRoot ??= Path.Combine(Path.GetTempPath(),
             "xe-local-ai-engine",
             "whisper-source-probe-tests",
-            Environment.ProcessId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            Environment.ProcessId.ToString(CultureInfo.InvariantCulture));
         return ProbeToolAsync(fileName, arguments, displayName, isolationRoot, ct);
     }
 

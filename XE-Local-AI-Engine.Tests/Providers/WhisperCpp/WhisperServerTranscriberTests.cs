@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -22,18 +23,18 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class WhisperServerTranscriberTests
 {
     private const string RealisticPayload = """
-        {
-          "text": "  And so my fellow Americans.  ",
-          "duration": 11.0,
-          "detected_language": "english",
-          "detected_language_probability": 0.97,
-          "language_probabilities": { "de": 0.01, "en": 0.97, "fr": 0.02 },
-          "segments": [
-            { "start": 0.0, "end": 5.5, "text": "  And so my fellow  ", "avg_logprob": -0.2231435513 },
-            { "start": 5.5, "end": 11.0, "text": " Americans. ", "avg_logprob": null }
-          ]
-        }
-        """;
+                                            {
+                                              "text": "  And so my fellow Americans.  ",
+                                              "duration": 11.0,
+                                              "detected_language": "english",
+                                              "detected_language_probability": 0.97,
+                                              "language_probabilities": { "de": 0.01, "en": 0.97, "fr": 0.02 },
+                                              "segments": [
+                                                { "start": 0.0, "end": 5.5, "text": "  And so my fellow  ", "avg_logprob": -0.2231435513 },
+                                                { "start": 5.5, "end": 11.0, "text": " Americans. ", "avg_logprob": null }
+                                              ]
+                                            }
+                                            """;
 
     [Test]
     public async Task Transcribe_MapsTheVerboseJsonPayloadOntoTheContract()
@@ -72,8 +73,8 @@ public sealed class WhisperServerTranscriberTests
         // A non-negative average log probability is not physical, but the daemon is the one reporting it; the contract
         // promises 0..1, so the clamp is what keeps a consumer from seeing 4.48 where it expects a probability.
         var payload = $$"""
-            {"text":"x","duration":1.0,"segments":[{"start":0,"end":1,"text":"x","avg_logprob":{{averageLogProbability.ToString(System.Globalization.CultureInfo.InvariantCulture)}}}]}
-            """;
+                        {"text":"x","duration":1.0,"segments":[{"start":0,"end":1,"text":"x","avg_logprob":{{averageLogProbability.ToString(CultureInfo.InvariantCulture)}}}]}
+                        """;
         await using var harness = new TranscriberHarness(payload);
 
         var result = await harness.TranscribeAsync();
@@ -251,7 +252,7 @@ public sealed class WhisperServerTranscriberTests
     private static void AssertClose(double expected, double? actual, string what)
     {
         AssertEx.True(actual is { } value && Math.Abs(value - expected) < 1e-6,
-            $"The {what} was {actual?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"}, expected {expected.ToString(System.Globalization.CultureInfo.InvariantCulture)}.");
+            $"The {what} was {actual?.ToString(CultureInfo.InvariantCulture) ?? "null"}, expected {expected.ToString(CultureInfo.InvariantCulture)}.");
     }
 
     private sealed class TranscriberHarness : IAsyncDisposable
@@ -382,7 +383,8 @@ public sealed class WhisperServerTranscriberTests
                 // The idle clock is the supervisor's; nothing here needs to observe a touch.
             }
 
-            public void Dispose() => Interlocked.Increment(ref owner._leasesDisposed);
+            public void Dispose() =>
+                Interlocked.Increment(ref owner._leasesDisposed);
         }
     }
 

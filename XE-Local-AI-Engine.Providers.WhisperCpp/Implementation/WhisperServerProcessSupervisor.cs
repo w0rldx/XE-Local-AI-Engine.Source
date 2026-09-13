@@ -492,7 +492,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
 #pragma warning disable CA2000 // MultipartFormDataContent owns the part it is given and disposes it with itself.
             using var content = new MultipartFormDataContent
             {
-                { new StringContent(modelPath), "model" }
+                {
+                    new StringContent(modelPath), "model"
+                }
             };
 #pragma warning restore CA2000
 
@@ -829,11 +831,16 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         {
             lock (_endpointGate)
             {
-                _endpoint = _endpoint with { ModelId = modelId, Generation = generation };
+                _endpoint = _endpoint with
+                {
+                    ModelId = modelId,
+                    Generation = generation
+                };
             }
         }
 
-        public void MarkUsed(DateTimeOffset now) => Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
+        public void MarkUsed(DateTimeOffset now) =>
+            Interlocked.Exchange(ref _lastUsedTicks, now.UtcTicks);
 
         /// <summary>
         ///     Atomically claims the right to run the reuse-path liveness probe, succeeding only once per interval, so
@@ -856,9 +863,11 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        public void ResetLivenessFailures() => Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
+        public void ResetLivenessFailures() =>
+            Interlocked.Exchange(ref _consecutiveLivenessFailures, value: 0);
 
-        public int RecordLivenessFailure() => Interlocked.Increment(ref _consecutiveLivenessFailures);
+        public int RecordLivenessFailure() =>
+            Interlocked.Increment(ref _consecutiveLivenessFailures);
 
         /// <summary>Registers an in-flight transcription unless the daemon is latched for teardown or a switch.</summary>
         public bool TryAcquireTranscription()
@@ -878,19 +887,23 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        public void ReleaseTranscription() => Interlocked.Decrement(ref _leaseState);
+        public void ReleaseTranscription() =>
+            Interlocked.Decrement(ref _leaseState);
 
         /// <summary>Terminally latches the daemon for teardown, only when nothing is in flight.</summary>
-        public bool TryBeginEvict() => Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
+        public bool TryBeginEvict() =>
+            Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
 
         /// <summary>
         ///     Latches the daemon for an in-place model switch, only when nothing is in flight. Unlike
         ///     <see cref="TryBeginEvict" /> this latch is RELEASED by <see cref="EndExclusive" />, because the daemon
         ///     survives the operation.
         /// </summary>
-        public bool TryBeginExclusive() => Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
+        public bool TryBeginExclusive() =>
+            Interlocked.CompareExchange(ref _leaseState, value: -1, comparand: 0) == 0;
 
-        public void EndExclusive() => Interlocked.CompareExchange(ref _leaseState, value: 0, comparand: -1);
+        public void EndExclusive() =>
+            Interlocked.CompareExchange(ref _leaseState, value: 0, comparand: -1);
     }
 
     /// <summary>A transcription lease over the resident daemon, holding both its lease word and the activity gate.</summary>
@@ -901,7 +914,8 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     {
         private int _disposed;
 
-        public void Touch() => server.MarkUsed(timeProvider.GetUtcNow());
+        public void Touch() =>
+            server.MarkUsed(timeProvider.GetUtcNow());
 
         public void Dispose()
         {

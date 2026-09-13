@@ -72,9 +72,9 @@ public sealed class ExternalAppInstanceStoreTests
         _ = await store.CreateAsync(command).ConfigureAwait(false);
 
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                        expectedVersion: 7,
-                                        ExternalAppInstanceStatus.Running,
-                                        ExternalAppInstanceStatus.Installing))
+                                    expectedVersion: 7,
+                                    ExternalAppInstanceStatus.Running,
+                                    ExternalAppInstanceStatus.Installing))
                                 .ConfigureAwait(false);
 
         AssertEx.False(result.Applied, "A stale version loses the compare-and-swap.");
@@ -105,10 +105,10 @@ public sealed class ExternalAppInstanceStoreTests
         await using var occupied = await context.Database.BeginTransactionAsync().ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<InvalidOperationException>(() => store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                expectedVersion: 0,
-                ExternalAppInstanceStatus.Running,
-                ExternalAppInstanceStatus.Installing)))
-            .ConfigureAwait(false);
+                              expectedVersion: 0,
+                              ExternalAppInstanceStatus.Running,
+                              ExternalAppInstanceStatus.Installing)))
+                          .ConfigureAwait(false);
 
         // Not "no entries": the create this test seeded with leaves its own rows tracked, and a saved entity is
         // Unchanged. What must not be here is a PENDING change — the mutated row and the queued event.
@@ -135,9 +135,8 @@ public sealed class ExternalAppInstanceStoreTests
         // writer that won the swap this one is about to lose can produce it.
         // instance_id is copied from the row itself rather than re-encoded here, so the collision is exact whatever
         // shape the provider stores a Guid in.
-        await fixture.RawExecuteAsync(
-                         "INSERT INTO external_app_instance_events (id, instance_id, sequence, kind, detail_json, occurred_at_utc) "
-                         + "SELECT $id, id, 2, 'Started', NULL, 2000 FROM external_app_instances;",
+        await fixture.RawExecuteAsync("INSERT INTO external_app_instance_events (id, instance_id, sequence, kind, detail_json, occurred_at_utc) "
+                                      + "SELECT $id, id, 2, 'Started', NULL, 2000 FROM external_app_instances;",
                          raw => raw.Parameters.AddWithValue("$id", Guid.NewGuid().ToString()))
                      .ConfigureAwait(false);
 
@@ -145,9 +144,9 @@ public sealed class ExternalAppInstanceStoreTests
             "The winner's event must actually be in the file, or nothing collides and this test proves nothing.");
 
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                        expectedVersion: 0,
-                                        ExternalAppInstanceStatus.Running,
-                                        ExternalAppInstanceStatus.Installing))
+                                    expectedVersion: 0,
+                                    ExternalAppInstanceStatus.Running,
+                                    ExternalAppInstanceStatus.Installing))
                                 .ConfigureAwait(false);
 
         AssertEx.False(result.Applied, "A sequence another writer already took means this writer lost; it is not a fault to raise.");
@@ -171,10 +170,10 @@ public sealed class ExternalAppInstanceStoreTests
         // The version is current; only the expected status is wrong — a Stop admitted against a row that is still
         // installing, which the transition table refuses.
         var result = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                        expectedVersion: 0,
-                                        ExternalAppInstanceStatus.Stopped,
-                                        ExternalAppInstanceStatus.Running,
-                                        ExternalAppInstanceEventKind.Stopped))
+                                    expectedVersion: 0,
+                                    ExternalAppInstanceStatus.Stopped,
+                                    ExternalAppInstanceStatus.Running,
+                                    ExternalAppInstanceEventKind.Stopped))
                                 .ConfigureAwait(false);
 
         AssertEx.False(result.Applied);
@@ -244,16 +243,16 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Equal(expected: 0L, tracked.Version);
 
         var winner = await fastStore.UpdateStatusAsync(ExternalAppTestFixture.Transition(instanceId,
-                                         expectedVersion: 0,
-                                         ExternalAppInstanceStatus.Running,
-                                         ExternalAppInstanceStatus.Installing,
-                                         ExternalAppInstanceEventKind.Installed))
+                                        expectedVersion: 0,
+                                        ExternalAppInstanceStatus.Running,
+                                        ExternalAppInstanceStatus.Installing,
+                                        ExternalAppInstanceEventKind.Installed))
                                     .ConfigureAwait(false);
         var loser = await slowStore.UpdateStatusAsync(ExternalAppTestFixture.Transition(instanceId,
-                                        expectedVersion: 0,
-                                        ExternalAppInstanceStatus.Failed,
-                                        ExternalAppInstanceStatus.Installing,
-                                        ExternalAppInstanceEventKind.Failed))
+                                       expectedVersion: 0,
+                                       ExternalAppInstanceStatus.Failed,
+                                       ExternalAppInstanceStatus.Installing,
+                                       ExternalAppInstanceEventKind.Failed))
                                    .ConfigureAwait(false);
 
         AssertEx.True(winner.Applied);
@@ -277,32 +276,32 @@ public sealed class ExternalAppInstanceStoreTests
         var created = await store.CreateAsync(command).ConfigureAwait(false);
 
         var seeded = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                                        created.Version,
-                                        new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            ExternalAppInstanceStatus.Installing
-                                        },
-                                        ExternalAppInstanceStatus.Running,
-                                        ExternalAppInstanceEventKind.Installed,
-                                        EventDetailJson: null,
-                                        OccurredAtUtc: 2_000,
-                                        ExternalAppDesiredState.Running,
-                                        PublishedPortsJson: """{"web":{"7000":41237}}""",
-                                        ManifestSnapshotJson: null,
-                                        ManifestVersion: null,
-                                        RuntimeProvider: "docker-rootless",
-                                        StartedAtUtc: 2_000))
+                                    created.Version,
+                                    new HashSet<ExternalAppInstanceStatus>
+                                    {
+                                        ExternalAppInstanceStatus.Installing
+                                    },
+                                    ExternalAppInstanceStatus.Running,
+                                    ExternalAppInstanceEventKind.Installed,
+                                    EventDetailJson: null,
+                                    OccurredAtUtc: 2_000,
+                                    ExternalAppDesiredState.Running,
+                                    PublishedPortsJson: """{"web":{"7000":41237}}""",
+                                    ManifestSnapshotJson: null,
+                                    ManifestVersion: null,
+                                    RuntimeProvider: "docker-rootless",
+                                    StartedAtUtc: 2_000))
                                 .ConfigureAwait(false);
         AssertEx.True(seeded.Applied);
 
         // Everything optional is null this time: a stop that only moves the status must not blank the ports the start
         // wrote, nor the provider, nor the started stamp.
         var second = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                     seeded.Version,
-                                     ExternalAppInstanceStatus.Stopping,
-                                     ExternalAppInstanceStatus.Running,
-                                     ExternalAppInstanceEventKind.StopRequested,
-                                     occurredAtUtc: 3_000))
+                                    seeded.Version,
+                                    ExternalAppInstanceStatus.Stopping,
+                                    ExternalAppInstanceStatus.Running,
+                                    ExternalAppInstanceEventKind.StopRequested,
+                                    occurredAtUtc: 3_000))
                                 .ConfigureAwait(false);
         AssertEx.True(second.Applied);
 
@@ -325,17 +324,17 @@ public sealed class ExternalAppInstanceStoreTests
         var created = await store.CreateAsync(command).ConfigureAwait(false);
 
         var failed = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                                        created.Version,
-                                        new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            ExternalAppInstanceStatus.Installing
-                                        },
-                                        ExternalAppInstanceStatus.Failed,
-                                        ExternalAppInstanceEventKind.Failed,
-                                        EventDetailJson: null,
-                                        OccurredAtUtc: 2_000,
-                                        FailureCategory: ExternalAppFailureCategory.ImagePullFailed,
-                                        FailureSummary: "The image could not be pulled at its pinned digest."))
+                                    created.Version,
+                                    new HashSet<ExternalAppInstanceStatus>
+                                    {
+                                        ExternalAppInstanceStatus.Installing
+                                    },
+                                    ExternalAppInstanceStatus.Failed,
+                                    ExternalAppInstanceEventKind.Failed,
+                                    EventDetailJson: null,
+                                    OccurredAtUtc: 2_000,
+                                    FailureCategory: ExternalAppFailureCategory.ImagePullFailed,
+                                    FailureSummary: "The image could not be pulled at its pinned digest."))
                                 .ConfigureAwait(false);
         AssertEx.True(failed.Applied);
 
@@ -343,17 +342,17 @@ public sealed class ExternalAppInstanceStoreTests
         AssertEx.Equal((ExternalAppFailureCategory?)ExternalAppFailureCategory.ImagePullFailed, afterFailure.FailureCategory);
 
         var recovered = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                                        failed.Version,
-                                        new HashSet<ExternalAppInstanceStatus>
-                                        {
-                                            ExternalAppInstanceStatus.Failed
-                                        },
-                                        ExternalAppInstanceStatus.Starting,
-                                        ExternalAppInstanceEventKind.StartRequested,
-                                        EventDetailJson: null,
-                                        OccurredAtUtc: 3_000,
-                                        ClearFailure: true))
-                                .ConfigureAwait(false);
+                                       failed.Version,
+                                       new HashSet<ExternalAppInstanceStatus>
+                                       {
+                                           ExternalAppInstanceStatus.Failed
+                                       },
+                                       ExternalAppInstanceStatus.Starting,
+                                       ExternalAppInstanceEventKind.StartRequested,
+                                       EventDetailJson: null,
+                                       OccurredAtUtc: 3_000,
+                                       ClearFailure: true))
+                                   .ConfigureAwait(false);
         AssertEx.True(recovered.Applied);
 
         var snapshot = AssertEx.NotNull(await store.GetAsync(command.Id).ConfigureAwait(false));
@@ -416,16 +415,16 @@ public sealed class ExternalAppInstanceStoreTests
 
         // The start that rebuilt the containers against the new environment is what pays the debt off.
         var started = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                                       version,
-                                       new HashSet<ExternalAppInstanceStatus>
-                                       {
-                                           ExternalAppInstanceStatus.Installing
-                                       },
-                                       ExternalAppInstanceStatus.Running,
-                                       ExternalAppInstanceEventKind.Started,
-                                       EventDetailJson: null,
-                                       OccurredAtUtc: 5_000,
-                                       NeedsRecreate: false))
+                                     version,
+                                     new HashSet<ExternalAppInstanceStatus>
+                                     {
+                                         ExternalAppInstanceStatus.Installing
+                                     },
+                                     ExternalAppInstanceStatus.Running,
+                                     ExternalAppInstanceEventKind.Started,
+                                     EventDetailJson: null,
+                                     OccurredAtUtc: 5_000,
+                                     NeedsRecreate: false))
                                  .ConfigureAwait(false);
 
         AssertEx.True(started.Applied);
@@ -555,10 +554,10 @@ public sealed class ExternalAppInstanceStoreTests
         var command = ExternalAppTestFixture.Create();
         var created = await store.CreateAsync(command).ConfigureAwait(false);
         var updating = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(command.Id,
-                                       created.Version,
-                                       ExternalAppInstanceStatus.Updating,
-                                       ExternalAppInstanceStatus.Installing,
-                                       ExternalAppInstanceEventKind.UpdateRequested))
+                                      created.Version,
+                                      ExternalAppInstanceStatus.Updating,
+                                      ExternalAppInstanceStatus.Installing,
+                                      ExternalAppInstanceEventKind.UpdateRequested))
                                   .ConfigureAwait(false);
         AssertEx.True(updating.Applied);
 
@@ -593,10 +592,10 @@ public sealed class ExternalAppInstanceStoreTests
         var created = await store.CreateAsync(doomed).ConfigureAwait(false);
         _ = await store.CreateAsync(survivor).ConfigureAwait(false);
         _ = await store.UpdateStatusAsync(ExternalAppTestFixture.Transition(doomed.Id,
-                             created.Version,
-                             ExternalAppInstanceStatus.Uninstalling,
-                             ExternalAppInstanceStatus.Installing,
-                             ExternalAppInstanceEventKind.UninstallRequested))
+                           created.Version,
+                           ExternalAppInstanceStatus.Uninstalling,
+                           ExternalAppInstanceStatus.Installing,
+                           ExternalAppInstanceEventKind.UninstallRequested))
                        .ConfigureAwait(false);
         var version = AssertEx.NotNull(await store.GetAsync(doomed.Id).ConfigureAwait(false)).Version;
 
@@ -673,15 +672,15 @@ public sealed class ExternalAppInstanceStoreTests
         var oversized = new string('x', count: 4097);
 
         var failure = await AssertEx.ThrowsAsync<ArgumentException>(() => store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                                            created.Version,
-                                            new HashSet<ExternalAppInstanceStatus>
-                                            {
-                                                ExternalAppInstanceStatus.Installing
-                                            },
-                                            ExternalAppInstanceStatus.Failed,
-                                            ExternalAppInstanceEventKind.Failed,
-                                            oversized,
-                                            OccurredAtUtc: 2_000)))
+                                        created.Version,
+                                        new HashSet<ExternalAppInstanceStatus>
+                                        {
+                                            ExternalAppInstanceStatus.Installing
+                                        },
+                                        ExternalAppInstanceStatus.Failed,
+                                        ExternalAppInstanceEventKind.Failed,
+                                        oversized,
+                                        OccurredAtUtc: 2_000)))
                                     .ConfigureAwait(false);
         AssertEx.True(failure.Message.Contains("4096", StringComparison.Ordinal), "The bound is the message's point.");
 

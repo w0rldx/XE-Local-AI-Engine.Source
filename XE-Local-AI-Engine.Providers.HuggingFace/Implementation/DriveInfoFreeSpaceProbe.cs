@@ -26,8 +26,7 @@ public sealed class DriveInfoFreeSpaceProbe : IFreeSpaceProbe
             var parent = Path.GetDirectoryName(probePath);
             if (string.IsNullOrEmpty(parent) || string.Equals(parent, probePath, StringComparison.Ordinal))
             {
-                throw new InvalidOperationException(
-                    $"No existing directory was found at or above '{path}', so the free space on its volume cannot be measured.");
+                throw new InvalidOperationException($"No existing directory was found at or above '{path}', so the free space on its volume cannot be measured.");
             }
 
             probePath = parent;

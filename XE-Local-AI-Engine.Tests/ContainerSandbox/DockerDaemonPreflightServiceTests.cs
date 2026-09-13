@@ -363,8 +363,7 @@ public sealed class DockerDaemonPreflightServiceTests
         AssertEx.Null(await store.ReadAsync());
     }
 
-    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, IDockerDaemonAttestationStore Store) CreateService(
-        ContainerSandboxOptions? options = null,
+    private static (IDockerDaemonPreflightService Service, FakeDockerRuntimeClient Client, IDockerDaemonAttestationStore Store) CreateService(ContainerSandboxOptions? options = null,
         IDockerDaemonAttestationStore? attestationStore = null)
     {
         var resolved = options ?? DockerSandboxHardeningTests.Options() with

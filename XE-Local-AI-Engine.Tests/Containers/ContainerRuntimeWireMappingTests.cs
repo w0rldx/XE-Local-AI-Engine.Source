@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Tests.Containers;
 
 using System.Buffers.Binary;
 using Docker.DotNet;
+using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -9,7 +10,6 @@ using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
-using Docker.DotNet.Models;
 
 /// <summary>
 ///     The two pieces of the production client that read meaning out of daemon text, tested without a daemon.
@@ -329,8 +329,7 @@ public sealed class ContainerRuntimeWireMappingTests
     {
         // Never connected: DockerClientBuilder opens no socket at construction, and no member that touches the wire
         // is called here.
-        return new DockerDotNetRuntimeClient(
-            new DockerDaemonEndpoint(new Uri("unix:///xe-health-mapping-tests.sock"), DockerDaemonEndpointSource.Configuration),
+        return new DockerDotNetRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///xe-health-mapping-tests.sock"), DockerDaemonEndpointSource.Configuration),
             TimeSpan.FromSeconds(1),
             requestTimeout: null,
             pullTimeout: null,

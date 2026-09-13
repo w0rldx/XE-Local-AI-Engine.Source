@@ -79,8 +79,7 @@ internal sealed partial class ExternalAppService
         var granted = ExternalAppEffectivePermissions.Diff(NoPermissions, ExternalAppEffectivePermissions.From(manifest));
         if (!command.AcceptPermissions)
         {
-            throw new ExternalAppPermissionChangeRequiresAcknowledgementException(
-                "This application's declared permissions have to be accepted before it can be installed.",
+            throw new ExternalAppPermissionChangeRequiresAcknowledgementException("This application's declared permissions have to be accepted before it can be installed.",
                 granted);
         }
 
@@ -95,15 +94,15 @@ internal sealed partial class ExternalAppService
 
             var createdAtUtc = Now();
             var version = await InsertInstanceAsync(services.Store,
-                                                    command,
-                                                    manifest,
-                                                    granted,
-                                                    variables,
-                                                    admission.Runtime.Provider,
-                                                    instanceId,
-                                                    createdAtUtc,
-                                                    cancellationToken)
-                              .ConfigureAwait(false);
+                    command,
+                    manifest,
+                    granted,
+                    variables,
+                    admission.Runtime.Provider,
+                    instanceId,
+                    createdAtUtc,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             if (!_runner.TryStart(instanceId,
                     ExternalAppOperationKind.Install,
@@ -159,14 +158,12 @@ internal sealed partial class ExternalAppService
         CancellationToken cancellationToken)
     {
         using var applicationLease = await _gate.TryEnterAsync(ExternalAppInstanceGate.ApplicationKey(command.ApplicationId)).ConfigureAwait(false)
-                                     ?? throw new ExternalAppOperationInFlightException(
-                                         "Another install of this application is already being admitted.");
+                                     ?? throw new ExternalAppOperationInFlightException("Another install of this application is already being admitted.");
 
         var existing = await store.ListByApplicationAsync(command.ApplicationId, cancellationToken).ConfigureAwait(false);
         if (existing.Count > 0)
         {
-            throw new ExternalAppAlreadyInstalledException(
-                $"The application '{command.ApplicationId}' is already installed; this version supports one instance of each.");
+            throw new ExternalAppAlreadyInstalledException($"The application '{command.ApplicationId}' is already installed; this version supports one instance of each.");
         }
 
         var create = new ExternalAppInstanceCreate(instanceId,
@@ -182,7 +179,10 @@ internal sealed partial class ExternalAppService
             ExternalAppInstanceEventKind.PermissionAccepted,
             // Permission NAMES from the fixed vocabulary. A value has no business on an audit row that is replayed
             // into a browser.
-            JsonSerializer.Serialize(new { permissions = granted }, ExternalAppJson.Options),
+            JsonSerializer.Serialize(new
+            {
+                permissions = granted
+            }, ExternalAppJson.Options),
             // The instance's container-bridge credential, minted here and only here. It is sealed at rest by the same
             // interceptor that seals the variables, and its revocation is the row's deletion — there is no separate
             // revoke step, because a token whose instance no longer exists names nothing the verifier can find.
@@ -195,9 +195,9 @@ internal sealed partial class ExternalAppService
         }
 
         await PublishAsync(instanceId,
-                           written.Sequence,
-                           ExternalAppInstanceEventKind.PermissionAccepted,
-                           ExternalAppInstanceStatus.Installing)
+                written.Sequence,
+                ExternalAppInstanceEventKind.PermissionAccepted,
+                ExternalAppInstanceStatus.Installing)
             .ConfigureAwait(false);
 
         return written.Version;
@@ -220,16 +220,16 @@ internal sealed partial class ExternalAppService
             runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
 
             var published = await RebuildAsync(runtime,
-                                               resolution.Daemon.IsRootless,
-                                               instanceId,
-                                               manifest,
-                                               variables,
-                                               // Read back rather than carried from admission: the mint happens
-                                               // inside the row write, which is the only place it is durable.
-                                               await ResolveBridgeGrantAsync(instanceId, cancellationToken).ConfigureAwait(false),
-                                               commitBeforeStart: null,
-                                               cancellationToken)
-                                .ConfigureAwait(false);
+                    resolution.Daemon.IsRootless,
+                    instanceId,
+                    manifest,
+                    variables,
+                    // Read back rather than carried from admission: the mint happens
+                    // inside the row write, which is the only place it is durable.
+                    await ResolveBridgeGrantAsync(instanceId, cancellationToken).ConfigureAwait(false),
+                    commitBeforeStart: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // Two events and two sequences for one status: "this application is installed" and "it is running" are
             // different facts, and a history that merged them could not say which of the two a later failure undid.
@@ -245,10 +245,10 @@ internal sealed partial class ExternalAppService
             if (await ApplyAsync(services.Store, cursor, installed, cancellationToken).ConfigureAwait(false))
             {
                 _ = await ApplyAsync(services.Store,
-                                     cursor,
-                                     Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started),
-                                     cancellationToken)
-                        .ConfigureAwait(false);
+                        cursor,
+                        Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started),
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
         }
         catch (ExternalAppPipelineException failure)
@@ -268,9 +268,9 @@ internal sealed partial class ExternalAppService
 #pragma warning restore CA1031
         {
             await FailAsync(services.Store,
-                            runtime,
-                            cursor,
-                            ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception))
+                    runtime,
+                    cursor,
+                    ExternalAppFailureTranslator.Translate(ExternalAppFailurePhase.Resolution, exception))
                 .ConfigureAwait(false);
         }
         finally
@@ -385,8 +385,7 @@ internal sealed partial class ExternalAppService
             return;
         }
 
-        throw new ExternalAppManifestChangedException(
-            "This application's definition changed after it was shown; review it again before continuing.",
+        throw new ExternalAppManifestChangedException("This application's definition changed after it was shown; review it again before continuing.",
             manifest.ManifestVersion,
             manifest.ManifestSha256);
     }
@@ -414,7 +413,8 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>What the four admission inputs said, so the preview and the command read one evaluation.</summary>
-    private sealed record InstallAdmission(ExternalAppBlockedReason? BlockedReason,
+    private sealed record InstallAdmission(
+        ExternalAppBlockedReason? BlockedReason,
         ContainerRuntimeResolution Runtime,
         IReadOnlyList<string> MissingCapabilities,
         ExternalAppResourceVerdict Resources,

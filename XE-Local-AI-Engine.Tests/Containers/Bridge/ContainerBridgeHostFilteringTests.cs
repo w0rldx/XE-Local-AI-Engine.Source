@@ -3,8 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Containers.Bridge;
 using System.Net;
 using System.Net.Sockets;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.HostFiltering;
+using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -272,7 +272,11 @@ public sealed class ContainerBridgeHostFilteringTests
             _ = builder.Services.Configure<HostFilteringOptions>(options =>
                 options.AllowedHosts = [.. (allowedHosts ?? "*").Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)]);
 
-            var bridgeOptions = Options.Create(new ContainerBridgeOptions { Enabled = true, Port = port });
+            var bridgeOptions = Options.Create(new ContainerBridgeOptions
+            {
+                Enabled = true,
+                Port = port
+            });
             builder.Services.AddSingleton(bridgeOptions);
             builder.Services.AddSingleton(new ContainerBridgeEndpointSource(listenerEndpoint));
 
@@ -296,7 +300,10 @@ public sealed class ContainerBridgeHostFilteringTests
             ContainerBridgePipeline.Map(app, listenerEndpoint);
             await app.StartAsync().ConfigureAwait(false);
 
-            var client = new HttpClient { BaseAddress = new Uri($"http://127.0.0.1:{port}") };
+            var client = new HttpClient
+            {
+                BaseAddress = new Uri($"http://127.0.0.1:{port}")
+            };
             return new FilteredBridgeHost(app, client, watcher, port);
         }
 

@@ -79,13 +79,13 @@ public sealed class ExternalAppsRuntimeIsolationArchitectureTests
         }
 
         AssertEx.Empty(FindBannedSymbols("""
-                                            var id = await runtime.RunContainerAsync(specification, cancellationToken);
-                                            var inspection = await runtime.InspectAsync(id, cancellationToken);
-                                            await runtime.CreateNetworkAsync(network, cancellationToken);
-                                            await runtime.StopContainerAsync(id, grace, cancellationToken);
-                                            await runtime.ProbeWritablePathAsync(id, "/data", cancellationToken);
-                                            var summaries = await runtime.ListContainersDetailedAsync(labels, cancellationToken);
-                                        """),
+                                             var id = await runtime.RunContainerAsync(specification, cancellationToken);
+                                             var inspection = await runtime.InspectAsync(id, cancellationToken);
+                                             await runtime.CreateNetworkAsync(network, cancellationToken);
+                                             await runtime.StopContainerAsync(id, grace, cancellationToken);
+                                             await runtime.ProbeWritablePathAsync(id, "/data", cancellationToken);
+                                             var summaries = await runtime.ListContainersDetailedAsync(labels, cancellationToken);
+                                         """),
             "The runtime layer's own vocabulary must not trip the guard, or the slice that uses it cannot be written.");
     }
 
@@ -97,10 +97,13 @@ public sealed class ExternalAppsRuntimeIsolationArchitectureTests
     /// </summary>
     private static IReadOnlyList<string> FindBannedSymbols(string text)
     {
-        return [.. BannedSymbols.Where(symbol => Regex.IsMatch(text,
-            @"\b" + Regex.Escape(symbol) + @"\b",
-            RegexOptions.None,
-            TimeSpan.FromSeconds(5)))];
+        return
+        [
+            .. BannedSymbols.Where(symbol => Regex.IsMatch(text,
+                @"\b" + Regex.Escape(symbol) + @"\b",
+                RegexOptions.None,
+                TimeSpan.FromSeconds(5)))
+        ];
     }
 
     private static string GuardedDirectory()

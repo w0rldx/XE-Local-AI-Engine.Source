@@ -15,8 +15,7 @@ public sealed class ContainerRuntimeCapabilitiesTests
     public void CapabilityNames_AreTheNineCamelCaseNamesTheManifestUses()
     {
         AssertEx.Equal(expected: 9, ContainerRuntimeCapabilities.Names.Count);
-        AssertEx.Equal(
-            "containers,networks,bindStorage,loopbackPortPublishing,healthChecks,restartPolicies,logs,imagePull,gpuDevices",
+        AssertEx.Equal("containers,networks,bindStorage,loopbackPortPublishing,healthChecks,restartPolicies,logs,imagePull,gpuDevices",
             string.Join(",", ContainerRuntimeCapabilities.Names));
     }
 

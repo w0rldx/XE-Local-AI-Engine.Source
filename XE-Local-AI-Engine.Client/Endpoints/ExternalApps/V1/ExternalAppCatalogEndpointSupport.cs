@@ -13,8 +13,7 @@ internal static class ExternalAppCatalogEndpointSupport
     ///     the same application would be a state the install gate refuses; the first wins rather than throwing, because
     ///     a catalog read is not the place to discover it.
     /// </summary>
-    public static async Task<IReadOnlyDictionary<string, ExternalAppInstanceSummary>> InstalledByApplicationIdAsync(
-        IExternalAppService apps,
+    public static async Task<IReadOnlyDictionary<string, ExternalAppInstanceSummary>> InstalledByApplicationIdAsync(IExternalAppService apps,
         CancellationToken cancellationToken)
     {
         var instances = await apps.ListAsync(cancellationToken).ConfigureAwait(false);

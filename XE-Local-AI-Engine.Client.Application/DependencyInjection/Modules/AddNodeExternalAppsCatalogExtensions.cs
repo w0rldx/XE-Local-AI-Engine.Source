@@ -27,7 +27,10 @@ internal static class AddNodeExternalAppsCatalogExtensions
                    client.MaxResponseContentBufferSize = ExternalAppCatalogOptions.DefaultMaxDocumentBytes;
                    client.DefaultRequestHeaders.UserAgent.ParseAdd("XE-Local-AI-Engine-ExternalApps/1.0");
                })
-               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler { AllowAutoRedirect = false });
+               .ConfigurePrimaryHttpMessageHandler(static () => new SocketsHttpHandler
+               {
+                   AllowAutoRedirect = false
+               });
         // The cache store persists a tiny node-local JSON file under external-apps/; the provider owns the in-memory
         // bundled/remote/last-good snapshot plus TTL-gated refresh serialization. Both singletons, and neither is on
         // the startup path: the provider's first GetCatalogAsync is the first catalog request, which the

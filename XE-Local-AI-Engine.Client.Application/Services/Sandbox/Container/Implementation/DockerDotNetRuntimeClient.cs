@@ -8,7 +8,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using Docker.DotNet;
 using Docker.DotNet.Models;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
@@ -350,25 +349,22 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         // as no user. There must be no window in which such a container exists for a read-back to catch.
         if (specification.PublishedPorts.FirstOrDefault(publication => !IsLoopback(publication.HostIp)) is { } offender)
         {
-            throw new ArgumentException(
-                $"Container port {offender.ContainerPort}/{offender.Protocol} asks to publish on host interface "
-                + $"'{offender.HostIp}'. Application containers publish on 127.0.0.1 and on nothing else.",
+            throw new ArgumentException($"Container port {offender.ContainerPort}/{offender.Protocol} asks to publish on host interface "
+                                        + $"'{offender.HostIp}'. Application containers publish on 127.0.0.1 and on nothing else.",
                 nameof(specification));
         }
 
         if (!ContainerImageReference.IsContentAddressed(specification.Image))
         {
-            throw new ArgumentException(
-                $"Image '{specification.Image}' is not digest-pinned. A tag names whatever the registry last pushed, "
-                + "not the bytes the catalog approved; give a 'name@sha256:<digest>' reference or a bare image id.",
+            throw new ArgumentException($"Image '{specification.Image}' is not digest-pinned. A tag names whatever the registry last pushed, "
+                                        + "not the bytes the catalog approved; give a 'name@sha256:<digest>' reference or a bare image id.",
                 nameof(specification));
         }
 
         if (specification.User is not null && string.IsNullOrWhiteSpace(specification.User))
         {
-            throw new ArgumentException(
-                "A blank container user is refused. Pass null for the image's own default user; \"\" and null would "
-                + "otherwise be the same instruction written two ways and only one of them says what it means.",
+            throw new ArgumentException("A blank container user is refused. Pass null for the image's own default user; \"\" and null would "
+                                        + "otherwise be the same instruction written two ways and only one of them says what it means.",
                 nameof(specification));
         }
 
@@ -376,12 +372,11 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         // would throw the BCL's own duplicate-key ArgumentException from ToDictionary — raised outside the try, so
         // unclassified, and naming neither the port nor the specification. This layer says which publication instead.
         if (specification.PublishedPorts.GroupBy(PortKey, StringComparer.Ordinal)
-                                        .FirstOrDefault(group => group.Skip(1).Any()) is { } duplicated)
+                         .FirstOrDefault(group => group.Skip(1).Any()) is { } duplicated)
         {
-            throw new ArgumentException(
-                $"Container port {duplicated.Key} is published more than once. A container port and protocol name one "
-                + "exposed port on the daemon, so the second publication would replace the first rather than add to "
-                + "it. Publish each container port once, on one host port.",
+            throw new ArgumentException($"Container port {duplicated.Key} is published more than once. A container port and protocol name one "
+                                        + "exposed port on the daemon, so the second publication would replace the first rather than add to "
+                                        + "it. Publish each container port once, on one host port.",
                 nameof(specification));
         }
 
@@ -617,9 +612,8 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         var separator = imageReference.IndexOf("@sha256:", StringComparison.Ordinal);
         if (separator < 0)
         {
-            throw new ArgumentException(
-                $"Image '{imageReference}' is not digest-pinned. This layer never pulls a tag: a tag names whatever "
-                + "the registry last pushed, not the bytes the catalog approved.",
+            throw new ArgumentException($"Image '{imageReference}' is not digest-pinned. This layer never pulls a tag: a tag names whatever "
+                                        + "the registry last pushed, not the bytes the catalog approved.",
                 nameof(imageReference));
         }
 
@@ -679,10 +673,9 @@ internal sealed class DockerDotNetRuntimeClient : IContainerRuntime
         // ownership is refused rather than given a check it is guaranteed to pass.
         if (specification.Labels.Count == 0)
         {
-            throw new ArgumentException(
-                $"The container network '{specification.Name}' carries no labels. At least one ownership label is "
-                + "required: a network is reused only when it provably belongs to this engine, and an empty label map "
-                + "makes that check vacuous.",
+            throw new ArgumentException($"The container network '{specification.Name}' carries no labels. At least one ownership label is "
+                                        + "required: a network is reused only when it provably belongs to this engine, and an empty label map "
+                                        + "makes that check vacuous.",
                 nameof(specification));
         }
 

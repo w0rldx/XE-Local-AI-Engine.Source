@@ -44,7 +44,10 @@ public sealed class ExternalAppStartupReconcilerTests
 
         // ONE harness: the row, the reconciler and the assertion have to share a database, or "the row was not
         // touched" is a statement about a database the pass never opened.
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with { Enabled = false })
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, static options => options with
+                                                                 {
+                                                                     Enabled = false
+                                                                 })
                                                                  .ConfigureAwait(false);
         var seeded = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Installing).ConfigureAwait(false);
 
@@ -264,7 +267,10 @@ public sealed class ExternalAppStartupReconcilerTests
     public async Task BranchB_WhenAnExistingContainersDigestDiffers_ReportsFailedWithPolicyViolation()
     {
         await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
-        harness.Runtime.InspectionMutator = inspection => inspection with { Image = ExternalAppTestManifests.SecondImage };
+        harness.Runtime.InspectionMutator = inspection => inspection with
+        {
+            Image = ExternalAppTestManifests.SecondImage
+        };
 
         var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
 
@@ -289,7 +295,10 @@ public sealed class ExternalAppStartupReconcilerTests
         await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
         _ = await harness.ForceStatusAsync(harness.InstalledId, ExternalAppInstanceStatus.Failed).ConfigureAwait(false);
 
-        harness.Runtime.InspectionMutator = inspection => inspection with { Image = observed };
+        harness.Runtime.InspectionMutator = inspection => inspection with
+        {
+            Image = observed
+        };
 
         var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
 
@@ -312,7 +321,13 @@ public sealed class ExternalAppStartupReconcilerTests
 
         harness.Runtime.InspectionMutator = inspection => inspection with
         {
-            PublishedPorts = [.. inspection.PublishedPorts.Select(static port => port with { HostIp = "0.0.0.0" })]
+            PublishedPorts =
+            [
+                .. inspection.PublishedPorts.Select(static port => port with
+                {
+                    HostIp = "0.0.0.0"
+                })
+            ]
         };
 
         var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
@@ -334,7 +349,10 @@ public sealed class ExternalAppStartupReconcilerTests
     {
         await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
 
-        harness.Runtime.InspectionMutator = static inspection => inspection with { Privileged = true };
+        harness.Runtime.InspectionMutator = static inspection => inspection with
+        {
+            Privileged = true
+        };
 
         var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
 
@@ -466,8 +484,7 @@ public sealed class ExternalAppStartupReconcilerTests
         // Same services and names, so the containers are still found; only the image lost its digest pin, which is
         // what ApplicationContainerPolicy refuses when the plan is rebuilt for verification.
         await harness.ReplaceManifestSnapshotAsync(harness.InstalledId,
-                         ExternalAppTestManifests.Manifest(
-                             [ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]))
+                         ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)], image: "ghcr.io/example/app:1.0.0")]))
                      .ConfigureAwait(false);
 
         var summary = await harness.CreateReconciler().ReconcileAsync().ConfigureAwait(false);
@@ -629,7 +646,10 @@ public sealed class ExternalAppStartupReconcilerTests
         harness.Runtime.SeedExistingNetwork(new ContainerNetworkSpecification
         {
             Name = specification.NetworkName,
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["com.example.owner"] = "someone-else" },
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["com.example.owner"] = "someone-else"
+            },
             Internal = false
         });
 
@@ -678,8 +698,7 @@ public sealed class ExternalAppStartupReconcilerTests
 
     private static ApplicationManifest TwoServiceManifest()
     {
-        return ExternalAppTestManifests.Manifest(
-        [
+        return ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)]),
             ExternalAppTestManifests.Service("sidecar",
                 dependsOn: [new ApplicationDependency("web", "started")],

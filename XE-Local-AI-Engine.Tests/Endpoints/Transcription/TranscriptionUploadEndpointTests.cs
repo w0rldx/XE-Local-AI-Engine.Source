@@ -288,7 +288,10 @@ public sealed class TranscriptionUploadEndpointTests
                 services.RemoveAll<IWhisperServerSupervisor>();
                 services.AddSingleton<IWhisperServerSupervisor>(new FakeWhisperServerSupervisor());
                 services.RemoveAll<IAudioTranscoder>();
-                services.AddSingleton<IAudioTranscoder>(new FakeAudioTranscoder { IsAvailable = transcoderAvailable });
+                services.AddSingleton<IAudioTranscoder>(new FakeAudioTranscoder
+                {
+                    IsAvailable = transcoderAvailable
+                });
                 services.RemoveAll<ITranscriptionRuntimeService>();
                 services.AddSingleton<ITranscriptionRuntimeService>(new FakeTranscriptionRuntimeService("ggml-tiny"));
                 extraServices?.Invoke(services);

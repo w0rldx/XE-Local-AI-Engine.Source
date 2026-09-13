@@ -66,7 +66,8 @@ internal sealed class FakeWhisperProcessHandle(int pid) : IWhisperServerProcessH
     }
 
     /// <summary>Simulates a crash or exit, so the next ensure sees a dead process.</summary>
-    public void SimulateExit() => Interlocked.Exchange(ref _exited, value: 1);
+    public void SimulateExit() =>
+        Interlocked.Exchange(ref _exited, value: 1);
 }
 
 /// <summary>
@@ -117,7 +118,8 @@ internal sealed class FakeWhisperReadinessProbe(bool ready = true, bool responsi
 /// <summary>Backend selector returning a fixed backend; never probes hardware.</summary>
 internal sealed class FakeWhisperBackendSelector(WhisperBackend backend = WhisperBackend.Cpu) : IWhisperBackendSelector
 {
-    public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) => Task.FromResult(backend);
+    public Task<WhisperBackend> SelectBackendAsync(CancellationToken ct) =>
+        Task.FromResult(backend);
 }
 
 /// <summary>Binary manager returning a fixed fake server path for whatever backend is requested; never downloads.</summary>
@@ -196,8 +198,7 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
 {
     private readonly HttpClient _httpClient;
 
-    public WhisperSupervisorHarness(
-        FakeWhisperProcessLauncher? launcher = null,
+    public WhisperSupervisorHarness(FakeWhisperProcessLauncher? launcher = null,
         FakeWhisperReadinessProbe? readinessProbe = null,
         WhisperRuntimeOptions? options = null,
         TimeProvider? timeProvider = null,

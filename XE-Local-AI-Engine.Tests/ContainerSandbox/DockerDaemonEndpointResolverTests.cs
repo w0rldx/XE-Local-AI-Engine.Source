@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.ContainerSandbox;
 
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -214,7 +215,7 @@ public sealed class DockerDaemonEndpointResolverTests
         // The half the user-information redaction missed. A query string and a fragment address nothing on a Docker
         // daemon, are equally operator-supplied, and are equally somewhere a token fits — and unlike user information
         // they survive on a LOCAL socket, which no transport check refuses.
-        var raw = string.Format(System.Globalization.CultureInfo.InvariantCulture, template, Sentinel);
+        var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
         var endpoint = new DockerDaemonEndpoint(new Uri(raw), DockerDaemonEndpointSource.DockerHostEnvironmentVariable);
 
         AssertEx.False(endpoint.Display.Contains(Sentinel, StringComparison.Ordinal),
@@ -231,7 +232,7 @@ public sealed class DockerDaemonEndpointResolverTests
     {
         // The word both refusals use. Naming the component is the whole point: an operator who is told only "the
         // endpoint is refused" goes looking for a syntax error, and one who is shown the value has been disclosed to.
-        var raw = string.Format(System.Globalization.CultureInfo.InvariantCulture, template, Sentinel);
+        var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
         var endpoint = new DockerDaemonEndpoint(new Uri(raw), DockerDaemonEndpointSource.DockerHostEnvironmentVariable);
 
         AssertEx.Equal(expected, endpoint.DisclosingComponent);

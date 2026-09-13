@@ -102,7 +102,8 @@ internal sealed class FakeWhisperServerSupervisor : IWhisperServerSupervisor
         Task.FromResult(new WhisperServerEvictResult(Evicted: true,
             new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
 
-    public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) => null;
+    public IWhisperTranscriptionLease? TryAcquireTranscriptionLease(string modelId, long generation) =>
+        null;
 
     public WhisperRuntimeStatusSnapshot GetStatus() =>
         new(WhisperRuntimeState.Ready, "tiny", Backend: null, BinaryVersion: null, BinarySource: null, SupportsTranscode: true);
@@ -141,17 +142,23 @@ internal sealed class FakeAudioTranscoder : IAudioTranscoder
 /// <summary>Resolves the node's effective model without touching settings, the catalogue or the hardware profile.</summary>
 internal sealed class FakeTranscriptionRuntimeService(string effectiveModelId) : ITranscriptionRuntimeService
 {
-    public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<TranscriptionRuntimeView> GetRuntimeAsync(CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) => throw new NotSupportedException();
+    public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct) => throw new NotSupportedException();
+    public Task<TranscriptionModelCatalogView> SelectModelAsync(string? modelId, CancellationToken ct) =>
+        throw new NotSupportedException();
 
-    public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) => Task.FromResult(effectiveModelId);
+    public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
+        Task.FromResult(effectiveModelId);
 }
 
 /// <summary>
@@ -210,9 +217,11 @@ internal sealed class TranscriptionStoreReadGate
     /// <summary>Completes once a read has been caught by the hold.</summary>
     public Task Entered => _entered.Task;
 
-    public void Arm() => Interlocked.Exchange(ref _armed, 1);
+    public void Arm() =>
+        Interlocked.Exchange(ref _armed, 1);
 
-    public void Release() => _released.TrySetResult();
+    public void Release() =>
+        _released.TrySetResult();
 
     internal async Task HoldIfArmedAsync()
     {
@@ -247,9 +256,11 @@ internal sealed class GatedTranscriptionSessionStore(ITranscriptionSessionStore 
     public Task<IReadOnlyList<TranscriptionSessionSummaryView>> ListAsync(int limit, int offset, CancellationToken cancellationToken) =>
         inner.ListAsync(limit, offset, cancellationToken);
 
-    public Task<int> CountAsync(CancellationToken cancellationToken) => inner.CountAsync(cancellationToken);
+    public Task<int> CountAsync(CancellationToken cancellationToken) =>
+        inner.CountAsync(cancellationToken);
 
-    public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken) => inner.DeleteAsync(sessionId, cancellationToken);
+    public Task<bool> DeleteAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        inner.DeleteAsync(sessionId, cancellationToken);
 
     public Task<bool> SetStatusAsync(Guid sessionId, TranscriptionSessionStatus status, long updatedAtUtc, CancellationToken cancellationToken) =>
         inner.SetStatusAsync(sessionId, status, updatedAtUtc, cancellationToken);
@@ -325,8 +336,7 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
     public string TempDirectory => Path.Combine(Root, "tmp", "transcription");
 
     /// <summary>The files currently sitting in the engine's temporary directory.</summary>
-    public IReadOnlyList<string> TempFiles =>
-        Directory.Exists(TempDirectory) ? Directory.GetFiles(TempDirectory) : [];
+    public IReadOnlyList<string> TempFiles => Directory.Exists(TempDirectory) ? Directory.GetFiles(TempDirectory) : [];
 
     public static async Task<TranscriptionServiceHarness> CreateAsync()
     {
@@ -364,7 +374,10 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
         string extension = ".wav",
         TranscriptionSessionConfig? config = null)
     {
-        var session = await Service.CreateSessionAsync(new CreateTranscriptionSessionInput { Config = config }, CancellationToken.None).ConfigureAwait(false);
+        var session = await Service.CreateSessionAsync(new CreateTranscriptionSessionInput
+        {
+            Config = config
+        }, CancellationToken.None).ConfigureAwait(false);
         var slot = await Service.BeginUploadAsync(session.Id, extension, CancellationToken.None).ConfigureAwait(false);
         await File.WriteAllBytesAsync(slot.SourcePath, audio).ConfigureAwait(false);
         return (session.Id, slot);

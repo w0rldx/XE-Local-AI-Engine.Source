@@ -22,11 +22,13 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_SubstitutesADeclaredValue()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
-        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal) { ["ADMIN_PASSWORD"] = Secret });
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ADMIN_PASSWORD"] = Secret
+        });
 
         AssertEx.Equal(Secret, plan.Services[0].Specification.Environment["PASSWORD"]);
     }
@@ -34,8 +36,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithNoSuppliedValue_FallsBackToTheDeclaredDefault()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", environment: Env("USER", "${ADMIN_USER}"))],
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", environment: Env("USER", "${ADMIN_USER}"))],
             variables: [ExternalAppTestManifests.Variable("ADMIN_USER", required: true, @default: "admin")]);
 
         var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal));
@@ -50,8 +51,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithAnOptionalVariableWithNoValue_EmitsTheKeyAsEmpty()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", environment: Env("TAVILY_API_KEY", "${TAVILY_API_KEY}"))],
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", environment: Env("TAVILY_API_KEY", "${TAVILY_API_KEY}"))],
             variables: [ExternalAppTestManifests.Variable("TAVILY_API_KEY")]);
 
         var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal));
@@ -63,8 +63,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithARequiredVariableWithNoValueAndNoDefault_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
         var exception = AssertEx.Throws<ExternalAppConfigurationException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)));
@@ -75,8 +74,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_CarriesEveryBuiltIn()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app",
                 environment: new Dictionary<string, string>(StringComparer.Ordinal)
                 {
@@ -102,8 +100,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_ResolvesAHyphenatedServiceNameTokenInAnotherServicesEnvironment()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", environment: Env("NTFY_BASE_URL", "http://127.0.0.1:${XE_UI_HOST_PORT_ntfy-server}")),
             ExternalAppTestManifests.Service("ntfy-server", ports: [ExternalAppTestManifests.UiPort(80)], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -116,8 +113,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithATokenNamingAServiceThatPublishesNothing_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", environment: Env("URL", "http://127.0.0.1:${XE_UI_HOST_PORT_quiet}")),
             ExternalAppTestManifests.Service("quiet", image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -169,8 +165,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_OrdersServicesSoEveryDependencyComesFirst()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", dependsOn: [new ApplicationDependency("search", "healthy"), new ApplicationDependency("db", "started")]),
             ExternalAppTestManifests.Service("db", image: ExternalAppTestManifests.SecondImage),
             ExternalAppTestManifests.Service("search", image: ExternalAppTestManifests.SecondImage)
@@ -191,8 +186,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithADependencyCycle_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("a", dependsOn: [new ApplicationDependency("b", "started")]),
             ExternalAppTestManifests.Service("b", dependsOn: [new ApplicationDependency("a", "started")], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -203,8 +197,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithADependencyTheManifestDoesNotDeclare_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("a", dependsOn: [new ApplicationDependency("ghost", "started")])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("a", dependsOn: [new ApplicationDependency("ghost", "started")])]);
 
         _ = AssertEx.Throws<ExternalAppManifestException>(() => Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)));
     }
@@ -216,8 +209,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WhenTwoServicesDeclareTheSameStorageName_UsesSeparateHostDirectories()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/app/data")]),
             ExternalAppTestManifests.Service("db", storage: [new ApplicationStorage("data", "/chroma/chroma")], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -234,8 +226,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithTwoMountsAtOneContainerPath_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app",
                 storage: [new ApplicationStorage("data", "/app/data")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/app/data", "body")])
@@ -252,8 +243,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_WithTwoMountsBackedByOneHostDirectory_Throws()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app",
                 storage: [new ApplicationStorage("data", "/app/data"), new ApplicationStorage("data", "/app/other")])
         ]);
@@ -287,11 +277,13 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void Plan_ToString_NeverContainsASecret()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", environment: Env("PASSWORD", "${ADMIN_PASSWORD}"))],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
-        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal) { ["ADMIN_PASSWORD"] = Secret });
+        var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["ADMIN_PASSWORD"] = Secret
+        });
 
         AssertEx.False(plan.ToString().Contains(Secret, StringComparison.Ordinal), "A plan must not print its environment.");
         AssertEx.False(plan.Services[0].ToString().Contains(Secret, StringComparison.Ordinal), "A service deployment must not print its environment.");
@@ -306,8 +298,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void BuiltIns_WhenABridgeGrantIsSupplied_CarryTheEndpointAndTheToken()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("OPENAI_BASE_URL", "http://${XE_BRIDGE_ENDPOINT}/llm/v1"))
         ]);
 
@@ -319,8 +310,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void BuiltIns_WhenABridgeGrantIsSupplied_CarryTheTokenVerbatim()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("OPENAI_API_KEY", "${XE_BRIDGE_TOKEN}"))
         ]);
 
@@ -339,8 +329,7 @@ public sealed class DeploymentPlannerTests
     [Arguments("XE_BRIDGE_TOKEN")]
     public void BuiltIns_WithoutABridgeGrant_RefuseAManifestThatReferencesThem(string token)
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"${{{token}}}"))
         ]);
 
@@ -358,8 +347,7 @@ public sealed class DeploymentPlannerTests
     [Arguments("XE_BRIDGE_TOKEN")]
     public void BuiltIns_WithoutABridgeGrant_SayWhichFeatureIsMissingRatherThanNamingAnUnknownToken(string token)
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"${{{token}}}"))
         ]);
 
@@ -378,8 +366,7 @@ public sealed class DeploymentPlannerTests
     [Arguments("XE_BRIDGE_TOKEN")]
     public void RequiresBridge_ForAManifestThatReferencesABridgeBuiltIn_IsTrue(string token)
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", $"http://${{{token}}}/llm/v1"))
         ]);
 
@@ -396,15 +383,14 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void RequiresBridge_ForAManifestThatReferencesNeither_IsFalse()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
-            ExternalAppTestManifests.Service("web",
-                environment: new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    ["OPENAI_BASE_URL"] = "${LLM_HOST}",
-                    ["NOTE"] = "point XE_BRIDGE_ENDPOINT at this yourself"
-                })
-        ],
+        var manifest = ExternalAppTestManifests.Manifest([
+                ExternalAppTestManifests.Service("web",
+                    environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["OPENAI_BASE_URL"] = "${LLM_HOST}",
+                        ["NOTE"] = "point XE_BRIDGE_ENDPOINT at this yourself"
+                    })
+            ],
             variables: [ExternalAppTestManifests.Variable("LLM_HOST", @default: "http://localhost:11434")]);
 
         AssertEx.False(DeploymentPlanner.RequiresBridge(manifest), "Nothing here substitutes a bridge built-in.");
@@ -418,8 +404,7 @@ public sealed class DeploymentPlannerTests
     [Test]
     public void BuiltIns_ForATokenThatIsNotABridgeName_KeepTheGenericUndeclaredMessage()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", environment: Env("SOME_SETTING", "${XE_NOT_A_THING}"))
         ]);
 
@@ -453,7 +438,14 @@ public sealed class DeploymentPlannerTests
         var plan = Plan(manifest, new Dictionary<string, string>(StringComparer.Ordinal), bridgeGrant: new ContainerBridgeGrant("192.0.2.10:18790", "aabb.ccdd"));
 
         AssertEx.NotNull(plan);
-        foreach (var name in new[] { "XE_UID", "XE_GID", "XE_INSTANCE_ID", "XE_BRIDGE_ENDPOINT", "XE_BRIDGE_TOKEN" })
+        foreach (var name in new[]
+                 {
+                     "XE_UID",
+                     "XE_GID",
+                     "XE_INSTANCE_ID",
+                     "XE_BRIDGE_ENDPOINT",
+                     "XE_BRIDGE_TOKEN"
+                 })
         {
             AssertEx.Contains(ExternalAppCatalogValidator.BuiltInVariableNames, name,
                 $"The planner injects '{name}', so a manifest referencing it must validate.");
@@ -483,6 +475,9 @@ public sealed class DeploymentPlannerTests
 
     private static Dictionary<string, string> Env(string key, string value)
     {
-        return new Dictionary<string, string>(StringComparer.Ordinal) { [key] = value };
+        return new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            [key] = value
+        };
     }
 }

@@ -29,8 +29,10 @@ public sealed class TranscriptionServiceTests
         // has to hold here too — nothing guarantees this service is only ever reached through that endpoint.
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
 
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => harness.Service.CreateSessionAsync(
-            new CreateTranscriptionSessionInput { SourceKind = sourceKind },
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(() => harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput
+            {
+                SourceKind = sourceKind
+            },
             CancellationToken.None));
     }
 
@@ -40,8 +42,10 @@ public sealed class TranscriptionServiceTests
         // The control: without it the table above would pass against a parse that rejects everything.
         await using var harness = await TranscriptionServiceHarness.CreateAsync();
 
-        var session = await harness.Service.CreateSessionAsync(
-            new CreateTranscriptionSessionInput { SourceKind = "microphone" },
+        var session = await harness.Service.CreateSessionAsync(new CreateTranscriptionSessionInput
+            {
+                SourceKind = "microphone"
+            },
             CancellationToken.None);
 
         AssertEx.Equal(TranscriptionSourceKind.Microphone, session.SourceKind);

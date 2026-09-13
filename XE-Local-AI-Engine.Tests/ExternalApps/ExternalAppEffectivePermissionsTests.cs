@@ -14,8 +14,7 @@ public sealed class ExternalAppEffectivePermissionsTests
     [Test]
     public void From_KeepsApplicationFlagsAndPerServiceGrants()
     {
-        var manifest = Manifest(
-            permissions: new ApplicationPermissions(Internet: true, LocalNetwork: true, "readOnly", "optional"),
+        var manifest = Manifest(permissions: new ApplicationPermissions(Internet: true, LocalNetwork: true, "readOnly", "optional"),
             services:
             [
                 ExternalAppTestManifests.Service("app",

@@ -184,7 +184,7 @@ public sealed class WhisperCppSourceBuildServiceTests
         // libraries only from the directory it was built in, which adoption is about to delete.
         var exception = AssertEx.Throws<WhisperRuntimeException>(() =>
             WhisperCppSourceBuildService.ValidateRelocatableRunpath("Dynamic section at offset 0x1000 contains 20 entries:\n"
-                                                                   + " 0x0000000000000001 (NEEDED) Shared library: [libwhisper.so.1]\n"));
+                                                                    + " 0x0000000000000001 (NEEDED) Shared library: [libwhisper.so.1]\n"));
 
         AssertEx.Equal("The source build produced a runtime that cannot be relocated.", exception.Message);
     }
@@ -244,8 +244,7 @@ public sealed class WhisperCppSourceBuildServiceTests
             "An adopted build writes the installed-runtime record.");
         AssertEx.Equal(WhisperInstalledRuntimeValidity.Active, installed.Validity);
         AssertEx.Equal(WhisperBackend.Cuda, installed.DesiredBackend);
-        AssertEx.True(
-            Directory.Exists(Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", WhisperCppReleasePins.PinnedSourceCommitSha)),
+        AssertEx.True(Directory.Exists(Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", WhisperCppReleasePins.PinnedSourceCommitSha)),
             "The adopted tree must land under the managed install root, keyed by the resolved commit.");
     }
 
@@ -320,8 +319,7 @@ public sealed class WhisperCppSourceBuildServiceTests
             "The echoed command line must be scrubbed like every other surfaced line.");
     }
 
-    private static WhisperCppSourceBuildRequest OfficialCudaRequest =>
-        new(WhisperBackend.Cuda, WhisperCppSourceSelection.Official);
+    private static WhisperCppSourceBuildRequest OfficialCudaRequest => new(WhisperBackend.Cuda, WhisperCppSourceSelection.Official);
 
     private static string Readelf(string entry) =>
         "Dynamic section at offset 0x2d18 contains 30 entries:\n"
@@ -432,7 +430,8 @@ public sealed class WhisperCppSourceBuildServiceTests
             }
         }
 
-        public void Dispose() => _block.Dispose();
+        public void Dispose() =>
+            _block.Dispose();
 
         public async Task<WhisperSourceCommandResult> RunAsync(string fileName,
             IReadOnlyList<string> arguments,

@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Providers.WhisperCpp.Implementation;
 
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Threading.Channels;
 using Microsoft.Extensions.Logging;
@@ -588,7 +589,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                         "--build", buildDir,
                         "--target", "whisper-server", "whisper-cli",
                         "--config", "Release",
-                        "--parallel", buildJobs.ToString(System.Globalization.CultureInfo.InvariantCulture)
+                        "--parallel", buildJobs.ToString(CultureInfo.InvariantCulture)
                     ],
                     WorkRoot,
                     BuildTimeout,
@@ -649,13 +650,13 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         try
         {
             var result = await _runner.RunAsync("nvidia-smi",
-                    ["--query-gpu=compute_cap", "--format=csv,noheader"],
-                    WorkRoot,
-                    _ => { },
-                    ShortCommandTimeout,
-                    captureOutput: true,
-                    ct)
-                .ConfigureAwait(false);
+                                          ["--query-gpu=compute_cap", "--format=csv,noheader"],
+                                          WorkRoot,
+                                          _ => { },
+                                          ShortCommandTimeout,
+                                          captureOutput: true,
+                                          ct)
+                                      .ConfigureAwait(false);
             return result.ExitCode == 0 ? ParseCudaArchitectures(result.StandardOutput) : DefaultCudaArchitectures;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -692,13 +693,13 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         // which in production sits inside the operator's home directory.
         AppendLog(SanitizeLogLine($"> {Path.GetFileName(fileName)} {string.Join(' ', arguments)}"));
         var result = await _runner.RunAsync(fileName,
-                arguments,
-                workingDirectory,
-                line => AppendLog(SanitizeLogLine(line)),
-                timeout,
-                captureOutput,
-                ct)
-            .ConfigureAwait(false);
+                                      arguments,
+                                      workingDirectory,
+                                      line => AppendLog(SanitizeLogLine(line)),
+                                      timeout,
+                                      captureOutput,
+                                      ct)
+                                  .ConfigureAwait(false);
         if (result.ExitCode != 0)
         {
             throw new WhisperRuntimeException($"The source-build command '{Path.GetFileName(fileName)}' failed.");

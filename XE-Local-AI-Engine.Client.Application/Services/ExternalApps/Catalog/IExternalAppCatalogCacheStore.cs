@@ -48,4 +48,3 @@ public sealed record StoredExternalAppCatalogCache(
     }
 #pragma warning restore CA1822, S2325, S1172, IDE0060
 }
-

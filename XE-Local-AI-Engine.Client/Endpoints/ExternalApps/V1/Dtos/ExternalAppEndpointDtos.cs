@@ -21,7 +21,8 @@ using FastEndpoints;
 ///     removal stays a manual operator act. It is 0 on an install preview, where nothing reconciles — the count is the
 ///     reconciler's observation, not a standing fact.
 /// </param>
-public sealed record ExternalAppRuntimeResponse(string Provider,
+public sealed record ExternalAppRuntimeResponse(
+    string Provider,
     string Status,
     bool Available,
     bool Ready,
@@ -49,7 +50,8 @@ public sealed record ExternalAppDaemonView(string? DaemonId, string? ServerVersi
 /// <summary>
 ///     Member names are exactly the manifest <c>requires[]</c> capability names. <c>GpuDevices</c> is always false.
 /// </summary>
-public sealed record ExternalAppCapabilitiesView(bool Containers,
+public sealed record ExternalAppCapabilitiesView(
+    bool Containers,
     bool Networks,
     bool BindStorage,
     bool LoopbackPortPublishing,
@@ -75,7 +77,8 @@ public sealed record RefreshExternalAppRuntimeRequest
 ///     <paramref name="LastRefreshFailure" /> is set when the MOST RECENT refresh failed, read off the snapshot. Two
 ///     members because "your click just failed" and "the cache is stale" are different sentences.
 /// </param>
-public sealed record ExternalAppCatalogResponse(int SchemaVersion,
+public sealed record ExternalAppCatalogResponse(
+    int SchemaVersion,
     long GeneratedAtUtc,
     long FetchedAtUtc,
     bool FromBundledSeed,
@@ -86,7 +89,8 @@ public sealed record ExternalAppCatalogResponse(int SchemaVersion,
 /// <param name="InstalledInstanceId">
 ///     Set when this application already has an instance. V1 allows one, so the card links instead of offering install.
 /// </param>
-public sealed record ExternalAppSummaryView(string Id,
+public sealed record ExternalAppSummaryView(
+    string Id,
     int ManifestVersion,
     string DisplayName,
     string Summary,
@@ -105,7 +109,8 @@ public sealed record ExternalAppSummaryView(string Id,
 ///     UI data. There is no user or uid member at either level — containers run as the image's default user, and the
 ///     boundary is the container's dropped capabilities, seccomp and loopback-only network.
 /// </summary>
-public sealed record ExternalAppManifestView(string Id,
+public sealed record ExternalAppManifestView(
+    string Id,
     int ManifestVersion,
     string DisplayName,
     string Summary,
@@ -121,7 +126,8 @@ public sealed record ExternalAppManifestView(string Id,
     IReadOnlyList<ExternalAppVariableView> Variables);
 
 /// <summary>One container of an application, as the detail page renders it.</summary>
-public sealed record ExternalAppServiceView(string Name,
+public sealed record ExternalAppServiceView(
+    string Name,
     string Image,
     string ImageTag,
     IReadOnlyList<string>? Entrypoint,
@@ -164,7 +170,8 @@ public sealed record ExternalAppResourcesView(int MinimumMemoryMb, int Recommend
 /// <param name="WritableRootFilesystem">True when ANY service runs with a writable root filesystem.</param>
 /// <param name="PublishedPorts">Every <c>service:containerPort</c> string of the map, ordinal-sorted.</param>
 /// <param name="ExtraHosts">Every extra host any service declares, ordinal-sorted.</param>
-public sealed record ExternalAppEffectivePermissionsView(bool Internet,
+public sealed record ExternalAppEffectivePermissionsView(
+    bool Internet,
     string HostFiles,
     string Gpu,
     bool LocalNetwork,
@@ -178,7 +185,8 @@ public sealed record ExternalAppEffectivePermissionsView(bool Internet,
 ///     One service's own grants. Sets become arrays in declaration order; the mapper sorts nothing and adds nothing.
 ///     <paramref name="PublishedPorts" /> entries are <c>service:containerPort</c>, the same strings the diff compares.
 /// </summary>
-public sealed record ExternalAppServicePermissionsView(IReadOnlyList<string> Capabilities,
+public sealed record ExternalAppServicePermissionsView(
+    IReadOnlyList<string> Capabilities,
     bool WritableRootFilesystem,
     IReadOnlyList<string> PublishedPorts,
     IReadOnlyList<string> ExtraHosts);
@@ -186,7 +194,8 @@ public sealed record ExternalAppServicePermissionsView(IReadOnlyList<string> Cap
 /// <param name="Default">
 ///     NULL for a <c>secret</c> variable whatever the manifest says: a shipped secret default is never a wire value.
 /// </param>
-public sealed record ExternalAppVariableView(string Name,
+public sealed record ExternalAppVariableView(
+    string Name,
     string Label,
     string? Description,
     string Type,
@@ -215,7 +224,8 @@ public sealed record ExternalAppVariableValidationView(int? MinLength, int? MaxL
 ///     <c>AlreadyInstalled</c>, but one closed vocabulary means the SPA ships eight labels once instead of two
 ///     overlapping sets.
 /// </param>
-public sealed record ExternalAppInstallPreview(string ApplicationId,
+public sealed record ExternalAppInstallPreview(
+    string ApplicationId,
     int ManifestVersion,
     string ManifestSha256,
     bool CanInstall,
@@ -244,7 +254,8 @@ public sealed record ExternalAppInstallPreview(string ApplicationId,
 /// <param name="ResourceVerdict">
 ///     The service's own resource verdict, projected. The install preview names the same shape <c>ResourceCheck</c>.
 /// </param>
-public sealed record ExternalAppUpdatePreview(string ApplicationId,
+public sealed record ExternalAppUpdatePreview(
+    string ApplicationId,
     Guid InstanceId,
     int CurrentManifestVersion,
     int TargetManifestVersion,
@@ -261,7 +272,8 @@ public sealed record ExternalAppUpdatePreview(string ApplicationId,
 ///     The sentence naming requested versus available, carried straight across, which the SPA shows rather than
 ///     composing it from the byte counts.
 /// </param>
-public sealed record ExternalAppResourceCheckView(bool Satisfied,
+public sealed record ExternalAppResourceCheckView(
+    bool Satisfied,
     string? FailureCategory,
     long RequiredMemoryBytes,
     long AvailableMemoryBytes,
@@ -282,7 +294,8 @@ public sealed record ExternalAppResourceCheckView(bool Satisfied,
 ///     <c>testedVersion</c> reaches the client as <c>manifest.testedVersion</c>; there is no duplicate top-level member.
 /// </param>
 /// <param name="RuntimeOverride">Null means the node-wide selection applies.</param>
-public sealed record ExternalAppInstanceView(Guid Id,
+public sealed record ExternalAppInstanceView(
+    Guid Id,
     string ApplicationId,
     string DisplayName,
     int ManifestVersion,
@@ -312,7 +325,8 @@ public sealed record ExternalAppInstanceView(Guid Id,
 ///     summary, and re-reading the instance to fill a manifest into a 202 body would return a row a concurrent
 ///     operation may already have moved.
 /// </summary>
-public sealed record ExternalAppInstanceSummaryView(Guid Id,
+public sealed record ExternalAppInstanceSummaryView(
+    Guid Id,
     string ApplicationId,
     string DisplayName,
     int ManifestVersion,
@@ -476,7 +490,8 @@ public sealed record ExternalAppInstanceEventFeedRequest
 ///     bound: one direction means the hub replay and the paged feed can share one store member without a reversal step
 ///     that could disagree.
 /// </summary>
-public sealed record ListExternalAppInstanceEventsResponse(IReadOnlyList<ExternalAppInstanceEventView> Items,
+public sealed record ListExternalAppInstanceEventsResponse(
+    IReadOnlyList<ExternalAppInstanceEventView> Items,
     long HighestSequence,
     bool HasMore);
 

@@ -3,10 +3,8 @@ namespace XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1;
 using System.Net;
 using System.Text.Json;
 using NSubstitute;
-using NSubstitute.Core;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
-using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -64,7 +62,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", route, new { expectedVersion = 7L })
+                                   .SendAsOperatorAsync(factory, "POST", route, new
+                                   {
+                                       expectedVersion = 7L
+                                   })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -100,7 +101,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new { expectedVersion = 7L })
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new
+                                   {
+                                       expectedVersion = 7L
+                                   })
                                    .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -151,7 +155,10 @@ public sealed class ExternalAppLifecycleEndpointTests
 
         var body = route == ExternalAppEndpointPayloads.InstanceUpdate
             ? UpdateBody(expectedVersion: 3L)
-            : new Dictionary<string, object?>(StringComparer.Ordinal) { ["expectedVersion"] = 3L };
+            : new Dictionary<string, object?>(StringComparer.Ordinal)
+            {
+                ["expectedVersion"] = 3L
+            };
 
         using var response = await ExternalAppEndpointPayloads.SendAsOperatorAsync(factory, "POST", route, body).ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
@@ -188,7 +195,10 @@ public sealed class ExternalAppLifecycleEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        method,
                                        $"{ExternalAppEndpointPayloads.Instances}/not-a-guid{suffix}",
-                                       new { expectedVersion = 7L })
+                                       new
+                                       {
+                                           expectedVersion = 7L
+                                       })
                                    .ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest,
@@ -263,7 +273,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStop, new { expectedVersion = 7L })
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStop, new
+                                   {
+                                       expectedVersion = 7L
+                                   })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -285,7 +298,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", route, new { expectedVersion = 7L })
+                                   .SendAsOperatorAsync(factory, "POST", route, new
+                                   {
+                                       expectedVersion = 7L
+                                   })
                                    .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -377,11 +393,10 @@ public sealed class ExternalAppLifecycleEndpointTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.PreviewUpdateAsync(ExternalAppEndpointPayloads.InstanceId, Arg.Any<CancellationToken>())
-            .Returns(ExternalAppEndpointPayloads.UpdatePreviewOf(
-                currentValues: new Dictionary<string, string>(StringComparer.Ordinal)
-                {
-                    [ExternalAppEndpointPayloads.SecretVariableName] = ExternalAppVariableMask.Value
-                }));
+            .Returns(ExternalAppEndpointPayloads.UpdatePreviewOf(currentValues: new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                [ExternalAppEndpointPayloads.SecretVariableName] = ExternalAppVariableMask.Value
+            }));
 
         await using var factory = Factory(apps);
 
@@ -437,8 +452,7 @@ public sealed class ExternalAppLifecycleEndpointTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.UpdateAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<UpdateCommand>(), Arg.Any<CancellationToken>())
-            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppPermissionChangeRequiresAcknowledgementException(
-                "This update grants permissions the installed version does not have.",
+            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppPermissionChangeRequiresAcknowledgementException("This update grants permissions the installed version does not have.",
                 ["capabilities", "writableRootFilesystem"]));
 
         await using var factory = Factory(apps);
@@ -472,7 +486,10 @@ public sealed class ExternalAppLifecycleEndpointTests
         await using var factory = Factory(apps);
 
         using var response = await ExternalAppEndpointPayloads
-                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new { expectedVersion = 7L })
+                                   .SendAsOperatorAsync(factory, "POST", ExternalAppEndpointPayloads.InstanceStart, new
+                                   {
+                                       expectedVersion = 7L
+                                   })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -485,8 +502,7 @@ public sealed class ExternalAppLifecycleEndpointTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.UpdateAsync(Arg.Any<Guid>(), Arg.Any<long>(), Arg.Any<UpdateCommand>(), Arg.Any<CancellationToken>())
-            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppManifestChangedException(
-                "The catalog now serves a different manifest.",
+            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppManifestChangedException("The catalog now serves a different manifest.",
                 4,
                 ExternalAppEndpointPayloads.OtherManifestSha256));
 

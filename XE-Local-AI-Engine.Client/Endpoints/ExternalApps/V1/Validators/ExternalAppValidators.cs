@@ -3,7 +3,6 @@ namespace XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Validators;
 using System.Text.RegularExpressions;
 using FastEndpoints;
 using FluentValidation;
-using XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1;
 
 /// <summary>
 ///     Shape validation only: patterns, lengths, ranges and presence. Anything needing the catalog or the stored

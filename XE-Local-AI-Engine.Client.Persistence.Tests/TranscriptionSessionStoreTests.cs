@@ -214,9 +214,9 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         // The unique (session_id, seq) index is the guard, not a check in the store: two writers that both believe they
         // own sequence 1 must collide at the database rather than silently interleave.
         _ = await AssertEx.ThrowsAsync<DbUpdateException>(
-                () => RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 9_000, "collision")], updatedAtUtc: 160, CancellationToken.None)),
-                "A repeated sequence within one session must be rejected.")
-            .ConfigureAwait(false);
+                              () => RunAsync(databasePath, store => store.AppendSegmentsAsync(sessionId, [NewSegment(seq: 1, startMs: 9_000, "collision")], updatedAtUtc: 160, CancellationToken.None)),
+                              "A repeated sequence within one session must be rejected.")
+                          .ConfigureAwait(false);
 
         // The index is scoped to the session, so the same sequence in another session is perfectly legal.
         await RunAsync(databasePath, store => store.AppendSegmentsAsync(otherSessionId, [NewSegment(seq: 1, startMs: 0, "independent")], updatedAtUtc: 250, CancellationToken.None))

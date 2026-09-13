@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using System.Reflection;
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -44,11 +43,11 @@ public sealed class ExternalAppBridgeTokenExposureTests
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web")]);
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
         var admitted = await harness.Service.InstallAsync(new InstallCommand(AppId,
-                                              DisplayName: null,
-                                              manifest.ManifestVersion,
-                                              manifest.ManifestSha256,
-                                              new Dictionary<string, string>(StringComparer.Ordinal),
-                                              AcceptPermissions: true))
+                                        DisplayName: null,
+                                        manifest.ManifestVersion,
+                                        manifest.ManifestSha256,
+                                        new Dictionary<string, string>(StringComparer.Ordinal),
+                                        AcceptPermissions: true))
                                     .ConfigureAwait(false);
         await harness.WaitUntilIdleAsync(admitted.Id).ConfigureAwait(false);
 

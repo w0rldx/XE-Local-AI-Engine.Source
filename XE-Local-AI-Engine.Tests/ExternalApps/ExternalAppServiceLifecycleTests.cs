@@ -98,17 +98,24 @@ public sealed class ExternalAppServiceLifecycleTests
     [Test]
     public async Task Start_AfterConfigure_RecreatesTheContainersAndTheChangedVariableReachesTheEnvironment()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["HOST"] = "${LLM_HOST}" })],
+        var manifest = ExternalAppTestManifests.Manifest([
+                ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["HOST"] = "${LLM_HOST}"
+                })
+            ],
             variables: [ExternalAppTestManifests.Variable("LLM_HOST", @default: "http://localhost:11434")]);
 
         await using var harness = await StoppedHarnessAsync(manifest).ConfigureAwait(false);
         var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
         var detail = await harness.Service.ConfigureAsync(stopped.Id,
-                                       stopped.Version,
-                                       new Dictionary<string, string>(StringComparer.Ordinal) { ["LLM_HOST"] = "http://127.0.0.1:9999" })
-                                   .ConfigureAwait(false);
+                                      stopped.Version,
+                                      new Dictionary<string, string>(StringComparer.Ordinal)
+                                      {
+                                          ["LLM_HOST"] = "http://127.0.0.1:9999"
+                                      })
+                                  .ConfigureAwait(false);
 
         AssertEx.True(detail.NeedsRecreate, "A configure records that the running containers no longer match the stored values.");
 
@@ -143,7 +150,10 @@ public sealed class ExternalAppServiceLifecycleTests
         var createdBefore = harness.Runtime.CreatedContainerIds.Count;
 
         // The container is there, but the daemon does not report the image the snapshot names.
-        harness.Runtime.InspectionMutator = inspection => inspection with { Image = observed };
+        harness.Runtime.InspectionMutator = inspection => inspection with
+        {
+            Image = observed
+        };
 
         _ = await harness.Service.StartAsync(stopped.Id, stopped.Version).ConfigureAwait(false);
         _ = await harness.SettleAsync(stopped.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
@@ -183,8 +193,7 @@ public sealed class ExternalAppServiceLifecycleTests
     [Test]
     public async Task Reset_WipesTheVolumesReMaterialisesTheFilesAndRestoresTheDesiredState()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web",
                 storage: [new ApplicationStorage("data", "/var/lib/app")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/etc/app/settings.yml", "server: local\n")])
@@ -211,10 +220,8 @@ public sealed class ExternalAppServiceLifecycleTests
     [Test]
     public async Task Reset_WhenTheVolumeWipeFails_LandsOnFailedRatherThanStayingInResetting()
     {
-        await using var harness = await StoppedHarnessAsync(
-                                            ExternalAppTestManifests.Manifest(
-                                                [ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]))
-                                        .ConfigureAwait(false);
+        await using var harness = await StoppedHarnessAsync(ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]))
+            .ConfigureAwait(false);
         var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
         var volumes = Path.Combine(stopped.StoragePath, "volumes");
@@ -253,8 +260,7 @@ public sealed class ExternalAppServiceLifecycleTests
         // The instance key was forgotten. The one entry left is the application key install takes transiently, which
         // is bounded by the catalog rather than by how many instances have ever existed.
         AssertEx.Equal(expected: 1, harness.Gate.TrackedCount);
-        using var reentered = AssertEx.NotNull(
-            await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(installed.Id)).ConfigureAwait(false),
+        using var reentered = AssertEx.NotNull(await harness.Gate.TryEnterAsync(ExternalAppInstanceGate.InstanceKey(installed.Id)).ConfigureAwait(false),
             "The uninstalled instance's gate must be free.");
         AssertEx.Equal(expected: 2,
             harness.Gate.TrackedCount,
@@ -323,8 +329,7 @@ public sealed class ExternalAppServiceLifecycleTests
     {
         SymlinkSupport.EnsureSupported();
 
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/data")]),
             ExternalAppTestManifests.Service("sidecar",
                 storage: [new ApplicationStorage("data", "/data")],
@@ -379,8 +384,7 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest()).ConfigureAwait(false);
         var row = await harness.SeedAsync(SingleServiceManifest(), ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<ExternalAppConcurrencyException>(
-            () => Invoke(harness, operation, row.Id, row.Version + 1)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppConcurrencyException>(() => Invoke(harness, operation, row.Id, row.Version + 1)).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -406,8 +410,7 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest()).ConfigureAwait(false);
         var row = await harness.SeedAsync(SingleServiceManifest(), status).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
-            () => Invoke(harness, operation, row.Id, row.Version)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(() => Invoke(harness, operation, row.Id, row.Version)).ConfigureAwait(false);
     }
 
     /// <summary>Cancel is accepted on the three long transients only, and only when something is actually running.</summary>
@@ -423,8 +426,7 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(SingleServiceManifest()).ConfigureAwait(false);
         var row = await harness.SeedAsync(SingleServiceManifest(), status).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
-            () => harness.Service.CancelAsync(row.Id)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(() => harness.Service.CancelAsync(row.Id)).ConfigureAwait(false);
     }
 
     [Test]
@@ -434,8 +436,7 @@ public sealed class ExternalAppServiceLifecycleTests
         var row = await harness.SeedAsync(SingleServiceManifest(), ExternalAppInstanceStatus.Installing).ConfigureAwait(false);
 
         // A transient status with no live operation is a CRASHED operation. The boot reconciler settles those.
-        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
-            () => harness.Service.CancelAsync(row.Id)).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(() => harness.Service.CancelAsync(row.Id)).ConfigureAwait(false);
     }
 
     [Test]
@@ -444,9 +445,10 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await RunningHarnessAsync(SingleServiceManifest()).ConfigureAwait(false);
         var installed = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
-        var failure = await AssertEx.ThrowsAsync<ExternalAppInvalidTransitionException>(
-            () => harness.Service.ConfigureAsync(installed.Id, installed.Version, new Dictionary<string, string>(StringComparer.Ordinal)))
-            .ConfigureAwait(false);
+        var failure = await AssertEx
+                            .ThrowsAsync<ExternalAppInvalidTransitionException>(() =>
+                                harness.Service.ConfigureAsync(installed.Id, installed.Version, new Dictionary<string, string>(StringComparer.Ordinal)))
+                            .ConfigureAwait(false);
 
         // The wording, not only the refusal: admission is every Operable status except Running, so a message that
         // said "while the application is stopped" described a rule the service stopped enforcing when Failed and
@@ -457,19 +459,29 @@ public sealed class ExternalAppServiceLifecycleTests
     [Test]
     public async Task Configure_WithTheMaskSentinel_KeepsTheStoredSecretAndNeverReturnsIt()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["PW"] = "${ADMIN_PASSWORD}" })],
+        var manifest = ExternalAppTestManifests.Manifest([
+                ExternalAppTestManifests.Service("web", environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["PW"] = "${ADMIN_PASSWORD}"
+                })
+            ],
             variables: [ExternalAppTestManifests.Variable("ADMIN_PASSWORD", required: true, type: "secret")]);
 
         await using var harness = await StoppedHarnessAsync(manifest,
-                                            new Dictionary<string, string>(StringComparer.Ordinal) { ["ADMIN_PASSWORD"] = "correct horse battery staple" })
-                                        .ConfigureAwait(false);
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["ADMIN_PASSWORD"] = "correct horse battery staple"
+                })
+            .ConfigureAwait(false);
         var stopped = AssertEx.NotNull(await harness.ReadAsync(harness.InstalledId).ConfigureAwait(false));
 
         var detail = await harness.Service.ConfigureAsync(stopped.Id,
-                                       stopped.Version,
-                                       new Dictionary<string, string>(StringComparer.Ordinal) { ["ADMIN_PASSWORD"] = ExternalAppVariableMask.Value })
-                                   .ConfigureAwait(false);
+                                      stopped.Version,
+                                      new Dictionary<string, string>(StringComparer.Ordinal)
+                                      {
+                                          ["ADMIN_PASSWORD"] = ExternalAppVariableMask.Value
+                                      })
+                                  .ConfigureAwait(false);
 
         AssertEx.Equal(ExternalAppVariableMask.Value, detail.MaskedVariables["ADMIN_PASSWORD"]);
 
@@ -491,8 +503,7 @@ public sealed class ExternalAppServiceLifecycleTests
         var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
         var eventsBefore = await harness.ReadEventsAsync(row.Id).ConfigureAwait(false);
 
-        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
-            () => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
 
         AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
         AssertEx.Contains(refused.Message, "container bridge", message: "The operator has to read which feature is missing.");
@@ -516,8 +527,7 @@ public sealed class ExternalAppServiceLifecycleTests
         await using var harness = await ExternalAppServiceHarness.CreateAsync(manifest, withBridge: false).ConfigureAwait(false);
         var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Running, ExternalAppDesiredState.Running).ConfigureAwait(false);
 
-        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
-            () => harness.Service.RestartAsync(row.Id, row.Version)).ConfigureAwait(false);
+        var refused = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.RestartAsync(row.Id, row.Version)).ConfigureAwait(false);
 
         AssertEx.Contains(refused.Message, nameof(ExternalAppBlockedReason.BridgeUnavailable));
 
@@ -574,17 +584,15 @@ public sealed class ExternalAppServiceLifecycleTests
 
         // Install first and on an empty store: an existing row would be refused as already installed, which is a
         // different reason and would prove nothing about this one.
-        var installRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
-            () => harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                DisplayName: null,
-                manifest.ManifestVersion,
-                manifest.ManifestSha256,
-                new Dictionary<string, string>(StringComparer.Ordinal),
-                AcceptPermissions: true))).ConfigureAwait(false);
+        var installRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.InstallAsync(new InstallCommand(manifest.Id,
+            DisplayName: null,
+            manifest.ManifestVersion,
+            manifest.ManifestSha256,
+            new Dictionary<string, string>(StringComparer.Ordinal),
+            AcceptPermissions: true))).ConfigureAwait(false);
 
         var row = await harness.SeedAsync(manifest, ExternalAppInstanceStatus.Stopped).ConfigureAwait(false);
-        var startRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(
-            () => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
+        var startRefusal = await AssertEx.ThrowsAsync<ExternalAppValidationException>(() => harness.Service.StartAsync(row.Id, row.Version)).ConfigureAwait(false);
 
         AssertEx.Equal(installRefusal.Message, startRefusal.Message);
     }
@@ -630,17 +638,18 @@ public sealed class ExternalAppServiceLifecycleTests
     /// <summary>The same single service, reading a bridge built-in that only a node with an open bridge resolves.</summary>
     private static ApplicationManifest BridgeNeedingManifest()
     {
-        return ExternalAppTestManifests.Manifest(
-        [
+        return ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web",
-                environment: new Dictionary<string, string>(StringComparer.Ordinal) { ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1" })
+                environment: new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    ["OPENAI_BASE_URL"] = "http://${XE_BRIDGE_ENDPOINT}/llm/v1"
+                })
         ]);
     }
 
     private static ApplicationManifest TwoServiceManifest()
     {
-        return ExternalAppTestManifests.Manifest(
-        [
+        return ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("web", ports: [ExternalAppTestManifests.UiPort(8080)]),
             ExternalAppTestManifests.Service("sidecar",
                 dependsOn: [new ApplicationDependency("web", "started")],

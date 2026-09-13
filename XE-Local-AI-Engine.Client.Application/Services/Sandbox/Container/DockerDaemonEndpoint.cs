@@ -109,6 +109,6 @@ public sealed record DockerDaemonEndpoint(Uri Uri, DockerDaemonEndpointSource So
     /// </summary>
     internal static string Redact(string endpoint)
     {
-        return System.Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ? Redact(uri) : UnparsableEndpoint;
+        return Uri.TryCreate(endpoint, UriKind.Absolute, out var uri) ? Redact(uri) : UnparsableEndpoint;
     }
 }

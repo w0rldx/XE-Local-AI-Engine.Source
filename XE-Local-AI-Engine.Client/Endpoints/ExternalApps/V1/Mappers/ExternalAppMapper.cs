@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.ExternalApps.V1.Mappers;
 
 using System.Globalization;
-using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;

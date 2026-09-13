@@ -3,8 +3,6 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using System.Globalization;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -248,22 +246,34 @@ internal sealed partial class ExternalAppService
 
         await using var runtime = await services.Resolver.CreateRuntimeAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
         var containers = await runtime
-                              .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken)
-                              .ConfigureAwait(false);
+                               .ListContainersAsync(ExternalAppLabels.For(_installId, instanceId, serviceName), cancellationToken)
+                               .ConfigureAwait(false);
         if (containers.Count == 0)
         {
-            return new ContainerLogSnapshot { Text = string.Empty, Truncated = false, LineCount = 0 };
+            return new ContainerLogSnapshot
+            {
+                Text = string.Empty,
+                Truncated = false,
+                LineCount = 0
+            };
         }
 
         var snapshot = await runtime.ReadLogsAsync(containers[0],
-                                        new ContainerLogRequest { TailLines = tail, MaxBytes = ContainerLogRequest.MaximumBytes },
+                                        new ContainerLogRequest
+                                        {
+                                            TailLines = tail,
+                                            MaxBytes = ContainerLogRequest.MaximumBytes
+                                        },
                                         cancellationToken)
                                     .ConfigureAwait(false);
 
         // Logs cross UNMASKED by design: the text is the application's own container output rather than an
         // engine-owned value, and an application printing its own secrets is something its operator needs to see.
         return snapshot.Truncated
-            ? snapshot with { Text = LogTruncationMarker + Environment.NewLine + snapshot.Text }
+            ? snapshot with
+            {
+                Text = LogTruncationMarker + Environment.NewLine + snapshot.Text
+            }
             : snapshot;
     }
 
@@ -418,12 +428,21 @@ internal sealed partial class ExternalAppService
     {
         return manifest with
         {
-            Services = [.. manifest.Services.Select(static service => service with { Files = [] })],
+            Services =
+            [
+                .. manifest.Services.Select(static service => service with
+                {
+                    Files = []
+                })
+            ],
             Variables =
             [
                 .. manifest.Variables.Select(static variable =>
                     string.Equals(variable.Type, SecretVariableType, StringComparison.Ordinal)
-                        ? variable with { Default = null }
+                        ? variable with
+                        {
+                            Default = null
+                        }
                         : variable)
             ]
         };
@@ -532,8 +551,7 @@ internal sealed partial class ExternalAppService
 
         if (offenders.Count > 0)
         {
-            throw new ExternalAppValidationException(
-                $"These configuration values are missing or not valid: {string.Join(", ", offenders)}.",
+            throw new ExternalAppValidationException($"These configuration values are missing or not valid: {string.Join(", ", offenders)}.",
                 offenders);
         }
 
@@ -602,7 +620,8 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>The three per-scope dependencies every entry point and every pipeline resolves, resolved in one place.</summary>
-    private sealed record ScopedServices(IExternalAppInstanceStore Store,
+    private sealed record ScopedServices(
+        IExternalAppInstanceStore Store,
         IApplicationCatalogProvider Catalog,
         IContainerRuntimeResolver Resolver)
     {

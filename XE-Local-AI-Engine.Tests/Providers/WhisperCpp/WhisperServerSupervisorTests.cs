@@ -70,8 +70,7 @@ public sealed class WhisperServerSupervisorTests
         // sanitized failure rather than hanging or surfacing a transport exception.
         await using var harness = new WhisperSupervisorHarness(readinessProbe: new FakeWhisperReadinessProbe(ready: false));
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "did not become ready", StringComparison.Ordinal);
         AssertEx.True(harness.Launcher.Handles.Single().WasTreeKilled,
@@ -102,8 +101,7 @@ public sealed class WhisperServerSupervisorTests
     {
         // Brief test 3. The BINARY's backend decides, which is why the binary manager fake reports CUDA here.
         var admission = new RecordingGpuLoadAdmission();
-        await using var harness = new WhisperSupervisorHarness(
-            binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
             loadAdmission: admission);
 
@@ -119,14 +117,12 @@ public sealed class WhisperServerSupervisorTests
     {
         // Holding the gate after a failed spawn would wedge every other runtime's load on this box.
         var admission = new RecordingGpuLoadAdmission();
-        await using var harness = new WhisperSupervisorHarness(
-            readinessProbe: new FakeWhisperReadinessProbe(ready: false),
+        await using var harness = new WhisperSupervisorHarness(readinessProbe: new FakeWhisperReadinessProbe(ready: false),
             binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
             loadAdmission: admission);
 
-        await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
+        await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 
         AssertEx.Equal(expected: 1, admission.AcquireCount);
         AssertEx.Equal(expected: 1, admission.ReleaseCount);
@@ -144,8 +140,7 @@ public sealed class WhisperServerSupervisorTests
         {
             ReadinessGate = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
         };
-        await using var harness = new WhisperSupervisorHarness(
-            readinessProbe: probe,
+        await using var harness = new WhisperSupervisorHarness(readinessProbe: probe,
             binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
             loadAdmission: admission);
@@ -230,8 +225,7 @@ public sealed class WhisperServerSupervisorTests
         var endpoint = await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);
         using var lease = AssertEx.NotNull(harness.Supervisor.TryAcquireTranscriptionLease(endpoint.ModelId, endpoint.Generation));
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("small", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "busy with another transcription", StringComparison.Ordinal);
         AssertEx.Equal("base", AssertEx.NotNull(harness.Supervisor.GetStatus().LoadedModelId),
@@ -244,8 +238,7 @@ public sealed class WhisperServerSupervisorTests
         // An in-place load initialises GPU weights exactly as a spawn does, so skipping the gate here would let a
         // model switch race another runtime's load.
         var admission = new RecordingGpuLoadAdmission();
-        await using var harness = new WhisperSupervisorHarness(
-            binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
             loadAdmission: admission);
 
@@ -264,8 +257,7 @@ public sealed class WhisperServerSupervisorTests
     {
         var admission = new RecordingGpuLoadAdmission();
         var handler = new ScriptedWhisperHttpHandler(static _ => new HttpResponseMessage(HttpStatusCode.BadRequest));
-        await using var harness = new WhisperSupervisorHarness(
-            binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda),
             loadAdmission: admission,
             httpHandler: handler);
@@ -459,8 +451,7 @@ public sealed class WhisperServerSupervisorTests
     {
         await using var harness = new WhisperSupervisorHarness();
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("not-a-model", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("not-a-model", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "not installed", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.Launcher.LaunchCount);
@@ -474,8 +465,7 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
         File.Delete(Path.Combine(harness.ModelsDirectory, "base", "ggml-base.bin"));
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "not installed", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.Launcher.LaunchCount);
@@ -490,8 +480,7 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
         harness.Options.VadModelPath = Path.Combine(harness.ModelsDirectory, "vad", WhisperModelCatalog.VadFileName);
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "voice-activity-detection model is not installed", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.Launcher.LaunchCount);
@@ -537,8 +526,7 @@ public sealed class WhisperServerSupervisorTests
         await using var harness = new WhisperSupervisorHarness();
         using var mutation = AssertEx.NotNull(harness.ActivityGate.TryAcquireMutationReservation());
 
-        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(
-            () => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
+        var exception = await AssertEx.ThrowsAsync<WhisperRuntimeException>(() => harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None));
 
         AssertEx.Contains(exception.Message, "busy with an exclusive operation", StringComparison.Ordinal);
         AssertEx.Equal(expected: 0, harness.Launcher.LaunchCount);
@@ -560,8 +548,7 @@ public sealed class WhisperServerSupervisorTests
     [Test]
     public async Task GetStatus_AfterSpawn_ReportsTheResolvedBinary()
     {
-        await using var harness = new WhisperSupervisorHarness(
-            binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: false, version: "byo"),
+        await using var harness = new WhisperSupervisorHarness(binaryManager: new FakeWhisperBinaryManager(WhisperBackend.Cuda, isPinnedFallback: false, version: "byo"),
             backendSelector: new FakeWhisperBackendSelector(WhisperBackend.Cuda));
 
         await harness.Supervisor.EnsureRunningAsync("base", CancellationToken.None);

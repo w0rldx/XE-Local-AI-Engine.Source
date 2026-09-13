@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Hosting;
 
 using System.Net;
 using System.Net.Sockets;
-using Microsoft.AspNetCore.Hosting.Server.Features;
 
 /// <summary>
 ///     The two questions that have to be answered before the bridge's URL is appended to the host's bind list, both

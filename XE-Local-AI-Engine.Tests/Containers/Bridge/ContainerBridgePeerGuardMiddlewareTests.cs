@@ -100,8 +100,8 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-            .InvokeAsync(context, static _ => Task.CompletedTask)
-            .ConfigureAwait(false);
+              .InvokeAsync(context, static _ => Task.CompletedTask)
+              .ConfigureAwait(false);
 
         AssertEx.Equal(StatusCodes.Status403Forbidden, context.Response.StatusCode, "The diagnosis must not change the verdict.");
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "rootful"),
@@ -118,8 +118,8 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(Endpoints(), watcher, logger)
-            .InvokeAsync(context, static _ => Task.CompletedTask)
-            .ConfigureAwait(false);
+              .InvokeAsync(context, static _ => Task.CompletedTask)
+              .ConfigureAwait(false);
 
         AssertEx.True(logger.HasEntry(LogLevel.Warning, "accepts this computer's own addresses only"), "The refusal is still reported.");
         AssertEx.False(logger.HasEntry(LogLevel.Warning, "rootful"), "A routable public peer is another machine; naming the daemon would be a wrong diagnosis.");
@@ -213,14 +213,14 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
         using var watcher = CreateWatcher();
         await new ContainerBridgePeerGuardMiddleware(new ContainerBridgeEndpointSource(endpoint: null),
-                watcher,
-                NullLogger<ContainerBridgePeerGuardMiddleware>.Instance)
-            .InvokeAsync(context, _ =>
-            {
-                nextCalled = true;
-                return Task.CompletedTask;
-            })
-            .ConfigureAwait(false);
+                  watcher,
+                  NullLogger<ContainerBridgePeerGuardMiddleware>.Instance)
+              .InvokeAsync(context, _ =>
+              {
+                  nextCalled = true;
+                  return Task.CompletedTask;
+              })
+              .ConfigureAwait(false);
 
         AssertEx.True(nextCalled, "With no resolved bridge there is no bridge connection to refuse, and the node's own pipeline owns the request.");
     }
@@ -240,7 +240,11 @@ public sealed class ContainerBridgePeerGuardMiddlewareTests
 
     private static IOptions<ContainerBridgeOptions> BridgeOptions()
     {
-        return Options.Create(new ContainerBridgeOptions { Enabled = true, Port = BridgePort });
+        return Options.Create(new ContainerBridgeOptions
+        {
+            Enabled = true,
+            Port = BridgePort
+        });
     }
 
     /// <summary>

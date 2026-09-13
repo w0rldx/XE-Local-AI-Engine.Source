@@ -23,9 +23,9 @@ internal sealed class TranscriptSegmentConfiguration : IEntityTypeConfiguration<
         builder.Property(entity => entity.Confidence).HasColumnName("confidence");
 
         builder.HasOne<TranscriptionSession>()
-            .WithMany(session => session.Segments)
-            .HasForeignKey(entity => entity.SessionId)
-            .OnDelete(DeleteBehavior.Cascade);
+               .WithMany(session => session.Segments)
+               .HasForeignKey(entity => entity.SessionId)
+               .OnDelete(DeleteBehavior.Cascade);
 
         builder.HasIndex(entity => new
         {

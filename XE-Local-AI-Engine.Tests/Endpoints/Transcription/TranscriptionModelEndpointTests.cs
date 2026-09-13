@@ -26,8 +26,7 @@ public sealed class TranscriptionModelEndpointTests
     {
         var service = new StubTranscriptionRuntimeService
         {
-            Catalog = new TranscriptionModelCatalogView(
-            [
+            Catalog = new TranscriptionModelCatalogView([
                 new TranscriptionModelView(Entry("tiny"), Installed: true, Download: null),
                 new TranscriptionModelView(Entry("base"), Installed: false,
                     new WhisperModelDownloadStatus("base", WhisperModelDownloadPhase.Running, CompletedBytes: 10, TotalBytes: 100, SanitizedError: null)
@@ -63,7 +62,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new { modelId = "not-a-model" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new
+        {
+            modelId = "not-a-model"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -77,7 +79,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new { modelId = "   " });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new
+        {
+            modelId = "   "
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -94,7 +99,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new { modelId = "base" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new
+        {
+            modelId = "base"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -115,7 +123,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new { modelId = "base" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads", new
+        {
+            modelId = "base"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Accepted, response.StatusCode);
@@ -134,7 +145,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads/cancel", new { modelId = "base" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads/cancel", new
+        {
+            modelId = "base"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -152,7 +166,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(coordinator);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads/cancel", new { modelId = "base" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/downloads/cancel", new
+        {
+            modelId = "base"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -166,7 +183,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new { modelId = "small" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new
+        {
+            modelId = "small"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -183,7 +203,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new { modelId = (string?)null });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new
+        {
+            modelId = (string?)null
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -200,7 +223,10 @@ public sealed class TranscriptionModelEndpointTests
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new { modelId = "not-a-model" });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/models/select", new
+        {
+            modelId = "not-a-model"
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -235,14 +261,18 @@ public sealed class TranscriptionModelEndpointTests
         var request = new HttpRequestMessage(new HttpMethod(method), $"{ApiPrefix}/{route}");
         if (method == "POST")
         {
-            request.Content = JsonContent.Create(new { modelId = "base" });
+            request.Content = JsonContent.Create(new
+            {
+                modelId = "base"
+            });
         }
 
         authorize(request);
         return request;
     }
 
-    private static WhisperModelEntry Entry(string modelId) => AssertEx.NotNull(WhisperModelCatalog.Find(modelId));
+    private static WhisperModelEntry Entry(string modelId) =>
+        AssertEx.NotNull(WhisperModelCatalog.Find(modelId));
 
     private static async Task<JsonElement> GetJsonAsync(TestServerWebAppFactory factory, HttpClient client, string route)
     {
@@ -302,9 +332,11 @@ public sealed class TranscriptionModelEndpointTests
             return new WhisperModelDownloadTicket(modelId, AlreadyInFlight);
         }
 
-        public WhisperModelDownloadStatus? GetStatus(string modelId) => Status;
+        public WhisperModelDownloadStatus? GetStatus(string modelId) =>
+            Status;
 
-        public IReadOnlyList<WhisperModelDownloadStatus> ListStatuses() => Status is null ? [] : [Status];
+        public IReadOnlyList<WhisperModelDownloadStatus> ListStatuses() =>
+            Status is null ? [] : [Status];
 
         public bool Cancel(string modelId)
         {
@@ -336,7 +368,8 @@ public sealed class TranscriptionModelEndpointTests
             Task.FromResult(new WhisperServerEvictResult(Evicted: true,
                 new WhisperRuntimeActivitySnapshot(0, 0, 0, MutationReserved: false, EvictionReserved: false)));
 
-        public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) => Task.FromResult(Catalog);
+        public Task<TranscriptionModelCatalogView> GetModelsAsync(CancellationToken ct) =>
+            Task.FromResult(Catalog);
 
         public Task<WhisperModelEntry> GetRecommendedModelAsync(CancellationToken ct) =>
             Task.FromResult(AssertEx.NotNull(WhisperModelCatalog.Find(Catalog.RecommendedModelId)));
@@ -345,9 +378,13 @@ public sealed class TranscriptionModelEndpointTests
         {
             SelectCalled = true;
             LastSelectedModelId = modelId;
-            return Task.FromResult(Catalog with { SelectedModelId = modelId });
+            return Task.FromResult(Catalog with
+            {
+                SelectedModelId = modelId
+            });
         }
 
-        public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) => Task.FromResult(Catalog.RecommendedModelId);
+        public Task<string> ResolveEffectiveModelIdAsync(CancellationToken ct) =>
+            Task.FromResult(Catalog.RecommendedModelId);
     }
 }

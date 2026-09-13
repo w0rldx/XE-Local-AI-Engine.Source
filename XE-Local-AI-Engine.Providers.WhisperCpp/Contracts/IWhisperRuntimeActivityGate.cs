@@ -9,11 +9,12 @@ public sealed record WhisperRuntimeActivitySnapshot(
     bool EvictionReserved)
 {
     /// <summary>Whether anything at all is holding the runtime; the single flag the 409 envelope reports.</summary>
-    public bool IsBusy => MutationReserved
-                          || EvictionReserved
-                          || ActiveTranscriptionCount > 0
-                          || SpawnReadinessCount > 0
-                          || ResidentProcessCount > 0;
+    public bool IsBusy =>
+        MutationReserved
+        || EvictionReserved
+        || ActiveTranscriptionCount > 0
+        || SpawnReadinessCount > 0
+        || ResidentProcessCount > 0;
 }
 
 /// <summary>An identity-scoped activity lease. Disposal releases exactly the lease that was granted, once.</summary>

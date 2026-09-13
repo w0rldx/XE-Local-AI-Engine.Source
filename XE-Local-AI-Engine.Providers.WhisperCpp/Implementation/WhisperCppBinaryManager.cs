@@ -209,10 +209,10 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             throw;
         }
         catch (Exception exception) when (exception is IOException
-                                             or UnauthorizedAccessException
-                                             or ArgumentException
-                                             or NotSupportedException
-                                             or WhisperRuntimeException)
+                                              or UnauthorizedAccessException
+                                              or ArgumentException
+                                              or NotSupportedException
+                                              or WhisperRuntimeException)
         {
             await TombstoneAsync(state, "The managed runtime path failed security validation.", ct).ConfigureAwait(false);
             return null;
@@ -350,9 +350,8 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
             return;
         }
 
-        throw new WhisperRuntimeException(
-            "The whisper.cpp runtime could not be downloaded or failed integrity verification after a retry. "
-            + "Check the network connection and try again.",
+        throw new WhisperRuntimeException("The whisper.cpp runtime could not be downloaded or failed integrity verification after a retry. "
+                                          + "Check the network connection and try again.",
             secondError);
     }
 
@@ -449,10 +448,10 @@ public sealed class WhisperCppBinaryManager : IWhisperCppBinaryManager
                     break;
                 case WhisperArchiveKind.TarGz:
                     await using (var compressed = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                    await using (var decompressed = new GZipStream(compressed, CompressionMode.Decompress))
-                    {
-                        await TarFile.ExtractToDirectoryAsync(decompressed, stagingDir, overwriteFiles: true, ct).ConfigureAwait(false);
-                    }
+                        await using (var decompressed = new GZipStream(compressed, CompressionMode.Decompress))
+                        {
+                            await TarFile.ExtractToDirectoryAsync(decompressed, stagingDir, overwriteFiles: true, ct).ConfigureAwait(false);
+                        }
 
                     break;
                 default:

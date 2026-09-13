@@ -91,7 +91,10 @@ public sealed class ContainerRuntimeRecordPrintingTests
         {
             Image = "ghcr.io/example/app@sha256:0000000000000000000000000000000000000000000000000000000000000000",
             Name = "xe-app-odysseus",
-            Labels = new Dictionary<string, string>(StringComparer.Ordinal) { ["xe.instance"] = "instance-1" },
+            Labels = new Dictionary<string, string>(StringComparer.Ordinal)
+            {
+                ["xe.instance"] = "instance-1"
+            },
             Environment = new Dictionary<string, string>(StringComparer.Ordinal)
             {
                 ["ODYSSEUS_ADMIN_PASSWORD"] = KnownSecret

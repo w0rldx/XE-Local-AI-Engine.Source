@@ -13,7 +13,8 @@ using System.Net;
 /// <param name="IsTunnel">Whether the interface is a tunnel or dial-up link, which no container network reaches back through.</param>
 /// <param name="HasGateway">Whether the interface has at least one gateway address, i.e. whether it routes off this machine.</param>
 /// <param name="UnicastAddresses">Every unicast address assigned to the interface, in both families.</param>
-public sealed record HostInterfaceSnapshot(bool IsUp,
+public sealed record HostInterfaceSnapshot(
+    bool IsUp,
     bool IsLoopback,
     bool IsTunnel,
     bool HasGateway,

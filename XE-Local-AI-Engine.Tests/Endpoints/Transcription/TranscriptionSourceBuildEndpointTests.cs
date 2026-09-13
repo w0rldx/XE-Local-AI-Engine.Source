@@ -232,7 +232,10 @@ public sealed class TranscriptionSourceBuildEndpointTests
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/cancel", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/cancel", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -254,7 +257,10 @@ public sealed class TranscriptionSourceBuildEndpointTests
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -274,7 +280,10 @@ public sealed class TranscriptionSourceBuildEndpointTests
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
@@ -292,7 +301,10 @@ public sealed class TranscriptionSourceBuildEndpointTests
         await using var factory = FactoryWith(build);
         using var client = factory.CreateClient();
 
-        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new { accepted = true });
+        using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/runtime/source-build/remove", new
+        {
+            accepted = true
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -343,12 +355,13 @@ public sealed class TranscriptionSourceBuildEndpointTests
         AssertEx.NotEqual(HttpStatusCode.Forbidden, allowedResponse.StatusCode, $"'{route}' must admit an operator.");
     }
 
-    private static object OfficialCudaBody => new
-    {
-        backend = "cuda",
-        source = "official",
-        acknowledgeCustomSourceRisk = false
-    };
+    private static object OfficialCudaBody =>
+        new
+        {
+            backend = "cuda",
+            source = "official",
+            acknowledgeCustomSourceRisk = false
+        };
 
     private static WhisperCppSourceBuildDescriptor Descriptor() =>
         new(WhisperBackend.Cuda,
@@ -460,7 +473,8 @@ public sealed class TranscriptionSourceBuildEndpointTests
         public Task<WhisperCppSourceBuildRemoveResult> RemoveAsync(CancellationToken ct) =>
             RemoveFailure is null ? Task.FromResult(RemoveResult) : Task.FromException<WhisperCppSourceBuildRemoveResult>(RemoveFailure);
 
-        public WhisperCppSourceBuildStatus GetStatus() => Status;
+        public WhisperCppSourceBuildStatus GetStatus() =>
+            Status;
 
         public bool Cancel()
         {
@@ -468,9 +482,11 @@ public sealed class TranscriptionSourceBuildEndpointTests
             return false;
         }
 
-        public Task RecoverAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task RecoverAsync(CancellationToken ct) =>
+            Task.CompletedTask;
 
-        public Task ShutdownAsync(CancellationToken ct) => Task.CompletedTask;
+        public Task ShutdownAsync(CancellationToken ct) =>
+            Task.CompletedTask;
     }
 
     private sealed class StubPrerequisiteProbe : IWhisperCppSourceBuildPrerequisiteProbe

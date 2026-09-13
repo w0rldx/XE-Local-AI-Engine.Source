@@ -1,11 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
 using System.Collections.Concurrent;
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Docker.DotNet;
-using Docker.DotNet.Models;
 using Microsoft.Extensions.Logging.Abstractions;
 using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -422,8 +422,7 @@ public sealed class ContainerRuntimeRealDaemonTests
             }
         }
 
-        throw new InvalidOperationException(
-            $"Waited {timeout.TotalSeconds:0} s for {what} and it never happened. Last observation: {last}.");
+        throw new InvalidOperationException($"Waited {timeout.TotalSeconds:0} s for {what} and it never happened. Last observation: {last}.");
     }
 
     private static async Task<ContainerBox> NewBoxAsync()
@@ -471,7 +470,7 @@ public sealed class ContainerRuntimeRealDaemonTests
         }
 
         throw Unavailable("no usable Docker daemon. Tried " + string.Join(" | ", attempts)
-                          + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
+                                                            + " Start Docker, or point DOCKER_HOST at a daemon this user can open, and re-run.");
     }
 
     /// <summary>
@@ -800,7 +799,7 @@ public sealed class ContainerRuntimeRealDaemonTests
                 MemoryBytes = 0,
                 NanoCpus = 0,
                 PidsLimit = 256,
-                Entrypoint = ["httpd", "-f", "-p", ServedPort.ToString(System.Globalization.CultureInfo.InvariantCulture), "-h", WritableMount],
+                Entrypoint = ["httpd", "-f", "-p", ServedPort.ToString(CultureInfo.InvariantCulture), "-h", WritableMount],
                 Healthcheck = new ContainerHealthcheck
                 {
                     Test = ["CMD-SHELL", $"wget -q -O /dev/null http://127.0.0.1:{ServedPort}/ || exit 1"],

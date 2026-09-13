@@ -68,8 +68,7 @@ public sealed class ExternalAppOperationRunnerTests
 
         // The gate is keyed by instance, so the second attempt at the same APPLICATION is refused by the
         // one-per-application rule rather than by the gate; both are 409s a caller can act on.
-        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(
-            () => harness.Service.InstallAsync(Command())).ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ExternalAppAlreadyInstalledException>(() => harness.Service.InstallAsync(Command())).ConfigureAwait(false);
 
         AssertEx.True(harness.Runner.IsRunning(admitted.Id), "The install must still hold its instance entry.");
 
@@ -152,8 +151,7 @@ public sealed class ExternalAppOperationRunnerTests
 
     private static async Task<ExternalAppServiceHarness> NewHarnessAsync()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("web", storage: [new ApplicationStorage("data", "/var/lib/app")])]);
 
         return await ExternalAppServiceHarness.CreateAsync(manifest).ConfigureAwait(false);
     }

@@ -138,8 +138,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         };
     }
 
-    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ResolveWithEndpointAsync(
-        ContainerRuntimeSelection? instanceOverride,
+    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ResolveWithEndpointAsync(ContainerRuntimeSelection? instanceOverride,
         bool forceRefresh,
         string? confirmingDaemonId,
         CancellationToken cancellationToken)
@@ -203,8 +202,7 @@ internal sealed class ContainerRuntimeResolver : IContainerRuntimeResolver, IDis
         return selection;
     }
 
-    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ProbeAsync(
-        ContainerRuntimeOptions options,
+    private async Task<(ContainerRuntimeResolution Resolution, DockerDaemonEndpoint Endpoint)> ProbeAsync(ContainerRuntimeOptions options,
         string? confirmingDaemonId,
         CancellationToken cancellationToken)
     {

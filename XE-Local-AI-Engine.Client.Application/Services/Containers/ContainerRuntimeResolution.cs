@@ -124,7 +124,8 @@ public sealed record ContainerRuntimeResolution
     ///         treat as "there is no container runtime on this machine".
     ///     </para>
     /// </summary>
-    public bool Available => Status is not (ContainerRuntimeStatus.DaemonUnreachable
-        or ContainerRuntimeStatus.NotConfigured
-        or ContainerRuntimeStatus.ProbeFailed);
+    public bool Available =>
+        Status is not (ContainerRuntimeStatus.DaemonUnreachable
+            or ContainerRuntimeStatus.NotConfigured
+            or ContainerRuntimeStatus.ProbeFailed);
 }

@@ -139,13 +139,13 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
         // ONE call for the whole tick. The state word arrives with the ids, which is the entire reason this can tell
         // a stopped container from a removed one.
         var listed = await runtime
-                         .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
-                         {
-                             [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
-                             [ExternalAppLabels.Install] = _service.InstallId
-                         },
-                         cancellationToken)
-                         .ConfigureAwait(false);
+                           .ListContainersDetailedAsync(new Dictionary<string, string>(StringComparer.Ordinal)
+                               {
+                                   [ExternalAppLabels.Owner] = ExternalAppLabels.OwnerValue,
+                                   [ExternalAppLabels.Install] = _service.InstallId
+                               },
+                               cancellationToken)
+                           .ConfigureAwait(false);
 
         foreach (var row in candidates)
         {
@@ -242,16 +242,19 @@ internal sealed class ExternalAppStateObserver : IHostedService, IDisposable
     {
         var now = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
         var result = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(row.Id,
-                                    row.Version,
-                                    new HashSet<ExternalAppInstanceStatus> { row.Status },
-                                    ExternalAppInstanceStatus.StoppedUnexpectedly,
-                                    ExternalAppInstanceEventKind.StoppedUnexpectedly,
-                                    EventDetailJson: null,
-                                    now,
-                                    StoppedAtUtc: now,
-                                    FailureCategory: ExternalAppFailureCategory.StoppedUnexpectedly,
-                                    FailureSummary: summary),
-                                cancellationToken)
+                                        row.Version,
+                                        new HashSet<ExternalAppInstanceStatus>
+                                        {
+                                            row.Status
+                                        },
+                                        ExternalAppInstanceStatus.StoppedUnexpectedly,
+                                        ExternalAppInstanceEventKind.StoppedUnexpectedly,
+                                        EventDetailJson: null,
+                                        now,
+                                        StoppedAtUtc: now,
+                                        FailureCategory: ExternalAppFailureCategory.StoppedUnexpectedly,
+                                        FailureSummary: summary),
+                                    cancellationToken)
                                 .ConfigureAwait(false);
 
         if (!result.Applied)

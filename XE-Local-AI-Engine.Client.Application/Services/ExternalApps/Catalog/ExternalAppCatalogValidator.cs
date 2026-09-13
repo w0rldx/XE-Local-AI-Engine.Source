@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 
 using System.Globalization;
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -175,8 +174,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateApplication(
-        ApplicationManifest? manifest,
+    private static void ValidateApplication(ApplicationManifest? manifest,
         int index,
         HashSet<string> seenIds,
         List<string> errors)
@@ -232,8 +230,7 @@ public static partial class ExternalAppCatalogValidator
         ValidateApplicationCrossRules(manifest, prefix, context, errors);
     }
 
-    private static void ValidateApplicationIdentity(
-        ApplicationManifest manifest,
+    private static void ValidateApplicationIdentity(ApplicationManifest manifest,
         string prefix,
         HashSet<string> seenIds,
         List<string> errors)
@@ -429,8 +426,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateApplicationCrossRules(
-        ApplicationManifest manifest,
+    private static void ValidateApplicationCrossRules(ApplicationManifest manifest,
         string prefix,
         ApplicationValidationContext context,
         List<string> errors)
@@ -453,8 +449,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateService(
-        ApplicationService? service,
+    private static void ValidateService(ApplicationService? service,
         int index,
         string applicationPrefix,
         ApplicationValidationContext context,
@@ -508,8 +503,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateServiceEnvironment(
-        ApplicationService service,
+    private static void ValidateServiceEnvironment(ApplicationService service,
         string prefix,
         ApplicationValidationContext context,
         List<string> errors)
@@ -548,8 +542,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ResolveToken(
-        string token,
+    private static void ResolveToken(string token,
         string key,
         string prefix,
         ApplicationValidationContext context,
@@ -610,8 +603,7 @@ public static partial class ExternalAppCatalogValidator
         return true;
     }
 
-    private static void ValidateServicePorts(
-        ApplicationService service,
+    private static void ValidateServicePorts(ApplicationService service,
         string prefix,
         ApplicationValidationContext context,
         List<string> errors)
@@ -661,7 +653,8 @@ public static partial class ExternalAppCatalogValidator
 
             if (port.OpenPath is { } openPath && !IsAcceptableOpenPath(openPath))
             {
-                errors.Add($"{path}.openPath must be an absolute path of at most {MaxOpenPathLength.ToString(CultureInfo.InvariantCulture)} characters, without a second leading '/', a backslash or a control character.");
+                errors.Add(
+                    $"{path}.openPath must be an absolute path of at most {MaxOpenPathLength.ToString(CultureInfo.InvariantCulture)} characters, without a second leading '/', a backslash or a control character.");
             }
         }
     }
@@ -721,9 +714,9 @@ public static partial class ExternalAppCatalogValidator
         }
 
         var storagePaths = service.Storage?
-                               .Where(storage => storage is not null && IsMountablePath(storage.ContainerPath))
-                               .Select(storage => storage.ContainerPath)
-                               .ToList()
+                                  .Where(storage => storage is not null && IsMountablePath(storage.ContainerPath))
+                                  .Select(storage => storage.ContainerPath)
+                                  .ToList()
                            ?? [];
 
         var acceptedContainerPaths = new List<string>();
@@ -871,8 +864,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateServiceDependencies(
-        ApplicationService service,
+    private static void ValidateServiceDependencies(ApplicationService service,
         string prefix,
         ApplicationValidationContext context,
         List<string> errors)
@@ -972,8 +964,7 @@ public static partial class ExternalAppCatalogValidator
         }
     }
 
-    private static void ValidateDependencyCycles(
-        ApplicationManifest manifest,
+    private static void ValidateDependencyCycles(ApplicationManifest manifest,
         string prefix,
         ApplicationValidationContext context,
         List<string> errors)
@@ -1016,8 +1007,7 @@ public static partial class ExternalAppCatalogValidator
     ///     already on the current path closes a cycle, so every node from that node to the end of the path is a member;
     ///     nodes that merely lead into a cycle are not.
     /// </summary>
-    private static void CollectCycleMembers(
-        string node,
+    private static void CollectCycleMembers(string node,
         Dictionary<string, List<string>> edges,
         HashSet<string> explored,
         List<string> path,
@@ -1048,8 +1038,7 @@ public static partial class ExternalAppCatalogValidator
         path.RemoveAt(path.Count - 1);
     }
 
-    private static void ValidateVariable(
-        ApplicationVariable? variable,
+    private static void ValidateVariable(ApplicationVariable? variable,
         int index,
         string applicationPrefix,
         ApplicationValidationContext context,
@@ -1309,8 +1298,7 @@ public static partial class ExternalAppCatalogValidator
     private static bool IsIso8601Utc(string value)
     {
         return value.EndsWith('Z')
-               && DateTimeOffset.TryParse(
-                   value,
+               && DateTimeOffset.TryParse(value,
                    CultureInfo.InvariantCulture,
                    DateTimeStyles.RoundtripKind | DateTimeStyles.AdjustToUniversal,
                    out var parsed)
@@ -1329,8 +1317,7 @@ public static partial class ExternalAppCatalogValidator
     /// </summary>
     private sealed class ApplicationValidationContext
     {
-        private ApplicationValidationContext(
-            IReadOnlySet<string> serviceNames,
+        private ApplicationValidationContext(IReadOnlySet<string> serviceNames,
             IReadOnlySet<string> servicesWithUiPort,
             IReadOnlySet<string> servicesWithHealthcheck,
             IReadOnlySet<string> declaredVariableNames,
@@ -1423,8 +1410,7 @@ public static partial class ExternalAppCatalogValidator
                 }
             }
 
-            return new ApplicationValidationContext(
-                serviceNames,
+            return new ApplicationValidationContext(serviceNames,
                 servicesWithUiPort,
                 servicesWithHealthcheck,
                 variableNames,

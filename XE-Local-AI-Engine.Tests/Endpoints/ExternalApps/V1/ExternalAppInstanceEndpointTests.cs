@@ -206,8 +206,10 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody(
-                                           variables: new Dictionary<string, string>(StringComparer.Ordinal) { [key] = "value" }))
+                                       ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
+                                       {
+                                           [key] = "value"
+                                       }))
                                    .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -233,11 +235,10 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody(
-                                           variables: new Dictionary<string, string>(StringComparer.Ordinal)
-                                           {
-                                               [ExternalAppEndpointPayloads.SecretVariableName] = secret
-                                           }))
+                                       ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
+                                       {
+                                           [ExternalAppEndpointPayloads.SecretVariableName] = secret
+                                       }))
                                    .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -262,8 +263,10 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "POST",
                                        ExternalAppEndpointPayloads.Instances,
-                                       ExternalAppEndpointPayloads.InstallBody(
-                                           variables: new Dictionary<string, string>(StringComparer.Ordinal) { [key] = "value" }))
+                                       ExternalAppEndpointPayloads.InstallBody(variables: new Dictionary<string, string>(StringComparer.Ordinal)
+                                       {
+                                           [key] = "value"
+                                       }))
                                    .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -497,7 +500,10 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "PUT",
                                        ExternalAppEndpointPayloads.InstanceVariables,
-                                       new { variables = new Dictionary<string, string>(StringComparer.Ordinal) })
+                                       new
+                                       {
+                                           variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                                       })
                                    .ConfigureAwait(false);
         var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
 
@@ -522,7 +528,11 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "PUT",
                                        ExternalAppEndpointPayloads.InstanceVariables,
-                                       new { expectedVersion = 3L, variables = new Dictionary<string, string>(StringComparer.Ordinal) })
+                                       new
+                                       {
+                                           expectedVersion = 3L,
+                                           variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                                       })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -548,7 +558,11 @@ public sealed class ExternalAppInstanceEndpointTests
                                    .SendAsOperatorAsync(factory,
                                        "PUT",
                                        ExternalAppEndpointPayloads.InstanceVariables,
-                                       new { expectedVersion = 7L, variables = new Dictionary<string, string>(StringComparer.Ordinal) })
+                                       new
+                                       {
+                                           expectedVersion = 7L,
+                                           variables = new Dictionary<string, string>(StringComparer.Ordinal)
+                                       })
                                    .ConfigureAwait(false);
         using var document = await ExternalAppEndpointPayloads.ReadJsonAsync(response).ConfigureAwait(false);
 
@@ -562,8 +576,7 @@ public sealed class ExternalAppInstanceEndpointTests
     {
         var apps = Substitute.For<IExternalAppService>();
         apps.InstallAsync(Arg.Any<InstallCommand>(), Arg.Any<CancellationToken>())
-            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppValidationException(
-                $"Required variables are missing: {ExternalAppEndpointPayloads.SecretVariableName}.",
+            .Returns<ExternalAppInstanceSummary>(_ => throw new ExternalAppValidationException($"Required variables are missing: {ExternalAppEndpointPayloads.SecretVariableName}.",
                 [ExternalAppEndpointPayloads.SecretVariableName]));
 
         await using var factory = Factory(apps);

@@ -52,8 +52,7 @@ public sealed class TranscriptionUploadSlotTests
         await using (slot)
         {
             using var source = new MemoryStream(new byte[OverBufferCap * 4]);
-            _ = await AssertEx.ThrowsAsync<TranscriptionUploadTooLargeException>(
-                () => slot.CopyFromAsync(source, OverBufferCap, CancellationToken.None),
+            _ = await AssertEx.ThrowsAsync<TranscriptionUploadTooLargeException>(() => slot.CopyFromAsync(source, OverBufferCap, CancellationToken.None),
                 "An over-cap body must be refused while it is being read, not after it has all landed.");
 
             AssertEx.True(File.Exists(slot.SourcePath), "Bytes reached the disk before the cap tripped.");
@@ -76,8 +75,7 @@ public sealed class TranscriptionUploadSlotTests
         {
             // The source cancels the caller's token part-way through, which is what a client disconnect looks like.
             using var source = new CancellingStream(cancellation, bytesBeforeCancel: 8 * 1024);
-            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(
-                () => slot.CopyFromAsync(source, Cap * 64, cancellation.Token),
+            _ = await AssertEx.ThrowsAsync<OperationCanceledException>(() => slot.CopyFromAsync(source, Cap * 64, cancellation.Token),
                 "Cancellation must still propagate; the slot swallows nothing on this path.");
         }
 
@@ -232,11 +230,14 @@ public sealed class TranscriptionUploadSlotTests
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 
     /// <summary>A body whose reader cancels the caller's token part-way through, the way a client disconnect does.</summary>
@@ -282,10 +283,13 @@ public sealed class TranscriptionUploadSlotTests
         {
         }
 
-        public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
+        public override long Seek(long offset, SeekOrigin origin) =>
+            throw new NotSupportedException();
 
-        public override void SetLength(long value) => throw new NotSupportedException();
+        public override void SetLength(long value) =>
+            throw new NotSupportedException();
 
-        public override void Write(byte[] buffer, int offset, int count) => throw new NotSupportedException();
+        public override void Write(byte[] buffer, int offset, int count) =>
+            throw new NotSupportedException();
     }
 }

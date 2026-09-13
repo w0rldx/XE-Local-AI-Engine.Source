@@ -16,8 +16,7 @@ public sealed class WhisperCppSourceBuildRequestValidationTests
     {
         // The caller does not get to name the official repository: the server fills it in, so a request that lies
         // about what "official" means cannot be smuggled through.
-        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(
-            new WhisperCppSourceBuildRequest(WhisperBackend.Cuda, WhisperCppSourceSelection.Official));
+        var normalized = WhisperCppSourceBuildRequestValidation.Normalize(new WhisperCppSourceBuildRequest(WhisperBackend.Cuda, WhisperCppSourceSelection.Official));
 
         AssertEx.Equal(WhisperCppSourceBuildRequestValidation.OfficialRepository, normalized.Repository);
         AssertEx.Null(normalized.Commit, "The official source builds the engine-pinned revision, never a caller's commit.");

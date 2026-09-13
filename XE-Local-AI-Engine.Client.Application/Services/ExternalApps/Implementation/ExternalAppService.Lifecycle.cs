@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -78,8 +77,7 @@ internal sealed partial class ExternalAppService
         var row = await RequireInstanceAsync(services.Store, instanceId, cancellationToken).ConfigureAwait(false);
         if (row.Status == ExternalAppInstanceStatus.Running || Array.IndexOf(Operable, row.Status) < 0)
         {
-            throw new ExternalAppInvalidTransitionException(
-                $"Settings can only be changed while the application is not running; it is {row.Status}.");
+            throw new ExternalAppInvalidTransitionException($"Settings can only be changed while the application is not running; it is {row.Status}.");
         }
 
         RequireVersion(row, expectedVersion);
@@ -172,7 +170,7 @@ internal sealed partial class ExternalAppService
 
             var cursor = new InstanceCursor(instanceId, row.Version, row.Status);
             if (!await ApplyAsync(services.Store, cursor, Transition(cursor, admitted, RequestEventFor(kind, row.Status)), cancellationToken)
-                     .ConfigureAwait(false))
+                    .ConfigureAwait(false))
             {
                 throw new ExternalAppConcurrencyException("The instance changed while this command was being admitted.");
             }
@@ -185,7 +183,12 @@ internal sealed partial class ExternalAppService
 
             lease = null;
 
-            return ToSummary(row with { Status = admitted, Version = cursor.Version, UpdatedAtUtc = Now() }, versions);
+            return ToSummary(row with
+            {
+                Status = admitted,
+                Version = cursor.Version,
+                UpdatedAtUtc = Now()
+            }, versions);
         }
         finally
         {
@@ -275,17 +278,17 @@ internal sealed partial class ExternalAppService
             var published = await StartInstanceAsync(runtime, resolution.Daemon.IsRootless, context.Row, cancellationToken).ConfigureAwait(false);
 
             _ = await ApplyAsync(services.Store,
-                                 cursor,
-                                 Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started) with
-                                 {
-                                     DesiredState = ExternalAppDesiredState.Running,
-                                     PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                                     StartedAtUtc = Now(),
-                                     NeedsRecreate = false,
-                                     ClearFailure = true
-                                 },
-                                 cancellationToken)
-                    .ConfigureAwait(false);
+                    cursor,
+                    Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Started) with
+                    {
+                        DesiredState = ExternalAppDesiredState.Running,
+                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                        StartedAtUtc = Now(),
+                        NeedsRecreate = false,
+                        ClearFailure = true
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -309,15 +312,15 @@ internal sealed partial class ExternalAppService
             await StopInstanceAsync(runtime, context.Row, cancellationToken).ConfigureAwait(false);
 
             _ = await ApplyAsync(services.Store,
-                                 cursor,
-                                 Transition(cursor, ExternalAppInstanceStatus.Stopped, ExternalAppInstanceEventKind.Stopped) with
-                                 {
-                                     DesiredState = ExternalAppDesiredState.Stopped,
-                                     StoppedAtUtc = Now(),
-                                     ClearFailure = true
-                                 },
-                                 cancellationToken)
-                    .ConfigureAwait(false);
+                    cursor,
+                    Transition(cursor, ExternalAppInstanceStatus.Stopped, ExternalAppInstanceEventKind.Stopped) with
+                    {
+                        DesiredState = ExternalAppDesiredState.Stopped,
+                        StoppedAtUtc = Now(),
+                        ClearFailure = true
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -345,17 +348,17 @@ internal sealed partial class ExternalAppService
             var published = await StartInstanceAsync(runtime, resolution.Daemon.IsRootless, context.Row, cancellationToken).ConfigureAwait(false);
 
             _ = await ApplyAsync(services.Store,
-                                 cursor,
-                                 Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Restarted) with
-                                 {
-                                     DesiredState = ExternalAppDesiredState.Running,
-                                     PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                                     StartedAtUtc = Now(),
-                                     NeedsRecreate = false,
-                                     ClearFailure = true
-                                 },
-                                 cancellationToken)
-                    .ConfigureAwait(false);
+                    cursor,
+                    Transition(cursor, ExternalAppInstanceStatus.Running, ExternalAppInstanceEventKind.Restarted) with
+                    {
+                        DesiredState = ExternalAppDesiredState.Running,
+                        PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                        StartedAtUtc = Now(),
+                        NeedsRecreate = false,
+                        ClearFailure = true
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -392,14 +395,14 @@ internal sealed partial class ExternalAppService
 
             var manifest = DeserializeManifest(context.Row.ManifestSnapshotJson);
             var published = await RebuildAsync(runtime,
-                                               resolution.Daemon.IsRootless,
-                                               context.InstanceId,
-                                               manifest,
-                                               ParseVariables(context.Row.VariablesJson),
-                                               BridgeGrantFor(context.Row.BridgeToken),
-                                               commitBeforeStart: null,
-                                               cancellationToken)
-                                .ConfigureAwait(false);
+                    resolution.Daemon.IsRootless,
+                    context.InstanceId,
+                    manifest,
+                    ParseVariables(context.Row.VariablesJson),
+                    BridgeGrantFor(context.Row.BridgeToken),
+                    commitBeforeStart: null,
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // The rebuild leaves everything running. An instance that was stopped before the reset is stopped again:
             // the desired state is the user's, and a reset is not a decision to start something.
@@ -410,18 +413,18 @@ internal sealed partial class ExternalAppService
             }
 
             _ = await ApplyAsync(services.Store,
-                                 cursor,
-                                 Transition(cursor,
-                                     restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
-                                     ExternalAppInstanceEventKind.Reset) with
-                                 {
-                                     DesiredState = context.Row.DesiredState,
-                                     PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                                     NeedsRecreate = false,
-                                     ClearFailure = true
-                                 },
-                                 cancellationToken)
-                    .ConfigureAwait(false);
+                    cursor,
+                    Transition(cursor,
+                            restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
+                            ExternalAppInstanceEventKind.Reset) with
+                        {
+                            DesiredState = context.Row.DesiredState,
+                            PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                            NeedsRecreate = false,
+                            ClearFailure = true
+                        },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -461,8 +464,7 @@ internal sealed partial class ExternalAppService
                 // Still best-effort, and the row still goes: an empty directory tree left by a full disk or a
                 // permission the operator changed by hand is recoverable with one command, a row the UI is stuck on
                 // is not.
-                _logger.LogWarning(
-                    "External application instance {InstanceId} was uninstalled but its data directory '{StoragePath}' could not be removed; it can be deleted by hand.",
+                _logger.LogWarning("External application instance {InstanceId} was uninstalled but its data directory '{StoragePath}' could not be removed; it can be deleted by hand.",
                     context.InstanceId,
                     context.Row.StoragePath);
             }
@@ -476,9 +478,9 @@ internal sealed partial class ExternalAppService
             // Published after the rows are gone and never replayable, which is correct: there is nothing left to
             // replay it from, and a subscriber's only sensible response is to re-read and find the instance absent.
             await PublishAsync(context.InstanceId,
-                               cursor.Sequence + 1,
-                               ExternalAppInstanceEventKind.Uninstalled,
-                               ExternalAppInstanceStatus.Uninstalling)
+                    cursor.Sequence + 1,
+                    ExternalAppInstanceEventKind.Uninstalled,
+                    ExternalAppInstanceStatus.Uninstalling)
                 .ConfigureAwait(false);
 
             _gate.Forget(ExternalAppInstanceGate.InstanceKey(context.InstanceId));
@@ -515,7 +517,7 @@ internal sealed partial class ExternalAppService
         {
             await RequireTeardownAsync(runtime, row.Id, cancellationToken).ConfigureAwait(false);
             return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, BridgeGrantFor(row.BridgeToken), commitBeforeStart: null, cancellationToken)
-                       .ConfigureAwait(false);
+                .ConfigureAwait(false);
         }
 
         try
@@ -529,7 +531,7 @@ internal sealed partial class ExternalAppService
             _logger.LogWarning("Reusing the containers of external application instance {InstanceId} lost a host port; rebuilding.", row.Id);
             await RequireTeardownAsync(runtime, row.Id, CancellationToken.None).ConfigureAwait(false);
             return await RebuildAsync(runtime, daemonIsRootless, row.Id, manifest, variables, BridgeGrantFor(row.BridgeToken), commitBeforeStart: null, cancellationToken)
-                       .ConfigureAwait(false);
+                .ConfigureAwait(false);
         }
     }
 
@@ -575,11 +577,11 @@ internal sealed partial class ExternalAppService
             }
 
             if (ApplicationContainerPolicy.FindViolations(service.Specification,
-                    inspection,
-                    daemonIsRootless,
-                    inspection.State.Running,
-                    _layout.Describe(row.Id).InstanceRoot)
-                .Count > 0)
+                                              inspection,
+                                              daemonIsRootless,
+                                              inspection.State.Running,
+                                              _layout.Describe(row.Id).InstanceRoot)
+                                          .Count > 0)
             {
                 return null;
             }
@@ -772,7 +774,8 @@ internal sealed partial class ExternalAppService
     }
 
     /// <summary>What admission decided, handed to the background operation as values rather than as shared state.</summary>
-    private sealed record LifecycleContext(Guid InstanceId,
+    private sealed record LifecycleContext(
+        Guid InstanceId,
         long Version,
         long Sequence,
         ExternalAppInstanceStatus Status,
@@ -780,7 +783,10 @@ internal sealed partial class ExternalAppService
     {
         public InstanceCursor ToCursor()
         {
-            return new InstanceCursor(InstanceId, Version, Status) { Sequence = Sequence };
+            return new InstanceCursor(InstanceId, Version, Status)
+            {
+                Sequence = Sequence
+            };
         }
     }
 }

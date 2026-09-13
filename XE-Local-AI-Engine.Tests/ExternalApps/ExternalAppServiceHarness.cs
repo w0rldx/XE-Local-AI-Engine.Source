@@ -1,6 +1,10 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using System.Collections.Concurrent;
+using System.Net;
+using System.Net.Sockets;
+using System.Runtime.Versioning;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -36,7 +40,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     private readonly IOptions<ExternalAppsOptions> _appOptions;
     private readonly IDisposable _hostHandle;
     private readonly Action _stopHost;
-    private readonly List<System.Net.Sockets.Socket> _squatters = [];
+    private readonly List<Socket> _squatters = [];
     private readonly List<string> _restoredOnDispose = [];
     private readonly ServiceProvider _provider;
 
@@ -168,13 +172,16 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                          row.Version,
-                                          new HashSet<ExternalAppInstanceStatus> { row.Status },
-                                          status,
-                                          ExternalAppInstanceEventKind.Failed,
-                                          EventDetailJson: null,
-                                          OccurredAtUtc: 50,
-                                          desiredState))
+                                     row.Version,
+                                     new HashSet<ExternalAppInstanceStatus>
+                                     {
+                                         row.Status
+                                     },
+                                     status,
+                                     ExternalAppInstanceEventKind.Failed,
+                                     EventDetailJson: null,
+                                     OccurredAtUtc: 50,
+                                     desiredState))
                                  .ConfigureAwait(false);
         AssertEx.True(applied.Applied, $"Forcing instance {instanceId:N} to {status} must not lose its compare-and-swap.");
 
@@ -196,7 +203,12 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
 
         // A record with init-only members, so the hook TRANSFORMS rather than mutates: an Action could not set
         // anything, which is how the previous shape silently ignored every caller that passed one.
-        var defaults = new ExternalAppsOptions { Enabled = true, InstanceRoot = rootPath, ServiceReadyTimeoutSeconds = 30 };
+        var defaults = new ExternalAppsOptions
+        {
+            Enabled = true,
+            InstanceRoot = rootPath,
+            ServiceReadyTimeoutSeconds = 30
+        };
         var options = configure is null ? defaults : configure(defaults);
 
         var runtime = new FakeDockerRuntimeClient(new DockerDaemonEndpoint(new Uri("unix:///xe-external-apps-tests.sock"),
@@ -242,7 +254,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             // An OPEN bridge by default, so seeded and installed instances get the same built-ins a real node
             // injects. `withBridge: false` is the node that opened none.
             new ContainerBridgeEndpointSource(withBridge
-                ? new ResolvedContainerBridgeEndpoint(System.Net.IPAddress.Parse("192.0.2.10"), 18790, "192.0.2.10:18790")
+                ? new ResolvedContainerBridgeEndpoint(IPAddress.Parse("192.0.2.10"), 18790, "192.0.2.10:18790")
                 : null),
             time,
             serviceLog);
@@ -317,21 +329,21 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var store = scope.ServiceProvider.GetRequiredService<IExternalAppInstanceStore>();
 
         var created = await store.CreateAsync(new ExternalAppInstanceCreate(instanceId,
-                                         manifest.Id,
-                                         manifest.ManifestVersion,
-                                         System.Text.Json.JsonSerializer.Serialize(manifest, ExternalAppJson.Options),
-                                         manifest.DisplayName,
-                                         "{}",
-                                         Path.Combine(RootPath, "external-apps", "instances", instanceId.ToString("N")),
-                                         "docker",
-                                         RuntimeOverride: null,
-                                         CreatedAtUtc: 1,
-                                         ExternalAppInstanceEventKind.PermissionAccepted,
-                                         FirstEventDetailJson: null,
-                                         // Seeded rows carry a bridge token because real installs do; a row without
-                                         // one models an instance installed before the bridge existed, which is a
-                                         // different case and is seeded deliberately where it is wanted.
-                                         withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null))
+                                     manifest.Id,
+                                     manifest.ManifestVersion,
+                                     JsonSerializer.Serialize(manifest, ExternalAppJson.Options),
+                                     manifest.DisplayName,
+                                     "{}",
+                                     Path.Combine(RootPath, "external-apps", "instances", instanceId.ToString("N")),
+                                     "docker",
+                                     RuntimeOverride: null,
+                                     CreatedAtUtc: 1,
+                                     ExternalAppInstanceEventKind.PermissionAccepted,
+                                     FirstEventDetailJson: null,
+                                     // Seeded rows carry a bridge token because real installs do; a row without
+                                     // one models an instance installed before the bridge existed, which is a
+                                     // different case and is seeded deliberately where it is wanted.
+                                     withBridgeToken ? ContainerBridgeToken.Mint(instanceId) : null))
                                  .ConfigureAwait(false);
 
         var version = created.Version;
@@ -339,13 +351,16 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         if (status != ExternalAppInstanceStatus.Installing)
         {
             var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                              version,
-                                              new HashSet<ExternalAppInstanceStatus> { currentStatus },
-                                              status,
-                                              ExternalAppInstanceEventKind.Installed,
-                                              EventDetailJson: null,
-                                              OccurredAtUtc: 2,
-                                              desiredState))
+                                         version,
+                                         new HashSet<ExternalAppInstanceStatus>
+                                         {
+                                             currentStatus
+                                         },
+                                         status,
+                                         ExternalAppInstanceEventKind.Installed,
+                                         EventDetailJson: null,
+                                         OccurredAtUtc: 2,
+                                         desiredState))
                                      .ConfigureAwait(false);
             AssertEx.True(applied.Applied, "Seeding the row must not lose its compare-and-swap.");
         }
@@ -359,7 +374,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     /// </summary>
     public Task ReplaceManifestSnapshotAsync(Guid instanceId, ApplicationManifest manifest)
     {
-        return ReplaceManifestSnapshotAsync(instanceId, System.Text.Json.JsonSerializer.Serialize(manifest, ExternalAppJson.Options));
+        return ReplaceManifestSnapshotAsync(instanceId, JsonSerializer.Serialize(manifest, ExternalAppJson.Options));
     }
 
     /// <inheritdoc cref="ReplaceManifestSnapshotAsync(Guid, ApplicationManifest)" />
@@ -371,13 +386,16 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                          row.Version,
-                                          new HashSet<ExternalAppInstanceStatus> { row.Status },
-                                          row.Status,
-                                          ExternalAppInstanceEventKind.Installed,
-                                          EventDetailJson: null,
-                                          OccurredAtUtc: 60,
-                                          ManifestSnapshotJson: manifestJson))
+                                     row.Version,
+                                     new HashSet<ExternalAppInstanceStatus>
+                                     {
+                                         row.Status
+                                     },
+                                     row.Status,
+                                     ExternalAppInstanceEventKind.Installed,
+                                     EventDetailJson: null,
+                                     OccurredAtUtc: 60,
+                                     ManifestSnapshotJson: manifestJson))
                                  .ConfigureAwait(false);
         AssertEx.True(applied.Applied, "Replacing the manifest snapshot must not lose its compare-and-swap.");
     }
@@ -393,12 +411,15 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
         var row = AssertEx.NotNull(await store.GetAsync(instanceId).ConfigureAwait(false));
 
         var applied = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(instanceId,
-                                          row.Version,
-                                          new HashSet<ExternalAppInstanceStatus> { row.Status },
-                                          row.Status,
-                                          ExternalAppInstanceEventKind.Failed,
-                                          EventDetailJson: null,
-                                          OccurredAtUtc: 99))
+                                     row.Version,
+                                     new HashSet<ExternalAppInstanceStatus>
+                                     {
+                                         row.Status
+                                     },
+                                     row.Status,
+                                     ExternalAppInstanceEventKind.Failed,
+                                     EventDetailJson: null,
+                                     OccurredAtUtc: 99))
                                  .ConfigureAwait(false);
         AssertEx.True(applied.Applied, "The competing write must land, or the test is not testing a lost swap.");
     }
@@ -493,9 +514,8 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
             // Re-read for the report: the message has to say what the row actually settled on, and the failure
             // category is the whole diagnosis when a pipeline went the wrong way.
             row = await ReadAsync(instanceId).ConfigureAwait(false);
-            throw new AssertionException(
-                $"Instance {instanceId:N} never reached {string.Join(" or ", expected)}; it is {row?.Status.ToString() ?? "absent"} "
-                + $"({row?.FailureCategory?.ToString() ?? "no category"}: {row?.FailureSummary ?? "no summary"}).");
+            throw new AssertionException($"Instance {instanceId:N} never reached {string.Join(" or ", expected)}; it is {row?.Status.ToString() ?? "absent"} "
+                                         + $"({row?.FailureCategory?.ToString() ?? "no category"}: {row?.FailureSummary ?? "no summary"}).");
         }
 
         await WaitUntilIdleAsync(instanceId).ConfigureAwait(false);
@@ -528,10 +548,10 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     /// </summary>
     public void Squat(int port)
     {
-        var socket = new System.Net.Sockets.Socket(System.Net.Sockets.AddressFamily.InterNetwork,
-            System.Net.Sockets.SocketType.Stream,
-            System.Net.Sockets.ProtocolType.Tcp);
-        socket.Bind(new System.Net.IPEndPoint(System.Net.IPAddress.Loopback, port));
+        var socket = new Socket(AddressFamily.InterNetwork,
+            SocketType.Stream,
+            ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, port));
         socket.Listen(backlog: 1);
         _squatters.Add(socket);
     }
@@ -540,7 +560,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
     ///     Makes a directory undeletable by taking write permission off its parent, which is the only portable way
     ///     on Unix. Restored on disposal so the fixture can still clean up after itself.
     /// </summary>
-    [System.Runtime.Versioning.UnsupportedOSPlatform("windows")]
+    [UnsupportedOSPlatform("windows")]
     public void MakeUndeletable(string path)
     {
         if (Environment.IsPrivilegedProcess)
@@ -599,8 +619,7 @@ internal sealed class ExternalAppServiceHarness : IAsyncDisposable
                    SourceUrl: null,
                    LastRefreshFailure: null)));
         catalog.GetApplicationAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-               .Returns(call => Task.FromResult(
-                   manifests.FirstOrDefault(candidate => string.Equals(candidate.Id, call.ArgAt<string>(0), StringComparison.Ordinal))));
+               .Returns(call => Task.FromResult(manifests.FirstOrDefault(candidate => string.Equals(candidate.Id, call.ArgAt<string>(0), StringComparison.Ordinal))));
     }
 
     private static IRuntimeDeviceAudit AuditWith(long availableRamBytes)
@@ -885,7 +904,8 @@ internal sealed class GatedContainerRuntime(FakeDockerRuntimeClient inner) : ICo
     public Task<DockerExecutionOutcome> ExecuteAsync(string containerId, DockerExecutionRequest request, CancellationToken cancellationToken = default) =>
         inner.ExecuteAsync(containerId, request, cancellationToken);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync() =>
+        ValueTask.CompletedTask;
 }
 
 /// <summary>Records every ping and every progress report, so the event feed is asserted rather than assumed.</summary>

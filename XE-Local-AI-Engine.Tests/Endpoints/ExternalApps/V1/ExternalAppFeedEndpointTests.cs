@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.ExternalApps.V1;
 
 using System.Net;
-using System.Text.Json;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -415,7 +414,13 @@ public sealed class ExternalAppFeedEndpointTests
         new(Guid.NewGuid(), ExternalAppEndpointPayloads.InstanceId, sequence, kind, detailJson, 1_780_000_000_000L + sequence);
 
     private static ContainerLogSnapshot Snapshot(bool truncated = false, int lineCount = 1) =>
-        new() { Text = LogText, Truncated = truncated, LineCount = lineCount };
+        new()
+        {
+            Text = LogText,
+            Truncated = truncated,
+            LineCount = lineCount
+        };
 
-    private static TestServerWebAppFactory Factory(IExternalAppService apps) => ExternalAppEndpointPayloads.EnabledFactory(apps);
+    private static TestServerWebAppFactory Factory(IExternalAppService apps) =>
+        ExternalAppEndpointPayloads.EnabledFactory(apps);
 }

@@ -364,16 +364,17 @@ public sealed class TranscriptionService : ITranscriptionService
     // The operator reads one vocabulary, not two: the supported list prints extensions, so the detected container is
     // named the same way. "Matroska" and "MP4" are the container names, but nobody uploads one of those — they upload
     // a .webm and a .m4a. The DetectedContainer field keeps the enum name for the wire.
-    private static string DescribeContainer(AudioContainer container) => container switch
-    {
-        AudioContainer.Wav => "wav",
-        AudioContainer.Mp3 => "mp3",
-        AudioContainer.Flac => "flac",
-        AudioContainer.Ogg => "ogg",
-        AudioContainer.Mp4 => "m4a",
-        AudioContainer.Matroska => "webm",
-        _ => "that file"
-    };
+    private static string DescribeContainer(AudioContainer container) =>
+        container switch
+        {
+            AudioContainer.Wav => "wav",
+            AudioContainer.Mp3 => "mp3",
+            AudioContainer.Flac => "flac",
+            AudioContainer.Ogg => "ogg",
+            AudioContainer.Mp4 => "m4a",
+            AudioContainer.Matroska => "webm",
+            _ => "that file"
+        };
 
     private static async Task<AudioContainer> DetectContainerAsync(string path, CancellationToken cancellationToken)
     {
@@ -407,7 +408,8 @@ public sealed class TranscriptionService : ITranscriptionService
         status is TranscriptionSessionStatus.Completed or TranscriptionSessionStatus.Failed or TranscriptionSessionStatus.Cancelled;
 
     // The provider speaks fractional seconds; the entity speaks whole milliseconds.
-    private static long ToMilliseconds(double seconds) => (long)Math.Round(seconds * 1000);
+    private static long ToMilliseconds(double seconds) =>
+        (long)Math.Round(seconds * 1000);
 
     private static TranscriptionSessionConfig DeserializeConfig(string configJson)
     {
@@ -431,7 +433,10 @@ public sealed class TranscriptionService : ITranscriptionService
     {
         if (config is null)
         {
-            return new TranscriptionSessionConfig { LanguageMode = "auto" };
+            return new TranscriptionSessionConfig
+            {
+                LanguageMode = "auto"
+            };
         }
 
         var isOverride = string.Equals(config.LanguageMode, "override", StringComparison.OrdinalIgnoreCase)

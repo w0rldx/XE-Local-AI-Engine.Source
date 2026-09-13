@@ -707,7 +707,8 @@ public sealed class InvocationResumeRegistryTests
 
         await AssertEx.EventuallyAsync(() => events.Count >= 2, TimeSpan.FromSeconds(5));
 
-        RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world", runtimePhase: InvocationRuntimePhase.Generating, runtimePhaseChangedAtUtc: generatingAt));
+        RaiseState(dispatcher,
+            NewState(invocationId, conversationId, InvocationStatus.Running, "Hello world", runtimePhase: InvocationRuntimePhase.Generating, runtimePhaseChangedAtUtc: generatingAt));
         RaiseState(dispatcher, NewState(invocationId, conversationId, InvocationStatus.Completed, "Hello world"));
         await consumer;
 

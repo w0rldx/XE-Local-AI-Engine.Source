@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
+using System.Globalization;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -233,7 +234,7 @@ public sealed class ContainerRuntimeResolverTests
         // The unix:// case is the one no other check catches: a local socket passes the transport check, so without
         // this refusal a query string on it would reach a READY resolution and be rendered on the runtime card.
         const string Sentinel = "sekrit-9f3a";
-        var raw = string.Format(System.Globalization.CultureInfo.InvariantCulture, template, Sentinel);
+        var raw = string.Format(CultureInfo.InvariantCulture, template, Sentinel);
         var harness = new Harness(endpoint: new DockerDaemonEndpoint(new Uri(raw), DockerDaemonEndpointSource.DockerHostEnvironmentVariable));
 
         var resolution = await harness.Resolver.ResolveAsync();
@@ -376,8 +377,7 @@ public sealed class ContainerRuntimeResolverTests
         // status and prose the runtime card shows rather than a second description written at the catch site.
         var harness = HarnessFor(status);
 
-        var exception = await AssertEx.ThrowsAsync<ContainerRuntimeUnavailableException>(
-            () => harness.Resolver.CreateRuntimeAsync());
+        var exception = await AssertEx.ThrowsAsync<ContainerRuntimeUnavailableException>(() => harness.Resolver.CreateRuntimeAsync());
 
         var resolution = AssertEx.NotNull(exception.Resolution);
         AssertEx.Equal(ContainerRuntimeResolver.ToRuntimeStatus(status), resolution.Status);

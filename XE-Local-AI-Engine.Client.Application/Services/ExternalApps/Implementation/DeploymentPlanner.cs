@@ -70,9 +70,9 @@ internal static partial class DeploymentPlanner
             var environment = ResolveEnvironment(service, declared, variables, builtIns);
             var mounts = BuildMounts(service, storage, hostSources);
             var publications = uiHostPorts
-                              .Where(port => string.Equals(port.Service, service.Name, StringComparison.Ordinal))
-                              .Select(static port => ApplicationContainerPolicy.Publication(port.ContainerPort, port.HostPort))
-                              .ToArray();
+                               .Where(port => string.Equals(port.Service, service.Name, StringComparison.Ordinal))
+                               .Select(static port => ApplicationContainerPolicy.Publication(port.ContainerPort, port.HostPort))
+                               .ToArray();
 
             var specification = ApplicationContainerPolicy.BuildSpecification(service, manifest, instanceId, installId, environment, mounts, publications);
 
@@ -258,8 +258,7 @@ internal static partial class DeploymentPlanner
             {
                 // A Compose-style default such as ${FOO:-bar} lands here. Passing it through verbatim would put that
                 // text into the container as if it were the value.
-                throw new ExternalAppConfigurationException(
-                    $"Service '{serviceName}' declares an environment value containing a malformed '${{…}}' token; only '${{NAME}}' is supported.");
+                throw new ExternalAppConfigurationException($"Service '{serviceName}' declares an environment value containing a malformed '${{…}}' token; only '${{NAME}}' is supported.");
             }
 
             _ = builder.Append(Resolve(match.Groups["name"].Value, serviceName, declared, variables, builtIns));
@@ -311,9 +310,8 @@ internal static partial class DeploymentPlanner
         if (string.Equals(name, BridgeEndpointVariable, StringComparison.Ordinal)
             || string.Equals(name, BridgeTokenVariable, StringComparison.Ordinal))
         {
-            throw new ExternalAppConfigurationException(
-                $"Service '{serviceName}' needs the container bridge, which this node did not open, so '${{{name}}}' has no value. "
-                + $"The bridge requires '{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.");
+            throw new ExternalAppConfigurationException($"Service '{serviceName}' needs the container bridge, which this node did not open, so '${{{name}}}' has no value. "
+                                                        + $"The bridge requires '{ContainerBridgeOptions.SectionName}:{nameof(ContainerBridgeOptions.Enabled)}' and an IPv4 host interface it can bind.");
         }
 
         // A XE_UI_HOST_PORT_<service> naming a service that publishes nothing lands here, and so does a token the
@@ -371,7 +369,12 @@ internal static partial class DeploymentPlanner
             }
 
             hostSources[source] = service.Name;
-            mounts.Add(new ContainerMount { HostPath = source, ContainerPath = target, ReadOnly = readOnly });
+            mounts.Add(new ContainerMount
+            {
+                HostPath = source,
+                ContainerPath = target,
+                ReadOnly = readOnly
+            });
         }
     }
 
@@ -404,7 +407,8 @@ internal sealed record DeploymentPlan(string NetworkName, IReadOnlyList<ServiceD
 }
 
 /// <summary>One service of a plan: what to create, what it must wait for, and what it publishes.</summary>
-internal sealed record ServiceDeployment(string ServiceName,
+internal sealed record ServiceDeployment(
+    string ServiceName,
     string ContainerName,
     ContainerSpecification Specification,
     IReadOnlyList<ServiceDependency> DependsOn,

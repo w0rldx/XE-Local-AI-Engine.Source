@@ -3,6 +3,7 @@
 // pull line, a recorded request, a seeded image — and they are only meaningful as a set: a reader arriving at
 // FakeDockerState needs all seven at once, and seven files of a dozen lines each would scatter them. The
 // substantial types (the server, the state, the container, the network, the exec session) each have their own file.
+
 namespace XE_Local_AI_Engine.Testing.FakeDocker;
 
 /// <summary>Which half of a demultiplexed Docker stream a frame belongs to. The values are Docker's own frame tags.</summary>

@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
-using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
 ///     Wire routes, fixtures and helpers shared by the External Apps endpoint suites.
@@ -208,7 +207,10 @@ internal static class ExternalAppEndpointPayloads
                     "1.4.0",
                     Entrypoint: null,
                     Command: null,
-                    new Dictionary<string, string>(StringComparer.Ordinal) { ["PORT"] = "8080" },
+                    new Dictionary<string, string>(StringComparer.Ordinal)
+                    {
+                        ["PORT"] = "8080"
+                    },
                     [new ApplicationPort(8080, "ui", 18080, "/app")],
                     [new ApplicationStorage("data", "/var/lib/odysseus")],
                     [new ApplicationFile("seed.json", "/etc/odysseus/seed.json", "abc", "e30=")],

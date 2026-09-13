@@ -32,7 +32,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     [Test]
     public async Task EnsureFile_DestinationAlreadyMatchesTheCatalogue_ReportsCompletedWithoutTouchingTheNetwork()
     {
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, SharedBytes);
         using var harness = new Harness(dir);
@@ -56,7 +56,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // Exactly what the live round left on disk: a complete .part and its range sidecar beside a published file,
         // orphaned by an attempt that died at the commit step. The destination is already published, so those bytes
         // are dead weight rather than resume state, and leaving them means every later run carries the wreckage.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, SharedBytes);
         var partPath = destination + ".part";
@@ -77,7 +77,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // Present but not what the catalogue pins — a truncated copy, an upstream re-upload, or a foreign file under
         // our name. Reusing it would install bytes the runtime cannot load; leaving it would fail the commit guard
         // forever. It is replaced.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var destination = dir.FilePath("ggml-silero.bin");
         await File.WriteAllBytesAsync(destination, Encoding.UTF8.GetBytes("not the pinned weights"));
         using var harness = new Harness(dir);
@@ -94,7 +94,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     {
         // The size check is only the cheap gate; the digest is what decides. A corrupt file of exactly the right
         // length must not pass as installed.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         var destination = dir.FilePath("ggml-silero.bin");
         var sameLengthDifferentBytes = Encoding.UTF8.GetBytes(new string(c: 'x', count: SharedBytes.Length));
         await File.WriteAllBytesAsync(destination, sameLengthDifferentBytes);
@@ -112,7 +112,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
         // The live defect in miniature, driven through the real store and the real download client: install one model
         // (shared file + its weight), then install a second (the same shared file + a different weight). Before the
         // fix the second install died on the shared file's commit guard and never requested its weight at all.
-        using var dir = new Infra.TempModelsDir();
+        using var dir = new GgufStoreTestInfrastructure.TempModelsDir();
         using var harness = new Harness(dir);
         var shared = dir.FilePath("ggml-silero.bin");
         var firstWeight = dir.FilePath("ggml-base.bin");
@@ -151,11 +151,11 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     {
         private readonly HttpClient _http;
         private readonly HttpClient _resolveHttp;
-        private readonly Infra.ScriptedHandler _resolveHandler;
+        private readonly GgufStoreTestInfrastructure.ScriptedHandler _resolveHandler;
 
-        public Harness(Infra.TempModelsDir dir)
+        public Harness(GgufStoreTestInfrastructure.TempModelsDir dir)
         {
-            Handler = new Infra.ScriptedHandler((request, _) =>
+            Handler = new GgufStoreTestInfrastructure.ScriptedHandler((request, _) =>
             {
                 var bytes = request.RequestUri!.AbsoluteUri.Contains("silero", StringComparison.OrdinalIgnoreCase)
                     ? SharedBytes
@@ -172,7 +172,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
 
             // A bare 200 with no X-Linked-Etag, so the client verifies against the caller's pinned digest — which is
             // the path the transcription catalogue actually takes.
-            _resolveHandler = new Infra.ScriptedHandler(static (_, _) => new HttpResponseMessage());
+            _resolveHandler = new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) => new HttpResponseMessage());
             _resolveHttp = new HttpClient(_resolveHandler, disposeHandler: false);
 
             var options = Infra.Options(dir.Path);
@@ -183,7 +183,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
                 options));
         }
 
-        public Infra.ScriptedHandler Handler { get; }
+        public GgufStoreTestInfrastructure.ScriptedHandler Handler { get; }
 
         public HuggingFaceWhisperWeightStore Store { get; }
 
@@ -200,6 +200,7 @@ public sealed class HuggingFaceWhisperWeightStoreTests
     {
         public PullProgress? Last { get; private set; }
 
-        public void Report(PullProgress value) => Last = value;
+        public void Report(PullProgress value) =>
+            Last = value;
     }
 }

@@ -209,8 +209,9 @@ public sealed class FfmpegAudioTranscoder : IAudioTranscoder
         return sanitized.Length > SanitizedStderrChars ? sanitized[^SanitizedStderrChars..] : sanitized;
     }
 
-    private static bool LooksLikeAPath(string value) => value.Contains('/', StringComparison.Ordinal)
-                                                        || value.Contains('\\', StringComparison.Ordinal);
+    private static bool LooksLikeAPath(string value) =>
+        value.Contains('/', StringComparison.Ordinal)
+        || value.Contains('\\', StringComparison.Ordinal);
 
     /// <summary>
     ///     Waits for the killed child to be gone, on a bound the caller's cancellation cannot reach.

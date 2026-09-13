@@ -84,7 +84,10 @@ internal static class TranscriptionMapper
     {
         // A config column that cannot be read must not turn a readable transcript into a 500: the transcript is the
         // thing the operator came for, and the options are metadata beside it.
-        var config = TryDeserialize(configJson) ?? new TranscriptionSessionConfig { LanguageMode = "auto" };
+        var config = TryDeserialize(configJson) ?? new TranscriptionSessionConfig
+        {
+            LanguageMode = "auto"
+        };
         return new TranscriptionSessionConfigResponse
         {
             LanguageMode = config.LanguageMode,

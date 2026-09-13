@@ -99,7 +99,10 @@ public sealed class TranscriptionUploadStreamingTests
         await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var service = new StubTranscriptionService { Gate = gate };
+        using var service = new StubTranscriptionService
+        {
+            Gate = gate
+        };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 
@@ -207,7 +210,10 @@ public sealed class TranscriptionUploadStreamingTests
         await AssertNoFrameworkSpillEventuallyAsync("before the test starts").ConfigureAwait(false);
 
         var gate = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var service = new StubTranscriptionService { Gate = gate };
+        using var service = new StubTranscriptionService
+        {
+            Gate = gate
+        };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
 

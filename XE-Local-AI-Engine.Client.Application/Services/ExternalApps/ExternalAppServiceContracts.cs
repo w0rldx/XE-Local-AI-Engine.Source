@@ -141,7 +141,8 @@ public static class ExternalAppJson
 ///     (<see cref="UpdateAvailable" />, <see cref="AvailableManifestVersion" />, <see cref="CatalogMissing" />) are
 ///     computed against the catalog at read time and are never persisted.
 /// </summary>
-public sealed record ExternalAppInstanceSummary(Guid Id,
+public sealed record ExternalAppInstanceSummary(
+    Guid Id,
     string ApplicationId,
     string DisplayName,
     int ManifestVersion,
@@ -164,7 +165,8 @@ public sealed record ExternalAppInstanceSummary(Guid Id,
 ///     <see cref="MaskedVariables" /> carries the stored values with every <c>secret</c> replaced by
 ///     <see cref="ExternalAppVariableMask.Value" />, which is why this record may print: nothing on it is a secret.
 /// </remarks>
-public sealed record ExternalAppInstanceDetail(ExternalAppInstanceSummary Summary,
+public sealed record ExternalAppInstanceDetail(
+    ExternalAppInstanceSummary Summary,
     ApplicationManifest Manifest,
     string? TestedVersion,
     IReadOnlyDictionary<string, string> MaskedVariables,
@@ -187,7 +189,8 @@ public sealed record ExternalAppInstanceDetail(ExternalAppInstanceSummary Summar
 ///     install command carries them back and admission refuses a mismatch, so a catalog refresh between the
 ///     disclosure and the submit cannot authorise different images.
 /// </remarks>
-public sealed record InstallPreview(string ApplicationId,
+public sealed record InstallPreview(
+    string ApplicationId,
     int ManifestVersion,
     string ManifestSha256,
     bool CanInstall,
@@ -205,7 +208,8 @@ public sealed record InstallPreview(string ApplicationId,
 ///     <see cref="CurrentValues" /> the stored values with secrets masked, so a target that declares a newly required
 ///     variable can be filled in before the instance is stopped.
 /// </summary>
-public sealed record UpdatePreview(string ApplicationId,
+public sealed record UpdatePreview(
+    string ApplicationId,
     Guid InstanceId,
     int CurrentManifestVersion,
     int TargetManifestVersion,
@@ -222,7 +226,8 @@ public sealed record UpdatePreview(string ApplicationId,
 ///     An install request. <see cref="AcceptPermissions" /> is never inferred: the server refuses rather than
 ///     deciding that a caller who sent variables must have read the disclosure.
 /// </summary>
-public sealed record InstallCommand(string ApplicationId,
+public sealed record InstallCommand(
+    string ApplicationId,
     string? DisplayName,
     int ManifestVersion,
     string ManifestSha256,
@@ -245,7 +250,8 @@ public sealed record InstallCommand(string ApplicationId,
 ///     An update request. <see cref="Variables" /> are the TARGET manifest's values — a target can declare a
 ///     variable no stored map holds, and the settings form that would supply it is driven by the old snapshot.
 /// </summary>
-public sealed record UpdateCommand(int ManifestVersion,
+public sealed record UpdateCommand(
+    int ManifestVersion,
     string ManifestSha256,
     bool AcceptPermissions,
     IReadOnlyDictionary<string, string> Variables)

@@ -16,10 +16,10 @@ using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.Containers.Implementation;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Sandbox.Container;
-using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Tests.ContainerSandbox;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -166,12 +166,11 @@ public sealed class ContainerBridgeRealDaemonTests
     /// </summary>
     private static SkipTestException Rootful(string endpoint)
     {
-        return new SkipTestException(
-            $"SKIPPED — the daemon at '{endpoint}' is ROOTFUL, and the bridge is expected to be dark there: a container's "
-            + "traffic to one of this host's own addresses keeps the container's source address, so the same-host peer guard "
-            + "refuses it before the token gate. That is the deferred limitation in ADR 0011 (admit the subnets of engine-owned "
-            + "networks), not a defect this run could find. Nothing about the bridge is proven on this box; run these against a "
-            + "rootless daemon.");
+        return new SkipTestException($"SKIPPED — the daemon at '{endpoint}' is ROOTFUL, and the bridge is expected to be dark there: a container's "
+                                     + "traffic to one of this host's own addresses keeps the container's source address, so the same-host peer guard "
+                                     + "refuses it before the token gate. That is the deferred limitation in ADR 0011 (admit the subnets of engine-owned "
+                                     + "networks), not a defect this run could find. Nothing about the bridge is proven on this box; run these against a "
+                                     + "rootless daemon.");
     }
 
     /// <summary>
@@ -259,7 +258,11 @@ public sealed class ContainerBridgeRealDaemonTests
             // The PRODUCTION resolver picks the address, so what the container is told here is what a real node
             // would tell it. A host with no qualifying interface has no bridge and nothing to prove.
             var port = ReservePort();
-            var bridgeOptions = new ContainerBridgeOptions { Enabled = true, Port = port };
+            var bridgeOptions = new ContainerBridgeOptions
+            {
+                Enabled = true,
+                Port = port
+            };
             var endpoint = ContainerBridgeEndpointResolver.Resolve(bridgeOptions, ContainerBridgeEndpointResolver.HostRunsDockerDesktop())
                            ?? throw Unavailable("this host has no up, non-loopback, IPv4 interface, so it could not open a bridge to reach.");
 
@@ -294,8 +297,7 @@ public sealed class ContainerBridgeRealDaemonTests
             builder.Services.AddScoped<ContainerBridgeTokenMiddleware>();
 
             var models = Substitute.For<IGgufModelStore>();
-            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>(
-            [
+            _ = models.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([
                 new LocalModelDescriptor
                 {
                     ModelName = ModelName,
@@ -334,10 +336,10 @@ public sealed class ContainerBridgeRealDaemonTests
             await Runtime.StartContainerAsync(containerId).ConfigureAwait(false);
 
             var finished = await PollAsync(async () => (await Runtime.InspectAsync(containerId).ConfigureAwait(false)).State,
-                                   static state => !state.Running,
-                                   DaemonDeadline,
-                                   "the fetching container to exit")
-                               .ConfigureAwait(false);
+                    static state => !state.Running,
+                    DaemonDeadline,
+                    "the fetching container to exit")
+                .ConfigureAwait(false);
 
             return finished.ExitCode;
         }
@@ -346,7 +348,10 @@ public sealed class ContainerBridgeRealDaemonTests
         public async Task<string> ReadFetchedBodyAsync()
         {
             var containerId = _lastContainerId ?? throw new InvalidOperationException("Nothing has fetched yet.");
-            var logs = await Runtime.ReadLogsAsync(containerId, new ContainerLogRequest { TailLines = 200 }).ConfigureAwait(false);
+            var logs = await Runtime.ReadLogsAsync(containerId, new ContainerLogRequest
+            {
+                TailLines = 200
+            }).ConfigureAwait(false);
             return logs.Text;
         }
 

@@ -60,7 +60,11 @@ public sealed class ContainerBridgeEndpointResolverTests
     [Test]
     public void Resolve_WhenTheConfiguredBindAddressIsNotOnThisHost_ReturnsNothingRatherThanThrowing()
     {
-        var resolved = ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions { Enabled = true, BindAddress = "10.9.9.9" },
+        var resolved = ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions
+            {
+                Enabled = true,
+                BindAddress = "10.9.9.9"
+            },
             hostRunsDockerDesktop: false,
             [
                 Interface("192.168.1.10", hasGateway: true)
@@ -132,7 +136,10 @@ public sealed class ContainerBridgeEndpointResolverTests
     [Test]
     public void Resolve_WhenNoInterfaceQualifies_ReturnsNothingRatherThanThrowing()
     {
-        var resolved = ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions { Enabled = true },
+        var resolved = ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions
+            {
+                Enabled = true
+            },
             hostRunsDockerDesktop: false,
             [
                 Interface("127.0.0.1", isLoopback: true)
@@ -144,7 +151,11 @@ public sealed class ContainerBridgeEndpointResolverTests
     [Test]
     public void Resolve_OnALinuxDaemon_HandsContainersTheBoundAddressItself()
     {
-        var resolved = AssertEx.NotNull(ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions { Enabled = true, Port = 18790 },
+        var resolved = AssertEx.NotNull(ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions
+            {
+                Enabled = true,
+                Port = 18790
+            },
             hostRunsDockerDesktop: false,
             [
                 Interface("192.168.1.10")
@@ -162,7 +173,11 @@ public sealed class ContainerBridgeEndpointResolverTests
     [Test]
     public void Resolve_OnDockerDesktop_HandsContainersTheHostAliasWhileStillBindingTheRealAddress()
     {
-        var resolved = AssertEx.NotNull(ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions { Enabled = true, Port = 18790 },
+        var resolved = AssertEx.NotNull(ContainerBridgeEndpointResolver.Resolve(new ContainerBridgeOptions
+            {
+                Enabled = true,
+                Port = 18790
+            },
             hostRunsDockerDesktop: true,
             [
                 Interface("192.168.1.10")
@@ -176,8 +191,7 @@ public sealed class ContainerBridgeEndpointResolverTests
     [Test]
     public void CollectUnicastAddresses_ReturnsEveryAddressOfEveryInterfaceInBothFamilies()
     {
-        var addresses = ContainerBridgeEndpointResolver.CollectUnicastAddresses(
-        [
+        var addresses = ContainerBridgeEndpointResolver.CollectUnicastAddresses([
             Interface("127.0.0.1", isLoopback: true),
             Interface("192.168.1.10", ipv6: "2001:db8::1"),
             Interface("10.0.0.5", isUp: false)

@@ -36,8 +36,10 @@ public sealed class WhisperModelPathResolver
     }
 
     /// <summary>Whether a catalogue entry's weight file is present on disk.</summary>
-    public bool IsInstalled(WhisperModelEntry entry) => File.Exists(FilePathFor(entry));
+    public bool IsInstalled(WhisperModelEntry entry) =>
+        File.Exists(FilePathFor(entry));
 
     /// <summary>Whether the pinned VAD file is present on disk.</summary>
-    public bool IsVadInstalled() => File.Exists(VadFilePath);
+    public bool IsVadInstalled() =>
+        File.Exists(VadFilePath);
 }

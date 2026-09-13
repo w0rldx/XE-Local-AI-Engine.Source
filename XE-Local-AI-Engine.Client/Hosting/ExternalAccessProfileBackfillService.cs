@@ -95,7 +95,7 @@ public sealed class ExternalAccessProfileBackfillService(
         if (stored is null)
         {
             logger.LogWarning("Skipping the external-access profile backfill: the node settings file could not be read, "
-                + "so the profile stays undecided. Repair or delete node-settings.json to choose one.");
+                              + "so the profile stays undecided. Repair or delete node-settings.json to choose one.");
             return;
         }
 
@@ -106,8 +106,8 @@ public sealed class ExternalAccessProfileBackfillService(
                 // A switch without a profile: an operator's opt-out, or a hand-edited profile the store normalised away.
                 // Backfilling would flip those switches back on, so the node stays undecided until someone answers.
                 logger.LogWarning("Skipping the external-access profile backfill: this node carries external-access "
-                    + "switches but no recognised profile, so the profile stays undecided and its switches are kept as "
-                    + "they are. Choose a preset on the Node Settings page.");
+                                  + "switches but no recognised profile, so the profile stays undecided and its switches are kept as "
+                                  + "they are. Choose a preset on the Node Settings page.");
             }
 
             return;
@@ -157,8 +157,8 @@ public sealed class ExternalAccessProfileBackfillService(
     private static bool IsUntouchedByTheFeature(StoredNodeSettings settings)
     {
         return settings.ExternalAccessProfile is null
-            && settings.AutoCheckApplicationUpdates is null
-            && settings.AutoCheckRuntimeUpdates is null
-            && settings.AutoProvisionFirstRunModel is null;
+               && settings.AutoCheckApplicationUpdates is null
+               && settings.AutoCheckRuntimeUpdates is null
+               && settings.AutoProvisionFirstRunModel is null;
     }
 }

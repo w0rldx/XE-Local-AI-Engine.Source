@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 
-using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
@@ -91,20 +90,19 @@ internal sealed partial class ExternalAppService
             try
             {
                 return await CreateAndStartAsync(runtime,
-                                                 daemonIsRootless,
-                                                 instanceId,
-                                                 manifest,
-                                                 plan,
-                                                 hold,
-                                                 commitBeforeStart,
-                                                 cancellationToken)
-                           .ConfigureAwait(false);
+                        daemonIsRootless,
+                        instanceId,
+                        manifest,
+                        plan,
+                        hold,
+                        commitBeforeStart,
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
             catch (ExternalAppPipelineException failure)
                 when (attempt == 0 && failure.Failure.Category == ExternalAppFailureCategory.PortUnavailable)
             {
-                _logger.LogWarning(
-                    "A host port for external application instance {InstanceId} was taken between the probe and the create; replanning the whole attempt once.",
+                _logger.LogWarning("A host port for external application instance {InstanceId} was taken between the probe and the create; replanning the whole attempt once.",
                     instanceId);
                 attempt++;
 
@@ -162,12 +160,12 @@ internal sealed partial class ExternalAppService
             // Internal = false: V1 enforces no outbound restriction, and an internal network would be a confinement
             // claim the disclosure does not make.
             _ = await runtime.CreateNetworkAsync(new ContainerNetworkSpecification
-            {
-                Name = ExternalAppLabels.NetworkName(instanceId),
-                Labels = ExternalAppLabels.For(_installId, instanceId),
-                Internal = false
-            },
-            cancellationToken).ConfigureAwait(false);
+                {
+                    Name = ExternalAppLabels.NetworkName(instanceId),
+                    Labels = ExternalAppLabels.For(_installId, instanceId),
+                    Internal = false
+                },
+                cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -320,7 +318,7 @@ internal sealed partial class ExternalAppService
             if (!probed)
             {
                 probed = await ProbeStorageAsync(runtime, manifest, service.ServiceName, containerId, daemonIsRootless, cancellationToken)
-                             .ConfigureAwait(false);
+                    .ConfigureAwait(false);
             }
         }
 
@@ -418,8 +416,7 @@ internal sealed partial class ExternalAppService
                         throw NotReady(service.ServiceName, "reported itself unhealthy");
                     case ContainerHealthState.None when !warned:
                         warned = true;
-                        _logger.LogWarning(
-                            "Service '{Service}' declares a healthcheck but the daemon reports no health state for it; waiting for the deadline.",
+                        _logger.LogWarning("Service '{Service}' declares a healthcheck but the daemon reports no health state for it; waiting for the deadline.",
                             service.ServiceName);
                         break;
                     default:
@@ -562,8 +559,7 @@ internal sealed partial class ExternalAppService
                 return true;
             }
 
-            _logger.LogWarning(
-                "{Count} container(s) of external application instance {InstanceId} are still on the container runtime after its teardown.",
+            _logger.LogWarning("{Count} container(s) of external application instance {InstanceId} are still on the container runtime after its teardown.",
                 left.Count,
                 instanceId);
 
@@ -697,7 +693,15 @@ internal sealed partial class ExternalAppService
 
             // The ONE mount, and the whole confinement: the helper can reach nothing outside this instance's
             // volumes directory whatever its command does. Read-back below proves the daemon applied exactly it.
-            Mounts = [new ContainerMount { HostPath = volumesRoot, ContainerPath = HelperMountPath, ReadOnly = false }],
+            Mounts =
+            [
+                new ContainerMount
+                {
+                    HostPath = volumesRoot,
+                    ContainerPath = HelperMountPath,
+                    ReadOnly = false
+                }
+            ],
             PublishedPorts = [],
 
             // Docker's own default set, kept and not widened. CAP_DAC_OVERRIDE is in it and is the point; dropping
@@ -857,7 +861,10 @@ internal sealed partial class ExternalAppService
     {
         return new ExternalAppStatusUpdate(cursor.InstanceId,
             cursor.Version,
-            new HashSet<ExternalAppInstanceStatus> { cursor.Status },
+            new HashSet<ExternalAppInstanceStatus>
+            {
+                cursor.Status
+            },
             newStatus,
             kind,
             EventDetailJson: null,
@@ -876,8 +883,7 @@ internal sealed partial class ExternalAppService
         var result = await store.UpdateStatusAsync(update, cancellationToken).ConfigureAwait(false);
         if (!result.Applied)
         {
-            _logger.LogWarning(
-                "A {Status} transition for external application instance {InstanceId} lost its compare-and-swap; another writer moved the row.",
+            _logger.LogWarning("A {Status} transition for external application instance {InstanceId} lost its compare-and-swap; another writer moved the row.",
                 update.NewStatus,
                 cursor.InstanceId);
             return false;
@@ -958,8 +964,7 @@ internal sealed partial class ExternalAppService
     /// </summary>
     private void LeaveTransientForShutdown(Guid instanceId)
     {
-        _logger.LogInformation(
-            "The operation on external application instance {InstanceId} was interrupted by shutdown; its row is left as it stands for the next boot to settle.",
+        _logger.LogInformation("The operation on external application instance {InstanceId} was interrupted by shutdown; its row is left as it stands for the next boot to settle.",
             instanceId);
     }
 

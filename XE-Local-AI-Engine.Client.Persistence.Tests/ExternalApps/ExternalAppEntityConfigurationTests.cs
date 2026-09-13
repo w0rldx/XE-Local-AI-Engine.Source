@@ -83,18 +83,18 @@ public sealed class ExternalAppEntityConfigurationTests
         var command = ExternalAppTestFixture.Create();
         var created = await store.CreateAsync(command).ConfigureAwait(false);
         _ = await store.UpdateStatusAsync(new ExternalAppStatusUpdate(command.Id,
-                             created.Version,
-                             new HashSet<ExternalAppInstanceStatus>
-                             {
-                                 ExternalAppInstanceStatus.Installing
-                             },
-                             ExternalAppInstanceStatus.Failed,
-                             ExternalAppInstanceEventKind.Failed,
-                             EventDetailJson: null,
-                             OccurredAtUtc: 2_000,
-                             ExternalAppDesiredState.Running,
-                             FailureCategory: ExternalAppFailureCategory.ImagePullFailed,
-                             FailureSummary: "The image could not be pulled at its pinned digest."))
+                           created.Version,
+                           new HashSet<ExternalAppInstanceStatus>
+                           {
+                               ExternalAppInstanceStatus.Installing
+                           },
+                           ExternalAppInstanceStatus.Failed,
+                           ExternalAppInstanceEventKind.Failed,
+                           EventDetailJson: null,
+                           OccurredAtUtc: 2_000,
+                           ExternalAppDesiredState.Running,
+                           FailureCategory: ExternalAppFailureCategory.ImagePullFailed,
+                           FailureSummary: "The image could not be pulled at its pinned digest."))
                        .ConfigureAwait(false);
 
         // Text rather than the ordinal: an enum stored as a number silently re-labels every existing row the day a

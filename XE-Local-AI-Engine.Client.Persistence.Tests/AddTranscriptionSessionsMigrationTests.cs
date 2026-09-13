@@ -314,11 +314,11 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     private static async Task<string> ColumnTypeAsync(MigrationSchemaProbe probe, string tableName, string columnName)
     {
         var type = await probe.ScalarAsync("SELECT type FROM pragma_table_info($table) WHERE name = $column;",
-                                   command =>
-                                   {
-                                       _ = command.Parameters.AddWithValue("$table", tableName);
-                                       _ = command.Parameters.AddWithValue("$column", columnName);
-                                   })
+                                  command =>
+                                  {
+                                      _ = command.Parameters.AddWithValue("$table", tableName);
+                                      _ = command.Parameters.AddWithValue("$column", columnName);
+                                  })
                               .ConfigureAwait(false);
         return AssertEx.NotNull(type as string, $"{tableName}.{columnName} does not exist.");
     }
@@ -326,11 +326,11 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     private static async Task<bool> HasCascadeDeleteAsync(MigrationSchemaProbe probe, string tableName, string principalTable)
     {
         var onDelete = await probe.ScalarAsync("SELECT on_delete FROM pragma_foreign_key_list($table) WHERE \"table\" = $principal;",
-                                       command =>
-                                       {
-                                           _ = command.Parameters.AddWithValue("$table", tableName);
-                                           _ = command.Parameters.AddWithValue("$principal", principalTable);
-                                       })
+                                      command =>
+                                      {
+                                          _ = command.Parameters.AddWithValue("$table", tableName);
+                                          _ = command.Parameters.AddWithValue("$principal", principalTable);
+                                      })
                                   .ConfigureAwait(false);
         return onDelete is string text && text.Contains("CASCADE", StringComparison.OrdinalIgnoreCase);
     }

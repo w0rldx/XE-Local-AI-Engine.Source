@@ -404,7 +404,10 @@ namespace XE_Local_AI_Engine.Client
             LoopbackBindGuard.Guard(app,
                 bridgeEndpoint is null
                     ? []
-                    : new[] { bridgeEndpoint.ListenerUrl });
+                    : new[]
+                    {
+                        bridgeEndpoint.ListenerUrl
+                    });
 
             try
             {

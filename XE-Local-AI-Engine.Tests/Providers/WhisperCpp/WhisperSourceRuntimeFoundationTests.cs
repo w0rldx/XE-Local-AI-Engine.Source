@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Tests.Providers.WhisperCpp;
 using System.Diagnostics;
 using System.Runtime.Versioning;
 using System.Security.Cryptography;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Logging.Abstractions;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
@@ -104,7 +105,17 @@ public sealed class WhisperSourceRuntimeFoundationTests
         // box that builds fine with make is not failed for lacking ninja.
         // readelf is on the floor because the post-build relocation gate runs it: without binutils a build compiles
         // for up to two hours and then fails a check the checklist could have surfaced up front.
-        foreach (var key in new[] { "os-is-linux", "cmake", "gcc", "g++", "git", "readelf", "make-or-ninja", "free-disk" })
+        foreach (var key in new[]
+                 {
+                     "os-is-linux",
+                     "cmake",
+                     "gcc",
+                     "g++",
+                     "git",
+                     "readelf",
+                     "make-or-ninja",
+                     "free-disk"
+                 })
         {
             AssertEx.True(cpuKeys.Contains(key), $"The checklist must carry the '{key}' row.");
             AssertEx.True(cudaKeys.Contains(key), $"The checklist must carry the '{key}' row.");
@@ -243,7 +254,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
     }
 
     private static string Sha(string content) =>
-        Convert.ToHexStringLower(SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(content)));
+        Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(content)));
 
     /// <summary>Fails exactly one record write, so the adoption's last step is the one that breaks.</summary>
     private sealed class FailingWriteStore(WhisperInstalledRuntimeStore inner) : IWhisperInstalledRuntimeStore
@@ -252,7 +263,8 @@ public sealed class WhisperSourceRuntimeFoundationTests
 
         public bool FailNextWrite { get; set; }
 
-        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) => Inner.ReadAsync(ct);
+        public Task<WhisperInstalledRuntimeState?> ReadAsync(CancellationToken ct) =>
+            Inner.ReadAsync(ct);
 
         public Task WriteAsync(WhisperInstalledRuntimeState state, CancellationToken ct)
         {
@@ -265,6 +277,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
             return Inner.WriteAsync(state, ct);
         }
 
-        public Task DeleteAsync(CancellationToken ct) => Inner.DeleteAsync(ct);
+        public Task DeleteAsync(CancellationToken ct) =>
+            Inner.DeleteAsync(ct);
     }
 }

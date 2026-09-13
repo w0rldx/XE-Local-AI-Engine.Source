@@ -68,7 +68,10 @@ public sealed class ExternalAppsOptionsValidatorTests
     [Arguments("@sha256:9db7b59979c38555a39def84a31fb98b5296952f9e3afd4f6f11f05b07adfab0")]
     public void Validate_WithAStorageHelperImageThatIsNotDigestPinned_FailsNamingTheKey(string image)
     {
-        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions { StorageHelperImage = image });
+        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions
+        {
+            StorageHelperImage = image
+        });
 
         AssertEx.True(result.Failed, $"'{image}' is not digest-pinned and must be refused at start-up.");
         AssertEx.Contains(result.FailureMessage, "ExternalApps:StorageHelperImage");
@@ -90,7 +93,10 @@ public sealed class ExternalAppsOptionsValidatorTests
     [Test]
     public void Validate_WithARelativeInstanceRoot_FailsNamingTheKey()
     {
-        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions { InstanceRoot = "relative/path" });
+        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions
+        {
+            InstanceRoot = "relative/path"
+        });
 
         AssertEx.True(result.Failed, "A relative instance root must be refused at start-up.");
         AssertEx.Contains(result.FailureMessage, "ExternalApps:InstanceRoot");
@@ -104,7 +110,10 @@ public sealed class ExternalAppsOptionsValidatorTests
     [Arguments("1000:1000:1000")]
     public void Validate_WithAMalformedContainerIdentity_FailsNamingTheKey(string identity)
     {
-        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions { ContainerIdentity = identity });
+        var result = new ExternalAppsOptionsValidator().Validate(name: null, new ExternalAppsOptions
+        {
+            ContainerIdentity = identity
+        });
 
         AssertEx.True(result.Failed, $"'{identity}' is not a uid:gid pair.");
         AssertEx.Contains(result.FailureMessage, "ExternalApps:ContainerIdentity");
@@ -117,7 +126,10 @@ public sealed class ExternalAppsOptionsValidatorTests
     [Test]
     public void DataAnnotations_RejectAnObserverIntervalBelowTheFloor()
     {
-        var options = new ExternalAppsOptions { ObserverIntervalSeconds = 1 };
+        var options = new ExternalAppsOptions
+        {
+            ObserverIntervalSeconds = 1
+        };
         var results = new List<ValidationResult>();
 
         var valid = Validator.TryValidateObject(options, new ValidationContext(options), results, validateAllProperties: true);

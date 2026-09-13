@@ -1,13 +1,11 @@
 namespace XE_Local_AI_Engine.Tests.ExternalApps;
 
 using System.Globalization;
-using TUnit.Core.Exceptions;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.ExternalApps;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
-using XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -217,9 +215,8 @@ public sealed class ExternalAppStorageHelperTests
     [Test]
     public async Task Uninstall_WhenTheApplicationDeclaresNoStorage_RunsNoHelperAtAll()
     {
-        await using var harness = await ExternalAppServiceHarness.CreateAsync(
-                                            ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service(ServiceName)]))
-                                        .ConfigureAwait(false);
+        await using var harness = await ExternalAppServiceHarness.CreateAsync(ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service(ServiceName)]))
+                                                                 .ConfigureAwait(false);
         var row = await InstallAsync(harness).ConfigureAwait(false);
         var helper = CaptureHelperSpecification(harness);
 
@@ -261,8 +258,7 @@ public sealed class ExternalAppStorageHelperTests
 
     private static ApplicationManifest Manifest()
     {
-        return ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service(ServiceName, storage: [new ApplicationStorage(VolumeName, "/var/lib/app")])]);
+        return ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service(ServiceName, storage: [new ApplicationStorage(VolumeName, "/var/lib/app")])]);
     }
 
     private static async Task<ExternalAppInstanceSnapshot> InstallAsync(ExternalAppServiceHarness harness)
@@ -271,12 +267,12 @@ public sealed class ExternalAppStorageHelperTests
                        ?? throw new AssertionException("The harness catalog does not hold the fixture manifest.");
 
         var admitted = await harness.Service.InstallAsync(new InstallCommand(manifest.Id,
-                                     DisplayName: null,
-                                     manifest.ManifestVersion,
-                                     manifest.ManifestSha256,
-                                     new Dictionary<string, string>(StringComparer.Ordinal),
-                                     AcceptPermissions: true))
-                                 .ConfigureAwait(false);
+                                        DisplayName: null,
+                                        manifest.ManifestVersion,
+                                        manifest.ManifestSha256,
+                                        new Dictionary<string, string>(StringComparer.Ordinal),
+                                        AcceptPermissions: true))
+                                    .ConfigureAwait(false);
 
         _ = await harness.SettleAsync(admitted.Id, ExternalAppInstanceStatus.Running).ConfigureAwait(false);
         harness.InstalledId = admitted.Id;
@@ -287,7 +283,10 @@ public sealed class ExternalAppStorageHelperTests
     private static async Task<ExternalAppServiceHarness> RunningHarnessAsync()
     {
         var harness = await ExternalAppServiceHarness.CreateAsync(Manifest(),
-                                                         static options => options with { StorageHelperImage = HelperImage })
+                                                         static options => options with
+                                                         {
+                                                             StorageHelperImage = HelperImage
+                                                         })
                                                      .ConfigureAwait(false);
         _ = await InstallAsync(harness).ConfigureAwait(false);
         return harness;

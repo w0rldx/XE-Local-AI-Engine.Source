@@ -269,7 +269,12 @@ internal static class ApplicationContainerPolicy
             violations.Add($"the container has {observed.DeviceCount.ToString(CultureInfo.InvariantCulture)} device mapping(s); applications get none");
         }
 
-        foreach (var (name, mode) in new[] { ("pid", observed.PidMode), ("ipc", observed.IpcMode), ("uts", observed.UtsMode) })
+        foreach (var (name, mode) in new[]
+                 {
+                     ("pid", observed.PidMode),
+                     ("ipc", observed.IpcMode),
+                     ("uts", observed.UtsMode)
+                 })
         {
             if (string.Equals(mode, HostMode, StringComparison.OrdinalIgnoreCase))
             {
@@ -329,8 +334,7 @@ internal static class ApplicationContainerPolicy
             var plannedReal = ResolveThroughLinks(Path.GetFullPath(expected.HostPath));
             if (confinement is not null && !IsInside(plannedReal, confinement))
             {
-                violations.Add(
-                    $"the mount at '{destination}' resolves to '{plannedReal}', which is outside this instance's own directory ({daemonMode} daemon)");
+                violations.Add($"the mount at '{destination}' resolves to '{plannedReal}', which is outside this instance's own directory ({daemonMode} daemon)");
                 continue;
             }
 
@@ -435,7 +439,8 @@ internal static class ApplicationContainerPolicy
 
             if (bound.HostPort == 0 || bound.HostPort != expected.HostPort)
             {
-                violations.Add($"container port {bound.ContainerPort.ToString(CultureInfo.InvariantCulture)} is bound on host port {bound.HostPort.ToString(CultureInfo.InvariantCulture)} rather than on the one the engine reserved");
+                violations.Add(
+                    $"container port {bound.ContainerPort.ToString(CultureInfo.InvariantCulture)} is bound on host port {bound.HostPort.ToString(CultureInfo.InvariantCulture)} rather than on the one the engine reserved");
             }
         }
 
@@ -459,12 +464,14 @@ internal static class ApplicationContainerPolicy
 
         if (observed.PidsLimit != requested.PidsLimit)
         {
-            violations.Add($"the container's process ceiling is {observed.PidsLimit.ToString(CultureInfo.InvariantCulture)} rather than the manifest's {requested.PidsLimit.ToString(CultureInfo.InvariantCulture)}");
+            violations.Add(
+                $"the container's process ceiling is {observed.PidsLimit.ToString(CultureInfo.InvariantCulture)} rather than the manifest's {requested.PidsLimit.ToString(CultureInfo.InvariantCulture)}");
         }
 
         if (observed.ReadOnlyRootFilesystem != requested.ReadOnlyRootFilesystem)
         {
-            violations.Add($"the container's root filesystem is {(observed.ReadOnlyRootFilesystem ? "read-only" : "writable")} rather than {(requested.ReadOnlyRootFilesystem ? "read-only" : "writable")}");
+            violations.Add(
+                $"the container's root filesystem is {(observed.ReadOnlyRootFilesystem ? "read-only" : "writable")} rather than {(requested.ReadOnlyRootFilesystem ? "read-only" : "writable")}");
         }
 
         if (observed.RestartMode != requested.RestartMode)

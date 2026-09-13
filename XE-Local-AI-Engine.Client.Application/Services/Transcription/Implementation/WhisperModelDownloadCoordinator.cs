@@ -103,7 +103,8 @@ public sealed class WhisperModelDownloadCoordinator : IWhisperModelDownloadCoord
     }
 
     /// <inheritdoc />
-    public IReadOnlyList<WhisperModelDownloadStatus> ListStatuses() => _status.Values.ToList();
+    public IReadOnlyList<WhisperModelDownloadStatus> ListStatuses() =>
+        _status.Values.ToList();
 
     // Detached, self-contained run. Every exit path writes a terminal status; the task itself never faults, because an
     // unobserved background fault would take the reason with it.

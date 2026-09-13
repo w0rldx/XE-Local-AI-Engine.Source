@@ -101,16 +101,31 @@ public sealed record TranscribeFileResult
     public string? ErrorMessage { get; init; }
 
     internal static TranscribeFileResult Succeeded(TranscriptionSessionDetailView session) =>
-        new() { Outcome = TranscribeFileOutcome.Succeeded, Session = session };
+        new()
+        {
+            Outcome = TranscribeFileOutcome.Succeeded,
+            Session = session
+        };
 
     internal static TranscribeFileResult SessionNotFound() =>
-        new() { Outcome = TranscribeFileOutcome.SessionNotFound };
+        new()
+        {
+            Outcome = TranscribeFileOutcome.SessionNotFound
+        };
 
     internal static TranscribeFileResult Cancelled() =>
-        new() { Outcome = TranscribeFileOutcome.Cancelled };
+        new()
+        {
+            Outcome = TranscribeFileOutcome.Cancelled
+        };
 
     internal static TranscribeFileResult RuntimeFailed(string code, string message) =>
-        new() { Outcome = TranscribeFileOutcome.RuntimeFailed, ErrorCode = code, ErrorMessage = message };
+        new()
+        {
+            Outcome = TranscribeFileOutcome.RuntimeFailed,
+            ErrorCode = code,
+            ErrorMessage = message
+        };
 
     internal static TranscribeFileResult UnsupportedContainer(AudioContainer detected,
         IReadOnlyList<string> supported,

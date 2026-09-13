@@ -1,5 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Containers;
 
+using System.Globalization;
 using System.Net;
 using System.Net.Sockets;
 using XE_Local_AI_Engine.Testing.FakeDocker;
@@ -71,8 +72,8 @@ public sealed class FakeDockerServerTests
 
         var parts = docker.State.ApiVersion.Split('.');
         AssertEx.Equal(expected: 2, parts.Length, "The fake daemon's API version is not in major.minor form.");
-        AssertEx.Equal(expected: 1, int.Parse(parts[0], System.Globalization.CultureInfo.InvariantCulture));
-        AssertEx.True(int.Parse(parts[1], System.Globalization.CultureInfo.InvariantCulture) >= 41,
+        AssertEx.Equal(expected: 1, int.Parse(parts[0], CultureInfo.InvariantCulture));
+        AssertEx.True(int.Parse(parts[1], CultureInfo.InvariantCulture) >= 41,
             $"The fake daemon reports API version {docker.State.ApiVersion}, below the production minimum of 1.41.");
 
         AssertEx.NotNullOrEmpty(docker.State.DaemonId);

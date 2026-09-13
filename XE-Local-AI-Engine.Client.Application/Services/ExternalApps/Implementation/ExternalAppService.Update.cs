@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Services.ExternalApps.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Containers;
 using XE_Local_AI_Engine.Client.Services.Containers.Bridge;
 using XE_Local_AI_Engine.Client.Services.ExternalApps.Catalog;
@@ -89,8 +88,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
             // The application must still be in the catalog. If it has left, the instance keeps running untouched:
             // there is no target manifest, so there is nothing this could update INTO.
             var target = await services.Catalog.GetApplicationAsync(row.ApplicationId, cancellationToken).ConfigureAwait(false)
-                         ?? throw new ExternalAppNotFoundException(
-                             $"The catalog no longer declares '{row.ApplicationId}', so this application cannot be updated.");
+                         ?? throw new ExternalAppNotFoundException($"The catalog no longer declares '{row.ApplicationId}', so this application cannot be updated.");
 
             var versions = await ReadCatalogVersionsAsync(services.Catalog, cancellationToken).ConfigureAwait(false);
             if (target.ManifestVersion <= row.ManifestVersion)
@@ -138,8 +136,7 @@ internal sealed partial class ExternalAppService : IExternalAppService
                 ExternalAppEffectivePermissions.From(target));
             if (added.Count > 0 && !command.AcceptPermissions)
             {
-                throw new ExternalAppPermissionChangeRequiresAcknowledgementException(
-                    "This update grants the application permissions it does not have; accept them before continuing.",
+                throw new ExternalAppPermissionChangeRequiresAcknowledgementException("This update grants the application permissions it does not have; accept them before continuing.",
                     added);
             }
 
@@ -148,17 +145,17 @@ internal sealed partial class ExternalAppService : IExternalAppService
             {
                 // Written BEFORE the stop, so the acknowledgement is on the record even if the update then fails.
                 _ = await ApplyAsync(services.Store,
-                                     cursor,
-                                     Transition(cursor, row.Status, ExternalAppInstanceEventKind.PermissionAccepted),
-                                     cancellationToken)
-                        .ConfigureAwait(false);
+                        cursor,
+                        Transition(cursor, row.Status, ExternalAppInstanceEventKind.PermissionAccepted),
+                        cancellationToken)
+                    .ConfigureAwait(false);
             }
 
             if (!await ApplyAsync(services.Store,
-                                  cursor,
-                                  Transition(cursor, admitted, ExternalAppInstanceEventKind.UpdateRequested),
-                                  cancellationToken)
-                     .ConfigureAwait(false))
+                        cursor,
+                        Transition(cursor, admitted, ExternalAppInstanceEventKind.UpdateRequested),
+                        cancellationToken)
+                    .ConfigureAwait(false))
             {
                 throw new ExternalAppConcurrencyException("The instance changed while this update was being admitted.");
             }
@@ -175,7 +172,12 @@ internal sealed partial class ExternalAppService : IExternalAppService
 
             lease = null;
 
-            return ToSummary(row with { Status = admitted, Version = cursor.Version, UpdatedAtUtc = Now() }, versions);
+            return ToSummary(row with
+            {
+                Status = admitted,
+                Version = cursor.Version,
+                UpdatedAtUtc = Now()
+            }, versions);
         }
         finally
         {
@@ -221,45 +223,44 @@ internal sealed partial class ExternalAppService : IExternalAppService
             var committed = false;
 
             var published = await RebuildAsync(runtime,
-                                               resolution.Daemon.IsRootless,
-                                               context.InstanceId,
-                                               target,
-                                               variables,
-                                               bridgeGrant,
-                                               async (planned, token) =>
-                                               {
-                                                   if (committed)
-                                                   {
-                                                       // A replanned attempt reaches this point a second time. The
-                                                       // row already describes the target, and re-committing would
-                                                       // lose its own compare-and-swap against the version it set.
-                                                       return;
-                                                   }
+                    resolution.Daemon.IsRootless,
+                    context.InstanceId,
+                    target,
+                    variables,
+                    bridgeGrant,
+                    async (planned, token) =>
+                    {
+                        if (committed)
+                        {
+                            // A replanned attempt reaches this point a second time. The
+                            // row already describes the target, and re-committing would
+                            // lose its own compare-and-swap against the version it set.
+                            return;
+                        }
 
-                                                   var result = await services.Store.CommitUpdateAsync(context.InstanceId,
-                                                                                cursor.Version,
-                                                                                snapshotJson,
-                                                                                variablesJson,
-                                                                                ExternalAppPublishedPorts.Serialize(planned),
-                                                                                target.ManifestVersion,
-                                                                                Now(),
-                                                                                mintedBridgeToken,
-                                                                                token)
-                                                                            .ConfigureAwait(false);
+                        var result = await services.Store.CommitUpdateAsync(context.InstanceId,
+                                                       cursor.Version,
+                                                       snapshotJson,
+                                                       variablesJson,
+                                                       ExternalAppPublishedPorts.Serialize(planned),
+                                                       target.ManifestVersion,
+                                                       Now(),
+                                                       mintedBridgeToken,
+                                                       token)
+                                                   .ConfigureAwait(false);
 
-                                                   if (!result.Applied)
-                                                   {
-                                                       throw new ExternalAppPipelineException(new ExternalAppFailure(
-                                                           ExternalAppFailureCategory.Unknown,
-                                                           "This application changed while it was being updated; nothing was started."));
-                                                   }
+                        if (!result.Applied)
+                        {
+                            throw new ExternalAppPipelineException(new ExternalAppFailure(ExternalAppFailureCategory.Unknown,
+                                "This application changed while it was being updated; nothing was started."));
+                        }
 
-                                                   cursor.Version = result.Version;
-                                                   cursor.Sequence = result.Sequence;
-                                                   committed = true;
-                                               },
-                                               cancellationToken)
-                                .ConfigureAwait(false);
+                        cursor.Version = result.Version;
+                        cursor.Sequence = result.Sequence;
+                        committed = true;
+                    },
+                    cancellationToken)
+                .ConfigureAwait(false);
 
             // The desired state is the user's and an update is not a decision to start something that was stopped.
             // Against the TARGET manifest: the containers standing here are the ones the rebuild just created, so the
@@ -271,18 +272,18 @@ internal sealed partial class ExternalAppService : IExternalAppService
             }
 
             _ = await ApplyAsync(services.Store,
-                                 cursor,
-                                 Transition(cursor,
-                                     restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
-                                     ExternalAppInstanceEventKind.Updated) with
-                                 {
-                                     DesiredState = context.Row.DesiredState,
-                                     PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
-                                     NeedsRecreate = false,
-                                     ClearFailure = true
-                                 },
-                                 cancellationToken)
-                    .ConfigureAwait(false);
+                    cursor,
+                    Transition(cursor,
+                            restoreStopped ? ExternalAppInstanceStatus.Stopped : ExternalAppInstanceStatus.Running,
+                            ExternalAppInstanceEventKind.Updated) with
+                        {
+                            DesiredState = context.Row.DesiredState,
+                            PublishedPortsJson = ExternalAppPublishedPorts.Serialize(published),
+                            NeedsRecreate = false,
+                            ClearFailure = true
+                        },
+                    cancellationToken)
+                .ConfigureAwait(false);
         }
         catch (Exception exception)
         {

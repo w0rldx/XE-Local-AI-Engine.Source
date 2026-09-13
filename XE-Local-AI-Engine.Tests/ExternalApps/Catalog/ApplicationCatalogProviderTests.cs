@@ -464,7 +464,10 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     {
         // 0xFF 0xFE can never start a UTF-8 sequence. A substituting decoder would turn it into U+FFFD and hand the
         // provider a body the catalog server never served.
-        var handler = new CountingStubHandler(HttpStatusCode.OK, body: null) { RawBody = [0xFF, 0xFE, 0x7B, 0x7D] };
+        var handler = new CountingStubHandler(HttpStatusCode.OK, body: null)
+        {
+            RawBody = [0xFF, 0xFE, 0x7B, 0x7D]
+        };
         var provider = BuildProvider(handler, RemoteUrl, out _);
 
         var snapshot = await provider.GetCatalogAsync(CancellationToken.None);
@@ -491,7 +494,10 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     [Test]
     public async Task RefreshAsync_WhenANotModifiedArrivesWithNoUsableCachedCopy_RefetchesUnconditionally()
     {
-        var handler = new CountingStubHandler(HttpStatusCode.OK, RemoteJson) { FirstCallStatus = HttpStatusCode.NotModified };
+        var handler = new CountingStubHandler(HttpStatusCode.OK, RemoteJson)
+        {
+            FirstCallStatus = HttpStatusCode.NotModified
+        };
         var provider = BuildProvider(handler, RemoteUrl, out _);
 
         var result = await provider.RefreshAsync(CancellationToken.None);
@@ -549,7 +555,10 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
     {
         // With ResponseHeadersRead the body is still on the wire here, so a connection that dies mid-read surfaces as
         // IOException, not HttpRequestException — and used to escape the refresh instead of falling back.
-        var handler = new CountingStubHandler(HttpStatusCode.OK, body: null) { FailBodyRead = true };
+        var handler = new CountingStubHandler(HttpStatusCode.OK, body: null)
+        {
+            FailBodyRead = true
+        };
         var provider = BuildProvider(handler, RemoteUrl, out _);
 
         var result = await provider.RefreshAsync(CancellationToken.None);
@@ -672,7 +681,10 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
 
             if (FailBodyRead)
             {
-                return Task.FromResult(new HttpResponseMessage(_statusCode) { Content = new FailingReadContent() });
+                return Task.FromResult(new HttpResponseMessage(_statusCode)
+                {
+                    Content = new FailingReadContent()
+                });
             }
 
             var response = new HttpResponseMessage(_statusCode);
@@ -720,7 +732,10 @@ public sealed class ApplicationCatalogProviderTests : IDisposable
             _ = _firstRequest.TrySetResult();
             await _release.Task.ConfigureAwait(false);
 
-            return new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) };
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(body)
+            };
         }
     }
 

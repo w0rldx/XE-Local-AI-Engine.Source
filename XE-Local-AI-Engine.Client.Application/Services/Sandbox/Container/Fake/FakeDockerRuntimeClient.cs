@@ -378,9 +378,8 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
         if (specification.PublishedPorts.FirstOrDefault(publication =>
                 !string.Equals(publication.HostIp, "127.0.0.1", StringComparison.Ordinal)) is { } offender)
         {
-            throw new ArgumentException(
-                $"Container port {offender.ContainerPort}/{offender.Protocol} asks to publish on host interface "
-                + $"'{offender.HostIp}'. Application containers publish on 127.0.0.1 and on nothing else.",
+            throw new ArgumentException($"Container port {offender.ContainerPort}/{offender.Protocol} asks to publish on host interface "
+                                        + $"'{offender.HostIp}'. Application containers publish on 127.0.0.1 and on nothing else.",
                 nameof(specification));
         }
 
@@ -602,8 +601,7 @@ public sealed class FakeDockerRuntimeClient : IContainerRuntime
         // nothing to compare and a foreign network holding the name would be reused.
         if (specification.Labels.Count == 0)
         {
-            throw new ArgumentException(
-                $"The container network '{specification.Name}' carries no labels. At least one ownership label is required.",
+            throw new ArgumentException($"The container network '{specification.Name}' carries no labels. At least one ownership label is required.",
                 nameof(specification));
         }
 

@@ -202,7 +202,8 @@ public sealed class WhisperModelDownloadCoordinatorTests
 
         public WhisperModelDownloadCoordinator Coordinator { get; }
 
-        public WhisperModelDownloadPhase? Phase(string modelId) => Coordinator.GetStatus(modelId)?.Phase;
+        public WhisperModelDownloadPhase? Phase(string modelId) =>
+            Coordinator.GetStatus(modelId)?.Phase;
 
         public void Dispose()
         {

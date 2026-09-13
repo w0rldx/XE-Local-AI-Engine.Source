@@ -192,7 +192,8 @@ public sealed class UploadTranscriptionAudioEndpoint(ITranscriptionService sessi
 
     // BadHttpRequestException derives from IOException, so this covers a body the server itself refused as well as one
     // the multipart reader ran off the end of. A cancellation is neither, and must keep propagating.
-    private static bool IsMalformedBody(Exception exception) => exception is IOException or InvalidDataException;
+    private static bool IsMalformedBody(Exception exception) =>
+        exception is IOException or InvalidDataException;
 
     private Task SendUnsupportedContainerAsync(TranscribeFileResult result) =>
         Send.ResultAsync(Results.Json(new TranscriptionUnsupportedContainerResponse

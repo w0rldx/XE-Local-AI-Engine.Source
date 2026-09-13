@@ -47,10 +47,9 @@ internal static class NodeSettingsEndpointDtoMapper
             KvCacheType = settings.KvCacheType,
             // The meeting point: the store holds a lower-case string, the engine holds the enum, and this pair is the
             // only conversion. An unparseable stored value reads back as the default rather than crossing the wire.
-            ContainerRuntimeSelection = ContainerRuntimeSelectionParser.Format(
-                ContainerRuntimeSelectionParser.TryParse(settings.ContainerRuntimeSelection, out var runtimeSelection)
-                    ? runtimeSelection
-                    : ContainerRuntimeSelection.Auto),
+            ContainerRuntimeSelection = ContainerRuntimeSelectionParser.Format(ContainerRuntimeSelectionParser.TryParse(settings.ContainerRuntimeSelection, out var runtimeSelection)
+                ? runtimeSelection
+                : ContainerRuntimeSelection.Auto),
             SpeculativeDraftModelName = settings.SpeculativeDraftModelName,
             SpeculativeDraftMaxTokens = settings.SpeculativeDraftMaxTokens,
             MinSpeculativeDraftMaxTokens = StoredNodeSettings.MinSpeculativeDraftMaxTokens,
@@ -208,8 +207,7 @@ internal static class NodeSettingsEndpointDtoMapper
     ///         </item>
     ///     </list>
     /// </summary>
-    private static (string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel) ApplyExternalAccess(
-        SaveNodeSettingsRequest request,
+    private static (string? Profile, bool? ApplicationUpdates, bool? RuntimeUpdates, bool? FirstRunModel) ApplyExternalAccess(SaveNodeSettingsRequest request,
         StoredNodeSettings currentSettings)
     {
         if (StoredNodeSettings.IsExternalAccessPreset(request.ExternalAccessProfile))

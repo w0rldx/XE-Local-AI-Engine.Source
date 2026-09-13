@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Providers.WhisperCpp;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Http.Resilience;
 using Microsoft.Extensions.Logging;
 using XE_Local_AI_Engine.Providers.Abstractions.Capabilities;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -61,8 +60,8 @@ public static class WhisperCppServiceCollectionExtensions
         // ONLY because every call site owns an explicit deadline through a linked token source; nothing may call this
         // client without one.
 #pragma warning disable EXTEXP0001 // RemoveAllResilienceHandlers is experimental; used deliberately to drop the
-                                   // Aspire-installed standard pipeline, whose attempt timeout and blanket retries are
-                                   // both wrong for a local transcription daemon.
+        // Aspire-installed standard pipeline, whose attempt timeout and blanket retries are
+        // both wrong for a local transcription daemon.
         services.AddHttpClient(RuntimeHttpClientName, static client => client.Timeout = Timeout.InfiniteTimeSpan)
                 .RemoveAllResilienceHandlers();
 #pragma warning restore EXTEXP0001

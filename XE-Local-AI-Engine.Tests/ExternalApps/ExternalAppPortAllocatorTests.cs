@@ -15,8 +15,7 @@ public sealed class ExternalAppPortAllocatorTests
     public void Hold_WithAFreePreferredPort_TakesIt()
     {
         var preferred = FindFreePort();
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(8080, preferred)])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(8080, preferred)])]);
 
         using var hold = ExternalAppPortAllocator.Hold(manifest);
 
@@ -34,8 +33,7 @@ public sealed class ExternalAppPortAllocatorTests
         occupied.Listen(backlog: 1);
         var taken = ((IPEndPoint)occupied.LocalEndPoint!).Port;
 
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(8080, taken)])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(8080, taken)])]);
 
         using var hold = ExternalAppPortAllocator.Hold(manifest);
 
@@ -51,8 +49,7 @@ public sealed class ExternalAppPortAllocatorTests
     public void Hold_WhenTwoServicesPreferTheSamePort_NeverGivesThemTheSameOne()
     {
         var preferred = FindFreePort();
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("first", ports: [ExternalAppTestManifests.UiPort(80, preferred)]),
             ExternalAppTestManifests.Service("second", ports: [ExternalAppTestManifests.UiPort(80, preferred)], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -70,8 +67,7 @@ public sealed class ExternalAppPortAllocatorTests
     [Test]
     public void Hold_KeepsThePortBoundUntilItsOwnServiceIsReleased()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("first", ports: [ExternalAppTestManifests.UiPort(80)]),
             ExternalAppTestManifests.Service("second", ports: [ExternalAppTestManifests.UiPort(80)], image: ExternalAppTestManifests.SecondImage)
         ]);
@@ -92,8 +88,7 @@ public sealed class ExternalAppPortAllocatorTests
     [Test]
     public void Release_IsIdempotentAndIgnoresAServiceThatPublishesNothing()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(80)])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(80)])]);
 
         using var hold = ExternalAppPortAllocator.Hold(manifest);
         hold.Release("app");
@@ -106,8 +101,7 @@ public sealed class ExternalAppPortAllocatorTests
     [Test]
     public void Dispose_ReleasesEveryPortStillHeld()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-            [ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(80)])]);
+        var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(80)])]);
 
         int port;
         using (var hold = ExternalAppPortAllocator.Hold(manifest))
@@ -126,8 +120,7 @@ public sealed class ExternalAppPortAllocatorTests
     [Test]
     public void ByService_CarriesTheFirstPublishedPortOfEachService()
     {
-        var manifest = ExternalAppTestManifests.Manifest(
-        [
+        var manifest = ExternalAppTestManifests.Manifest([
             ExternalAppTestManifests.Service("app", ports: [ExternalAppTestManifests.UiPort(80), ExternalAppTestManifests.UiPort(443)]),
             ExternalAppTestManifests.Service("quiet", image: ExternalAppTestManifests.SecondImage)
         ]);

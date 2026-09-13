@@ -47,8 +47,7 @@ public sealed class ApplicationContainerPolicyTests
     [Test]
     public void Policy_WithATaggedImage_RefusesBeforeAnyCreate()
     {
-        var exception = AssertEx.Throws<ContainerPolicyException>(
-            () => Specification(service: ExternalAppTestManifests.Service("app", image: "ghcr.io/example/app:1.0.0")));
+        var exception = AssertEx.Throws<ContainerPolicyException>(() => Specification(service: ExternalAppTestManifests.Service("app", image: "ghcr.io/example/app:1.0.0")));
 
         AssertEx.Equal(ApplicationContainerPolicy.ImageNotDigestPinnedReason, exception.Reason);
     }
@@ -56,8 +55,7 @@ public sealed class ApplicationContainerPolicyTests
     [Test]
     public void Policy_WithAnUndeclarableExtraHost_RefusesBeforeAnyCreate()
     {
-        var exception = AssertEx.Throws<ContainerPolicyException>(
-            () => Specification(service: ExternalAppTestManifests.Service("app", extraHosts: ["evil.invalid:10.0.0.1"])));
+        var exception = AssertEx.Throws<ContainerPolicyException>(() => Specification(service: ExternalAppTestManifests.Service("app", extraHosts: ["evil.invalid:10.0.0.1"])));
 
         AssertEx.Equal(ApplicationContainerPolicy.ExtraHostNotAllowedReason, exception.Reason);
     }
@@ -94,7 +92,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenCapabilitiesWereNotDropped_ReportsIt()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { CapabilitiesDropped = [] };
+        var observed = Inspection(specification) with
+        {
+            CapabilitiesDropped = []
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("drop ALL", StringComparison.Ordinal));
     }
@@ -103,7 +104,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenAnUnrequestedCapabilityIsHeld_ReportsItByName()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { CapabilitiesAdded = ["SYS_ADMIN"] };
+        var observed = Inspection(specification) with
+        {
+            CapabilitiesAdded = ["SYS_ADMIN"]
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("SYS_ADMIN", StringComparison.Ordinal));
     }
@@ -113,9 +117,15 @@ public sealed class ApplicationContainerPolicyTests
     {
         var specification = Specification();
 
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { SecurityOptions = ["seccomp=profile.json"] }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                SecurityOptions = ["seccomp=profile.json"]
+            }),
             static violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { SecurityOptions = ["no-new-privileges:true"] }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                SecurityOptions = ["no-new-privileges:true"]
+            }),
             static violation => violation.Contains("seccomp", StringComparison.Ordinal));
     }
 
@@ -139,7 +149,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenNoNewPrivilegesCameBackFalse_ReportsIt()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { SecurityOptions = ["no-new-privileges:false", "seccomp=profile.json"] };
+        var observed = Inspection(specification) with
+        {
+            SecurityOptions = ["no-new-privileges:false", "seccomp=profile.json"]
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("no-new-privileges", StringComparison.Ordinal));
     }
@@ -153,7 +166,10 @@ public sealed class ApplicationContainerPolicyTests
         AssertEx.Contains(specification.SecurityOptions, static option => string.Equals(option, ApplicationContainerPolicy.NoNewPrivileges, StringComparison.Ordinal));
         AssertEx.Empty(Violations(specification, Inspection(specification)));
         AssertEx.Empty(Violations(specification,
-            Inspection(specification) with { SecurityOptions = ["no-new-privileges", "seccomp=profile.json"] }));
+            Inspection(specification) with
+            {
+                SecurityOptions = ["no-new-privileges", "seccomp=profile.json"]
+            }));
     }
 
     [Test]
@@ -161,9 +177,15 @@ public sealed class ApplicationContainerPolicyTests
     {
         var specification = Specification();
 
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { Privileged = true }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                Privileged = true
+            }),
             static violation => violation.Contains("privileged", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { DeviceCount = 1 }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                DeviceCount = 1
+            }),
             static violation => violation.Contains("device", StringComparison.Ordinal));
     }
 
@@ -177,9 +199,18 @@ public sealed class ApplicationContainerPolicyTests
         var baseline = Inspection(specification);
         var observed = namespaceName switch
         {
-            "pid" => baseline with { PidMode = "host" },
-            "ipc" => baseline with { IpcMode = "host" },
-            _ => baseline with { UtsMode = "host" }
+            "pid" => baseline with
+            {
+                PidMode = "host"
+            },
+            "ipc" => baseline with
+            {
+                IpcMode = "host"
+            },
+            _ => baseline with
+            {
+                UtsMode = "host"
+            }
         };
 
         AssertEx.Contains(Violations(specification, observed), violation => violation.Contains(namespaceName, StringComparison.Ordinal));
@@ -189,7 +220,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenTheContainerJoinedAnotherNetwork_ReportsIt()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { NetworkMode = "bridge" };
+        var observed = Inspection(specification) with
+        {
+            NetworkMode = "bridge"
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("bridge", StringComparison.Ordinal));
     }
@@ -198,7 +232,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenTheContainerIsOnTheHostNetwork_ReportsIt()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { NetworkMode = "host" };
+        var observed = Inspection(specification) with
+        {
+            NetworkMode = "host"
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("host network", StringComparison.Ordinal));
     }
@@ -218,7 +255,13 @@ public sealed class ApplicationContainerPolicyTests
             Mounts =
             [
                 .. observed.Mounts,
-                new ContainerMountView { Type = "volume", Source = "a2f9c1", Destination = "/var/lib/hidden", ReadOnly = false }
+                new ContainerMountView
+                {
+                    Type = "volume",
+                    Source = "a2f9c1",
+                    Destination = "/var/lib/hidden",
+                    ReadOnly = false
+                }
             ]
         };
 
@@ -232,7 +275,16 @@ public sealed class ApplicationContainerPolicyTests
         var observed = Inspection(specification);
         observed = observed with
         {
-            Mounts = [new ContainerMountView { Type = "bind", Source = "/etc", Destination = "/app/data", ReadOnly = false }]
+            Mounts =
+            [
+                new ContainerMountView
+                {
+                    Type = "bind",
+                    Source = "/etc",
+                    Destination = "/app/data",
+                    ReadOnly = false
+                }
+            ]
         };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("/etc", StringComparison.Ordinal));
@@ -261,12 +313,19 @@ public sealed class ApplicationContainerPolicyTests
 
             var specification = Specification(storage: [new ApplicationStorage("data", "/app/data")]) with
             {
-                Mounts = [new ContainerMount { HostPath = hostPath, ContainerPath = "/app/data", ReadOnly = false }]
+                Mounts =
+                [
+                    new ContainerMount
+                    {
+                        HostPath = hostPath,
+                        ContainerPath = "/app/data",
+                        ReadOnly = false
+                    }
+                ]
             };
             var observed = Inspection(specification);
 
-            AssertEx.Contains(
-                ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: true, afterStart: false, instanceRoot),
+            AssertEx.Contains(ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: true, afterStart: false, instanceRoot),
                 violation => violation.Contains("outside this instance's own directory", StringComparison.Ordinal));
 
             // The negative control, and the defect this replaced: the two paths are the SAME string, so comparing
@@ -286,7 +345,13 @@ public sealed class ApplicationContainerPolicyTests
         var observed = Inspection(specification);
         observed = observed with
         {
-            Mounts = [.. observed.Mounts.Select(static mount => mount with { ReadOnly = false })]
+            Mounts =
+            [
+                .. observed.Mounts.Select(static mount => mount with
+                {
+                    ReadOnly = false
+                })
+            ]
         };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("writable", StringComparison.Ordinal));
@@ -296,7 +361,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_WhenAPlannedMountWasNotApplied_ReportsIt()
     {
         var specification = Specification(storage: [new ApplicationStorage("data", "/app/data")]);
-        var observed = Inspection(specification) with { Mounts = [] };
+        var observed = Inspection(specification) with
+        {
+            Mounts = []
+        };
 
         AssertEx.Contains(Violations(specification, observed), static violation => violation.Contains("not applied", StringComparison.Ordinal));
     }
@@ -311,7 +379,15 @@ public sealed class ApplicationContainerPolicyTests
         var specification = Specification(ports: [ExternalAppTestManifests.UiPort(7000)]);
         var observed = Inspection(specification) with
         {
-            RequestedPortBindings = [new ContainerPortPublication { ContainerPort = 7000, HostIp = "0.0.0.0", HostPort = 40000 }]
+            RequestedPortBindings =
+            [
+                new ContainerPortPublication
+                {
+                    ContainerPort = 7000,
+                    HostIp = "0.0.0.0",
+                    HostPort = 40000
+                }
+            ]
         };
 
         AssertEx.NotEmpty(ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: true, afterStart: false));
@@ -323,7 +399,16 @@ public sealed class ApplicationContainerPolicyTests
         var specification = Specification(ports: [ExternalAppTestManifests.UiPort(7000)]);
         var observed = Inspection(specification, afterStart: true) with
         {
-            PublishedPorts = [new ContainerPublishedPort { ContainerPort = 7000, Protocol = "tcp", HostIp = "0.0.0.0", HostPort = 40000 }]
+            PublishedPorts =
+            [
+                new ContainerPublishedPort
+                {
+                    ContainerPort = 7000,
+                    Protocol = "tcp",
+                    HostIp = "0.0.0.0",
+                    HostPort = 40000
+                }
+            ]
         };
 
         AssertEx.Contains(ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: false, afterStart: true),
@@ -337,7 +422,16 @@ public sealed class ApplicationContainerPolicyTests
         var observed = Inspection(specification, afterStart: true);
         observed = observed with
         {
-            PublishedPorts = [.. observed.PublishedPorts, new ContainerPublishedPort { ContainerPort = 9000, Protocol = "tcp", HostIp = "127.0.0.1", HostPort = 49000 }]
+            PublishedPorts =
+            [
+                .. observed.PublishedPorts, new ContainerPublishedPort
+                {
+                    ContainerPort = 9000,
+                    Protocol = "tcp",
+                    HostIp = "127.0.0.1",
+                    HostPort = 49000
+                }
+            ]
         };
 
         AssertEx.Contains(ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: true, afterStart: true),
@@ -348,7 +442,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_PostStart_WhenAPlannedPortIsNotBound_ReportsIt()
     {
         var specification = Specification(ports: [ExternalAppTestManifests.UiPort(7000)]);
-        var observed = Inspection(specification, afterStart: true) with { PublishedPorts = [] };
+        var observed = Inspection(specification, afterStart: true) with
+        {
+            PublishedPorts = []
+        };
 
         AssertEx.Contains(ApplicationContainerPolicy.FindViolations(specification, observed, daemonIsRootless: true, afterStart: true),
             static violation => violation.Contains("not bound", StringComparison.Ordinal));
@@ -359,15 +456,30 @@ public sealed class ApplicationContainerPolicyTests
     {
         var specification = Specification();
 
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { MemoryBytes = 1 }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                MemoryBytes = 1
+            }),
             static violation => violation.Contains("memory ceiling", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { NanoCpus = 1 }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                NanoCpus = 1
+            }),
             static violation => violation.Contains("CPU ceiling", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { PidsLimit = 99 }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                PidsLimit = 99
+            }),
             static violation => violation.Contains("process ceiling", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { ReadOnlyRootFilesystem = true }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                ReadOnlyRootFilesystem = true
+            }),
             static violation => violation.Contains("root filesystem", StringComparison.Ordinal));
-        AssertEx.Contains(Violations(specification, Inspection(specification) with { RestartMode = ContainerRestartMode.None }),
+        AssertEx.Contains(Violations(specification, Inspection(specification) with
+            {
+                RestartMode = ContainerRestartMode.None
+            }),
             static violation => violation.Contains("restart policy", StringComparison.Ordinal));
     }
 
@@ -398,7 +510,10 @@ public sealed class ApplicationContainerPolicyTests
     public void FindViolations_DoesNotComplainAboutTheUserTheDaemonReports()
     {
         var specification = Specification();
-        var observed = Inspection(specification) with { User = "0:0" };
+        var observed = Inspection(specification) with
+        {
+            User = "0:0"
+        };
 
         AssertEx.Empty(Violations(specification, observed));
     }
