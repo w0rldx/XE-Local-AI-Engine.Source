@@ -1,6 +1,6 @@
 import { ActionIcon, Badge, Drawer, Group, Menu, Stack, Text, Tooltip } from "@mantine/core";
 import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
 
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
@@ -8,6 +8,8 @@ import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineEr
 import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
 
 interface WorkSessionDetailLayoutProps {
+	/** The frame `usePaneLayoutMode` measures — the page owns the decision, this component owns the element. */
+	readonly containerRef: Ref<HTMLDivElement>;
 	readonly title: string;
 	readonly kindLabel: string;
 	readonly isMobile: boolean;
@@ -29,7 +31,7 @@ interface WorkSessionDetailLayoutProps {
 export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 	const { t } = useTranslation();
 	return (
-		<FullHeightPage data-testid="work-session-detail-page">
+		<FullHeightPage ref={props.containerRef} data-testid="work-session-detail-page">
 			<Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
 				<Group gap="xs" wrap="nowrap">
 					{props.isMobile ? (
@@ -94,6 +96,7 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 				{/* Both side surfaces reach a phone through the header's two toggles, so the narrow viewport keeps the
 				    conversation alone rather than stacking anything above it. */}
 				<ResponsivePaneLayout
+					isNarrow={props.isMobile}
 					narrowMode="mainOnly"
 					list={props.planPanel}
 					main={props.conversationPane}

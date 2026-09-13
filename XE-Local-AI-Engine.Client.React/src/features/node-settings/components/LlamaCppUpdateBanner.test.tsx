@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { LlamaCppRuntimeStatus } from "@/features/node-settings/models/LocalRuntimeModels";
@@ -21,42 +20,14 @@ vi.mock("@tanstack/react-router", () => ({
 
 import { LlamaCppUpdateBanner } from "@/features/node-settings/components/LlamaCppUpdateBanner";
 import { useRuntimeUpdateBannerStore } from "@/features/node-settings/stores/RuntimeUpdateBannerStore";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function renderBanner(): void {
-	render(
-		<MantineProvider>
-			<LlamaCppUpdateBanner />
-		</MantineProvider>,
-	);
+	renderWithProviders(<LlamaCppUpdateBanner />);
 }
 
 describe("LlamaCppUpdateBanner", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		hooksMock.statusData = undefined;
 		useRuntimeUpdateBannerStore.setState({ dismissedTag: null });
 		vi.clearAllMocks();

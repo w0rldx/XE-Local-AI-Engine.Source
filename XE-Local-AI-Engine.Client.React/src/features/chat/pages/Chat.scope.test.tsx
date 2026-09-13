@@ -4,8 +4,7 @@
 // unchanged, and a scoped mount must pin the conversation, hide the list, freeze the selectors, route the composer
 // through the override, and never write the GLOBAL chat preference store.
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import type { QueryClient } from "@tanstack/react-query";
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -16,6 +15,7 @@ import type { ChatConversationModel, ChatScope } from "@/features/chat/models/Ch
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 vi.mock("@tanstack/react-router", async (importOriginal) => {
 	const actual = await importOriginal<typeof import("@tanstack/react-router")>();
@@ -87,38 +87,6 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 
 const adapter = vi.mocked(nodeChatAdapter);
 
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-	Element.prototype.scrollIntoView = vi.fn();
-	if (!("randomUUID" in crypto)) {
-		Object.defineProperty(crypto, "randomUUID", { writable: true, value: () => "00000000-0000-4000-8000-000000000000" });
-	}
-}
-
 function conversation(id: string, title: string): ChatConversationModel {
 	return {
 		id,
@@ -148,25 +116,22 @@ function emptyResumeStream(): AsyncIterable<NodeChatStreamEventDto> {
 	};
 }
 
+// The wrapper form, not `renderWithProviders`: one test re-renders with a different scope and must land in the SAME
+// provider tree, otherwise the re-render remounts <Chat /> and the resume path under test never runs.
 function renderChat(scope?: ChatScope): { queryClient: QueryClient; rerender: (next?: ChatScope) => void } {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+	const { wrapper, queryClient } = createProvidersWrapper();
 	const confirmValue = { confirm: vi.fn().mockResolvedValue(true) };
 	const tree = (nextScope?: ChatScope): ReactNode => (
-		<QueryClientProvider client={queryClient}>
-			<ConfirmContext.Provider value={confirmValue}>
-				<MantineProvider>
-					<Chat scope={nextScope} />
-				</MantineProvider>
-			</ConfirmContext.Provider>
-		</QueryClientProvider>
+		<ConfirmContext.Provider value={confirmValue}>
+			<Chat scope={nextScope} />
+		</ConfirmContext.Provider>
 	);
-	const result = render(tree(scope));
+	const result = render(tree(scope), { wrapper });
 	return { queryClient, rerender: (next?: ChatScope) => result.rerender(tree(next)) };
 }
 
 describe("Chat scope seam", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [

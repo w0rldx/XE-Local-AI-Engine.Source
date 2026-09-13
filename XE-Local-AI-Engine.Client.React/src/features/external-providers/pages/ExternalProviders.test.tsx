@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ApiError } from "@/core/api/errors/ApiError";
@@ -42,31 +40,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 vi.mock("@/core/ui/hooks/useConfirm", () => ({ useConfirm: () => confirmMock }));
 
 import { ExternalProviders } from "@/features/external-providers/pages/ExternalProviders";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	// Mantine's SegmentedControl uses FloatingIndicator, which depends on ResizeObserver.
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function connection(overrides: Partial<ExternalProviderConnectionDto> = {}): ExternalProviderConnectionDto {
 	return {
@@ -94,15 +68,10 @@ function connection(overrides: Partial<ExternalProviderConnectionDto> = {}): Ext
 }
 
 function renderPage(): void {
+	// This file's own client rather than `createTestQueryClient()`: caching stays on (no `gcTime: 0`), which the
+	// save/delete/probe mutations' invalidate-and-refetch assertions rely on.
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	const ui: ReactElement = (
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
-				<ExternalProviders />
-			</MantineProvider>
-		</QueryClientProvider>
-	);
-	render(ui);
+	renderWithProviders(<ExternalProviders />, { queryClient });
 }
 
 async function openStoredEditor(): Promise<void> {
@@ -114,7 +83,6 @@ async function openStoredEditor(): Promise<void> {
 
 describe("ExternalProviders page", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		generatedMock.listFn.mockResolvedValue({ revision: "rev-1", connections: [connection()] });
 		generatedMock.saveFn.mockResolvedValue({ revision: "rev-2", connections: [connection()] });
 		generatedMock.deleteFn.mockResolvedValue({ revision: "rev-2", connections: [] });

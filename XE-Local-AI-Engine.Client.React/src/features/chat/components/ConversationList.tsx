@@ -142,11 +142,11 @@ export const ConversationList = memo(function ConversationList({
 			{embedded ? null : (
 				<Group justify="space-between" px="md" pt="md" pb="xs">
 					<Text fw={700}>{t("pages.chat.conversations", "Conversations")}</Text>
-					<Tooltip label={t("pages.chat.conversationList.hide", "Hide conversations")} position="left">
+					<Tooltip label={t("pages.chat.conversationList.hide", "Minimize sidebar")} position="left">
 						<ActionIcon
 							variant="subtle"
 							onClick={onToggleCollapse}
-							aria-label={t("pages.chat.conversationList.collapseAria", "Collapse conversations")}
+							aria-label={t("pages.chat.conversationList.collapseAria", "Minimize sidebar")}
 						>
 							<IconChevronLeft size={16} />
 						</ActionIcon>
@@ -171,7 +171,7 @@ export const ConversationList = memo(function ConversationList({
 					size={30}
 					radius="md"
 					onClick={onCreateConversation}
-					aria-label={t("pages.chat.newConversation", "New conversation")}
+					aria-label={t("pages.chat.newConversation", "New plain chat")}
 				>
 					<IconPlus size={15} />
 				</ActionIcon>

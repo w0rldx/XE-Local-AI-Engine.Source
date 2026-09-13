@@ -319,7 +319,7 @@ export function devWorkflowAttemptLabel(t: TFunction, counts: DevWorkflowAttempt
 	return counts.operatorRetries > 0
 		? t(
 				"pages.devWorkflows.nodes.attemptOperatorRetry",
-				"attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +1 from an operator retry)",
+				"attempt {{attempt}} of {{maxAttempts}} (cap {{cap}}, +{{count}} from operator retries)",
 				{ ...counts, count: counts.operatorRetries },
 			)
 		: t("pages.devWorkflows.nodes.attempt", "attempt {{attempt}} of {{maxAttempts}}", { ...counts });

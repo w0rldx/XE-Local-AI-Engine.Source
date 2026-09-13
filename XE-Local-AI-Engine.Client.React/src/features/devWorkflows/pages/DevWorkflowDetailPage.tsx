@@ -6,11 +6,10 @@ import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
-import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
 import { ResponsivePaneLayout } from "@/core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout";
+import { usePaneLayoutMode } from "@/core/ui/components/ResponsivePaneLayout/usePaneLayoutMode";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import { DevWorkflowArtifactsTab } from "@/features/devWorkflows/components/DevWorkflowArtifactsTab";
 import { DevWorkflowDefinitionPanel } from "@/features/devWorkflows/components/DevWorkflowDefinitionPanel";
@@ -41,8 +40,8 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
-	const { width } = useWindowDimensions();
-	const isMobile = width < TWO_PANE_BREAKPOINT;
+	// One decision for the whole page: the header toggles, the two Drawers and the pane grid all read this.
+	const { ref: paneContainerRef, isNarrow: isMobile } = usePaneLayoutMode();
 	const [summaryDrawerOpened, summaryDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [deleteError, setDeleteError] = useState<string | undefined>(undefined);
@@ -108,7 +107,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	if (workItemQuery.isPending) {
 		return (
-			<FullHeightPage data-testid="dev-workflow-detail-page">
+			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
 				<Loader data-testid="dev-workflow-detail-loading" />
 			</FullHeightPage>
 		);
@@ -116,7 +115,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 
 	if (workItemQuery.isError || !workItemQuery.data) {
 		return (
-			<FullHeightPage data-testid="dev-workflow-detail-page">
+			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
 				<InlineErrorAlert
 					variant="light"
 					message={apiErrorMessage(
@@ -312,7 +311,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	);
 
 	return (
-		<FullHeightPage data-testid="dev-workflow-detail-page">
+		<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
 			<Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
 				<Group gap="xs" wrap="nowrap">
 					{isMobile ? (
@@ -374,6 +373,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 				{/* Both side surfaces reach a phone through the header's two toggles, so the narrow viewport keeps the
 				    centre pane alone rather than stacking anything above it. */}
 				<ResponsivePaneLayout
+					isNarrow={isMobile}
 					narrowMode="mainOnly"
 					list={summaryPanel}
 					main={centrePane}

@@ -197,7 +197,7 @@ describe("ConversationList management actions", () => {
 
 		// The hint becomes discoverable on hover and does not alter the existing skip-confirm behavior.
 		fireEvent.mouseEnter(deleteItem);
-		expect(await screen.findByText("Shift-click to skip confirmation")).toBeTruthy();
+		expect(await screen.findByText("Shift+Click to skip confirm")).toBeTruthy();
 	});
 
 	it("does not render the delete item for remote-origin (view-only) conversations", () => {

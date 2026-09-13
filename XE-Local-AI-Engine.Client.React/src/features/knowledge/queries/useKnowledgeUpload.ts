@@ -120,7 +120,7 @@ export function useKnowledgeUpload(collectionId = KNOWLEDGE_DEFAULT_COLLECTION_I
 
 			// Independent uploads run concurrently; each settles its own optimistic chip + invalidation.
 			Promise.all(accepted.map((file) => uploadOne(file))).catch((error: unknown) => {
-				toast.error(knowledgeErrorMessage(error, t("pages.knowledgeBase.upload.failed", "Failed to upload files.")));
+				toast.error(knowledgeErrorMessage(error, t("pages.knowledgeBase.upload.batchFailed", "Failed to upload files.")));
 			});
 		},
 		[uploadOne],

@@ -134,9 +134,9 @@ export function ChatMessageActions({
 				</Tooltip>
 			) : null}
 			{canBranch ? (
-				<Tooltip label={t("pages.chat.actions.branch", "Branch from here")} withArrow={true}>
+				<Tooltip label={t("pages.chat.actions.branch", "Branch conversation")} withArrow={true}>
 					<ActionIcon
-						aria-label={t("pages.chat.actions.branch", "Branch from here")}
+						aria-label={t("pages.chat.actions.branch", "Branch conversation")}
 						color="gray"
 						variant="subtle"
 						size="sm"

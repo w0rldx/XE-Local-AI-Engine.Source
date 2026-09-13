@@ -109,7 +109,7 @@ export function MessageFeedbackControl({ messageId, feedback, pending = false, o
 							{t("common.cancel", "Cancel")}
 						</Button>
 						<Button size="xs" loading={pending} onClick={submit} data-testid={`message-feedback-submit-${messageId}`}>
-							{t("pages.chat.feedback.submit", "Submit")}
+							{t("pages.chat.feedback.submit", "Submit feedback")}
 						</Button>
 					</Group>
 				</Stack>

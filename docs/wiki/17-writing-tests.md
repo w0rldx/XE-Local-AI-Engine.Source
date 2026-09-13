@@ -237,9 +237,11 @@ did. `EncryptConversationTitleMigrationTests.cs` (titles cleared) and
 
 ### React components
 
-Render through the shared provider wrapper `src/test/RenderWithProviders.tsx` (Mantine theme, i18n, TanStack
+Render through the shared provider wrapper `src/test/RenderWithProviders.tsx` (Mantine theme, TanStack
 Query, router) instead of bare `@testing-library/react` — a bare render loses the providers most components
-need. Network goes through the MSW handlers in `src/test/msw/`; assert against handlers, not against a mocked
+need. Translations need no wrapper: `src/i18n.ts` is a Vitest `setupFiles` entry, so every file resolves `t()`
+against the shipped `en` bundle and must assert that string rather than the in-code `defaultValue`. Network goes
+through the MSW handlers in `src/test/msw/`; assert against handlers, not against a mocked
 `fetch`. `src/test/PinLocale.ts` is already wired as a Vitest `setupFiles` entry, so locale is deterministic; so is
 `src/test/Cleanup.ts`, which runs React Testing Library's `cleanup` after every test (Vitest does not register it
 for you without `globals`). `restoreMocks`, `unstubEnvs` and `unstubGlobals` are on in `vite.config.ts`, so spies

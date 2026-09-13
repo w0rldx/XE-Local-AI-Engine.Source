@@ -1,9 +1,7 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import type { ReactElement } from "react";
+import { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { GetCloudSettingsResponse } from "@/core/api/generated";
@@ -36,31 +34,7 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 });
 
 import { CloudSettings } from "@/features/cloud-settings/pages/CloudSettings";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	// Mantine's SegmentedControl uses FloatingIndicator, which depends on ResizeObserver.
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function makeSettings(overrides: Partial<GetCloudSettingsResponse> = {}): GetCloudSettingsResponse {
 	return {
@@ -71,20 +45,14 @@ function makeSettings(overrides: Partial<GetCloudSettingsResponse> = {}): GetClo
 }
 
 function renderCloudSettings(): void {
+	// This file's own client rather than `createTestQueryClient()`: caching stays on (no `gcTime: 0`), which the
+	// save/clear mutations' invalidate-and-refetch assertions rely on.
 	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } });
-	const ui: ReactElement = (
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
-				<CloudSettings />
-			</MantineProvider>
-		</QueryClientProvider>
-	);
-	render(ui);
+	renderWithProviders(<CloudSettings />, { queryClient });
 }
 
 describe("CloudSettings — Azure Foundry connection form (generated hey-api data layer)", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		generatedMock.getFn.mockResolvedValue(makeSettings());
 		generatedMock.saveFn.mockResolvedValue(makeSettings());
 		generatedMock.clearFn.mockResolvedValue(makeSettings());

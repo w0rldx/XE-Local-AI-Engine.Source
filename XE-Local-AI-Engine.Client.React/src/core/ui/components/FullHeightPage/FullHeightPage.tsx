@@ -1,10 +1,12 @@
 import { Box } from "@mantine/core";
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 
 interface FullHeightPageProps {
 	children: ReactNode;
 	"data-tour"?: string;
 	"data-testid"?: string;
+	/** The frame element, for a page that has to MEASURE the room its content gets (see `usePaneLayoutMode`). */
+	ref?: Ref<HTMLDivElement>;
 }
 
 // Frame for pages that own their scrolling (e.g. chat): claims the full height of the Layout scroll
@@ -26,9 +28,10 @@ interface FullHeightPageProps {
 // The X axis IS clipped: nothing full-height should pan the whole page sideways — wide content carries its own
 // horizontal scroller (Table.ScrollContainer), and letting the frame scroll horizontally would drag the page chrome
 // out of view with it.
-export function FullHeightPage({ children, "data-tour": dataTour, "data-testid": testId }: FullHeightPageProps) {
+export function FullHeightPage({ children, "data-tour": dataTour, "data-testid": testId, ref }: FullHeightPageProps) {
 	return (
 		<Box
+			ref={ref}
 			py="lg"
 			style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0, overflowY: "auto", overflowX: "hidden" }}
 			data-tour={dataTour}

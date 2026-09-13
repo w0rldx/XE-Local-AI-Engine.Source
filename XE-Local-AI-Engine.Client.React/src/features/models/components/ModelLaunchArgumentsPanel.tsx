@@ -51,7 +51,7 @@ export function ModelLaunchArgumentsPanel({ modelName }: ModelLaunchArgumentsPan
 		...withResponseValidation(deleteModelLaunchArgumentsMutation()),
 		onSuccess: async () => {
 			setValue("");
-			toast.success(t("pages.models.launchArgs.reset", "Launch arguments reset to defaults."));
+			toast.success(t("pages.models.launchArgs.resetSuccess", "Launch arguments reset to defaults."));
 			await invalidate();
 		},
 		onError: (error) => toast.error(apiErrorMessage(error, "Failed to reset launch arguments")),

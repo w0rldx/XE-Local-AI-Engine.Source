@@ -1,8 +1,7 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import type { QueryClient } from "@tanstack/react-query";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +12,7 @@ import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import type { NodeChatStreamEventDto } from "@/features/chat/models/NodeChatStreamTypes";
 import { Chat } from "@/features/chat/pages/Chat";
 import { nodeChatQueryKeys } from "@/features/chat/queries/NodeChatQueryKeys";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The no-installed-model guidance renders a TanStack-router Link to /models whenever the fixture's model list
 // is empty (the default below). Stub the router module so Chat mounts without a RouterProvider.
@@ -77,38 +77,6 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 }));
 
 const adapter = vi.mocked(nodeChatAdapter);
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-	Element.prototype.scrollIntoView = vi.fn();
-	if (!("randomUUID" in crypto)) {
-		Object.defineProperty(crypto, "randomUUID", { writable: true, value: () => "00000000-0000-4000-8000-000000000000" });
-	}
-}
 
 /**
  * The conversation exactly as a RELOADED page loads it: the user turn plus the still-`streaming` assistant
@@ -181,27 +149,17 @@ function emptyResumeStream(): AsyncIterable<NodeChatStreamEventDto> {
 }
 
 function renderChat(): { queryClient: QueryClient } {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false, gcTime: 0 } },
-	});
 	const confirmValue = { confirm: vi.fn().mockResolvedValue(true) };
 
-	render(
-		<QueryClientProvider client={queryClient}>
-			<ConfirmContext.Provider value={confirmValue}>
-				<MantineProvider>
-					<Chat />
-				</MantineProvider>
-			</ConfirmContext.Provider>
-		</QueryClientProvider>,
+	return renderWithProviders(
+		<ConfirmContext.Provider value={confirmValue}>
+			<Chat />
+		</ConfirmContext.Provider>,
 	);
-
-	return { queryClient };
 }
 
 describe("Chat cold-load resume", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
 		listLocalModelsQueryFn.mockResolvedValue({
 			items: [],

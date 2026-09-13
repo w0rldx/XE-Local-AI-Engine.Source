@@ -36,8 +36,9 @@ pnpm audit --prod --audit-level=high
 - User-facing strings go through react-i18next keys. Adding a language: [`docs/translating.md`](../docs/translating.md).
 - Some lint suppressions are load-bearing (the SignalR hub hooks and chat adapters; listed in wiki 16). Do not "fix" them.
 - An `await import()` inside `it()` counts against `testTimeout`; hoist imports.
-- A test that asserts a user-facing string renders through `src/test/renderWithProviders` or imports `@/i18n`;
-  a hand-rolled wrapper sees the uninitialised i18next fallback, which echoes `defaultValue` and never interpolates.
+- i18n is initialised suite-wide: `src/i18n.ts` is the first vitest `setupFiles` entry, so every test file — hand-rolled
+  wrapper or not — resolves `t()` against the shipped `en` bundle. Assert the bundle string the operator sees, never the
+  in-code `defaultValue`; `scripts/CheckI18nDefaults.mjs` fails lint on a drifted or missing default.
   The `"New conversation"` literal in `Chat.tsx` stays untranslated (persisted, compared by exact string).
 - Dependency decisions that look like dead weight but are not: `recharts` is a required peer of `@mantine/charts`;
   UnoCSS runs `presetWind3()` (never wind4); `@types/node` stays at 22.3.0 behind pnpm's trust-downgrade gate.

@@ -403,7 +403,7 @@ export function ChatInputArea({
 					<Textarea
 						ref={inputRef}
 						data-testid="chat-input"
-						placeholder={t("pages.chat.inputPlaceholder", "Message the local node")}
+						placeholder={t("pages.chat.inputPlaceholder", "Type your message")}
 						value={content}
 						onChange={(event) => {
 							const target = event.currentTarget;

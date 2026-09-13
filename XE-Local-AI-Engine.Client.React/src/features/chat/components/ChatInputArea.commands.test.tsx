@@ -1,61 +1,38 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { ChatInputArea } from "@/features/chat/components/ChatInputArea";
 import type { ChatCommandOption } from "@/features/chat/models/SlashCommandModels";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 const commandOptions: ChatCommandOption[] = [
 	{ id: null, name: "ping", description: "Test the current chat agent.", prompt: "Respond with exactly PONG" },
 	{ id: "review-id", name: "review", description: "Review current work", prompt: "Review the current work" },
 ];
 
-function installBrowserMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-			disconnect = vi.fn();
-			unobserve = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-	Element.prototype.scrollIntoView = vi.fn();
-}
-
 function renderComposer(overrides: Record<string, unknown> = {}) {
 	const onSend = vi.fn();
-	render(
-		<MantineProvider>
-			<ChatInputArea
-				availableReasoningEfforts={["none", "medium"]}
-				isSending={false}
-				modelOptions={[]}
-				selectedModel="local-default"
-				reasoningEffort="medium"
-				commandOptions={commandOptions}
-				onCancel={vi.fn()}
-				onModelChange={vi.fn()}
-				onReasoningEffortChange={vi.fn()}
-				onSend={onSend}
-				{...overrides}
-			/>
-		</MantineProvider>,
+	renderWithProviders(
+		<ChatInputArea
+			availableReasoningEfforts={["none", "medium"]}
+			isSending={false}
+			modelOptions={[]}
+			selectedModel="local-default"
+			reasoningEffort="medium"
+			commandOptions={commandOptions}
+			onCancel={vi.fn()}
+			onModelChange={vi.fn()}
+			onReasoningEffortChange={vi.fn()}
+			onSend={onSend}
+			{...overrides}
+		/>,
 	);
 	return { input: screen.getByTestId<HTMLTextAreaElement>("chat-input"), onSend };
 }
 
 describe("ChatInputArea slash commands", () => {
-	beforeEach(installBrowserMocks);
 	afterEach(cleanup);
 
 	it("uses Enter first to select and a second Enter to expand and send exactly once", () => {

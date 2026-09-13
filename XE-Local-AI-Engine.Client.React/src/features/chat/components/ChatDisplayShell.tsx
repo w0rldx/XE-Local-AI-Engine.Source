@@ -159,11 +159,11 @@ export function ChatDisplayShell({
 		<Stack gap={4}>
 			<Group gap="xs" wrap="nowrap" align="center">
 				{isMobile && !hideConversationList ? (
-					<Tooltip label={t("pages.chat.conversationList.show", "Show conversations")}>
+					<Tooltip label={t("pages.chat.conversationList.show", "Expand sidebar")}>
 						<ActionIcon
 							variant="subtle"
 							onClick={openConversationDrawer}
-							aria-label={t("pages.chat.conversationList.show", "Show conversations")}
+							aria-label={t("pages.chat.conversationList.show", "Expand sidebar")}
 							data-testid="chat-conversations-toggle"
 						>
 							<IconLayoutSidebar size={18} />
@@ -171,7 +171,7 @@ export function ChatDisplayShell({
 					</Tooltip>
 				) : null}
 				<Text fw={700} data-testid="chat-window-title" style={{ flex: 1, minWidth: 0 }} lineClamp={1}>
-					{conversation?.title?.trim() || t("pages.chat.windowTitle", "Local chat")}
+					{conversation?.title?.trim() || t("pages.chat.windowTitle", "Chat window")}
 				</Text>
 				{/* Temporary-chat toggle: shown only when the bound agent has adaptive memory enabled. A temporary chat
 				    still USES existing memory; it just won't teach the agent new memory from this thread. The toggle

@@ -7,6 +7,12 @@ import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTex
 describe("usePendingComposerTextStore", () => {
 	beforeEach(() => {
 		usePendingComposerTextStore.setState({ pendingText: "" });
+		// The suite-wide i18n init (a `setupFiles` entry) makes i18next-browser-languagedetector cache the detected
+		// language as `i18nextLng` in localStorage, so storage is not empty by the time this file runs. Clearing it
+		// here keeps the strict `storage.length === 0` assertion below meaningful — it still fails if the store
+		// itself ever starts persisting — rather than weakening it to ignore foreign keys. The detector's cache is
+		// NOT disabled in src/i18n.ts: production seeds UserLanguageStore from that very key.
+		globalThis.localStorage.clear();
 	});
 
 	it("hands the staged text back and empties itself", () => {

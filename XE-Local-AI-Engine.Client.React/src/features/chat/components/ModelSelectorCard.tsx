@@ -230,7 +230,7 @@ export function ModelSelectorCard({
 							<Stack gap={2}>
 								<ModelSelectorSection
 									items={availableOptions}
-									title={t("pages.chat.modelSelector.availableModels", "Available")}
+									title={t("pages.chat.modelSelector.availableModels", "Available models")}
 									reasoningLabel={reasoningLabel}
 									nativeReasoningLabel={nativeReasoningLabel}
 									selectedModel={selectedModel}
@@ -239,7 +239,7 @@ export function ModelSelectorCard({
 								/>
 								<ModelSelectorSection
 									items={unavailableOptions}
-									title={t("pages.chat.modelSelector.unavailableModels", "Unavailable")}
+									title={t("pages.chat.modelSelector.unavailableModels", "Unavailable models")}
 									reasoningLabel={reasoningLabel}
 									nativeReasoningLabel={nativeReasoningLabel}
 									selectedModel={selectedModel}

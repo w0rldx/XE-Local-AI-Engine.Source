@@ -67,7 +67,7 @@ export function DevWorkflowRunToolbar({
 					}}
 					data-testid="dev-workflow-decisions-needed"
 				>
-					{t("pages.devWorkflows.detail.decisionsNeeded", "{{count}} decision needed", { count: pendingDecisionCount })}
+					{t("pages.devWorkflows.detail.decisionsNeeded", "{{count}} decisions needed", { count: pendingDecisionCount })}
 				</Button>
 			) : null}
 

@@ -88,7 +88,11 @@
 		"workerNode": "Worker Node",
 		"hide": "Hide",
 		"copy": "Copy",
-		"copied": "Copied"
+		"copied": "Copied",
+		"retry": "Retry",
+		"actions": "Actions",
+		"unknown": "Unknown",
+		"back": "Back"
 	},
 	"theme": {
 		"title": "Theme",
@@ -515,13 +519,14 @@
 			"upload": {
 				"heading": "Add documents",
 				"prompt": "Drop documents here or click to browse",
-				"hint": "PDF, DOCX, Markdown, text, CSV, JSON — up to {{limit}} MB each.",
+				"hint": "PDF, DOCX, Markdown, text, structured data, and source code — up to {{limit}} MB each.",
 				"dropzoneAria": "Upload documents to the knowledge base",
 				"queued": "{{name}} is being indexed.",
 				"deduplicated": "{{name}} is already in the knowledge base.",
 				"failed": "Failed to upload {{name}}.",
 				"tooLarge": "{{name}} exceeds the {{limit}} MB upload limit.",
-				"unsupported": "{{name}} is not a supported document type."
+				"unsupported": "{{name}} is not a supported document type.",
+				"batchFailed": "Failed to upload files."
 			},
 			"documents": {
 				"heading": "Documents",
@@ -542,6 +547,7 @@
 			},
 			"table": {
 				"name": "Name",
+				"source": "Source",
 				"status": "Status",
 				"chunks": "Chunks",
 				"embeddingModel": "Embedding model",
@@ -590,7 +596,25 @@
 				"updated": "Updated",
 				"chunks": "Chunks",
 				"chunkLabel": "Chunk {{index}}",
-				"noChunks": "This document has no indexed chunks yet."
+				"noChunks": "This document has no indexed chunks yet.",
+				"page": "Page {{page}}"
+			},
+			"collection": {
+				"label": "Collection",
+				"description": "Uploads, repository imports, document lists, and searches stay inside this namespace.",
+				"invalid": "Use 1–128 letters, digits, dots, underscores, or hyphens.",
+				"open": "Open collection"
+			},
+			"repository": {
+				"divider": "Or import a repository",
+				"hint": "Index tracked and unignored text/code files from a registered Git repository into the active collection.",
+				"label": "Registered repository",
+				"placeholder": "Choose a repository",
+				"empty": "No available repositories",
+				"action": "Import repository",
+				"success": "Repository import queued {{count}} document(s): {{added}} added, {{updated}} updated, {{removed}} removed; {{deduplicated}} unchanged document(s) were reused.",
+				"queueFull": "The indexing queue is full; retry to continue.",
+				"error": "Failed to import the repository."
 			}
 		},
 		"about": {
@@ -640,7 +664,9 @@
 				"notConfigured": "Automatic updates aren't available in this build. To move to a newer version, install it manually.",
 				"copyCode": "Copy code",
 				"copied": "Copied"
-			}
+			},
+			"runtimeTerms": "Platform .NET component terms",
+			"bundledDataTerms": "Bundled data terms"
 		},
 		"chat": {
 			"windowTitle": "Chat window",
@@ -658,7 +684,7 @@
 			"modelExpired": "Not loaded",
 			"modelSelector": {
 				"availableModels": "Available models",
-				"hint": "Choose a model installed on the selected node.",
+				"hint": "Choose a model installed on the local node.",
 				"noChatModels": "No chat-capable models",
 				"search": "Search models...",
 				"noResults": "No models found",
@@ -794,6 +820,7 @@
 				"actionsAria": "Conversation actions",
 				"archive": "Archive",
 				"noMatches": "No conversations match your search.",
+				"noMessages": "No messages",
 				"pin": "Pin",
 				"pinned": "Pinned",
 				"recent": "Recent",
@@ -1109,7 +1136,8 @@
 						"unsupported": "Unsupported",
 						"failed": "Failed",
 						"unknown": "Unknown"
-					}
+					},
+					"uploadBatchFailed": "Failed to upload files."
 				}
 			},
 			"temporaryChat": {
@@ -1579,7 +1607,7 @@
 			"developerMode": {
 				"title": "Developer settings",
 				"label": "Developer mode",
-				"description": "Enables advanced, experimental controls in the app (e.g. chat sampling options). Stored in this browser only."
+				"description": "Enables advanced, experimental controls in the app (e.g. chat sampling options), and starts recording this browser session — DOM changes, clicks and navigation — so it can be attached to a diagnostic snapshot. Stored in this browser only."
 			},
 			"llamaCpp": {
 				"title": "llama.cpp runtime",
@@ -1833,6 +1861,30 @@
 				"revoke": "Revoke key",
 				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
 			},
+			"mcpServerKey": {
+				"title": "MCP server",
+				"configured": "Key configured",
+				"none": "No key",
+				"description": "Let an external MCP client such as Claude Code connect to this node and hand tasks to your local model. Only a one-way hash of the key is stored, so it is shown once when you generate it and cannot be retrieved afterwards. Only clients on this machine can connect.",
+				"scopeLabel": "Scope",
+				"endpointLabel": "Endpoint URL",
+				"prefixLabel": "Key",
+				"notRetrievable": "Only the first characters are shown. The full key is not stored and cannot be shown again — regenerate if you no longer have it.",
+				"lastUsed": "Last used {{when}}",
+				"neverUsed": "Never used yet — no client has connected with this key.",
+				"revealTitle": "Copy this key now",
+				"revealWarning": "This is the only time this key will be shown. It is not stored and cannot be recovered — if you lose it you must generate a new one and update every client that uses it.",
+				"dismissReveal": "I have copied it",
+				"clientHint": "Add it to Claude Code with: claude mcp add --transport http xe-engine \"<endpoint>\" --header \"Authorization: Bearer <key>\". Set a per-server timeout of about 1800000 ms, or a long local-model run will be cut off by the client.",
+				"newKeyScopeLabel": "New key scope",
+				"delegateScope": "Delegate",
+				"agenticScope": "Agentic",
+				"agenticWarning": "An agentic key can change node settings, install runtimes, pull and delete models, and manage saved agents without asking you — every action is approved automatically and logged. Only give this to an agent you trust with full node configuration.",
+				"regenerate": "Regenerate key",
+				"generate": "Generate key",
+				"revoke": "Revoke key",
+				"regenerateWarning": "Regenerating replaces the key immediately — any client still configured with the old one stops working."
+			},
 			"saved": "Node settings saved. Capability reporting was requested for the worker connection.",
 			"savedRestartRequired": "Node settings saved. Some of the changed settings only take effect after the node restarts.",
 			"fields": {
@@ -1945,6 +1997,10 @@
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max pending tool-call age"
 				},
+				"detachedGraceSeconds": {
+					"label": "Disconnect grace",
+					"description": "How long a run keeps going after its last client disconnects. 0 never cancels."
+				},
 				"kvCacheType": {
 					"label": "KV cache type",
 					"description": "Changing this invalidates every frozen inference profile on this node. Each model re-explores with the new KV cache type the next time it loads, and must be benchmarked and frozen again. q4_0 trades answer quality for VRAM.",
@@ -1999,6 +2055,9 @@
 					"off": "Off",
 					"empty": "No installed llama.cpp chat models"
 				},
+				"knowledgeModels": {
+					"title": "Knowledge models"
+				},
 				"embeddingModel": {
 					"downloadRecommended": "Download recommended embedding model",
 					"recommendedHelp": "Required for the knowledge base: without an embedding model, documents cannot be indexed. Recommended: nomic-embed-text-v1.5 (~274 MB).",
@@ -2040,7 +2099,16 @@
 			},
 			"title": "Node settings",
 			"subtitle": "Tune non-secret local runtime settings stored on this worker.",
-			"loading": "Loading node settings…"
+			"loading": "Loading node settings…",
+			"localChatRuntime": {
+				"title": "Local chat runtime",
+				"description": "The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
+				"timeoutLabel": "Maximum message request timeout",
+				"timeoutRange": "Allowed range: {{min}}–{{max}} seconds.",
+				"timeoutError": "Enter a whole number from {{min}} to {{max}}.",
+				"save": "Save settings",
+				"reload": "Reload"
+			}
 		},
 		"cloudSettings": {
 			"placeholder": {
@@ -2360,6 +2428,17 @@
 				"license": "License",
 				"empty": "No license or template provided for this model.",
 				"fitDisabled": "Model-fit recommendations are disabled on this node."
+			},
+			"launchArgs": {
+				"tab": "Advanced",
+				"warning": "Advanced: these raw flags are passed to llama.cpp when this model loads. An invalid flag can stop the model from starting — it only affects this model, and clearing the override restores the defaults. Changes take effect the next time the model loads.",
+				"label": "Extra llama.cpp arguments",
+				"description": "Space-separated flags, for example ",
+				"descriptionSuffix": ". The model path, host and port are managed by the app and cannot be set here.",
+				"save": "Save",
+				"saved": "Launch arguments saved. They apply the next time this model loads.",
+				"reset": "Reset to default",
+				"resetSuccess": "Launch arguments reset to defaults."
 			},
 			"gguf": {
 				"browse": {
@@ -3301,7 +3380,7 @@
 					"context": "Context",
 					"quantization": "Quant",
 					"released": "Released",
-					"installed": "Installed",
+					"installed": "Status",
 					"action": "Action",
 					"ram": "Req. RAM",
 					"vram": "Req. VRAM"
@@ -3495,7 +3574,7 @@
 		},
 		"loadedModels": {
 			"title": "Loaded models",
-			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory; if a generation is running, the app waits briefly for it to finish and may interrupt it.",
+			"subtitle": "Models the local runtime is currently holding in memory (RAM/VRAM). Eject frees that memory — gracefully, after any in-flight generation completes.",
 			"loading": "Loading loaded models…",
 			"empty": "No models currently loaded.",
 			"unavailable": "Ollama isn't reachable right now. It's an optional secondary provider, so there may be nothing loaded to show here. llama.cpp models still appear below.",
@@ -3514,11 +3593,11 @@
 			},
 			"eject": {
 				"button": "Eject",
-				"tooltip": "Frees the model's memory; a running generation may be interrupted",
+				"tooltip": "Frees memory after the current generation finishes",
 				"confirmTitle": "Eject model",
-				"confirmDescription": "Eject '{{modelName}}' from memory? If a generation is running, the app waits briefly for it to finish; ejecting may interrupt it.",
+				"confirmDescription": "Eject '{{modelName}}' from memory? Memory is freed after the current generation finishes; an in-flight response is not interrupted.",
 				"confirmAction": "Eject",
-				"success": "Ejecting '{{modelName}}' — its memory will be freed shortly.",
+				"success": "Ejecting '{{modelName}}' — memory frees after the current generation.",
 				"error": "Could not eject the model."
 			},
 			"ollama": {
@@ -4811,7 +4890,132 @@
 		},
 		"customTools": {
 			"title": "Custom tools",
-			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default."
+			"subtitle": "Author HTTP and host-command tools your agents can call. They run on this machine under per-call approval — assign one to an agent, off by default.",
+			"createButton": "New custom tool",
+			"dangerBanner": "Custom tools run commands, call networks, and launch programs on the host machine with your access. Only enable a tool whose exact behaviour you trust — every call still asks for your approval, but the code runs here.",
+			"form": {
+				"name": {
+					"label": "Name",
+					"description": "The model sees this as {{prefixed}}.",
+					"required": "Name is required.",
+					"invalid": "Use lowercase letters, digits and underscores; start and end alphanumeric."
+				},
+				"description": {
+					"label": "Description",
+					"description": "What the tool does — the model reads this to decide when to call it.",
+					"required": "Description is required."
+				},
+				"kind": {
+					"label": "Kind",
+					"http": "HTTP fetch",
+					"command": "Command"
+				},
+				"mode": {
+					"label": "Mode",
+					"fixed": "Fixed",
+					"parameterized": "Parameterized",
+					"parameterizedHint": "The model fills the declared inputs into the {param} placeholders each call.",
+					"fixedHint": "The tool runs verbatim with no model-supplied input.",
+					"fixedNoParameters": "A Fixed tool cannot declare parameters. Remove them or switch to Parameterized."
+				},
+				"dangerNote": "Custom tools run on this machine: an HTTP tool reaches the network and a Command tool launches a program with your access. Only create and enable tools whose exact behaviour you trust.",
+				"acknowledge": {
+					"label": "I understand these tools can run code, call networks, and launch programs on my machine, and I take responsibility.",
+					"required": "You must acknowledge this to save."
+				},
+				"enabled": {
+					"label": "Enabled",
+					"description": "A disabled tool is never offered to any agent, even if assigned."
+				},
+				"parameters": {
+					"label": "Parameters",
+					"add": "Add parameter",
+					"empty": "No parameters declared yet.",
+					"namePlaceholder": "city",
+					"nameInvalid": "Identifier only",
+					"descriptionPlaceholder": "description",
+					"required": "Required",
+					"remove": "Remove parameter"
+				},
+				"http": {
+					"method": "Method",
+					"url": "URL template",
+					"urlHint": "Use {param} placeholders for query values or path segments only — never the scheme, host, or port.",
+					"urlRequired": "A URL template is required.",
+					"headers": "Headers",
+					"addHeader": "Add header",
+					"noHeaders": "No headers.",
+					"body": "Body template",
+					"bodyHint": "Optional request body. {param} placeholders are filled the same way.",
+					"allowedHosts": "Allowed hosts",
+					"addHost": "Add host",
+					"allowedHostsHint": "Required when the URL host is itself templated: the request may only reach a host on this list.",
+					"removeHost": "Remove host"
+				},
+				"command": {
+					"executable": "Executable",
+					"executableHint": "Absolute path to a regular program. Shells and interpreters (sh, bash, python, node…) are rejected.",
+					"executableRequired": "An executable path is required.",
+					"validate": "Validate",
+					"validateFailed": "Could not validate the path.",
+					"validateOk": "Looks good.",
+					"validateRejected": "Rejected.",
+					"validateIdle": "Validate the path to confirm it resolves on this host.",
+					"args": "Arguments",
+					"addArg": "Add argument",
+					"argsHint": "One argument per row. A {param} placeholder fills a single argument — a value can never inject extra arguments.",
+					"noArgs": "No arguments.",
+					"removeArg": "Remove argument",
+					"workingDirectory": "Working directory",
+					"timeout": "Timeout (seconds)",
+					"timeoutHint": "0 uses the default.",
+					"env": "Environment variables",
+					"addEnv": "Add variable",
+					"noEnv": "No environment variables."
+				},
+				"secretRows": {
+					"namePlaceholder": "Name",
+					"storedPlaceholder": "•••• stored — leave to keep",
+					"valuePlaceholder": "Value",
+					"secret": "Secret",
+					"remove": "Remove"
+				}
+			},
+			"list": {
+				"loading": "Loading custom tools…",
+				"empty": "No custom tools yet. Create one to give your agents a host command or HTTP call.",
+				"columns": {
+					"name": "Name",
+					"kind": "Kind",
+					"enabled": "Enabled",
+					"version": "Version",
+					"actions": "Actions"
+				},
+				"kindCommand": "Command",
+				"kindHttp": "HTTP fetch",
+				"parameterizedBadge": "Parameterized",
+				"fixedBadge": "Fixed",
+				"enabledBadge": "Enabled",
+				"disabledBadge": "Disabled",
+				"dangerBadge": "Host access",
+				"dangerTooltip": "This tool is enabled and can run on the host when an agent calls it and you approve.",
+				"editAria": "Edit {{name}}",
+				"deleteAria": "Delete {{name}}"
+			},
+			"editor": {
+				"createTitle": "New custom tool",
+				"editTitle": "Edit custom tool",
+				"loading": "Loading custom tool…"
+			},
+			"delete": {
+				"title": "Delete custom tool",
+				"description": "Delete '{{name}}'? This cannot be undone."
+			},
+			"errors": {
+				"load": "Could not load custom tools.",
+				"save": "Could not save the custom tool.",
+				"delete": "Could not delete the custom tool."
+			}
 		},
 		"training": {
 			"title": "Training",
@@ -6826,7 +7030,8 @@
 		"toolSourceBadge": {
 			"builtin": "built-in",
 			"mcp": "MCP",
-			"mcpServer": "MCP · {{server}}"
+			"mcpServer": "MCP · {{server}}",
+			"custom": "custom"
 		}
 	},
 	"onboarding": {
@@ -7249,7 +7454,20 @@
 				"smokeFailed": "Smoke test failed",
 				"skipped": "Skipped",
 				"failed": "Export failed"
-			}
+			},
+			"discarded": "Discarded",
+			"cleanupPending": "Cleanup pending",
+			"validate": "Validate quality",
+			"revalidate": "Revalidate quality",
+			"override": "Override failure",
+			"overrideTitle": "Override failed quality decision",
+			"overrideReason": "Override reason",
+			"recordOverride": "Record override",
+			"discard": "Discard staged file",
+			"discardTitle": "Discard staged artifact",
+			"discardReason": "Discard reason",
+			"confirmDiscard": "Confirm discard",
+			"retryCleanup": "Retry cleanup"
 		},
 		"errors": {
 			"request": "The training request failed."

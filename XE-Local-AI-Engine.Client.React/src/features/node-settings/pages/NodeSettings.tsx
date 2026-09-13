@@ -262,22 +262,34 @@ export function NodeSettings() {
 
 			{settingsError ? <InlineErrorAlert message={errorMessage(settingsError)} /> : null}
 
-			<SectionCard title="Local chat runtime" icon={<IconSettings size={22} />}>
+			<SectionCard title={t("pages.nodeSettings.localChatRuntime.title", "Local chat runtime")} icon={<IconSettings size={22} />}>
 				<Text c="dimmed">
-					The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run
-					before it is cancelled with a timeout. It is also reported to the platform via capability reports.
+					{t(
+						"pages.nodeSettings.localChatRuntime.description",
+						"The maximum message request timeout bounds how long a single local chat message request (send or regenerate) may run before it is cancelled with a timeout. It is also reported to the platform via capability reports.",
+					)}
 				</Text>
 				<NumberInput
-					label="Maximum message request timeout"
-					description={`Allowed range: ${minTimeout}–${maxTimeout} seconds.`}
-					suffix=" seconds"
+					label={t("pages.nodeSettings.localChatRuntime.timeoutLabel", "Maximum message request timeout")}
+					description={t("pages.nodeSettings.localChatRuntime.timeoutRange", "Allowed range: {{min}}–{{max}} seconds.", {
+						min: minTimeout,
+						max: maxTimeout,
+					})}
+					suffix={` ${t("pages.nodeSettings.fields.seconds", "seconds")}`}
 					min={minTimeout}
 					max={maxTimeout}
 					step={5}
 					allowDecimal={false}
 					value={timeoutSeconds}
 					onChange={handleTimeoutChange}
-					error={timeoutToSave === undefined ? `Enter a whole number from ${minTimeout} to ${maxTimeout}.` : undefined}
+					error={
+						timeoutToSave === undefined
+							? t("pages.nodeSettings.localChatRuntime.timeoutError", "Enter a whole number from {{min}} to {{max}}.", {
+									min: minTimeout,
+									max: maxTimeout,
+								})
+							: undefined
+					}
 				/>
 				<Group>
 					<Button
@@ -287,10 +299,10 @@ export function NodeSettings() {
 						disabled={!canSave}
 						data-testid="node-settings-save-button"
 					>
-						Save settings
+						{t("pages.nodeSettings.localChatRuntime.save", "Save settings")}
 					</Button>
 					<Button variant="subtle" leftSection={<IconRefresh size={16} />} onClick={handleReload} disabled={settingsIsFetching}>
-						Reload
+						{t("pages.nodeSettings.localChatRuntime.reload", "Reload")}
 					</Button>
 				</Group>
 			</SectionCard>

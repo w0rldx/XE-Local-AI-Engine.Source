@@ -214,6 +214,7 @@ export function GraphWorkflowEditorMode({ selection, onSelectionChange, isNarrow
 			{/* Stacked rather than dropped: without the definition list there is no way to reach another workflow from a
 			    phone, and the toolbar is not that. */}
 			<ResponsivePaneLayout
+				isNarrow={isNarrow}
 				narrowMode="stack"
 				list={definitionList}
 				main={body}

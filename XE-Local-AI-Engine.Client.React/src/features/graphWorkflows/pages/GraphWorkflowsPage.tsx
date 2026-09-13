@@ -9,10 +9,9 @@ import { Stack } from "@mantine/core";
 import { IconSitemap } from "@tabler/icons-react";
 import { useTranslation } from "react-i18next";
 
-import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
-import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { PageHeader } from "@/core/ui/components/PageHeader/PageHeader";
+import { usePaneLayoutMode } from "@/core/ui/components/ResponsivePaneLayout/usePaneLayoutMode";
 import { GraphWorkflowEditorMode } from "@/features/graphWorkflows/components/GraphWorkflowEditorMode";
 import { GraphWorkflowRunMode } from "@/features/graphWorkflows/components/GraphWorkflowRunMode";
 import type { GraphWorkflowSelection } from "@/features/graphWorkflows/models/GraphWorkflowModels";
@@ -25,13 +24,12 @@ export interface GraphWorkflowsPageProps {
 
 export function GraphWorkflowsPage({ selection, onSelectionChange }: GraphWorkflowsPageProps) {
 	const { t } = useTranslation();
-	// `useWindowDimensions` (unlike `useMediaQuery`) reads `innerWidth` synchronously on the first render, so the
-	// two-pane layout never flashes as a drawer before settling — Preview's canvas made the same call.
-	const { width } = useWindowDimensions();
-	const isNarrow = width < TWO_PANE_BREAKPOINT;
+	// Measured synchronously on mount, so the two-pane layout never flashes as a drawer before settling — Preview's
+	// canvas made the same call. The frame below is what the panes actually get, sidebar and padding already deducted.
+	const { ref: paneContainerRef, isNarrow } = usePaneLayoutMode();
 
 	return (
-		<FullHeightPage data-testid="graph-workflows-page">
+		<FullHeightPage ref={paneContainerRef} data-testid="graph-workflows-page">
 			<Stack gap="sm" h="100%" style={{ minHeight: 0 }}>
 				<PageHeader
 					title={t("pages.graphWorkflows.title", "Graph Workflows")}

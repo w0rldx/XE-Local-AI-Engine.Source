@@ -1,12 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { Home } from "@/pages/Home/Home";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // The landing page's whole job is to name the next action, so what it must never do is tell a node that CAN answer
 // that it cannot. An external-only node — no GGUF installed, one registered OpenAI-compatible connection — is a
@@ -39,30 +38,11 @@ vi.mock("@/core/api/generated/@tanstack/react-query.gen", async (importOriginal)
 }));
 
 function renderHome(): void {
-	const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-	render(
-		<QueryClientProvider client={queryClient}>
-			<MantineProvider>
-				<Home />
-			</MantineProvider>
-		</QueryClientProvider>,
-	);
+	renderWithProviders(<Home />);
 }
 
 describe("Home landing card", () => {
 	beforeEach(() => {
-		// MantineProvider reads the color scheme through matchMedia, which jsdom does not implement.
-		Object.defineProperty(window, "matchMedia", {
-			writable: true,
-			value: vi.fn().mockImplementation((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn(),
-			})),
-		});
 		vi.clearAllMocks();
 	});
 

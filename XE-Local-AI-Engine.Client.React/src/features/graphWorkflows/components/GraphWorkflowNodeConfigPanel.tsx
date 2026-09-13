@@ -132,7 +132,10 @@ export function GraphWorkflowNodeConfigPanel({
 		const message = messages[field];
 		return message !== undefined && touched.includes(field) ? t(message) : undefined;
 	};
-	const keyInvalidMessage = t("pages.graphWorkflows.form.key.invalid", "Use letters, digits, hyphens and underscores.");
+	const keyInvalidMessage = t(
+		"pages.graphWorkflows.form.key.invalid",
+		"Use letters, digits, hyphens and underscores, up to 64 characters.",
+	);
 
 	const commitKey = (): void => {
 		if (keyDraft === node.key) {

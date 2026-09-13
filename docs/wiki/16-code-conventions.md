@@ -320,14 +320,26 @@ order of magnitude. Escalate only when they cannot express the thing:
 (`COMPACT_CONTROLS_BREAKPOINT`, `DESKTOP_NAV_BREAKPOINT`, `TWO_PANE_BREAKPOINT`), and its sibling test pins
 them to the Mantine theme so a theme change fails loudly instead of drifting the shell apart.
 
-Two mechanisms cover the app; copy the one that matches what has to change:
+Three mechanisms cover the app; copy the one that matches what has to change:
 
 - **`SimpleGrid cols={{ base, sm, lg }}`** when a card or list grid only needs to reflow. Reference:
   `features/dashboard/pages/Dashboard.tsx`.
 - **`useWindowDimensions` compared against a named `LayoutBreakpoints` constant** when the layout swaps a
-  whole subtree (a pane becomes a Drawer). Reference:
-  `core/ui/components/ResponsivePaneLayout/ResponsivePaneLayout.tsx`. `useMediaQuery` and Mantine's
-  `visibleFrom`/`hiddenFrom` each appear once — they are not the pattern to copy.
+  whole subtree (a pane becomes a Drawer) and the VIEWPORT really is the space in question. Reference:
+  `core/layout/components/Layout/Layout.tsx`. Mantine's `visibleFrom`/`hiddenFrom` is used in one file
+  (`features/node-settings/components/NodeSettingsUsageRatesCard.tsx`, three call sites), for a pure show/hide
+  at `sm`: fine for CSS-only visibility, not the pattern for swapping a subtree. `useMediaQuery` is not used at
+  all — it reads asynchronously and flashed the wrong layout on first paint.
+- **`usePaneLayoutMode` (`core/ui/components/ResponsivePaneLayout/`)** for the three-pane pages. It measures
+  the page's own container with a `ResizeObserver` instead of the viewport, because the panes sit inside the
+  app shell: the sidebar and the content padding take ~250px first, and the sidebar collapses with no window
+  resize at all. The page makes the decision ONCE for the surfaces the PAGE owns and hands the same boolean to
+  its Drawers, its header toggles and `ResponsivePaneLayout`; the viewport constant survives only as the
+  fallback while the container is still unmeasured. The threshold is derived from the grid's own track sizes,
+  so it cannot drift from them. That decision does not reach inside a pane, though: a pane that is responsive
+  in its own right still reads the viewport for itself — the chat embedded in the work-session grid does
+  exactly that, in `features/chat/components/ChatDisplayShell.tsx` (its message list, against
+  `TWO_PANE_BREAKPOINT`) and `ChatInputArea.tsx` (its composer's context-usage readout).
 
 **Wide content owns its own horizontal scroller.** The shell clips both axes (`Layout`) and `FullHeightPage`
 deliberately clips X, so a table or diagram wider than its pane must carry its own `Table.ScrollContainer` or

@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { act, cleanup, screen } from "@testing-library/react";
+import { act, cleanup, render, screen } from "@testing-library/react";
+import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { CodeEditor } from "@/core/ui/components/CodeEditor/CodeEditor";
-import { installJsdomEnvironmentMocks, renderWithMantine } from "@/test/MantineTestRender";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 const editorMock = vi.hoisted(() => {
 	let value = "";
@@ -54,16 +54,23 @@ vi.mock("@/core/ui/components/CodeEditor/MonacoRuntime", () => ({
 	},
 }));
 
+// `render(ui, { wrapper })` rather than `renderWithProviders(ui)`: several tests below assert that a re-render applies
+// props IN PLACE instead of recreating the editor, and only the wrapper form lets `rerender` reuse the same provider
+// tree. Passing the providers inline to `rerender` would remount the subtree and destroy exactly what is under test.
+function renderEditor(ui: ReactElement) {
+	const { wrapper } = createProvidersWrapper();
+	return render(ui, { wrapper });
+}
+
 describe("CodeEditor", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		editorMock.focus(false);
-		installJsdomEnvironmentMocks();
 	});
 	afterEach(() => cleanup());
 
 	it("lazily mounts Monaco with the given value, language and read-only state", async () => {
-		renderWithMantine(<CodeEditor value="+added" language="diff" readOnly={true} data-testid="viewer" aria-label="Patch" />);
+		renderEditor(<CodeEditor value="+added" language="diff" readOnly={true} data-testid="viewer" aria-label="Patch" />);
 
 		expect(await screen.findByTestId("viewer")).toBeTruthy();
 		expect(editorMock.create).toHaveBeenCalledTimes(1);
@@ -78,14 +85,10 @@ describe("CodeEditor", () => {
 	});
 
 	it("applies value and language changes in place without recreating the editor", async () => {
-		const { rerender } = renderWithMantine(<CodeEditor value="a" language="json" data-testid="viewer" />);
+		const { rerender } = renderEditor(<CodeEditor value="a" language="json" data-testid="viewer" />);
 		await screen.findByTestId("viewer");
 
-		rerender(
-			<MantineProvider>
-				<CodeEditor value="b" language="yaml" data-testid="viewer" />
-			</MantineProvider>,
-		);
+		rerender(<CodeEditor value="b" language="yaml" data-testid="viewer" />);
 
 		expect(editorMock.create).toHaveBeenCalledTimes(1);
 		expect(editorMock.instance.setValue).toHaveBeenCalledWith("b");
@@ -94,7 +97,7 @@ describe("CodeEditor", () => {
 
 	it("forwards edits through onChange and does not echo the same value back into the model", async () => {
 		const onChange = vi.fn();
-		const { rerender } = renderWithMantine(<CodeEditor value="a" onChange={onChange} data-testid="editor" />);
+		const { rerender } = renderEditor(<CodeEditor value="a" onChange={onChange} data-testid="editor" />);
 		await screen.findByTestId("editor");
 
 		act(() => editorMock.type("ab"));
@@ -103,24 +106,16 @@ describe("CodeEditor", () => {
 		// The controlled round-trip: parent stores "ab" and re-renders with it. Monaco already holds "ab", so
 		// setValue must NOT run (it would reset the caret and undo stack).
 		editorMock.instance.setValue.mockClear();
-		rerender(
-			<MantineProvider>
-				<CodeEditor value="ab" onChange={onChange} data-testid="editor" />
-			</MantineProvider>,
-		);
+		rerender(<CodeEditor value="ab" onChange={onChange} data-testid="editor" />);
 		expect(editorMock.instance.setValue).not.toHaveBeenCalled();
 	});
 
 	it("does not report a prop-driven value replacement as a user edit", async () => {
 		const onChange = vi.fn();
-		const { rerender } = renderWithMantine(<CodeEditor value="a" onChange={onChange} data-testid="editor" />);
+		const { rerender } = renderEditor(<CodeEditor value="a" onChange={onChange} data-testid="editor" />);
 		await screen.findByTestId("editor");
 
-		rerender(
-			<MantineProvider>
-				<CodeEditor value="replaced by parent" onChange={onChange} data-testid="editor" />
-			</MantineProvider>,
-		);
+		rerender(<CodeEditor value="replaced by parent" onChange={onChange} data-testid="editor" />);
 
 		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced by parent");
 		expect(onChange).not.toHaveBeenCalled();
@@ -131,7 +126,7 @@ describe("CodeEditor", () => {
 	});
 
 	it("disposes the editor on unmount", async () => {
-		const { unmount } = renderWithMantine(<CodeEditor value="a" data-testid="viewer" />);
+		const { unmount } = renderEditor(<CodeEditor value="a" data-testid="viewer" />);
 		await screen.findByTestId("viewer");
 		unmount();
 		expect(editorMock.instance.dispose).toHaveBeenCalledTimes(1);
@@ -140,31 +135,23 @@ describe("CodeEditor", () => {
 	it("does not rewind the model to a lagging `value` while the operator is typing", async () => {
 		// The controlled round trip is asynchronous: the parent re-renders one keystroke behind. Writing that echo back
 		// reset the model to the stale text and dropped everything typed since, which reads as lost and reordered input.
-		const { rerender } = renderWithMantine(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
+		const { rerender } = renderEditor(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
 		await screen.findByTestId("editor");
 		editorMock.focus(true);
 
 		act(() => editorMock.type("abcd"));
 		// The parent has only caught up as far as "abc".
-		rerender(
-			<MantineProvider>
-				<CodeEditor value="abc" data-testid="editor" onChange={vi.fn()} />
-			</MantineProvider>,
-		);
+		rerender(<CodeEditor value="abc" data-testid="editor" onChange={vi.fn()} />);
 
 		expect(editorMock.instance.setValue).not.toHaveBeenCalled();
 		expect(editorMock.instance.getValue()).toBe("abcd");
 	});
 
 	it("still applies a value the parent changed while the editor is not focused", async () => {
-		const { rerender } = renderWithMantine(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
+		const { rerender } = renderEditor(<CodeEditor value="ab" data-testid="editor" onChange={vi.fn()} />);
 		await screen.findByTestId("editor");
 
-		rerender(
-			<MantineProvider>
-				<CodeEditor value="replaced" data-testid="editor" onChange={vi.fn()} />
-			</MantineProvider>,
-		);
+		rerender(<CodeEditor value="replaced" data-testid="editor" onChange={vi.fn()} />);
 
 		expect(editorMock.instance.setValue).toHaveBeenCalledWith("replaced");
 	});

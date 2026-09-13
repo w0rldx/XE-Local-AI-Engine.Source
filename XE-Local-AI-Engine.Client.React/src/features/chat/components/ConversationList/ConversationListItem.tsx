@@ -99,7 +99,7 @@ export function ConversationListItem({
 						/>
 					) : (
 						<Text fw={600} size="sm" lineClamp={1} style={{ flex: 1, minWidth: 0 }}>
-							{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled")}
+							{conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation")}
 						</Text>
 					)}
 					{isRenaming ? null : (
@@ -156,7 +156,7 @@ export function ConversationListItem({
 										) : null}
 										{onDelete ? (
 											<Tooltip
-												label={t("pages.chat.conversationList.deleteShiftHint", "Shift-click to skip confirmation")}
+												label={t("pages.chat.conversationList.deleteShiftHint", "Shift+Click to skip confirm")}
 												position="left"
 												withArrow={true}
 												openDelay={300}
@@ -178,7 +178,7 @@ export function ConversationListItem({
 					)}
 				</Group>
 				<Text size="xs" c="dimmed" lineClamp={1}>
-					{conversation.lastMessagePreview?.trim() || t("pages.chat.noMessages", "No messages")}
+					{conversation.lastMessagePreview?.trim() || t("pages.chat.conversationList.noMessages", "No messages")}
 				</Text>
 				{isRemote || conversation.isArchived ? (
 					<Group gap={4}>

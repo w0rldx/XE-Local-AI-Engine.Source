@@ -138,7 +138,7 @@ describe("ChatMessage actions", () => {
 		const onBranch = vi.fn();
 		renderWithProviders(<ChatMessage message={assistantMessage()} onBranch={onBranch} />);
 
-		fireEvent.click(screen.getByLabelText("Branch from here"));
+		fireEvent.click(screen.getByLabelText("Branch conversation"));
 
 		expect(onBranch).toHaveBeenCalledWith("assistant-1");
 	});

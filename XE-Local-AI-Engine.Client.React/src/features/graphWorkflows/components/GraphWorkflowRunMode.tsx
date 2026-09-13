@@ -164,6 +164,7 @@ export function GraphWorkflowRunMode({ selection, onSelectionChange, isNarrow }:
 			{/* Stacked rather than dropped: without the run list there is no way to reach another run from a phone,
 			    and the toolbar's back button is not that. */}
 			<ResponsivePaneLayout
+				isNarrow={isNarrow}
 				narrowMode="stack"
 				list={runList}
 				main={main}

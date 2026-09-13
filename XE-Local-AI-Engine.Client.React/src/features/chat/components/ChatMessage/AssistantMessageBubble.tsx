@@ -72,7 +72,7 @@ export function AssistantMessageBubble({
 								/>
 							}
 						>
-							{t("pages.chat.streaming", "streaming")}
+							{t("pages.chat.streaming", "Receiving response")}
 						</Badge>
 					) : null}
 				</Group>

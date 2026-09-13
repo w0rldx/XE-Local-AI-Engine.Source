@@ -75,6 +75,14 @@ function setViewportWidth(width: number): void {
 	Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
 }
 
+/**
+ * jsdom gives every element a `clientWidth` of 0, and `usePaneLayoutMode` measures in a layout effect — before a test
+ * could get a handle on the node — so the stub goes on the prototype. Removed again in `afterEach`.
+ */
+function stubContainerWidth(width: number): void {
+	Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => width });
+}
+
 function renderPage(selection: DevWorkflowDetailSelection = {}) {
 	const onSelectionChange = vi.fn();
 	renderWithProviders(
@@ -96,6 +104,8 @@ describe("DevWorkflowDetailPage", () => {
 
 	afterEach(() => {
 		cleanup();
+		// A no-op when the test never stubbed it; jsdom's own prototype getter comes back either way.
+		Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
 	});
 
 	it("resolves the latest run when no run is selected and renders its node-run table", async () => {
@@ -139,6 +149,22 @@ describe("DevWorkflowDetailPage", () => {
 
 		fireEvent.click(screen.getByTestId("dev-workflow-side-toggle"));
 		expect(await screen.findByTestId("dev-workflow-side-tabs")).toBeDefined();
+	});
+
+	// The grid lives inside the app shell, so a wide WINDOW is not a wide container: the sidebar and the content
+	// padding take ~250px before the panes see any of it, and the sidebar collapses with no resize event at all.
+	// The toggles and the grid now read one decision, so a wide viewport can no longer leave the third column
+	// reachable only by scrolling sideways while the header claims there is nothing to open.
+	it("collapses on a wide viewport when the container is too narrow for three columns", async () => {
+		setViewportWidth(1600);
+		stubContainerWidth(725);
+		server.use(...baseRoutes());
+		renderPage();
+
+		await screen.findByTestId("dev-workflow-centre-pane");
+		expect(screen.queryByTestId("dev-workflow-detail-grid")).toBeNull();
+		expect(screen.getByTestId("dev-workflow-summary-toggle")).toBeDefined();
+		expect(screen.getByTestId("dev-workflow-side-toggle")).toBeDefined();
 	});
 
 	it("shows the artifacts and events tabs when no node is selected", async () => {

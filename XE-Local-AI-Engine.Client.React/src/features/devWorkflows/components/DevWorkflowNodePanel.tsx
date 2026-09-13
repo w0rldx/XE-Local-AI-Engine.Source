@@ -135,7 +135,7 @@ export function DevWorkflowNodePanel({
 					</Group>
 					{producedCount > 0 ? (
 						<Button size="xs" variant="subtle" onClick={onShowArtifacts} data-testid="dev-workflow-node-artifacts">
-							{t("pages.devWorkflows.node.producedArtifacts", "produced {{count}} artifact(s)", { count: producedCount })}
+							{t("pages.devWorkflows.node.producedArtifacts", "produced {{count}} artifacts", { count: producedCount })}
 						</Button>
 					) : null}
 				</SectionCard>

@@ -237,7 +237,7 @@ export function ChatMessageList({
 			<Stack gap="sm">
 				{!conversation ? (
 					<Text size="sm" c="dimmed">
-						{t("pages.chat.emptyState", "Select a conversation to start chatting.")}
+						{t("pages.chat.emptyState", "Create or select a conversation to start chatting.")}
 					</Text>
 				) : null}
 

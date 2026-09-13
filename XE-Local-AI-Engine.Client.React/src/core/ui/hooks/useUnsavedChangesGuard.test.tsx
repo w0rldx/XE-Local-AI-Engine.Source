@@ -141,7 +141,7 @@ describe("useUnsavedChangesGuard", () => {
 
 		const dialog = await screen.findByRole("dialog");
 		expect(dialog).toBeTruthy();
-		expect(screen.getByText("You have unsaved changes. Discard them and leave?")).toBeTruthy();
+		expect(screen.getByText("You have unsaved changes. If you leave now, they will be lost.")).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Discard" })).toBeTruthy();
 		expect(screen.getByRole("button", { name: "Keep editing" })).toBeTruthy();
 	});

@@ -6,12 +6,17 @@ import type { ReactElement, ReactNode } from "react";
 
 import { installJsdomEnvironmentMocks } from "@/test/MantineTestRender";
 
-// Initialises the app's own i18next instance as a side effect. `i18n.ts` calls `.use(initReactI18next)`, which
-// registers the instance as react-i18next's default — so `useTranslation()` resolves against the real `en` bundle
-// with no <I18nextProvider> in the tree. Consequence worth knowing before migrating a test onto this helper: a file
-// that `vi.mock("react-i18next")`s the module wholesale must NOT use it, because the mock leaves `initReactI18next`
-// undefined and `i18next.use(undefined)` throws at import time. Those files keep their own hand-rolled wrapper.
-import "@/i18n";
+// i18n is NOT set up here: `src/i18n.ts` is the first vitest `setupFiles` entry, so the app's own i18next instance is
+// initialised once per test file — before any test imports anything — and `useTranslation()` resolves against the real
+// `en` bundle with no <I18nextProvider> in the tree, in every file. This helper therefore provides only Mantine, a
+// QueryClient, the jsdom stubs and an optional memory router.
+//
+// A file that `vi.mock("react-i18next")`s the module wholesale MAY now use this helper: the mock applies to the
+// components' own imports, while the real instance initialised in setup is untouched (the setup import runs before the
+// hoisted mock and stays cached, so nothing calls `i18next.use(undefined)`). Verified with a throwaway probe that
+// mocked react-i18next with the usual `t: (key, defaultValue) => defaultValue ?? key` shape and rendered through
+// `renderWithProviders`. Note what such a mock costs: the component then renders its in-code default, not the shipped
+// bundle string, which is exactly the blind spot the suite-wide init closes.
 
 export interface RenderWithProvidersOptions {
 	/** Reuse a client across renders (e.g. to seed cache or assert invalidation). Defaults to a fresh one per render. */
@@ -67,8 +72,8 @@ function renderInMemoryRouter(ui: ReactNode, route: string): ReactElement {
 
 /**
  * Renders `ui` inside the provider stack every non-trivial component in this app assumes: the jsdom stubs Mantine
- * needs (matchMedia / ResizeObserver), MantineProvider, a fresh QueryClient, the app's i18next instance, and — on
- * request — a memory-history TanStack Router.
+ * needs (matchMedia / ResizeObserver), MantineProvider, a fresh QueryClient, and — on request — a memory-history
+ * TanStack Router. Translations need no provider; see the note at the top of this file.
  *
  * Returns Testing Library's usual result plus the `queryClient`, so a test can seed or assert cache state without
  * having to construct one itself.

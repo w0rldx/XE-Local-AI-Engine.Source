@@ -172,7 +172,7 @@ export function TaskItemForm({
 										label={t("pages.benchmarks.items.niahCriterion", "Criterion to override")}
 										description={t(
 											"pages.benchmarks.items.niahCriterionHelp",
-											"An `exact` criterion of the judge policy. Each case supplies its own passcode as that criterion's expected answer.",
+											"An exact-match criterion of the judge policy. Each case supplies its own passcode as that criterion's expected answer.",
 										)}
 										value={niah.criterionId}
 										onChange={(event) => writeNiah({ criterionId: event.currentTarget.value })}

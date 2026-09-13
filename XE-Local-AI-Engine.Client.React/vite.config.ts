@@ -207,7 +207,19 @@ export default defineConfig(({ command, mode }) => {
 			// `setupMswServer()` (src/test/UseMswServer.ts), so the other 325 no longer pay for it.
 			// Cleanup.ts unmounts every React tree a test mounted; without globals RTL never registers its own
 			// afterEach(cleanup), so mounted components used to survive into the next test — see src/test/Cleanup.ts.
-			setupFiles: ["src/test/PinLocale.ts", "src/test/Cleanup.ts", "src/test/NoNetwork.ts"],
+			//
+			// src/i18n.ts is FIRST: importing it initialises the app's own i18next instance and registers it as
+			// react-i18next's default, so every test file — not just the ones that render through
+			// `renderWithProviders` — resolves `t(key, default)` against the real `en` bundle. Without it,
+			// react-i18next's uninitialised fallback echoes the in-code `defaultValue` verbatim and never
+			// interpolates, so 76 files with a hand-rolled wrapper asserted strings the operator never sees: a
+			// green test over a stale default, a raw key, or a literal `{{count}}`. One init for the suite closes
+			// that whole class. It costs no network: `detection.order` is `["localStorage"]` only.
+			// Side effect worth knowing: the language detector's `cacheUserLanguage` writes `i18nextLng` into
+			// localStorage during `init()`. Production DEPENDS on that cache (UserLanguageStore seeds itself from
+			// `i18nextLng`), so it is not disabled here; the one test that asserts an empty localStorage clears it
+			// in its own `beforeEach` — see src/core/ui/stores/PendingComposerTextStore.test.ts.
+			setupFiles: ["src/i18n.ts", "src/test/PinLocale.ts", "src/test/Cleanup.ts", "src/test/NoNetwork.ts"],
 			// Undoes `vi.spyOn` before each test, so a spy a test forgot to restore (console, Date, a module export)
 			// cannot silently stay installed for the rest of the file.
 			restoreMocks: true,

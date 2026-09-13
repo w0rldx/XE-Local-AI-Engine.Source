@@ -180,7 +180,7 @@ function GraphWorkflowEditorCanvasInner({
 				: notice.rule === "parallelEdgesBothUnconditional"
 					? t(
 							"pages.graphWorkflows.editor.notice.parallelEdgesBothUnconditional",
-							"These two nodes are already joined by an unconditional edge. Give the new one a condition first.",
+							"These two nodes are already joined by a connection without a condition. Give the new one a condition first.",
 						)
 					: t(
 							"pages.graphWorkflows.editor.notice.pauseContextEdgeAdded",
@@ -251,7 +251,7 @@ function GraphWorkflowEditorCanvasInner({
 			<Text size="xs" c="dimmed" data-testid="graph-workflow-editor-hint">
 				{t(
 					"pages.graphWorkflows.editor.deleteHint",
-					"Drag a node onto the canvas or click it in the palette. Select a node or a connection and press Delete to remove it.",
+					"Drag a node onto the canvas, or click one in the palette. Select a node or a connection and press Delete to remove it.",
 				)}
 			</Text>
 			<Paper withBorder={true} style={{ flex: 1, minHeight: 240 }} data-testid="graph-workflow-canvas">

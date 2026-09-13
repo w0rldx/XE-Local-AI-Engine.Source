@@ -1745,21 +1745,25 @@ Monaco stays behind shared `CodeEditor`: import `editor.api` and chosen Monarch 
 
 A bounded Mantine `NumberInput`/`Slider` that distinguishes “unset” from override needs a post-mount `ready` guard before persistence. Mantine can emit min/default on mount and overwrite a deliberate null. Capability flags for file/image chat input remain static client constants; do not wait for a backend capabilities endpoint that is not part of this contract.
 
-### A test that asserts a translated string must render through `renderWithProviders` or import `@/i18n`
+### A test asserts the bundle string, never an in-code `defaultValue`
 
-**Rule:** `src/test/RenderWithProviders.tsx` imports `@/i18n` on purpose — `i18n.ts` calls `.use(initReactI18next)`,
-which registers the instance as react-i18next's default, so `useTranslation()` resolves against the real `en` bundle
-with no provider in the tree. A test file that hand-rolls its own Mantine/Query wrapper and never imports `@/i18n`
-gets react-i18next's uninitialised fallback: it echoes each `defaultValue` verbatim and does not interpolate, so the
-assertion is pinned to the in-code literal, not to what the operator sees. The one legitimate carve-out is a file that
-`vi.mock("react-i18next")`s wholesale (the mock leaves `initReactI18next` undefined and `i18next.use(undefined)`
-throws at import). **Prevents:** a green test over a string the app renders differently. As of 2026-09-09, 124 files
-hand-roll a wrapper and 44 `t("key", "default")` sites disagree with `en.json` (mostly `pages.chat.*`; one code default
-dropped its `{{name}}` placeholder) — fix a drifted default before migrating its test's wrapper, each is already wrong
-in one of the two places. Related: the `"New conversation"` literal in `Chat.tsx` must NOT be translated; it is
-persisted and compared by exact string, so localising it breaks the untitled-conversation check across a language
-switch until the contract carries an `isUntitled` flag. **Authority:** `RenderWithProviders.tsx` and its header
-comment; the `ModelManagement.test.tsx` breakage that surfaced it, 2026-09-09.
+**Rule:** i18n is initialised ONCE for the whole suite — `src/i18n.ts` is the first vitest `setupFiles` entry, and
+`i18n.ts` calls `.use(initReactI18next)`, which registers the instance as react-i18next's default. So `useTranslation()`
+resolves against the real `en` bundle in every test file, with no provider in the tree and regardless of which wrapper
+the file renders through. Assert the string the operator reads; an assertion pinned to the in-code `defaultValue` is
+asserting the fallback, not the product. `scripts/CheckI18nDefaults.mjs` fails lint on a `t()` call whose default has
+drifted from `en.json` or is missing, which is the other half of the same guarantee. A file that
+`vi.mock("react-i18next")`s wholesale may use `renderWithProviders` (the mock applies to the components' imports; the
+instance initialised in setup is untouched), but it then renders its own defaults again and gives up this coverage.
+**Prevents:** a green test over a string the app renders differently — a stale default, a raw key with no default at
+all, or a literal `Step {{index}} of {{count}}` that real i18next interpolates. Before the suite-wide init, 76 files
+hand-rolled a wrapper and never saw the bundle. Side effect to know: `i18next-browser-languagedetector` writes
+`i18nextLng` into localStorage during `init()`; the cache is NOT disabled because production seeds
+`UserLanguageStore` from that key, so a test asserting an empty localStorage clears it itself. Related: the
+`"New conversation"` literal in `Chat.tsx` must NOT be translated; it is persisted and compared by exact string, so
+localising it breaks the untitled-conversation check across a language switch until the contract carries an
+`isUntitled` flag. **Authority:** the `setupFiles` comment in `vite.config.ts` and `RenderWithProviders.tsx`'s header;
+the measured suite run that turned 7 hidden defects green-to-red, 2026-09-13.
 
 ### A date goes through `formatTimestamp` or `formatTime`, never through a bare `toLocaleString()`
 

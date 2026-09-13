@@ -35,11 +35,11 @@ export function ConversationListCollapsedRail({
 			data-testid="conversation-list"
 			style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, padding: 8 }}
 		>
-			<Tooltip label={t("pages.chat.conversationList.show", "Show conversations")} position="right">
+			<Tooltip label={t("pages.chat.conversationList.show", "Expand sidebar")} position="right">
 				<ActionIcon
 					variant="subtle"
 					onClick={onToggleCollapse}
-					aria-label={t("pages.chat.conversationList.expandAria", "Expand conversations")}
+					aria-label={t("pages.chat.conversationList.expandAria", "Expand sidebar")}
 				>
 					<IconChevronRight size={16} />
 				</ActionIcon>
@@ -50,14 +50,14 @@ export function ConversationListCollapsedRail({
 				size={40}
 				radius="md"
 				onClick={onCreateConversation}
-				aria-label={t("pages.chat.newConversation", "New conversation")}
+				aria-label={t("pages.chat.newConversation", "New plain chat")}
 			>
 				<IconPlus size={16} />
 			</ActionIcon>
 			<ScrollArea style={{ flex: 1, width: "100%", minHeight: 0 }} type="auto">
 				<Stack gap={6} align="center">
 					{conversations.map((conversation) => {
-						const label = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled");
+						const label = conversation.title.trim() || t("pages.chat.conversationList.untitled", "Untitled conversation");
 						return (
 							<Tooltip key={conversation.id} label={label} position="right" withArrow={true}>
 								<ActionIcon

@@ -112,6 +112,14 @@ function setViewportWidth(width: number): void {
 	Object.defineProperty(window, "innerWidth", { writable: true, configurable: true, value: width });
 }
 
+/**
+ * jsdom gives every element a `clientWidth` of 0, and `usePaneLayoutMode` measures in a layout effect — before a test
+ * could get a handle on the node — so the stub goes on the prototype. Removed again in `afterEach`.
+ */
+function stubContainerWidth(width: number): void {
+	Object.defineProperty(HTMLElement.prototype, "clientWidth", { configurable: true, get: () => width });
+}
+
 // The page's delete action routes through the shared confirm dialog, which throws without a provider.
 const confirmResult = { value: true };
 const confirmSpy = vi.fn(() => Promise.resolve(confirmResult.value));
@@ -139,6 +147,8 @@ describe("WorkSessionDetailPage", () => {
 	afterEach(() => {
 		cleanup();
 		vi.clearAllMocks();
+		// A no-op when the test never stubbed it; jsdom's own prototype getter comes back either way.
+		Reflect.deleteProperty(HTMLElement.prototype, "clientWidth");
 	});
 
 	it("renders the three panes side by side at desktop width", async () => {
@@ -174,6 +184,21 @@ describe("WorkSessionDetailPage", () => {
 
 		fireEvent.click(screen.getByTestId("work-session-side-toggle"));
 		expect(await screen.findByTestId("work-session-side-panel")).toBeDefined();
+	});
+
+	// The grid lives inside the app shell, so a wide WINDOW is not a wide container: the sidebar and the content
+	// padding take ~250px before the panes see any of it, and the sidebar collapses with no resize event at all.
+	// One decision drives both halves, so the header can no longer withhold the toggles while the panes are stacked.
+	it("collapses on a wide viewport when the container is too narrow for three columns", async () => {
+		setViewportWidth(1600);
+		stubContainerWidth(725);
+		routes();
+		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />);
+
+		await screen.findByTestId("work-session-conversation-pane");
+		expect(screen.queryByTestId("work-session-detail-grid")).toBeNull();
+		expect(screen.getByTestId("work-session-plan-toggle")).toBeDefined();
+		expect(screen.getByTestId("work-session-side-toggle")).toBeDefined();
 	});
 
 	it("pins the owned conversation and the session's agent into the embedded chat", async () => {

@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -11,6 +9,7 @@ import { nodeChatAdapter } from "@/features/chat/api/NodeChatAdapter";
 import type { ChatConversationModel } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
 import { useNodeChatPreferencesStore } from "@/features/chat/stores/NodeChatPreferencesStore";
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 // A permanently-failing getConversation must surface an inline error + Retry — never an infinite spinner.
 // This exercises the Chat-page wiring (query error state → messagesLoadFailed → ChatMessageList error surface), the
@@ -82,38 +81,6 @@ vi.mock("@/features/chat/api/NodeChatConnection", () => ({
 
 const adapter = vi.mocked(nodeChatAdapter);
 
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-	Object.defineProperty(document, "fonts", {
-		writable: true,
-		value: { ready: Promise.resolve(), addEventListener: vi.fn(), removeEventListener: vi.fn() },
-	});
-	Element.prototype.scrollIntoView = vi.fn();
-	if (!("randomUUID" in crypto)) {
-		Object.defineProperty(crypto, "randomUUID", { writable: true, value: () => "00000000-0000-4000-8000-000000000000" });
-	}
-}
-
 function summary(id: string, title: string): ChatConversationModel {
 	return {
 		id,
@@ -143,25 +110,17 @@ function loaded(id: string, content: string): ChatConversationModel {
 }
 
 function renderChat(): void {
-	const queryClient = new QueryClient({
-		defaultOptions: { queries: { retry: false, gcTime: 0 } },
-	});
 	const confirmValue = { confirm: vi.fn().mockResolvedValue(true) };
 
-	render(
-		<QueryClientProvider client={queryClient}>
-			<ConfirmContext.Provider value={confirmValue}>
-				<MantineProvider>
-					<Chat />
-				</MantineProvider>
-			</ConfirmContext.Provider>
-		</QueryClientProvider>,
+	renderWithProviders(
+		<ConfirmContext.Provider value={confirmValue}>
+			<Chat />
+		</ConfirmContext.Provider>,
 	);
 }
 
 describe("Chat selected-conversation load failure", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		vi.clearAllMocks();
 		// Start from a clean selection so selectedConversationId falls back to the first conversation in the list.
 		useNodeChatPreferencesStore.getState().actions.setSelectedConversationId("");

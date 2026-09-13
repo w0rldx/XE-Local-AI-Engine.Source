@@ -134,8 +134,11 @@ export function SchedulerPage() {
 			return;
 		}
 		const shouldDiscard = await confirm({
-			title: t("components.dialogShell.unsavedTitle", "Unsaved changes"),
-			description: t("components.dialogShell.unsavedDescription", "You have unsaved changes. Discard them and leave?"),
+			title: t("components.dialogShell.unsavedTitle", "Discard unsaved changes?"),
+			description: t(
+				"components.dialogShell.unsavedDescription",
+				"You have unsaved changes. If you leave now, they will be lost.",
+			),
 			confirmationText: t("common.discard", "Discard"),
 			cancellationText: t("common.keepEditing", "Keep editing"),
 		});

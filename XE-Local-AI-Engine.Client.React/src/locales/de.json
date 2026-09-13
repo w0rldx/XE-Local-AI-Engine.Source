@@ -88,7 +88,11 @@
 		"workerNode": "Worker-Node",
 		"hide": "Ausblenden",
 		"copy": "Kopieren",
-		"copied": "Kopiert"
+		"copied": "Kopiert",
+		"retry": "Erneut versuchen",
+		"actions": "Aktionen",
+		"unknown": "Unbekannt",
+		"back": "Zurück"
 	},
 	"theme": {
 		"title": "Design",
@@ -515,13 +519,14 @@
 			"upload": {
 				"heading": "Dokumente hinzufügen",
 				"prompt": "Dokumente hier ablegen oder zum Durchsuchen klicken",
-				"hint": "PDF, DOCX, Markdown, Text, CSV, JSON — bis zu {{limit}} MB pro Datei.",
+				"hint": "PDF, DOCX, Markdown, Text, strukturierte Daten und Quellcode — bis zu {{limit}} MB pro Datei.",
 				"dropzoneAria": "Dokumente in die Wissensdatenbank hochladen",
 				"queued": "{{name}} wird indexiert.",
 				"deduplicated": "{{name}} ist bereits in der Wissensdatenbank.",
 				"failed": "{{name}} konnte nicht hochgeladen werden.",
 				"tooLarge": "{{name}} überschreitet das Upload-Limit von {{limit}} MB.",
-				"unsupported": "{{name}} ist kein unterstützter Dokumenttyp."
+				"unsupported": "{{name}} ist kein unterstützter Dokumenttyp.",
+				"batchFailed": "Dateien konnten nicht hochgeladen werden."
 			},
 			"documents": {
 				"heading": "Dokumente",
@@ -542,6 +547,7 @@
 			},
 			"table": {
 				"name": "Name",
+				"source": "Quelle",
 				"status": "Status",
 				"chunks": "Segmente",
 				"embeddingModel": "Einbettungsmodell",
@@ -590,7 +596,25 @@
 				"updated": "Aktualisiert",
 				"chunks": "Segmente",
 				"chunkLabel": "Segment {{index}}",
-				"noChunks": "Dieses Dokument hat noch keine indexierten Segmente."
+				"noChunks": "Dieses Dokument hat noch keine indexierten Segmente.",
+				"page": "Seite {{page}}"
+			},
+			"collection": {
+				"label": "Sammlung",
+				"description": "Uploads, Repository-Importe, Dokumentlisten und Suchen bleiben innerhalb dieses Namensraums.",
+				"invalid": "Verwenden Sie 1–128 Zeichen: Buchstaben, Ziffern, Punkte, Unterstriche oder Bindestriche.",
+				"open": "Sammlung öffnen"
+			},
+			"repository": {
+				"divider": "Oder ein Repository importieren",
+				"hint": "Indexieren Sie versionierte und nicht ignorierte Text-/Codedateien aus einem registrierten Git-Repository in die aktive Sammlung.",
+				"label": "Registriertes Repository",
+				"placeholder": "Repository auswählen",
+				"empty": "Keine verfügbaren Repositories",
+				"action": "Repository importieren",
+				"success": "Der Repository-Import hat {{count}} Dokument(e) eingereiht: {{added}} hinzugefügt, {{updated}} aktualisiert, {{removed}} entfernt; {{deduplicated}} unveränderte(s) Dokument(e) wurden wiederverwendet.",
+				"queueFull": "Die Indexierungs-Warteschlange ist voll; versuchen Sie es erneut, um fortzufahren.",
+				"error": "Das Repository konnte nicht importiert werden."
 			}
 		},
 		"about": {
@@ -640,7 +664,9 @@
 				"notConfigured": "Automatische Updates sind in diesem Build nicht verfügbar. Für eine neuere Version installiere sie bitte manuell.",
 				"copyCode": "Code kopieren",
 				"copied": "Kopiert"
-			}
+			},
+			"runtimeTerms": "Bedingungen der .NET-Plattformkomponenten",
+			"bundledDataTerms": "Bedingungen der mitgelieferten Daten"
 		},
 		"chat": {
 			"windowTitle": "Chatfenster",
@@ -658,7 +684,7 @@
 			"modelExpired": "Nicht geladen",
 			"modelSelector": {
 				"availableModels": "Verfügbare Modelle",
-				"hint": "Wähle ein auf dem ausgewählten Node installiertes Modell.",
+				"hint": "Wähle ein auf dem lokalen Node installiertes Modell.",
 				"noChatModels": "Keine chat-fähigen Modelle",
 				"search": "Modelle suchen...",
 				"noResults": "Keine Modelle gefunden",
@@ -794,6 +820,7 @@
 				"actionsAria": "Unterhaltungsaktionen",
 				"archive": "Archivieren",
 				"noMatches": "Keine Unterhaltungen entsprechen deiner Suche.",
+				"noMessages": "Keine Nachrichten",
 				"pin": "Anheften",
 				"pinned": "Angeheftet",
 				"recent": "Kürzlich",
@@ -1109,7 +1136,8 @@
 						"unsupported": "Nicht unterstützt",
 						"failed": "Fehlgeschlagen",
 						"unknown": "Unbekannt"
-					}
+					},
+					"uploadBatchFailed": "Dateien konnten nicht hochgeladen werden."
 				}
 			},
 			"temporaryChat": {
@@ -1579,7 +1607,7 @@
 			"developerMode": {
 				"title": "Entwicklereinstellungen",
 				"label": "Entwicklermodus",
-				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen). Wird nur in diesem Browser gespeichert."
+				"description": "Aktiviert erweiterte, experimentelle Steuerungen in der App (z.B. Chat-Sampling-Optionen) und zeichnet diese Browser-Sitzung auf — DOM-Änderungen, Klicks und Navigation —, damit sie einem Diagnose-Snapshot beigefügt werden kann. Wird nur in diesem Browser gespeichert."
 			},
 			"llamaCpp": {
 				"title": "llama.cpp-Laufzeit",
@@ -1833,6 +1861,30 @@
 				"revoke": "Schlüssel widerrufen",
 				"regenerateWarning": "Beim Neuerzeugen wird der Schlüssel sofort ersetzt — jeder Client, der noch mit dem alten konfiguriert ist, funktioniert dann nicht mehr."
 			},
+			"mcpServerKey": {
+				"title": "MCP-Server",
+				"configured": "Schlüssel konfiguriert",
+				"none": "Kein Schlüssel",
+				"description": "Erlaube einem externen MCP-Client wie Claude Code, sich mit diesem Node zu verbinden und Aufgaben an dein lokales Modell zu übergeben. Gespeichert wird nur ein Einweg-Hash des Schlüssels, daher wird er beim Erzeugen genau einmal angezeigt und kann danach nicht mehr abgerufen werden. Nur Clients auf diesem Rechner können sich verbinden.",
+				"scopeLabel": "Geltungsbereich",
+				"endpointLabel": "Endpunkt-URL",
+				"prefixLabel": "Schlüssel",
+				"notRetrievable": "Es werden nur die ersten Zeichen angezeigt. Der vollständige Schlüssel wird nicht gespeichert und kann nicht erneut angezeigt werden — erzeuge einen neuen, wenn du ihn nicht mehr hast.",
+				"lastUsed": "Zuletzt verwendet {{when}}",
+				"neverUsed": "Noch nie verwendet — es hat sich noch kein Client mit diesem Schlüssel verbunden.",
+				"revealTitle": "Kopiere diesen Schlüssel jetzt",
+				"revealWarning": "Dies ist das einzige Mal, dass dieser Schlüssel angezeigt wird. Er wird nicht gespeichert und kann nicht wiederhergestellt werden — wenn du ihn verlierst, musst du einen neuen erzeugen und jeden Client aktualisieren, der ihn verwendet.",
+				"dismissReveal": "Ich habe ihn kopiert",
+				"clientHint": "Füge ihn Claude Code hinzu mit: claude mcp add --transport http xe-engine \"<endpoint>\" --header \"Authorization: Bearer <key>\". Setze ein Zeitlimit pro Server von etwa 1800000 ms, sonst wird ein langer Lauf des lokalen Modells vom Client abgeschnitten.",
+				"newKeyScopeLabel": "Geltungsbereich des neuen Schlüssels",
+				"delegateScope": "Delegation",
+				"agenticScope": "Agentisch",
+				"agenticWarning": "Ein agentischer Schlüssel kann Knoteneinstellungen ändern, Laufzeiten installieren, Modelle herunterladen und löschen sowie gespeicherte Agenten verwalten, ohne dich zu fragen — jede Aktion wird automatisch freigegeben und protokolliert. Gib ihn nur einem Agenten, dem du die vollständige Knotenkonfiguration anvertraust.",
+				"regenerate": "Schlüssel neu erzeugen",
+				"generate": "Schlüssel erzeugen",
+				"revoke": "Schlüssel widerrufen",
+				"regenerateWarning": "Beim Neuerzeugen wird der Schlüssel sofort ersetzt — jeder Client, der noch mit dem alten konfiguriert ist, funktioniert dann nicht mehr."
+			},
 			"saved": "Knoteneinstellungen gespeichert. Die Fähigkeitsabfrage wurde für die Worker-Verbindung angefordert.",
 			"savedRestartRequired": "Knoteneinstellungen gespeichert. Einige der geänderten Einstellungen werden erst nach einem Neustart des Knotens wirksam.",
 			"fields": {
@@ -1945,6 +1997,10 @@
 				"maxPendingToolCallAgeMinutes": {
 					"label": "Max. ausstehende Tool-Aufruf-Dauer"
 				},
+				"detachedGraceSeconds": {
+					"label": "Karenzzeit nach Trennung",
+					"description": "Wie lange ein Lauf weiterläuft, nachdem sich sein letzter Client getrennt hat. 0 bricht nie ab."
+				},
 				"kvCacheType": {
 					"label": "KV-Cache-Typ",
 					"description": "Eine Änderung setzt alle eingefrorenen Inferenzprofile dieses Knotens außer Kraft. Jedes Modell wird beim nächsten Laden mit dem neuen KV-Cache-Typ neu vermessen und muss erneut gebenchmarkt und eingefroren werden. q4_0 tauscht Antwortqualität gegen VRAM ein.",
@@ -1999,6 +2055,9 @@
 					"off": "Aus",
 					"empty": "Keine installierten llama.cpp-Chatmodelle"
 				},
+				"knowledgeModels": {
+					"title": "Wissensmodelle"
+				},
 				"embeddingModel": {
 					"downloadRecommended": "Empfohlenes Embedding-Modell herunterladen",
 					"recommendedHelp": "Erforderlich für die Wissensdatenbank: Ohne Embedding-Modell können Dokumente nicht indexiert werden. Empfohlen: nomic-embed-text-v1.5 (~274 MB).",
@@ -2040,7 +2099,16 @@
 			},
 			"title": "Node-Einstellungen",
 			"subtitle": "Nicht-geheime lokale Runtime-Einstellungen dieses Workers anpassen.",
-			"loading": "Node-Einstellungen werden geladen…"
+			"loading": "Node-Einstellungen werden geladen…",
+			"localChatRuntime": {
+				"title": "Lokale Chat-Runtime",
+				"description": "Das maximale Zeitlimit für Nachrichtenanfragen begrenzt, wie lange eine einzelne lokale Chat-Nachrichtenanfrage (Senden oder Neu generieren) laufen darf, bevor sie mit einer Zeitüberschreitung abgebrochen wird. Es wird außerdem über Fähigkeitsberichte an die Plattform gemeldet.",
+				"timeoutLabel": "Maximales Zeitlimit für Nachrichtenanfragen",
+				"timeoutRange": "Zulässiger Bereich: {{min}}–{{max}} Sekunden.",
+				"timeoutError": "Bitte eine ganze Zahl von {{min}} bis {{max}} eingeben.",
+				"save": "Einstellungen speichern",
+				"reload": "Neu laden"
+			}
 		},
 		"cloudSettings": {
 			"placeholder": {
@@ -2360,6 +2428,17 @@
 				"license": "Lizenz",
 				"empty": "Für dieses Modell wurden keine Lizenz und keine Vorlage angegeben.",
 				"fitDisabled": "Modell-Passungsempfehlungen sind auf diesem Node deaktiviert."
+			},
+			"launchArgs": {
+				"tab": "Erweitert",
+				"warning": "Erweitert: Diese rohen Flags werden an llama.cpp übergeben, wenn dieses Modell geladen wird. Ein ungültiges Flag kann den Start des Modells verhindern — es betrifft nur dieses Modell, und das Leeren der Überschreibung stellt die Standardwerte wieder her. Änderungen werden beim nächsten Laden des Modells wirksam.",
+				"label": "Zusätzliche llama.cpp-Argumente",
+				"description": "Durch Leerzeichen getrennte Flags, zum Beispiel ",
+				"descriptionSuffix": ". Modellpfad, Host und Port werden von der App verwaltet und können hier nicht gesetzt werden.",
+				"save": "Speichern",
+				"saved": "Startargumente gespeichert. Sie gelten beim nächsten Laden dieses Modells.",
+				"reset": "Auf Standard zurücksetzen",
+				"resetSuccess": "Startargumente auf die Standardwerte zurückgesetzt."
 			},
 			"gguf": {
 				"browse": {
@@ -3301,7 +3380,7 @@
 					"context": "Kontext",
 					"quantization": "Quant",
 					"released": "Veröffentlicht",
-					"installed": "Installiert",
+					"installed": "Status",
 					"action": "Aktion",
 					"ram": "Erf. RAM",
 					"vram": "Erf. VRAM"
@@ -3495,7 +3574,7 @@
 		},
 		"loadedModels": {
 			"title": "Geladene Modelle",
-			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei; läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss und unterbricht sie möglicherweise.",
+			"subtitle": "Modelle, die die lokale Laufzeit derzeit im Speicher hält (RAM/VRAM). Auswerfen gibt diesen Speicher frei — kontrolliert, nachdem eine laufende Generierung abgeschlossen ist.",
 			"loading": "Geladene Modelle werden geladen…",
 			"empty": "Derzeit sind keine Modelle geladen.",
 			"unavailable": "Ollama ist derzeit nicht erreichbar. Es ist ein optionaler sekundärer Anbieter, daher gibt es hier möglicherweise nichts anzuzeigen. llama.cpp-Modelle erscheinen weiterhin unten.",
@@ -3514,11 +3593,11 @@
 			},
 			"eject": {
 				"button": "Auswerfen",
-				"tooltip": "Gibt den Speicher des Modells frei; eine laufende Generierung wird möglicherweise unterbrochen",
+				"tooltip": "Gibt den Speicher frei, sobald die aktuelle Generierung abgeschlossen ist",
 				"confirmTitle": "Modell auswerfen",
-				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Läuft gerade eine Generierung, wartet die App kurz auf deren Abschluss; das Auswerfen kann sie unterbrechen.",
+				"confirmDescription": "'{{modelName}}' aus dem Speicher auswerfen? Der Speicher wird freigegeben, sobald die aktuelle Generierung abgeschlossen ist; eine laufende Antwort wird nicht unterbrochen.",
 				"confirmAction": "Auswerfen",
-				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird in Kürze freigegeben.",
+				"success": "'{{modelName}}' wird ausgeworfen — der Speicher wird nach der aktuellen Generierung freigegeben.",
 				"error": "Das Modell konnte nicht ausgeworfen werden."
 			},
 			"ollama": {
@@ -4811,7 +4890,132 @@
 		},
 		"customTools": {
 			"title": "Eigene Tools",
-			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus."
+			"subtitle": "Erstellen Sie HTTP- und Host-Befehl-Tools, die Ihre Agenten aufrufen können. Sie laufen auf diesem Rechner mit Freigabe pro Aufruf — einem Agenten zuweisen, standardmäßig aus.",
+			"createButton": "Neues eigenes Tool",
+			"dangerBanner": "Eigene Tools führen Befehle aus, sprechen Netzwerke an und starten Programme auf dem Host-Rechner mit Ihren Rechten. Aktivieren Sie nur ein Tool, dessen genauem Verhalten Sie vertrauen — jeder Aufruf fragt weiterhin nach Ihrer Zustimmung, aber der Code läuft hier.",
+			"form": {
+				"name": {
+					"label": "Name",
+					"description": "Das Modell sieht dies als {{prefixed}}.",
+					"required": "Der Name ist erforderlich.",
+					"invalid": "Verwenden Sie Kleinbuchstaben, Ziffern und Unterstriche; Anfang und Ende müssen alphanumerisch sein."
+				},
+				"description": {
+					"label": "Beschreibung",
+					"description": "Was das Tool tut — das Modell liest dies, um zu entscheiden, wann es aufgerufen wird.",
+					"required": "Die Beschreibung ist erforderlich."
+				},
+				"kind": {
+					"label": "Art",
+					"http": "HTTP-Abruf",
+					"command": "Befehl"
+				},
+				"mode": {
+					"label": "Modus",
+					"fixed": "Fest",
+					"parameterized": "Parametrisiert",
+					"parameterizedHint": "Das Modell füllt die deklarierten Eingaben bei jedem Aufruf in die {param}-Platzhalter ein.",
+					"fixedHint": "Das Tool läuft unverändert, ohne Eingaben vom Modell.",
+					"fixedNoParameters": "Ein festes Tool kann keine Parameter deklarieren. Entfernen Sie sie oder wechseln Sie zu Parametrisiert."
+				},
+				"dangerNote": "Eigene Tools laufen auf diesem Rechner: Ein HTTP-Tool greift auf das Netzwerk zu und ein Befehls-Tool startet ein Programm mit Ihren Rechten. Erstellen und aktivieren Sie nur Tools, deren genauem Verhalten Sie vertrauen.",
+				"acknowledge": {
+					"label": "Mir ist bewusst, dass diese Tools Code ausführen, Netzwerke ansprechen und Programme auf meinem Rechner starten können, und ich übernehme dafür die Verantwortung.",
+					"required": "Sie müssen dies bestätigen, um zu speichern."
+				},
+				"enabled": {
+					"label": "Aktiviert",
+					"description": "Ein deaktiviertes Tool wird keinem Agenten angeboten, auch wenn es zugewiesen ist."
+				},
+				"parameters": {
+					"label": "Parameter",
+					"add": "Parameter hinzufügen",
+					"empty": "Noch keine Parameter deklariert.",
+					"namePlaceholder": "stadt",
+					"nameInvalid": "Nur Bezeichner",
+					"descriptionPlaceholder": "Beschreibung",
+					"required": "Erforderlich",
+					"remove": "Parameter entfernen"
+				},
+				"http": {
+					"method": "Methode",
+					"url": "URL-Vorlage",
+					"urlHint": "Verwenden Sie {param}-Platzhalter nur für Query-Werte oder Pfadsegmente — niemals für Schema, Host oder Port.",
+					"urlRequired": "Eine URL-Vorlage ist erforderlich.",
+					"headers": "Header",
+					"addHeader": "Header hinzufügen",
+					"noHeaders": "Keine Header.",
+					"body": "Body-Vorlage",
+					"bodyHint": "Optionaler Request-Body. {param}-Platzhalter werden auf dieselbe Weise gefüllt.",
+					"allowedHosts": "Erlaubte Hosts",
+					"addHost": "Host hinzufügen",
+					"allowedHostsHint": "Erforderlich, wenn der URL-Host selbst eine Vorlage ist: Die Anfrage darf nur einen Host aus dieser Liste erreichen.",
+					"removeHost": "Host entfernen"
+				},
+				"command": {
+					"executable": "Programmdatei",
+					"executableHint": "Absoluter Pfad zu einem gewöhnlichen Programm. Shells und Interpreter (sh, bash, python, node…) werden abgelehnt.",
+					"executableRequired": "Ein Pfad zur Programmdatei ist erforderlich.",
+					"validate": "Prüfen",
+					"validateFailed": "Der Pfad konnte nicht geprüft werden.",
+					"validateOk": "Sieht gut aus.",
+					"validateRejected": "Abgelehnt.",
+					"validateIdle": "Prüfen Sie den Pfad, um zu bestätigen, dass er auf diesem Host auflösbar ist.",
+					"args": "Argumente",
+					"addArg": "Argument hinzufügen",
+					"argsHint": "Ein Argument pro Zeile. Ein {param}-Platzhalter füllt genau ein Argument — ein Wert kann niemals zusätzliche Argumente einschleusen.",
+					"noArgs": "Keine Argumente.",
+					"removeArg": "Argument entfernen",
+					"workingDirectory": "Arbeitsverzeichnis",
+					"timeout": "Zeitlimit (Sekunden)",
+					"timeoutHint": "0 verwendet den Standardwert.",
+					"env": "Umgebungsvariablen",
+					"addEnv": "Variable hinzufügen",
+					"noEnv": "Keine Umgebungsvariablen."
+				},
+				"secretRows": {
+					"namePlaceholder": "Name",
+					"storedPlaceholder": "•••• gespeichert — leer lassen zum Beibehalten",
+					"valuePlaceholder": "Wert",
+					"secret": "Geheim",
+					"remove": "Entfernen"
+				}
+			},
+			"list": {
+				"loading": "Eigene Tools werden geladen…",
+				"empty": "Noch keine eigenen Tools. Erstellen Sie eines, um Ihren Agenten einen Host-Befehl oder HTTP-Aufruf zu geben.",
+				"columns": {
+					"name": "Name",
+					"kind": "Art",
+					"enabled": "Aktiviert",
+					"version": "Version",
+					"actions": "Aktionen"
+				},
+				"kindCommand": "Befehl",
+				"kindHttp": "HTTP-Abruf",
+				"parameterizedBadge": "Parametrisiert",
+				"fixedBadge": "Fest",
+				"enabledBadge": "Aktiviert",
+				"disabledBadge": "Deaktiviert",
+				"dangerBadge": "Host-Zugriff",
+				"dangerTooltip": "Dieses Tool ist aktiviert und kann auf dem Host laufen, wenn ein Agent es aufruft und Sie zustimmen.",
+				"editAria": "{{name}} bearbeiten",
+				"deleteAria": "{{name}} löschen"
+			},
+			"editor": {
+				"createTitle": "Neues eigenes Tool",
+				"editTitle": "Eigenes Tool bearbeiten",
+				"loading": "Eigenes Tool wird geladen…"
+			},
+			"delete": {
+				"title": "Eigenes Tool löschen",
+				"description": "'{{name}}' löschen? Dies kann nicht rückgängig gemacht werden."
+			},
+			"errors": {
+				"load": "Eigene Tools konnten nicht geladen werden.",
+				"save": "Das eigene Tool konnte nicht gespeichert werden.",
+				"delete": "Das eigene Tool konnte nicht gelöscht werden."
+			}
 		},
 		"training": {
 			"title": "Training",
@@ -6826,7 +7030,8 @@
 		"toolSourceBadge": {
 			"builtin": "integriert",
 			"mcp": "MCP",
-			"mcpServer": "MCP · {{server}}"
+			"mcpServer": "MCP · {{server}}",
+			"custom": "eigen"
 		}
 	},
 	"onboarding": {
@@ -7249,7 +7454,20 @@
 				"smokeFailed": "Rauchtest fehlgeschlagen",
 				"skipped": "Übersprungen",
 				"failed": "Export fehlgeschlagen"
-			}
+			},
+			"discarded": "Verworfen",
+			"cleanupPending": "Bereinigung ausstehend",
+			"validate": "Qualität prüfen",
+			"revalidate": "Qualität erneut prüfen",
+			"override": "Fehlschlag übersteuern",
+			"overrideTitle": "Fehlgeschlagene Qualitätsentscheidung übersteuern",
+			"overrideReason": "Grund für die Übersteuerung",
+			"recordOverride": "Übersteuerung festhalten",
+			"discard": "Bereitgestellte Datei verwerfen",
+			"discardTitle": "Bereitgestelltes Artefakt verwerfen",
+			"discardReason": "Grund für das Verwerfen",
+			"confirmDiscard": "Verwerfen bestätigen",
+			"retryCleanup": "Bereinigung wiederholen"
 		},
 		"errors": {
 			"request": "Die Trainings-Anfrage ist fehlgeschlagen."

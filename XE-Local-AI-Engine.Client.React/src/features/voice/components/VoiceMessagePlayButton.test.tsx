@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -9,6 +8,7 @@ import type { ChatMessageModel } from "@/features/chat/models/ChatModels";
 import { VoiceMessagePlayButton } from "@/features/voice/components/VoiceMessagePlayButton";
 import { useVoicePreferencesStore } from "@/features/voice/VoicePreferencesStore";
 import type { VoiceRuntimeContextValue } from "@/features/voice/VoiceRuntimeContext";
+import { createProvidersWrapper } from "@/test/RenderWithProviders";
 
 // Controllable runtime context: the component reads it via useVoiceRuntime, which the mock below returns.
 let mockContext: VoiceRuntimeContextValue;
@@ -45,8 +45,11 @@ function makeMessage(overrides: Partial<ChatMessageModel> = {}): ChatMessageMode
 	};
 }
 
+// The wrapper form, not `renderWithProviders`, because one test below `rerender`s: only this way does the re-render
+// land in the same provider tree instead of remounting the subtree.
 function renderButton(ui: ReactElement) {
-	return render(<MantineProvider>{ui}</MantineProvider>);
+	const { wrapper } = createProvidersWrapper();
+	return render(ui, { wrapper });
 }
 
 describe("VoiceMessagePlayButton", () => {
@@ -55,17 +58,6 @@ describe("VoiceMessagePlayButton", () => {
 		stopPlayback.mockClear();
 		mockContext = baseContext();
 		useVoicePreferencesStore.getState().actions.setVoiceEnabled(true);
-		Object.defineProperty(window, "matchMedia", {
-			writable: true,
-			value: vi.fn().mockImplementation((query: string) => ({
-				matches: false,
-				media: query,
-				onchange: null,
-				addEventListener: vi.fn(),
-				removeEventListener: vi.fn(),
-				dispatchEvent: vi.fn(),
-			})),
-		});
 	});
 
 	afterEach(() => {
@@ -88,11 +80,7 @@ describe("VoiceMessagePlayButton", () => {
 	it("renders nothing for a user message or empty content", () => {
 		const { rerender } = renderButton(<VoiceMessagePlayButton message={makeMessage({ role: "user" })} />);
 		expect(screen.queryByTestId("voice-message-play-msg-1")).toBeNull();
-		rerender(
-			<MantineProvider>
-				<VoiceMessagePlayButton message={makeMessage({ content: "   " })} />
-			</MantineProvider>,
-		);
+		rerender(<VoiceMessagePlayButton message={makeMessage({ content: "   " })} />);
 		expect(screen.queryByTestId("voice-message-play-msg-1")).toBeNull();
 	});
 

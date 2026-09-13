@@ -96,7 +96,7 @@ export function ThoughtsSection({
 							</m.div>
 						</ThemeIcon>
 						<Text component="span" size="sm" fw={600}>
-							{t("chat.toolCall.thinkingLive", "Thinking")}
+							{t("chat.toolCall.thinkingLive", "Thinking…")}
 						</Text>
 						{hasContentStarted ? null : (
 							<Text size="xs" c="dimmed" ff="monospace">

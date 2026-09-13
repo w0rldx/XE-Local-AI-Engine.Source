@@ -1,7 +1,6 @@
 // @vitest-environment jsdom
 
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { RuntimeAcquisitionStatus } from "@/features/node-settings/queries/useLocalRuntime";
@@ -27,46 +26,18 @@ vi.mock("@/features/node-settings/queries/useLocalRuntime", () => ({
 
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { RuntimeAcquisitionBanner } from "@/features/node-settings/components/RuntimeAcquisitionBanner";
-
-function installJsdomEnvironmentMocks(): void {
-	Object.defineProperty(window, "matchMedia", {
-		writable: true,
-		value: vi.fn().mockImplementation((query: string) => ({
-			matches: false,
-			media: query,
-			onchange: null,
-			addEventListener: vi.fn(),
-			removeEventListener: vi.fn(),
-			dispatchEvent: vi.fn(),
-		})),
-	});
-	Object.defineProperty(window, "ResizeObserver", {
-		writable: true,
-		value: class ResizeObserverMock {
-			observe = vi.fn();
-
-			unobserve = vi.fn();
-
-			disconnect = vi.fn();
-		},
-	});
-}
+import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function status(overrides: Partial<RuntimeAcquisitionStatus> & { sequence: number; phase: string }): RuntimeAcquisitionStatus {
 	return { variant: "cuda", tag: "b9692", completedBytes: null, totalBytes: null, stepIndex: 1, stepCount: 1, ...overrides };
 }
 
 function renderBanner(): void {
-	render(
-		<MantineProvider>
-			<RuntimeAcquisitionBanner />
-		</MantineProvider>,
-	);
+	renderWithProviders(<RuntimeAcquisitionBanner />);
 }
 
 describe("RuntimeAcquisitionBanner", () => {
 	beforeEach(() => {
-		installJsdomEnvironmentMocks();
 		hooksMock.status = undefined;
 		hooksMock.enabledArg = undefined;
 		useNodeAuthStore.setState({ accessToken: "token" });
@@ -109,8 +80,8 @@ describe("RuntimeAcquisitionBanner", () => {
 	});
 
 	it("shows the step counter only on the multi-archive path", () => {
-		// i18n is not initialized under the suite, so `t` yields the raw default template rather than interpolated copy
-		// (same caveat as LlamaCppUpdateBanner.test.tsx). Assert which segments compose the detail line, not their text.
+		// i18n is initialized suite-wide, so this asserts the sentence the operator actually reads — interpolated from
+		// the fixture below (step 2 of 2; 1024 of 4096 bytes, which humanizeBytes renders as KB), not the raw template.
 		hooksMock.status = status({
 			sequence: 4,
 			phase: "Downloading",
@@ -120,7 +91,7 @@ describe("RuntimeAcquisitionBanner", () => {
 			stepCount: 2,
 		});
 		renderBanner();
-		expect(screen.getByTestId("runtime-acquisition-banner-detail").textContent).toContain("Step {{index}} of {{count}}");
+		expect(screen.getByTestId("runtime-acquisition-banner-detail").textContent).toContain("Step 2 of 2 · 1 KB of 4 KB");
 
 		// A single-archive acquisition must not show "Step 1 of 1" — it would imply a second step that never comes.
 		cleanup();

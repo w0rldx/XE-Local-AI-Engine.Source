@@ -188,7 +188,7 @@ export function useConversationAttachments({
 			}
 
 			runUploads(accepted).catch((error: unknown) => {
-				toast.error(uploadErrorMessage(error, t("pages.chat.composer.attachments.uploadFailed", "Failed to upload files.")));
+				toast.error(uploadErrorMessage(error, t("pages.chat.composer.attachments.uploadBatchFailed", "Failed to upload files.")));
 			});
 		},
 		[runUploads],

@@ -5,10 +5,9 @@ import { useCallback, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
-import { TWO_PANE_BREAKPOINT } from "@/core/layout/constants/LayoutBreakpoints";
-import useWindowDimensions from "@/core/layout/hooks/useWindowDimensions";
 import { FullHeightPage } from "@/core/ui/components/FullHeightPage/FullHeightPage";
 import { InlineErrorAlert } from "@/core/ui/components/InlineErrorAlert/InlineErrorAlert";
+import { usePaneLayoutMode } from "@/core/ui/components/ResponsivePaneLayout/usePaneLayoutMode";
 import { useConfirm } from "@/core/ui/hooks/useConfirm";
 import type { ChatScope } from "@/features/chat/models/ChatModels";
 import { Chat } from "@/features/chat/pages/Chat";
@@ -42,8 +41,9 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	const { t } = useTranslation();
 	const { confirm } = useConfirm();
 	const navigate = useNavigate();
-	const { width } = useWindowDimensions();
-	const isMobile = width < TWO_PANE_BREAKPOINT;
+	// One decision for the whole page: the header toggles, the two Drawers and the pane grid all read this. The ref
+	// goes on the layout's frame, because that is the element the panes are actually laid out inside.
+	const { ref: paneContainerRef, isNarrow: isMobile } = usePaneLayoutMode();
 	const [planDrawerOpened, planDrawer] = useDisclosure(false);
 	const [sideDrawerOpened, sideDrawer] = useDisclosure(false);
 	const [eventsLimit, setEventsLimit] = useState(workSessionEventsPageSize);
@@ -161,7 +161,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 
 	if (sessionQuery.isPending) {
 		return (
-			<FullHeightPage data-testid="work-session-detail-page">
+			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
 				<Loader data-testid="work-session-detail-loading" />
 			</FullHeightPage>
 		);
@@ -169,7 +169,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 
 	if (sessionQuery.isError || !sessionQuery.data) {
 		return (
-			<FullHeightPage data-testid="work-session-detail-page">
+			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
 				<InlineErrorAlert
 					message={apiErrorMessage(
 						sessionQuery.error,
@@ -252,6 +252,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 
 	return (
 		<WorkSessionDetailLayout
+			containerRef={paneContainerRef}
 			title={sessionQuery.data.title ?? ""}
 			kindLabel={t(`pages.workSessions.kind.${toWorkSessionKind(sessionQuery.data.kind)}`, sessionQuery.data.kind ?? "")}
 			isMobile={isMobile}
