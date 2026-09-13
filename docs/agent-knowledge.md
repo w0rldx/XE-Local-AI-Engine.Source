@@ -182,6 +182,21 @@ plausible percentage. **Authority:** the
 `TEST_SHARD` parse in `scripts/run-tests-memory-safe.sh` (it rejects the combination before the Release build), and
 the `build-and-test` job's check that the group indices across the legs' `units.txt` files, sorted, equal `0`…`GROUPS-1` exactly. A duplicate-only check is not enough: it passes a run that skipped groups.
 
+### The packer's weights are load-bearing, and it cannot split a namespace
+
+**Rule:** re-measure the `HEAVY` table in `scripts/run-tests-memory-safe.sh` from a green CI run's TRX artifacts
+(coverage on, in-process width 1) whenever a namespace grows, and when one namespace alone outweighs a whole bin,
+split it into sub-namespaces in the test project rather than re-tuning `TEST_GROUPS`. **Failure prevented:** a
+namespace the packer cannot split is a hard floor on its shard's wall time. `DevWorkflows` was listed at a local
+196 s while CI spent 1651 s on it; LPT therefore gave it a bin to itself, that bin landed on shard 0, and
+`backend-tests (tests-0)` hit the 45-minute job timeout (run 34730991540) while the other three shards idled. The
+table was also missing `GraphWorkflows` (503 s) and `Integrations` (366 s) entirely, and an unlisted namespace
+weighs 1 — so the pack was balancing on numbers that described a different machine. **Authority:** the `HEAVY`
+list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight parse in
+`scripts/run-tests-memory-safe.sh`; the four `XE_Local_AI_Engine.Tests.DevWorkflows[.Execution|.Materialization|.Dispatch]`
+entries and the folders behind them (IDE0130 makes folder = namespace mandatory); CI runs 34515666107 (green,
+the measurement) and 34730991540 (the timeout).
+
 ### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
 
 After adding a SignalR hub, `LocalApiRoutes` family, React `features/` directory, numbered wiki page, or solution project, update the corresponding wiki inventory and run:
@@ -344,7 +359,7 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 
 `BackendTraceCorrelationTests` proved `[NotInParallel]` is insufficient when a shared host itself outlives each test's `ActivityListener`. `ClassDataSource<T>` also needs a true parameterless constructor. Per-test fixture customizations use `ConfigureAdditionalTestServices`, `AdditionalConfiguration`, `EnableDevelopmentMode`, and related init properties; there is no `WithWebHostBuilder`.
 
-`run-tests-memory-safe.sh` partitions by namespace into fresh processes, schedules longest first, refuses an empty unit list, and uses `TEST_GROUPS` for coverage grouping. Batches normally run at width 1; only the exact local non-coverage `DevWorkflows` namespace defaults to the measured-safe width 2. `PAR=1` restores full serialization, and grouped/coverage runs stay at width 1 by default. `JOBS=1` restores strict batch sequencing; other `PAR=N` values can reintroduce in-process races. The runner self-guards—an outer assembly guard sees its own build as contamination unless `NO_BUILD=1`. A one-process full run may be trustworthy on a roomy machine, but the batch runner remains the local wall-time/memory tool of record.
+`run-tests-memory-safe.sh` partitions by namespace into fresh processes, schedules longest first, refuses an empty unit list, and uses `TEST_GROUPS` for coverage grouping. Batches normally run at width 1; only the local non-coverage `DevWorkflows` namespace family defaults to the measured-safe width 2. `PAR=1` restores full serialization, and grouped/coverage runs stay at width 1 by default. `JOBS=1` restores strict batch sequencing; other `PAR=N` values can reintroduce in-process races. The runner self-guards—an outer assembly guard sees its own build as contamination unless `NO_BUILD=1`. A one-process full run may be trustworthy on a roomy machine, but the batch runner remains the local wall-time/memory tool of record.
 
 ### Test hosts leak temp files to `Path.GetTempPath()` — keep the fixture cleanup
 

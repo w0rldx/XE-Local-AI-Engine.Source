@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.DevWorkflows;
+namespace XE_Local_AI_Engine.Tests.DevWorkflows.Execution;
 
 using System.Text.Json;
 using System.Text.Json.Nodes;

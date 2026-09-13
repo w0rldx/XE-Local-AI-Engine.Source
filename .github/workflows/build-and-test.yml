@@ -477,7 +477,7 @@ jobs:
           # by (filename, line), so both a gap and an overlap merge to a plausible percentage.
           # Every unit is named group<N>[…], so the sorted indices must equal 0..GROUPS-1 exactly.
           # Equality is safe rather than brittle because the packer cannot leave a bin empty at this
-          # size: 113 namespaces into 16 bins, each appended to the lightest bin, gives every bin at
+          # size: 123 namespaces into 16 bins, each appended to the lightest bin, gives every bin at
           # least one. If that ever stopped holding, the runner skips the empty bin and this check
           # fails loudly — which is the outcome to want, not a silently shorter run.
           mapfile -t ran_groups < <(printf '%s\n' "${all_units[@]}" \

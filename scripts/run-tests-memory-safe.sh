@@ -10,7 +10,7 @@
 # balloons to ~3.5 GB, which thrashes a memory-tight box.
 #
 # This script runs the module in fresh-process batches, ONE per test namespace, normally single-threaded WITHIN the
-# process. The exact local non-coverage DevWorkflows namespace is measured-safe at width 2; PAR=1 restores full
+# process. The local non-coverage DevWorkflows namespace family is measured-safe at width 2; PAR=1 restores full
 # serialization, and grouped/coverage runs stay at width 1 by default. A fresh process per namespace resets the leak
 # between batches (bounding peak RSS) and — because namespaces
 # are the natural test-tree partition — covers every test exactly once with no source-parsing guesswork.
@@ -66,7 +66,7 @@
 #   after another: every hazard the fresh-process design defends against is process-scoped (env-var
 #   mutation, PATH stubs, meter/ActivityListener capture, the HostStartupLock) or already isolated
 #   per host (GUID-named temp SQLite/data dirs, port-0 binds). So the batches run JOBS at a time,
-#   longest-first. Only the exact ungrouped, non-coverage DevWorkflows unit uses width 2 when PAR is unset;
+#   longest-first. Only ungrouped, non-coverage units in the DevWorkflows namespace family use width 2 when PAR is unset;
 #   every other batch stays at width 1 by default. PROCESS-level parallelism is what this
 #   module responds to; in-process width is contention-bound (measured 2026-08-22, 16-core host:
 #   one process 8-wide = 11:00 wall / 10.0 GB, JOBS=4 batches = 6:02, JOBS=10 batches = 2:18 with
@@ -84,7 +84,7 @@
 # Env knobs:
 #   JOBS            how many namespace batch PROCESSES run concurrently (default 10; 1 = sequential)
 #   PAR             max parallel tests per batch (default 1 = deterministic + lowest RSS; >1 is faster but can flake).
-#                   When unset, only the exact ungrouped, non-coverage DevWorkflows unit uses measured-safe width 2;
+#                   When unset, only ungrouped, non-coverage units in the DevWorkflows namespace family use width 2;
 #                   set PAR=1 to disable that exception.
 #   AVAIL_FLOOR     a batch aborts if available RAM drops below this many MB (default 800; with JOBS>1
 #                   every batch that observes the breach kills itself — safety over completeness)
@@ -203,7 +203,7 @@ run_ns() {
   local ns="$1" filter="$2" out; out="$(mktemp)"; local t0=$EPOCHSECONDS
   local unit_par="$PAR"
   [[ -z "$PAR_EXPLICIT" && -z "${COVERAGE_DIR:-}" \
-    && "$ns" == "XE_Local_AI_Engine.Tests.DevWorkflows" ]] && unit_par=2
+    && "$ns" == XE_Local_AI_Engine.Tests.DevWorkflows* ]] && unit_par=2
   # Coverage/TRX is opt-in: one results directory per batch, because MTP resolves --coverage-output
   # relative to --results-directory and batches sharing one would overwrite each other's report.
   local exe="$EXE" slot=""
@@ -284,60 +284,80 @@ fi
 
 # Longest-first (LPT) so the parallel schedule doesn't end on a 90s batch started last. Every
 # namespace that took >= 10s is listed, descending; the trailing comment is that measurement.
-# Weights measured 2026-08-29 on a 16-core host as max(run1, run2) of two default-JOBS runs;
-# harmless if stale — unlisted namespaces follow alphabetically. Re-generate from a run's `dur=`
-# column when the tail stops shrinking — and note only the PER-NAMESPACE shape yields a
-# per-namespace `dur=`, so regenerate from a run with TEST_GROUPS unset. These weights are also what
-# the TEST_GROUPS packer bins on.
+# Weights are CI seconds from run 34515666107 (coverage ON, in-process width 1) — the environment
+# the packer is actually scheduling for, and the one a local 16-core no-coverage run understates by
+# up to 8x. NOT harmless if stale: the previous table carried DevWorkflows at a local 196s while CI
+# spent 1651s on it, the packer gave that one unsplittable namespace a bin to itself, and shard 0
+# hit the 45-minute job timeout (run 34730991540). Re-measure whenever a namespace grows.
+# Two sources, in order of preference:
+#   * the TRX artifacts of a green CI run — sum each test's duration per namespace; this is the only
+#     source that reflects coverage on and width 1, and it works under the sharded TEST_GROUPS shape;
+#   * a local run's `dur=` column, which is per-namespace only when TEST_GROUPS is unset.
+# Unlisted namespaces weigh 1 and follow alphabetically. These weights are also what the TEST_GROUPS
+# packer bins on, and the packer cannot split a namespace: a namespace that outgrows a whole bin has
+# to be split into sub-namespaces in the test project (see DevWorkflows.{Execution,Materialization,
+# Dispatch}, which is why those four entries exist rather than one).
 # The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost:
 # at a 15s cut-off the 71 remaining namespaces hid 248s of work from the packer and TEST_GROUPS=4
 # came out worse than the stale table it replaced (486s vs 479s of true load on the fullest bin).
 # Listing down to 10s brings that to 439s; going below 10s buys another ~13s for 11 more entries.
 HEAVY=(
-  XE_Local_AI_Engine.Tests.DevWorkflows                 # 196s (single sample, 2026-08-29 merged-tree run)
-  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1      # 118s
-  XE_Local_AI_Engine.Tests.WorkSessions                 # 108s
-  XE_Local_AI_Engine.Tests.Endpoints.Training.V1        # 88s
-  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 74s (single sample, 2026-08-29 merged-tree run)
-  XE_Local_AI_Engine.Tests.Development                  # 70s
-  XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1    # 65s
-  XE_Local_AI_Engine.Tests.Mcp                          # 65s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalModels        # 57s
-  XE_Local_AI_Engine.Tests.Hosting                      # 56s
-  XE_Local_AI_Engine.Tests.Endpoints.Images             # 52s
-  XE_Local_AI_Engine.Tests.Endpoints.Agents             # 50s
-  XE_Local_AI_Engine.Tests.Endpoints.Development.V1     # 50s
-  XE_Local_AI_Engine.Tests.Chat                         # 44s
-  XE_Local_AI_Engine.Tests.Endpoints.Knowledge          # 41s
-  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1        # 41s
-  XE_Local_AI_Engine.Tests.CloudSettings                # 38s
-  XE_Local_AI_Engine.Tests.Providers.LlamaServer        # 37s
-  XE_Local_AI_Engine.Tests.Endpoints.Drafting           # 35s
-  XE_Local_AI_Engine.Tests.Auth                         # 31s
-  XE_Local_AI_Engine.Tests.Endpoints.Development        # 31s
-  XE_Local_AI_Engine.Tests.Sandbox                      # 30s
-  XE_Local_AI_Engine.Tests.NodeSettings                 # 28s
-  XE_Local_AI_Engine.Tests.ApiFoundation                # 27s
-  XE_Local_AI_Engine.Tests.Automation                   # 27s
-  XE_Local_AI_Engine.Tests.Endpoints.LocalChat          # 25s
-  XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders  # 24s
-  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1     # 24s
-  XE_Local_AI_Engine.Tests.Endpoints.Skills             # 24s
-  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 24s
-  XE_Local_AI_Engine.Tests.Agents                       # 22s
-  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1     # 20s
-  XE_Local_AI_Engine.Tests.Endpoints.Workspaces         # 20s
-  XE_Local_AI_Engine.Tests.Proxy                        # 17s
-  XE_Local_AI_Engine.Tests.Connection                   # 16s
-  XE_Local_AI_Engine.Tests.Invocation                   # 16s
-  XE_Local_AI_Engine.Tests.ContainerSandbox             # 14s
-  XE_Local_AI_Engine.Tests.Endpoints.Cloud.Codex        # 13s
-  XE_Local_AI_Engine.Tests.Auth.Integration             # 12s
-  XE_Local_AI_Engine.Tests.Benchmarks                   # 11s
-  XE_Local_AI_Engine.Tests.Endpoints.TutorialState      # 11s
-  XE_Local_AI_Engine.Tests.BackgroundServices           # 10s
-  XE_Local_AI_Engine.Tests.Endpoints.Invocations        # 10s
-  XE_Local_AI_Engine.Tests.Memory                       # 10s
+  XE_Local_AI_Engine.Tests.GraphWorkflows              # 503s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 445s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch       # 430s
+  XE_Local_AI_Engine.Tests.DevWorkflows.Execution      # 411s
+  XE_Local_AI_Engine.Tests.Integrations                # 366s
+  XE_Local_AI_Engine.Tests.DevWorkflows                # 365s
+  XE_Local_AI_Engine.Tests.Endpoints.Benchmarks.V1     # 363s
+  XE_Local_AI_Engine.Tests.Endpoints.DevelopmentWorkflows.V1 # 307s
+  XE_Local_AI_Engine.Tests.WorkSessions                # 290s
+  XE_Local_AI_Engine.Tests.Endpoints.GraphWorkflows.V1 # 265s
+  XE_Local_AI_Engine.Tests.Chat                        # 197s
+  XE_Local_AI_Engine.Tests.Endpoints.ModelFit.V1       # 178s
+  XE_Local_AI_Engine.Tests.Development                 # 141s
+  XE_Local_AI_Engine.Tests.Endpoints.WorkSessions.V1   # 141s
+  XE_Local_AI_Engine.Tests.Endpoints.Images            # 137s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalModels       # 134s
+  XE_Local_AI_Engine.Tests.Mcp                         # 132s
+  XE_Local_AI_Engine.Tests.ApiFoundation               # 131s
+  XE_Local_AI_Engine.Tests.Endpoints.Development       # 124s
+  XE_Local_AI_Engine.Tests.NodeSettings                # 118s
+  XE_Local_AI_Engine.Tests.Endpoints.Development.V1    # 109s
+  XE_Local_AI_Engine.Tests.Endpoints.Agents            # 108s
+  XE_Local_AI_Engine.Tests.Endpoints.Training.V1       # 107s
+  XE_Local_AI_Engine.Tests.Hosting                     # 92s
+  XE_Local_AI_Engine.Tests.Endpoints.Workspaces        # 78s
+  XE_Local_AI_Engine.Tests.Agents                      # 76s
+  XE_Local_AI_Engine.Tests.Auth                        # 73s
+  XE_Local_AI_Engine.Tests.Endpoints.Drafting          # 73s
+  XE_Local_AI_Engine.Tests.Automation                  # 72s
+  XE_Local_AI_Engine.Tests.Endpoints.ExternalProviders # 72s
+  XE_Local_AI_Engine.Tests.CloudSettings               # 69s
+  XE_Local_AI_Engine.Tests.Endpoints.LocalChat         # 66s
+  XE_Local_AI_Engine.Tests.Auth.Integration            # 65s
+  XE_Local_AI_Engine.Tests.Endpoints.Proxy.V1          # 57s
+  XE_Local_AI_Engine.Tests.Endpoints.Knowledge         # 56s
+  XE_Local_AI_Engine.Tests.Endpoints.Integrations.V1   # 46s
+  XE_Local_AI_Engine.Tests.BackgroundServices          # 41s
+  XE_Local_AI_Engine.Tests.Endpoints.Scheduler         # 35s
+  XE_Local_AI_Engine.Tests.Providers.LlamaServer       # 34s
+  XE_Local_AI_Engine.Tests.AppUpdate                   # 26s
+  XE_Local_AI_Engine.Tests.Sandbox                     # 26s
+  XE_Local_AI_Engine.Tests.Connection                  # 24s
+  XE_Local_AI_Engine.Tests.Shutdown                    # 23s
+  XE_Local_AI_Engine.Tests.Integration                 # 22s
+  XE_Local_AI_Engine.Tests.Endpoints.CustomTools.V1    # 21s
+  XE_Local_AI_Engine.Tests.Endpoints.Skills            # 20s
+  XE_Local_AI_Engine.Tests.Providers.StableDiffusionCpp # 20s
+  XE_Local_AI_Engine.Tests.Endpoints.TutorialState     # 19s
+  XE_Local_AI_Engine.Tests.Invocation                  # 19s
+  XE_Local_AI_Engine.Tests.Proxy                       # 19s
+  XE_Local_AI_Engine.Tests.Architecture                # 16s
+  XE_Local_AI_Engine.Tests.Endpoints.NodeBinding.V1    # 16s
+  XE_Local_AI_Engine.Tests.ContainerSandbox            # 15s
+  XE_Local_AI_Engine.Tests.RateLimiting                # 15s
+  XE_Local_AI_Engine.Tests.GraphWorkflows.Import       # 13s
+  XE_Local_AI_Engine.Tests.Endpoints.Invocations       # 11s
 )
 declare -A IS_HEAVY=()
 ORDERED=()

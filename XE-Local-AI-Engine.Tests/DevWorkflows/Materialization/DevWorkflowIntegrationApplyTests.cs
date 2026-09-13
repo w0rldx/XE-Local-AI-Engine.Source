@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.DevWorkflows;
+namespace XE_Local_AI_Engine.Tests.DevWorkflows.Materialization;
 
 using System.Text;
 using Microsoft.Extensions.DependencyInjection;

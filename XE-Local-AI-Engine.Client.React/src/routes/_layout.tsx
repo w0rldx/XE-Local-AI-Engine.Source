@@ -5,6 +5,7 @@ import { getNodeSettingsOptions } from "@/core/api/generated/@tanstack/react-que
 import { useNodeAuthStore } from "@/core/auth/stores/NodeAuthStore";
 import { restoreNodeAuthSession } from "@/core/auth/utils/SessionRestore";
 import { Layout } from "@/core/layout/components/Layout/Layout";
+import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 
 // The authentication chain, hoisted out of `beforeLoad` so the profile guard below it runs UNCONDITIONALLY. As a chain
 // of early returns inside `beforeLoad` it would have short-circuited on every already-authenticated navigation, which
@@ -51,5 +52,11 @@ export const Route = createFileRoute("/_layout")({
 			}
 		}
 	},
-	component: (): React.ReactElement | null => <Layout />,
+	// The tour lives here, not above the router: mounted at the app root it opened its welcome dialog the moment setup
+	// stamped a token, on top of the still-unanswered `/external-access` chooser.
+	component: (): React.ReactElement | null => (
+		<OnboardingProvider>
+			<Layout />
+		</OnboardingProvider>
+	),
 });

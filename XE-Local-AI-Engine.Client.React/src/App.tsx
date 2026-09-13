@@ -8,7 +8,6 @@ import { router } from "@/core/integrations/tanstack-router/Router";
 import { ThemeProvider } from "@/core/theme/provider/ThemeProvider";
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { GgufDownloadPoller } from "@/features/models/components/GgufDownloadPoller";
-import { OnboardingProvider } from "@/features/onboarding/components/OnboardingProvider";
 import { ClientAiRuntimeProvider } from "@/features/voice/ClientAiRuntimeProvider";
 
 export function App() {
@@ -18,25 +17,23 @@ export function App() {
 				<ConfirmProvider>
 					<GgufDownloadPoller />
 					<ClientAiRuntimeProvider>
-						<OnboardingProvider>
-							<ErrorBoundary
-								fallbackRender={({ error, resetErrorBoundary }) => (
-									<AppErrorFallback
-										error={error}
-										onRetry={() => {
-											resetErrorBoundary();
-											router.invalidate();
-										}}
-									/>
-								)}
-								onError={onAppError}
-								onReset={() => {
-									router.invalidate();
-								}}
-							>
-								<RouterProvider router={router} />
-							</ErrorBoundary>
-						</OnboardingProvider>
+						<ErrorBoundary
+							fallbackRender={({ error, resetErrorBoundary }) => (
+								<AppErrorFallback
+									error={error}
+									onRetry={() => {
+										resetErrorBoundary();
+										router.invalidate();
+									}}
+								/>
+							)}
+							onError={onAppError}
+							onReset={() => {
+								router.invalidate();
+							}}
+						>
+							<RouterProvider router={router} />
+						</ErrorBoundary>
 					</ClientAiRuntimeProvider>
 				</ConfirmProvider>
 			</TanStackQueryProvider>

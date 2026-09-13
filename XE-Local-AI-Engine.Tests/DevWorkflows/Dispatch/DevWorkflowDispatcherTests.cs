@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.DevWorkflows;
+namespace XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch;
 
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Tests.Testing;

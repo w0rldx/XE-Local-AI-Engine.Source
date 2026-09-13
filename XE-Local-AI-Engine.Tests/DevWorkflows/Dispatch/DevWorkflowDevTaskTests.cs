@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.DevWorkflows;
+namespace XE_Local_AI_Engine.Tests.DevWorkflows.Dispatch;
 
 using System.Security.Cryptography;
 using System.Text;

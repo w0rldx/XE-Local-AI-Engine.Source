@@ -2,6 +2,9 @@
 
 import { QueryClient } from "@tanstack/react-query";
 import { isRedirect } from "@tanstack/react-router";
+import { readdir, readFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { getNodeSettingsQueryKey } from "@/core/api/generated/@tanstack/react-query.gen";
@@ -131,5 +134,27 @@ describe("route guards for the first-run external-access choice", () => {
 		);
 
 		expect(redirectTarget(error)).toBe("/login");
+	});
+
+	// Above the router the tour provider is alive on /setup, /login and /external-access, and opened its welcome dialog the
+	// instant setup stamped a token — on top of the still-unanswered profile chooser. Behind this route's guard it cannot.
+	// The mount point is read from source rather than rendered: `autoCodeSplitting` turns the route's `component` into a
+	// lazy wrapper whose `?tsr-split` import never resolves under this suite's network stubs.
+	it("mounts the onboarding provider inside the guarded layout route, not above the router", async () => {
+		// Every file that could mount it above the guard: `App.tsx` and each top-level route module, `__root.tsx` included.
+		const routesDir = dirname(fileURLToPath(import.meta.url));
+		const routeFiles = (await readdir(routesDir, { withFileTypes: true }))
+			.filter((entry) => entry.isFile() && entry.name.endsWith(".tsx"))
+			.map((entry) => join(routesDir, entry.name));
+		const candidates = [...routeFiles, join(routesDir, "..", "App.tsx")];
+		const sources = new Map(await Promise.all(candidates.map(async (path) => [path, await readFile(path, "utf8")] as const)));
+
+		const layoutPath = join(routesDir, "_layout.tsx");
+		const mountedIn = [...sources]
+			.filter(([, source]) => source.includes("OnboardingProvider"))
+			.map(([path]) => path)
+			.sort();
+		expect(mountedIn).toEqual([layoutPath]);
+		expect(sources.get(layoutPath)).toMatch(/<OnboardingProvider>\s*<Layout \/>\s*<\/OnboardingProvider>/);
 	});
 });
