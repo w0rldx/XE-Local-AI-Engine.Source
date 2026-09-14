@@ -312,10 +312,12 @@ fi
 # packer bins on, and the packer cannot split a namespace: a namespace that outgrows a whole bin has
 # to be split into sub-namespaces in the test project (see DevWorkflows.{Execution,Materialization,
 # Dispatch}, which is why those four entries exist rather than one).
-# The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost:
-# at a 15s cut-off the 71 remaining namespaces hid 248s of work from the packer and TEST_GROUPS=4
-# came out worse than the stale table it replaced (486s vs 479s of true load on the fullest bin).
-# Listing down to 10s brings that to 439s; going below 10s buys another ~13s for 11 more entries.
+# The cut-off is 10s and not 20s because everything unlisted weighs 1 regardless of its real cost.
+# Measured once, on run 34515666107 under TEST_GROUPS=4: a 15s cut-off left 71 namespaces hiding
+# 248s from the packer and packed worse than the stale table it replaced (486s vs 479s of true load
+# on the fullest bin); 10s brought that to 439s, and below 10s bought ~13s for 11 more entries.
+# The seconds move with every re-measure — on run 34861036286 the 10s cut-off hides 96s across 64
+# namespaces — the cut-off does not.
 HEAVY=(
   XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 1008s
   XE_Local_AI_Engine.Tests.GraphWorkflows              # 944s
