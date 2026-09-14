@@ -9,7 +9,6 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
-[NotInParallel]
 public sealed class McpAgentRunStoreBoundaryTests : IDisposable
 {
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
@@ -31,7 +30,11 @@ public sealed class McpAgentRunStoreBoundaryTests : IDisposable
             McpAgentRunStore.TombstoneReservationBytesV1);
     }
 
+    // The only test here that needs isolation: it opens MaxNonterminalRuns + 8 concurrent SQLite connections against
+    // one file and asserts an exact accepted/rejected split, so module-wide write contention can push it into
+    // SQLITE_BUSY. The other 15 tests are single-connection and run under their own GUID temp directory.
     [Test]
+    [NotInParallel]
     public async Task AdmitAsync_ConcurrentDistinctRequests_NeverExceedsNonterminalCapacity()
     {
         var databasePath = GetDatabasePath("concurrent-capacity.sqlite");

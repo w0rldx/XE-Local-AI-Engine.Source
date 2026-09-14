@@ -11,7 +11,6 @@ using XE_Local_AI_Engine.Client.Services.Capacity;
 using XE_Local_AI_Engine.Client.Services.Mcp.Runs;
 using XE_Local_AI_Engine.Tests.Testing;
 
-[NotInParallel]
 public sealed class McpAgentRunDispatcherTests
 {
     [Test]

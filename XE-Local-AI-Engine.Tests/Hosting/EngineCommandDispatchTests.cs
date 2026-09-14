@@ -7,7 +7,12 @@ using XE_Local_AI_Engine.Client;
 using XE_Local_AI_Engine.Client.Hosting;
 using XE_Local_AI_Engine.Tests.Testing;
 
-[NotInParallel]
+// Keyed, not bare: the only shared resource is the parent process environment. These tests set XE_DATA_DIR /
+// XE_ADMIN_EMAIL / XE_ADMIN_PASSWORD for real (restored in a finally), and Program.CreateAppAsync scrubs
+// XE_ADMIN_PASSWORD from the parent itself. Any other class that mutates one of these must carry the same key.
+[NotInParallel([DesktopBootstrap.DataDirectoryEnvironmentVariable,
+    DesktopLaunch.AdminEmailEnvironmentVariable,
+    DesktopLaunch.AdminPasswordEnvironmentVariable])]
 public sealed class EngineCommandDispatchTests
 {
     [Test]

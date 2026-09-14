@@ -154,7 +154,8 @@ TUnit runs classes — and tests within a class — in parallel.
   key to "make it stricter"; a key does the opposite.
 - **Keyed `[NotInParallel("X")]` serializes on the shared resource `X`.** Every test that touches `X` must use
   the same key. Live examples: `[NotInParallel("XE_NODE_SQLITE_KEY")]`, `[NotInParallel("DevelopmentFeatureConfiguration")]`,
-  `[NotInParallel("XE_LLAMACPP_OVERRIDE_ENV")]`.
+  `[NotInParallel("XE_LLAMACPP_OVERRIDE_ENV")]`. A test that touches several variables keys on all of them:
+  `Hosting/EngineCommandDispatchTests.cs` keys on `XE_DATA_DIR` + `XE_ADMIN_EMAIL` + `XE_ADMIN_PASSWORD`.
 
 **Environment variables are process-global.** A test that calls `Environment.SetEnvironmentVariable` must (a)
 carry a keyed `[NotInParallel("<VARIABLE_NAME>")]` and (b) restore the previous value in a `finally`/`Dispose`,

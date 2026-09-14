@@ -18,7 +18,6 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     <see cref="TestServerWebAppFactory" />. The lifecycle and workspace seams are explicit deterministic fakes, so no
 ///     model process, dispatcher timing, or filesystem is involved.
 /// </summary>
-[NotInParallel]
 public sealed class McpInboundProtocolTests
 {
     private const string EndpointRoute = "/api/local/v1/mcp/server";

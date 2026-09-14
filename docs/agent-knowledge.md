@@ -281,6 +281,12 @@ Only `CudaBuildServiceTests` and `LlamaCppSourceBuildServiceTests` mutate that p
 
 Get parallelism from separate processes/modules rather than weakening these attributes.
 
+**A class that only EMITS on `XE.Node` needs no guard — but only after you check every listener on its instruments.** The bare-guarded capture suites above are not the whole population: `Knowledge/KnowledgeIngestionDispatcherTests`, `Mcp/McpToolCallTimeoutAIFunctionTests` and `Capacity/GpuModelLoadAdmissionTests` also listen on `XE.Node` with **no** `[NotInParallel]` at all. So the rule is: an emitter is safe unguarded when, for each instrument it publishes, every listener on that instrument is either bare-guarded or filters by instrument name. The failure this prevents is an emitter whose instrument an unguarded listener asserts by exact value — that listener then reads the sum of two tests and fails on a number nothing in its own file produced.
+
+The two unguarded name-filtering listeners filter at `InstrumentPublished` (`instrument.Name == "mcp_tool_timeout_total"` / `== instrumentName`), so a foreign instrument is never even enabled. `KnowledgeIngestionDispatcherTests.EnqueueAsync_PublishesAcceptRejectCountersAndDepthGauge` is the loose one: it enables **every** `XE.Node` instrument and discards the rest in a `switch (instrument.Name)` default, asserts its counters as lower bounds, and gates its gauge on `when measurement == Capacity`. Its `listener.RecordObservableInstruments()` now fires other tests' live `McpAgentRunMetrics` observable gauges too, and is harmless only because of that name switch — do not relax it into an exact-value assertion.
+
+Authority: `McpAgentRunCoordinatorTests` and `McpAgentRunCompactionServiceTests` each build a real `McpAgentRunMetrics` (a `Meter(NodeMetrics.MeterName)`) and carried a bare `[NotInParallel]` for it until the 2026-09-14 audit dropped both; between them they serialized the whole module for 13 fake-only tests. Their `mcp_agent_run_*` instruments collide with no name any listener above matches.
+
 ### A wall-clock budget sized on an idle box is a CI flake waiting to happen — use `TestBudgets.Contended`
 
 Use `TestBudgets.Contended` for completion windows under module/coverage contention. Keep semantic timeouts inside the product option under test. Avoid stopwatch ceilings unless timing is the behavior.

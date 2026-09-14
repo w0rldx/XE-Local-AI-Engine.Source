@@ -4,7 +4,10 @@ using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
-[NotInParallel]
+/// <summary>
+///     Only the two tests that call <see cref="RunAsync" /> carry <c>[NotInParallel]</c>; see the comment there. The
+///     other three assert constants and guard clauses in memory and run in parallel.
+/// </summary>
 public sealed class RetrievalCapacityBenchmarkTests : IDisposable
 {
     private const string ProfileVariable = "XE_RAG_CAPACITY_PROFILE";
@@ -51,7 +54,13 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         AssertEx.True(exception.Message.Contains("zero-result", StringComparison.Ordinal));
     }
 
+    // Bare, not keyed, and on the method rather than the class: the benchmark samples process-wide state
+    // (Process.WorkingSet64 and GC.GetTotalMemory high-water marks) and reports an end-to-end p95 that
+    // XE_RAG_CAPACITY_ENFORCE_P95=1 turns into an assertion. A sibling test allocating or burning CPU beside it moves
+    // both numbers, so the guard has to mean "nothing else while this runs". The four XE_RAG_CAPACITY_* variables are
+    // read only, never written, so keying on them would protect nothing.
     [Test]
+    [NotInParallel]
     public async Task SmokeProfile_RealFtsVectorFusionAndHydration_ReportsCorrectnessAndCapacityMetrics()
     {
         var report = await RunAsync(RetrievalCapacityProfile.Parse("smoke")).ConfigureAwait(false);
@@ -79,7 +88,9 @@ public sealed class RetrievalCapacityBenchmarkTests : IDisposable
         Console.WriteLine(report.Summarize());
     }
 
+    // Same process-wide sampling as the smoke profile above, at a declared capacity step.
     [Test]
+    [NotInParallel]
     public async Task OptInProfile_DeclaredCapacity_ReportsAndOptionallyGatesFiveHundredMillisecondP95()
     {
         var profileName = Environment.GetEnvironmentVariable(ProfileVariable);
