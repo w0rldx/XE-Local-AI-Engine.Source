@@ -11,7 +11,7 @@ public sealed class AddCustomToolsMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesCustomToolsWithUniqueNameIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("custom-tools.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("custom-tools.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("custom_tools").ConfigureAwait(false), "custom_tools must exist.");
 

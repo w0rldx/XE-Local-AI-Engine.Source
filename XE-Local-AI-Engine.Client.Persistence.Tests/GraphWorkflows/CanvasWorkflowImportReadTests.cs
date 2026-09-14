@@ -69,7 +69,7 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_OverEncryptedRows_AnswersEveryCanvasInPlaintextBeforeTheDropTakesTheTable()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("canvas-import-round-trip.sqlite", PreDropMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-round-trip.sqlite", PreDropMigrationId).ConfigureAwait(false);
         var first = await SeedAsync(probe, "Release notes", LinearGraph, createdAtUtc: 1).ConfigureAwait(false);
         var second = await SeedAsync(probe, "Sign off", PauseGraph, createdAtUtc: 2).ConfigureAwait(false);
 
@@ -98,7 +98,7 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_AtHeadWhereTheTableIsAlreadyDropped_AnswersAnEmptySnapshotWithoutThrowing()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("canvas-import-no-table.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-no-table.sqlite").ConfigureAwait(false);
 
         AssertEx.False(await probe.TableExistsAsync("canvas_workflows").ConfigureAwait(false), "head is the state every start after the first sees.");
 
@@ -116,7 +116,7 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_WithARowThatWillNotDecrypt_CountsItAndStillReturnsTheOthers()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("canvas-import-damaged.sqlite", PreDropMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-damaged.sqlite", PreDropMigrationId).ConfigureAwait(false);
         var damaged = await SeedAsync(probe, "Damaged", LinearGraph, createdAtUtc: 1).ConfigureAwait(false);
         _ = await SeedAsync(probe, "Intact", PauseGraph, createdAtUtc: 2).ConfigureAwait(false);
         await probe.ExecuteAsync("UPDATE canvas_workflows SET graph_json = $graph WHERE id = $id;", command =>
@@ -146,7 +146,7 @@ public sealed class CanvasWorkflowImportReadTests
     [Test]
     public async Task ReadAsync_WithMoreRowsThanAnyReasonableCap_ReadsEveryOne()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("canvas-import-sixty.sqlite", PreDropMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("canvas-import-sixty.sqlite", PreDropMigrationId).ConfigureAwait(false);
         for (var index = 0; index < 60; index++)
         {
             _ = await SeedAsync(probe, $"Canvas {index}", LinearGraph, index + 1).ConfigureAwait(false);

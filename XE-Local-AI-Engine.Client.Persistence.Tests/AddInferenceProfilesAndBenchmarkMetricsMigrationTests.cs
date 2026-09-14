@@ -16,7 +16,7 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesInferenceProfilesWithTheFreezeColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("inference-profiles.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("inference_profiles").ConfigureAwait(false), "inference_profiles must exist.");
 
@@ -53,7 +53,7 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_AddsTheBenchmarkMeasurementColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("inference-profiles-benchmarks.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-benchmarks.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True((await probe.ColumnsAsync("model_fit_benchmarks").ConfigureAwait(false)).IsSupersetOf(new[]
         {
@@ -77,7 +77,7 @@ public sealed class AddInferenceProfilesAndBenchmarkMetricsMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_AllowsOnlyOneProfilePerMachineModelRoleAndBackend()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("inference-profiles-unique.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("inference-profiles-unique.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("inference_profiles",
                 "IX_inference_profiles_machine_key_model_name_role_backend",

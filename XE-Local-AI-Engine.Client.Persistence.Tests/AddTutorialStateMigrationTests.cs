@@ -11,7 +11,7 @@ public sealed class AddTutorialStateMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsTutorialStateToAspNetUsers()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateIdentityAsync("tutorial-state.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("tutorial-state.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("AspNetUsers").ConfigureAwait(false);
 

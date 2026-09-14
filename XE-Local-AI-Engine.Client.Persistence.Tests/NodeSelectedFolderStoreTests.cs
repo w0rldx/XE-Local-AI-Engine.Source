@@ -202,10 +202,7 @@ public sealed class NodeSelectedFolderStoreTests : IDisposable
         var databasePath = GetDatabasePath("migrate.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using (var context = CreateContext(databasePath, keyHolder))
-        {
-            await context.Database.MigrateAsync();
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();

@@ -87,7 +87,7 @@ public sealed class BenchmarkP2SchemaConstraintTests
 
     private static async Task<MigrationSchemaProbe> SeedAsync(string fileName)
     {
-        var probe = await MigrationSchemaProbe.MigrateChatAsync(fileName).ConfigureAwait(false);
+        var probe = await MigrationSchemaProbe.FromChatTemplateAsync(fileName).ConfigureAwait(false);
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_projects (id, name, core_task_json, context_tokens, agent_definition_id, version, created_at_utc, updated_at_utc)
                                  VALUES ($project, 'p2-constraints', x'00', 4096, $agent, 1, 1, 1);

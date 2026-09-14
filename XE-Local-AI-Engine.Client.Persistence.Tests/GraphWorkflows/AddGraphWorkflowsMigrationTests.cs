@@ -25,7 +25,7 @@ public sealed class AddGraphWorkflowsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheFourTablesWithTheirColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("graph-workflows.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         foreach (var table in Tables)
         {
@@ -175,7 +175,7 @@ public sealed class AddGraphWorkflowsMigrationTests
                                         """;
         const string IndexNames = "SELECT group_concat(name, ', ') FROM (SELECT name FROM pragma_index_list($table) ORDER BY name);";
 
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("graph-workflows-schema-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-schema-parity.sqlite").ConfigureAwait(false);
 
         using var fixture = new GraphWorkflowTestFixture();
         await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
@@ -200,7 +200,7 @@ public sealed class AddGraphWorkflowsMigrationTests
     [Test]
     public async Task Rollback_DropsTheFourTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("graph-workflows-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
 

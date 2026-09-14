@@ -20,7 +20,7 @@ public sealed class AddAgentWorkSessionsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheSixTablesWithTheirColumnsAndUniqueIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("agent-work-sessions.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         foreach (var table in Tables)
         {
@@ -90,7 +90,7 @@ public sealed class AddAgentWorkSessionsMigrationTests
     [Test]
     public async Task Rollback_DropsTheSixTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("agent-work-sessions-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("agent-work-sessions-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
 

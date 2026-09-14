@@ -213,10 +213,7 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         var databasePath = GetDatabasePath("migrate.sqlite");
         using var keyHolder = new FixedNodeSqliteKeyHolder(CreateKeyMaterial());
 
-        await using (var context = CreateContext(databasePath, keyHolder))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync().ConfigureAwait(false);
@@ -281,20 +278,6 @@ public sealed class ConversationUploadedFileStoreTests : IDisposable
         await dbContext.Database.EnsureCreatedAsync().ConfigureAwait(false);
 
         return provider;
-    }
-
-    private static NodeChatDbContext CreateContext(string databasePath, INodeSqliteKeyHolder keyHolder)
-    {
-        Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
-
-        // Migration application needs no at-rest interceptors; reuse the shared internal provider so this context adds
-        // no new EF internal service provider to the process-global count.
-        var options = new DbContextOptionsBuilder<NodeChatDbContext>()
-                      .UseSqlite($"Data Source={databasePath}")
-                      .UseInternalServiceProvider(SharedEfServiceProvider)
-                      .Options;
-
-        return new NodeChatDbContext(options, keyHolder);
     }
 
     private static async Task<IReadOnlySet<string>> GetUploadedFileColumnsAsync(SqliteConnection connection)

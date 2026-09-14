@@ -21,7 +21,7 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
     [Test]
     public async Task Migrate_OverAFrozenProfile_MarksItStaleAndUnbindsItsBenchmark()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("launch-policy-fingerprint.sqlite", PreFingerprintMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-fingerprint.sqlite", PreFingerprintMigrationId).ConfigureAwait(false);
 
         var profileId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""
@@ -53,7 +53,7 @@ public sealed class AddLaunchPolicyFingerprintAndBenchmarkResourcesMigrationTest
     [Test]
     public async Task Migrate_ToThisMigration_ReplacesTheSingleFreeVramFigureWithTheDeviceAndProcessPair()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("launch-policy-columns.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("launch-policy-columns.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         var profileColumns = await probe.ColumnsAsync("inference_profiles").ConfigureAwait(false);
 

@@ -35,10 +35,7 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
 
         // Bring the schema up to exactly the migration before this one, then apply the rest — so this migration's Up is
         // exercised as an in-place upgrade of an existing database, not just a fresh create.
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreChatMaintenanceStateMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreChatMaintenanceStateMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -64,10 +61,7 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("chat-maintenance-state-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         AssertEx.True(await TableExistsAsync(connection, "chat_maintenance_state").ConfigureAwait(false),
@@ -79,9 +73,10 @@ public sealed class AddChatMaintenanceStateMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("chat-maintenance-state-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreChatMaintenanceStateMigrationId).ConfigureAwait(false);
         }
 

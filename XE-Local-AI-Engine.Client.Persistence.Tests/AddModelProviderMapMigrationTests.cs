@@ -29,10 +29,7 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-provider-map-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreModelProviderMapMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreModelProviderMapMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -62,9 +59,10 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-provider-map-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreModelProviderMapMigrationId).ConfigureAwait(false);
         }
 
@@ -78,9 +76,11 @@ public sealed class AddModelProviderMapMigrationTests : IDisposable
     public async Task RevisionMigration_BackfillsExistingRowsAndRollsBackWithoutDataLoss()
     {
         var databasePath = GetDatabasePath("model-provider-map-revision.sqlite");
+
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevisionMigrationId).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevisionMigrationId).ConfigureAwait(false);
             await context.Database.ExecuteSqlRawAsync("INSERT INTO model_provider_map (model_name, provider_name, updated_at_utc) VALUES ('legacy-model', 'ollama', 7);")
                          .ConfigureAwait(false);
             await context.Database.MigrateAsync().ConfigureAwait(false);

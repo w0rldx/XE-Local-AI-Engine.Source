@@ -12,7 +12,7 @@ public sealed class AddNodeConversationSelectedPathMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsSelectedPathJsonToConversations()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("selected-path.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-path.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("conversations").ConfigureAwait(false);
 

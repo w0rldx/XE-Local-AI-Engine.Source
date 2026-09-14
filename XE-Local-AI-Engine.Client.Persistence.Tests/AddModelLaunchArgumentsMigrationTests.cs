@@ -29,10 +29,7 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-launch-arguments-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
 
@@ -49,11 +46,6 @@ public sealed class AddModelLaunchArgumentsMigrationTests : IDisposable
 
         AssertEx.True(await ModelNameUsesNoCaseCollationAsync(connection).ConfigureAwait(false),
             "model_launch_arguments.model_name should use NOCASE collation.");
-    }
-
-    private NodeChatDbContext CreateContext(string databasePath)
-    {
-        return AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
     }
 
     private static async Task<SqliteConnection> OpenConnectionAsync(string databasePath)

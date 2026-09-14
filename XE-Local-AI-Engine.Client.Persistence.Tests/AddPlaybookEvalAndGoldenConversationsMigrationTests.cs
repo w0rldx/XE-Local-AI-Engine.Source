@@ -28,10 +28,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
     {
         var databasePath = GetDatabasePath("eval-golden-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookEvalMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookEvalMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -80,10 +77,7 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
         var agentId = Guid.NewGuid();
         var goldenId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         // SQLite enforces foreign keys only when the pragma is on for the connection.
@@ -103,9 +97,10 @@ public sealed class AddPlaybookEvalAndGoldenConversationsMigrationTests : IDispo
     {
         var databasePath = GetDatabasePath("eval-golden-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookEvalMigrationId).ConfigureAwait(false);
         }
 

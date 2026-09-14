@@ -93,9 +93,10 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("adaptive-memory-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreAdaptiveMemoryMigrationId).ConfigureAwait(false);
         }
 
@@ -122,10 +123,7 @@ public sealed class AddAdaptiveAgentMemoryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath(fileName);
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAdaptiveMemoryMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAdaptiveMemoryMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {

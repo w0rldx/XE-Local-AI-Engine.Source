@@ -28,10 +28,7 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("enabled-at-utc-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreEnabledAtUtcMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreEnabledAtUtcMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -51,9 +48,10 @@ public sealed class AddPlaybookActionEnabledAtUtcMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("enabled-at-utc-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreEnabledAtUtcMigrationId).ConfigureAwait(false);
         }
 

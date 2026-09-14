@@ -18,7 +18,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_CreatesTheThreeTablesAndTheFidelityProjection()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-up.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-up.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("benchmark_fidelity_attempts").ConfigureAwait(false), "The migration must create benchmark_fidelity_attempts.");
         AssertEx.True(await probe.TableExistsAsync("benchmark_pairwise_fits").ConfigureAwait(false), "The migration must create benchmark_pairwise_fits.");
@@ -70,7 +70,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_LeavesBenchmarkRunsWithNoPairwiseColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-no-pairwise.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-no-pairwise.sqlite").ConfigureAwait(false);
 
         var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
         var offenders = runColumns.Where(column => column.Contains("pairwise", StringComparison.OrdinalIgnoreCase)).ToArray();
@@ -84,7 +84,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_RebuildingTheWorkItemCheck_PreservesQueueSequenceValues()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-rebuild.sqlite", PreP2MigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-rebuild.sqlite", PreP2MigrationId).ConfigureAwait(false);
         await SeedProjectRunAsync(probe).ConfigureAwait(false);
         await probe.ExecuteAsync("""
                                  INSERT INTO benchmark_work_items (queue_sequence, run_id, kind, judge_attempt_id, status, attempt, version, enqueued_at_utc)
@@ -105,7 +105,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_RewrittenCheck_AcceptsAllFourKindsAndRejectsAMismatchedId()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-check.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-check.sqlite").ConfigureAwait(false);
         await SeedProjectRunAsync(probe).ConfigureAwait(false);
 
         await InsertWorkItemAsync(probe, 1, "Primary", judgeAttemptId: null, comparisonId: null, fidelityAttemptId: null).ConfigureAwait(false);
@@ -135,7 +135,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_ExpressionIndexes_AreCoalescedAndFiltered()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-indexes.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-indexes.sqlite").ConfigureAwait(false);
 
         var slotAttempt = await IndexSqlAsync(probe, "ux_benchmark_comparisons_slot_attempt").ConfigureAwait(false);
         AssertEx.True(slotAttempt.Contains("COALESCE(task_case_id, x'00')", StringComparison.Ordinal),
@@ -154,7 +154,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_WhenRolledBack_RestoresTheTwoKindCheckAndDropsEverythingP2Added()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-down.sqlite").ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreP2MigrationId).ConfigureAwait(false);
 
@@ -183,7 +183,7 @@ public sealed class AddBenchmarkP2DiscriminationMigrationTests
     [Test]
     public async Task Migrate_RecordsThisMigrationInTheChatChain()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-p2-applied.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-p2-applied.sqlite").ConfigureAwait(false);
 
         var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
         AssertEx.True(applied.Contains(P2MigrationId), "The discrimination migration must be part of the chat chain a fresh box applies.");

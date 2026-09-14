@@ -18,7 +18,7 @@ public sealed class EncryptConversationTitleMigrationTests
     [Test]
     public async Task Migrate_OverAPlaintextTitle_ClearsItAndKeepsTheConversation()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("encrypt-title.sqlite", PreEncryptionMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title.sqlite", PreEncryptionMigrationId).ConfigureAwait(false);
 
         var conversationId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""
@@ -44,7 +44,7 @@ public sealed class EncryptConversationTitleMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_WidensTheTitleColumnToABlob()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("encrypt-title-column.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("encrypt-title-column.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         var declaredType = await probe.ScalarAsync("SELECT type FROM pragma_table_info('conversations') WHERE name = 'title';").ConfigureAwait(false);
 

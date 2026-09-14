@@ -24,7 +24,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheItemTableItsIndexesAndTheIdentityStamps()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-up.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-up.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("benchmark_task_items").ConfigureAwait(false), "M1 must create benchmark_task_items.");
         var itemColumns = await probe.ColumnsAsync("benchmark_task_items").ConfigureAwait(false);
@@ -82,7 +82,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_BackfillsEveryExistingRunToItsOwnSingletonCellAndTheLegacyHashes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-backfill.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-backfill.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
         await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
 
         await probe.MigrateToAsync(targetMigration: null).ConfigureAwait(false);
@@ -107,7 +107,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_ExistingSingleTaskProject_IsUnchangedAndGetsNoItemRow()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-identical.sqlite", PreTaskItemsMigrationId).ConfigureAwait(false);
         await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
         var beforeProject = await ScalarStringAsync(probe, "SELECT hex(core_task_json) || '|' || name || '|' || context_tokens || '|' || version FROM benchmark_projects WHERE id = $id;",
                 ProjectId)
@@ -151,7 +151,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_WhenRolledBack_DropsEverythingItAddedAndLeavesTheP2SchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-down.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreTaskItemsMigrationId).ConfigureAwait(false);
@@ -180,7 +180,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_KindCheck_AcceptsTheWholeVocabularyAndRejectsAnythingElse()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-kind.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-kind.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunsAsync(probe).ConfigureAwait(false);
 
         await InsertItemAsync(probe, index: 0, kind: "prompt").ConfigureAwait(false);
@@ -198,7 +198,7 @@ public sealed class AddBenchmarkTaskItemsMigrationTests
     [Test]
     public async Task Migrate_RecordsThisMigrationInTheChatChain()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-task-items-applied.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-task-items-applied.sqlite").ConfigureAwait(false);
 
         var applied = await probe.AppliedMigrationsAsync(identityContext: false).ConfigureAwait(false);
         AssertEx.True(applied.Contains(TaskItemsMigrationId), "The task-item migration must be part of the chat chain a fresh box applies.");

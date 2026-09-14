@@ -12,7 +12,7 @@ public sealed class AddMcpServerApiKeyScopeMigrationTests
     [Test]
     public async Task Migrate_ExistingKey_BackfillsDelegateScope()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("mcp-server-api-key-scope.sqlite", PreviousMigrationId)
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-server-api-key-scope.sqlite", PreviousMigrationId)
                                                           .ConfigureAwait(false);
         await probe.ExecuteAsync("""
                                  INSERT INTO mcp_server_api_keys (id, prefix, key_hash, created_at_utc)

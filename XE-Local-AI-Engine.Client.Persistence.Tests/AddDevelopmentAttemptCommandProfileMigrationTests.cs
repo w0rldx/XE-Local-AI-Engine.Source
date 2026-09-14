@@ -13,7 +13,7 @@ public sealed class AddDevelopmentAttemptCommandProfileMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsNullablePlaintextCommandProfileJson()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("development-attempt-command-profile.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-attempt-command-profile.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("development_attempts").ConfigureAwait(false);
 

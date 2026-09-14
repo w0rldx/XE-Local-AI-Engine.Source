@@ -21,7 +21,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
     [Test]
     public async Task Migrate_OverALegacyDocument_BackfillsTheDefaultCollectionAndLegacyProvenance()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("knowledge-collections.sqlite", PreCollectionsMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections.sqlite", PreCollectionsMigrationId).ConfigureAwait(false);
 
         await InsertLegacyDocumentAsync(probe, Guid.NewGuid().ToString(), "hash-a").ConfigureAwait(false);
 
@@ -41,7 +41,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_ScopesDedupeToTheCollection()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("knowledge-collections-dedupe.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-dedupe.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.False(await probe.IndexExistsAsync("knowledge_documents", "IX_knowledge_documents_content_hash", unique: true, "content_hash").ConfigureAwait(false),
             "The corpus-wide content-hash index must be gone, or a file could never be added to a second collection.");
@@ -62,7 +62,7 @@ public sealed class AddKnowledgeCollectionsAndProvenanceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_RebuildsTheChunkIndexOverTheProvenanceColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("knowledge-collections-fts.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-collections-fts.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("chunk_fts").ConfigureAwait(false), "The full-text index must exist.");
 

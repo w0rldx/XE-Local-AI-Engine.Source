@@ -11,7 +11,7 @@ public sealed class AddMcpAgenticRunAuthorityMigrationTests
     [Test]
     public async Task Migrate_AddsDelegateDefaultAndRejectsInconsistentAuthority()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("mcp-agentic-run-authority.sqlite", PreviousMigrationId)
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-agentic-run-authority.sqlite", PreviousMigrationId)
                                                           .ConfigureAwait(false);
         await probe.ExecuteAsync("""
                                  INSERT INTO mcp_agent_runs (
@@ -50,7 +50,7 @@ public sealed class AddMcpAgenticRunAuthorityMigrationTests
     [Test]
     public async Task Migrate_RejectsAgenticPrefixesOutsideBoundedAsciiAlphabet()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("mcp-agentic-prefix-alphabet.sqlite", ThisMigrationId)
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("mcp-agentic-prefix-alphabet.sqlite", ThisMigrationId)
                                                           .ConfigureAwait(false);
 
         foreach (var (requestId, prefix) in new[]

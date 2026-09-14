@@ -185,12 +185,11 @@ public sealed class KnowledgeDowngradeSafetyServiceTests : IDisposable
         services.AddDbContext<NodeChatDbContext>(options => options.UseSqlite(connectionString));
         services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
 
-        var provider = services.BuildServiceProvider(true);
-        await using var scope = provider.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<NodeChatDbContext>()
-                   .Database.MigrateAsync()
-                   .ConfigureAwait(false);
-        return provider;
+        // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises the
+        // downgrade-safety service over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
+        return services.BuildServiceProvider(true);
     }
 
     private string GetDatabasePath(string fileName)

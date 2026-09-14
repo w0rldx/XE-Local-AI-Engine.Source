@@ -17,7 +17,7 @@ public sealed class AddAgentExecutionLogProviderMigrationTests
     [Test]
     public async Task Migrate_OverHistoricalLogs_AttributesThemToAnUnknownProvider()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("execution-log-provider.sqlite", PreProviderMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("execution-log-provider.sqlite", PreProviderMigrationId).ConfigureAwait(false);
 
         var logId = Guid.NewGuid().ToString();
         await probe.ExecuteAsync("""

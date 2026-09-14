@@ -11,7 +11,7 @@ public sealed class AddSlashCommandsMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesSlashCommandsWithUniqueNameIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("slash-commands.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("slash-commands.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("slash_commands").ConfigureAwait(false), "slash_commands must exist.");
 

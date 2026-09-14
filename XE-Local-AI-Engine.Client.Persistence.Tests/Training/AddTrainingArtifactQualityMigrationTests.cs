@@ -28,10 +28,7 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
     {
         _ = Directory.CreateDirectory(_root);
         var path = Path.Combine(_root, "quality.sqlite");
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(path, _keyHolder))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreQualityMigrationId);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(path, PreQualityMigrationId);
 
         await using (var legacyConnection = new SqliteConnection($"Data Source={path};Foreign Keys=False"))
         {
@@ -73,10 +70,7 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
         const string kind = "MergedGguf";
         const string stagedPath = "staged.gguf";
         const string smokeState = "Passed";
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(path, _keyHolder))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(QualityMigrationId);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(path, QualityMigrationId);
 
         await using (var seedConnection = new SqliteConnection($"Data Source={path};Foreign Keys=False"))
         {
@@ -125,10 +119,7 @@ public sealed class AddTrainingArtifactQualityMigrationTests : IDisposable
         _ = Directory.CreateDirectory(_root);
         var path = Path.Combine(_root, "promoted-upgrade.sqlite");
         var artifactId = Guid.NewGuid();
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(path, _keyHolder))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreQualityMigrationId);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(path, PreQualityMigrationId);
 
         await using (var seedConnection = new SqliteConnection($"Data Source={path};Foreign Keys=False"))
         {

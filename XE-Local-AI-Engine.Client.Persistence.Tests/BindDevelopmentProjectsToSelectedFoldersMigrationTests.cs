@@ -12,7 +12,7 @@ public sealed class BindDevelopmentProjectsToSelectedFoldersMigrationTests
     [Test]
     public async Task Migrate_ToLatest_BindsProjectsToTheGrantedFolder()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("development-selected-folder-binding.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-selected-folder-binding.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("development_projects").ConfigureAwait(false);
 

@@ -46,10 +46,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -69,10 +66,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
@@ -90,10 +84,7 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
         var databasePath = GetDatabasePath("dispatched-tier-existing-row.sqlite");
         var rowId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreWaveMigrationId).ConfigureAwait(false);
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
@@ -128,9 +119,10 @@ public sealed class AddAgentExecutionLogDispatchedTierMigrationTests : IDisposab
     {
         var databasePath = GetDatabasePath("dispatched-tier-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreWaveMigrationId).ConfigureAwait(false);
         }
 

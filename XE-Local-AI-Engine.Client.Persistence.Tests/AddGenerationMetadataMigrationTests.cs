@@ -28,10 +28,7 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("generation-metadata-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreGenerationMetadataMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreGenerationMetadataMigrationId).ConfigureAwait(false);
 
         // A definition and a skill written before AI drafting existed, so the additive column is exercised on real rows
         // rather than on empty tables.
@@ -68,9 +65,10 @@ public sealed class AddGenerationMetadataMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("generation-metadata-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreGenerationMetadataMigrationId).ConfigureAwait(false);
         }
 

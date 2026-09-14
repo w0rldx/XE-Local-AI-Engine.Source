@@ -31,10 +31,7 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreviousMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId).ConfigureAwait(false);
 
         await SeedLegacyProjectionAsync(databasePath, documentId, chunkId).ConfigureAwait(false);
 
@@ -83,13 +80,12 @@ public sealed class AddKnowledgeVectorIdentityMigrationTests : IDisposable
         var documentId = Guid.NewGuid();
         var chunkId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreviousMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreviousMigrationId).ConfigureAwait(false);
 
         await SeedLegacyProjectionAsync(databasePath, documentId, chunkId).ConfigureAwait(false);
 
+        // Not a template copy: the rows seeded above have to survive the round trip, so the tail runs for real over
+        // them and the down migration then runs over the result.
         await using (var context = CreateContext(databasePath))
         {
             await context.Database.MigrateAsync().ConfigureAwait(false);

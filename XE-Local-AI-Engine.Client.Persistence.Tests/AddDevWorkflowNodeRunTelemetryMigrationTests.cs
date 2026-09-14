@@ -51,10 +51,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -75,10 +72,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
@@ -94,9 +88,10 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
         }
 
@@ -123,10 +118,7 @@ public sealed class AddDevWorkflowNodeRunTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("node-run-telemetry-indexes.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var indexes = await GetIndexNamesAsync(connection).ConfigureAwait(false);

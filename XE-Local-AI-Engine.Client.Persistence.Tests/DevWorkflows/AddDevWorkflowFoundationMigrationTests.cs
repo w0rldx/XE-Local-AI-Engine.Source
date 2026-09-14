@@ -23,7 +23,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task Migrate_CreatesTheEightTablesWithTheirColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-foundation.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         foreach (var table in Tables)
         {
@@ -144,7 +144,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-schema-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-schema-parity.sqlite").ConfigureAwait(false);
 
         using var fixture = new DevWorkflowTestFixture();
         await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
@@ -161,7 +161,7 @@ public sealed class AddDevWorkflowFoundationMigrationTests
     [Test]
     public async Task Rollback_DropsTheEightTablesAndLeavesTheRestOfTheSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-foundation-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-foundation-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
 

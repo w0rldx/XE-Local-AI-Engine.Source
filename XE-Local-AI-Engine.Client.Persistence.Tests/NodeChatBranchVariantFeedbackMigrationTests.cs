@@ -30,10 +30,7 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("branch-variant-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreBranchVariantMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreBranchVariantMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -57,9 +54,10 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("branch-variant-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreBranchVariantMigrationId).ConfigureAwait(false);
         }
 
@@ -85,10 +83,10 @@ public sealed class NodeChatBranchVariantFeedbackMigrationTests : IDisposable
         var parentId = Guid.NewGuid();
         var variantGroupId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-
             context.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,

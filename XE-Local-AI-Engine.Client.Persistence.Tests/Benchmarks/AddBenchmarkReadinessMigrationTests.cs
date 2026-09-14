@@ -40,7 +40,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsEveryReadinessColumn()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-readiness.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness.sqlite").ConfigureAwait(false);
 
         var runColumns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
         foreach (var column in RunColumns)
@@ -64,7 +64,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_ToLatest_LeavesEveryNewColumnHistorySafe()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-readiness-defaults.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-defaults.sqlite").ConfigureAwait(false);
 
         foreach (var column in RunColumns.Where(static column => !string.Equals(column, "is_warmup", StringComparison.Ordinal)))
         {
@@ -86,7 +86,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_ToLatest_IndexesTheRepeatGroup()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-readiness-index.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-index.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("benchmark_runs", "ix_benchmark_runs_repeat_group_id", unique: false, "repeat_group_id")
                                  .ConfigureAwait(false),
@@ -96,7 +96,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task OutputBudget_MustStayInsideTheProjectContext()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-output-budget-constraint.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-output-budget-constraint.sqlite").ConfigureAwait(false);
 
         // A budget at or above the window could never be honoured, so the database refuses it rather than letting it
         // masquerade as "no budget".
@@ -110,7 +110,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task GenerationTimeout_MustStayInsideItsBounds()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-invocation-timeout-bounds.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-invocation-timeout-bounds.sqlite").ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 59)).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, timeoutSeconds: 7201)).ConfigureAwait(false);
@@ -123,7 +123,7 @@ public sealed class AddBenchmarkReadinessMigrationTests
     [Test]
     public async Task Migrate_Down_RemovesEveryReadinessColumnAndKeepsTheRows()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-readiness-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-readiness-down.sqlite").ConfigureAwait(false);
         await InsertProjectAsync(probe, maxOutputTokens: 2048, timeoutSeconds: 600).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);

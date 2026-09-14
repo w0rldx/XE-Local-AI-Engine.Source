@@ -28,8 +28,6 @@ using XE_Local_AI_Engine.Client.Services.Scheduler.Handlers;
 /// </summary>
 public sealed class ScheduledJobManagementServiceTests : IDisposable
 {
-    private readonly NullNodeSqliteKeyHolder _keyHolder = new();
-
     private readonly string _rootPath = Path.Combine(Path.GetTempPath(), "xe-sched-mgmt-" + Guid.NewGuid().ToString("N"));
 
     public void Dispose()
@@ -1025,10 +1023,11 @@ public sealed class ScheduledJobManagementServiceTests : IDisposable
         AssertEx.Equal(expected: 1, affected, "The job-detail row to corrupt must exist before the heal test.");
     }
 
-    private async Task MigrateAsync(string dbPath)
+    // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
+    // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+    private static async Task MigrateAsync(string dbPath)
     {
-        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(dbPath, _keyHolder);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(dbPath).ConfigureAwait(false);
     }
 
     private static ServiceProvider BuildEnabledProvider(string dbPath,

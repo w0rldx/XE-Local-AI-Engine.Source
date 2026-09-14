@@ -28,10 +28,7 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("mcp-servers-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreMcpServersMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreMcpServersMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -73,9 +70,10 @@ public sealed class AddMcpServersMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("mcp-servers-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreMcpServersMigrationId).ConfigureAwait(false);
         }
 

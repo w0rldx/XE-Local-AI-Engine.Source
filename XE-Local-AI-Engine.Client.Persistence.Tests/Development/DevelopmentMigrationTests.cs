@@ -39,9 +39,10 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development.sqlite");
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDevelopmentMigrationId).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDevelopmentMigrationId).ConfigureAwait(false);
             await context.Database.MigrateAsync().ConfigureAwait(false);
         }
 
@@ -102,10 +103,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development-command-profile.sqlite");
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();
@@ -162,10 +160,7 @@ public sealed class DevelopmentMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_root);
         var databasePath = Path.Combine(_root, "development-attempt-command-profile.sqlite");
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         var projectId = Guid.NewGuid();
         var taskId = Guid.NewGuid();

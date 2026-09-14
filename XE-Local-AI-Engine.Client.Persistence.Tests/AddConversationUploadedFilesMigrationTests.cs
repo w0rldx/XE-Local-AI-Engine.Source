@@ -12,7 +12,7 @@ public sealed class AddConversationUploadedFilesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesUploadedFilesBoundToConversations()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("conversation-uploaded-files.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-uploaded-files.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("conversation_uploaded_files").ConfigureAwait(false),
             "conversation_uploaded_files must exist.");

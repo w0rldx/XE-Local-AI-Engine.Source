@@ -24,10 +24,7 @@ public sealed class AddTrainingDatasetDefinitionSnapshotMigrationTests : IDispos
     {
         _ = Directory.CreateDirectory(_rootPath);
         var databasePath = Path.Combine(_rootPath, "migration.sqlite");
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
-        {
-            await context.Database.MigrateAsync();
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();

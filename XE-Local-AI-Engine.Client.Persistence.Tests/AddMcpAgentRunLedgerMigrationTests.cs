@@ -27,9 +27,10 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_CreatesRunAndSingletonLedgerTables()
     {
         var databasePath = GetDatabasePath("mcp-ledger-up.sqlite");
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreLedgerMigrationId).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreLedgerMigrationId).ConfigureAwait(false);
             await context.Database.MigrateAsync().ConfigureAwait(false);
         }
 
@@ -81,9 +82,10 @@ public sealed class AddMcpAgentRunLedgerMigrationTests : IDisposable
     public async Task MigrateAsync_WhenRolledBack_DropsBothLedgerTables()
     {
         var databasePath = GetDatabasePath("mcp-ledger-down.sqlite");
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreLedgerMigrationId).ConfigureAwait(false);
         }
 

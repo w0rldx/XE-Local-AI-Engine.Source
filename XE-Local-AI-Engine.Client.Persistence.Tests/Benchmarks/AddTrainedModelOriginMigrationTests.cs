@@ -31,10 +31,7 @@ public sealed class AddTrainedModelOriginMigrationTests : IDisposable
     {
         Directory.CreateDirectory(_rootPath);
         var databasePath = Path.Combine(_rootPath, "migration.sqlite");
-        await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
-        {
-            await context.Database.MigrateAsync();
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
 
         await using var connection = new SqliteConnection($"Data Source={databasePath}");
         await connection.OpenAsync();
@@ -67,9 +64,10 @@ public sealed class AddTrainedModelOriginMigrationTests : IDisposable
         var projectId = Guid.NewGuid();
         var runId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath);
+
         await using (var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync();
             _ = context.BenchmarkProjects.Add(new BenchmarkProject
             {
                 Id = projectId,

@@ -14,7 +14,7 @@ public sealed class AddBenchmarkRunLaunchReceiptsMigrationTests
     {
         // Pinned AT this migration, not at head: the judge half of the block moved to benchmark_judge_attempts when
         // the 1-5 judge was retired, so head no longer carries it and only this point in the chain can assert it.
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-run-launch-receipts.sqlite",
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-run-launch-receipts.sqlite",
                                                               "20260816174029_AddBenchmarkRunLaunchReceipts")
                                                           .ConfigureAwait(false);
 

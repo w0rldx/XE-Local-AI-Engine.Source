@@ -12,7 +12,7 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task Migrate_CreatesTheRuleSetTableWithItsColumnsAndEnabledIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-rule-sets.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         AssertEx.False(await probe.TableExistsAsync(Table).ConfigureAwait(false), $"{Table} must not exist before the migration.");
 
@@ -46,7 +46,7 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task MigratedSchema_MatchesWhatEnsureCreatedBuilds()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-rule-set-parity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-set-parity.sqlite").ConfigureAwait(false);
 
         using var fixture = new DevWorkflowTestFixture();
         await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
@@ -60,7 +60,7 @@ public sealed class AddDevWorkflowRuleSetsMigrationTests
     [Test]
     public async Task Rollback_DropsTheRuleSetTableAndLeavesTheRestOfTheWorkflowSchemaIntact()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("dev-workflow-rule-sets-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("dev-workflow-rule-sets-rollback.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
 

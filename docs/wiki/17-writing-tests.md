@@ -222,18 +222,36 @@ a keyed `[NotInParallel(nameof(YourBackgroundServiceTests))]` when it touches a 
 
 Every migration that changes table/column/index shape ships a `<MigrationName>MigrationTests.cs` in
 `XE-Local-AI-Engine.Client.Persistence.Tests` (the file follows the migration name, not an `Add*` prefix).
-The shape is: migrate to the **preceding** migration id, insert historical rows, `MigrateAsync()` to head, then
+The shape is: start from the **preceding** migration id, insert historical rows, `MigrateAsync()` to head, then
 assert the resulting schema — see `AddAgentDefinitionsMigrationTests.cs`. Use the shared schema probe
 `XE-Local-AI-Engine.Client.Persistence.Tests/Testing/MigrationSchemaProbe.cs` for the table/column/index queries
 rather than hand-rolling `PRAGMA` SQL per file. Remember `MigrateAsync()` applies *every* later migration too, so
 assert the columns you added exist — not that the table's column set is exactly yours.
 
+**A database at head, or at migration N: copy the template.** Replaying the declared chain against an empty file
+is the dominant per-test cost in this project, and almost no test needs it. `Testing/MigratedDatabaseTemplate.cs`
+builds each state once per process — keyed by the migrations assembly's module version id, so a rebuild
+invalidates it — and every consumer gets a `File.Copy`. Reach for it as:
+`MigrationSchemaProbe.FromChatTemplateAsync(file)` / `FromChatTemplateAsync(file, predecessorId)` /
+`FromIdentityTemplateAsync(file)` for a probe, or `MigratedDatabaseTemplate.CopyChatHeadAsync(path)` /
+`CopyChatAtAsync(path, predecessorId)` when the suite opens its own context. A `WhenRolledBack_*` test copies the
+**head** template and then runs the down migration for real; a `WhenApplied_*` test copies the **at-(N-1)**
+template and then runs the tail for real. Both still exercise the migration they are named after.
+
+Keep the from-empty replay (`MigrationSchemaProbe.MigrateChatAsync` / `MigrateIdentityAsync`) where the replay is
+the thing under test, or where the assertion can see how the file was produced: a test that asserts the pending
+migration set, that reads the migrator's own pre-migration backup file, that asserts a file was created, or that
+asserts a journal mode or a `PRAGMA`. `MigrationChainTests` is the standing example — it asserts that the applied
+set equals the declared set, which a template would make vacuous. Data seeded before migration N belongs on the
+at-(N-1) template plus the real tail, never on a head copy.
+
 A migration that converts, repairs or deletes **data** needs rows to convert, or it is only being tested as a
-schema change. The probe's three-step seam is `MigrateChatAsync(file, predecessorId)` → `ExecuteAsync(insert…)`
-→ `MigrateToAsync(thisMigrationId)`: seed the historical rows through raw SQL (the entity model describes head,
-not the schema those rows were valid under), then run exactly the one migration over them and assert what it
-did. `EncryptConversationTitleMigrationTests.cs` (titles cleared) and
-`RepairAndUniqueMessageSequenceMigrationTests.cs` (colliding sequences renumbered) are the worked examples.
+schema change. The probe's three-step seam is `FromChatTemplateAsync(file, predecessorId)` →
+`ExecuteAsync(insert…)` → `MigrateToAsync(thisMigrationId)`: copy the at-(N-1) template, seed the historical
+rows through raw SQL (the entity model describes head, not the schema those rows were valid under), then run
+exactly the one migration over them for real and assert what it did. `EncryptConversationTitleMigrationTests.cs`
+(titles cleared) and `RepairAndUniqueMessageSequenceMigrationTests.cs` (colliding sequences renumbered) are the
+worked examples.
 
 ### React components
 

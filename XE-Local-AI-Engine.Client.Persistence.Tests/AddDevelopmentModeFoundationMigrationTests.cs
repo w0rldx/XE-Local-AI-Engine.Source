@@ -13,7 +13,7 @@ public sealed class AddDevelopmentModeFoundationMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTheProjectTaskAttemptArtifactEventChain()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("development-mode-foundation.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-mode-foundation.sqlite").ConfigureAwait(false);
 
         foreach (var table in new[]
                  {

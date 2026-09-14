@@ -11,7 +11,7 @@ public sealed class AddMessageAgentDefinitionIdMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsAgentDefinitionIdWithItsIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("message-agent-definition-id.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("message-agent-definition-id.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("messages").ConfigureAwait(false);
 

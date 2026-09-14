@@ -16,7 +16,7 @@ public sealed class AddNodeSelectedFoldersMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesSelectedFoldersWithAnEncryptedHostPath()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("selected-folders.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("selected_folders").ConfigureAwait(false), "selected_folders must exist.");
 
@@ -39,7 +39,7 @@ public sealed class AddNodeSelectedFoldersMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_RejectsASecondGrantUnderTheSameAlias()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("selected-folders-alias.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("selected-folders-alias.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("selected_folders", "IX_selected_folders_alias", unique: true, "alias").ConfigureAwait(false),
             "The alias must be uniquely indexed.");

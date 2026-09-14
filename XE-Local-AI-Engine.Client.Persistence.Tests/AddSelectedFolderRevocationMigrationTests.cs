@@ -27,9 +27,10 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
     public async Task MigrateAsync_AddsNullableRevocationAndActiveOnlyAliasIndex()
     {
         var databasePath = GetDatabasePath("selected-folder-revocation.sqlite");
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRevocationMigrationId).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRevocationMigrationId).ConfigureAwait(false);
             await context.Database.MigrateAsync().ConfigureAwait(false);
         }
 
@@ -51,10 +52,7 @@ public sealed class AddSelectedFolderRevocationMigrationTests : IDisposable
         var activeId = Guid.NewGuid();
         var revokedId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {

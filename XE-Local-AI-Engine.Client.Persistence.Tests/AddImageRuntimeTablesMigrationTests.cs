@@ -30,7 +30,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_CreatesAllThreeImageTables()
     {
         var databasePath = GetDatabasePath("image-tables-up.sqlite");
-        await MigrateUpAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
 
@@ -43,7 +43,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_ImageJobsHasExpectedColumns()
     {
         var databasePath = GetDatabasePath("image-jobs-columns-up.sqlite");
-        await MigrateUpAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetTableColumnsAsync(connection, "image_jobs").ConfigureAwait(false);
@@ -75,7 +75,7 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     public async Task MigrateAsync_WhenApplied_GeneratedImagesHasCascadeForeignKeyToImageJobs()
     {
         var databasePath = GetDatabasePath("generated-images-fk-up.sqlite");
-        await MigrateUpAsync(databasePath).ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
 
@@ -90,9 +90,10 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
         const string promptText = "an-utterly-distinctive-prompt-phrase-for-encryption-assertion";
         var jobId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             context.Add(new ImageJob
             {
                 Id = jobId,
@@ -127,9 +128,10 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("image-tables-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateForMigration(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreImageMigrationId).ConfigureAwait(false);
         }
 
@@ -138,12 +140,6 @@ public sealed class AddImageRuntimeTablesMigrationTests : IDisposable
         AssertEx.False(await TableExistsAsync(connection, "image_jobs").ConfigureAwait(false), "Rollback should drop image_jobs.");
         AssertEx.False(await TableExistsAsync(connection, "generated_images").ConfigureAwait(false), "Rollback should drop generated_images.");
         AssertEx.False(await TableExistsAsync(connection, "image_model_profiles").ConfigureAwait(false), "Rollback should drop image_model_profiles.");
-    }
-
-    private async Task MigrateUpAsync(string databasePath)
-    {
-        await using var context = CreateForMigration(databasePath);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
     }
 
     private NodeChatDbContext CreateForMigration(string databasePath)

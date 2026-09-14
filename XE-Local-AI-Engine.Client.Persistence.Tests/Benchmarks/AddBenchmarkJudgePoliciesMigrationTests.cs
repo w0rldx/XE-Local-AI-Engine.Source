@@ -18,7 +18,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTheJudgeTablesAndRepointsWorkItems()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("benchmark_judge_policy_revisions").ConfigureAwait(false), "Judge policy revisions must exist.");
         AssertEx.True(await probe.TableExistsAsync("benchmark_judge_attempts").ConfigureAwait(false), "Judge attempts must exist.");
@@ -89,7 +89,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task Migrate_OverPopulatedRows_DeletesEveryBenchmarkRow()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-purge.sqlite", PreviousMigration).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-purge.sqlite", PreviousMigration).ConfigureAwait(false);
         await SeedLegacyBenchmarkRowsAsync(probe).ConfigureAwait(false);
         AssertEx.Equal(expected: 1L, await probe.ScalarAsync("SELECT COUNT(*) FROM benchmark_runs;").ConfigureAwait(false));
 
@@ -104,7 +104,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task Migrate_Down_RemovesTheJudgeTablesAndRestoresTheOldWorkIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-down.sqlite").ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
 
@@ -119,7 +119,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task UserScoreCheck_AcceptsTheWholeZeroToHundredRangeAndRefusesAbove()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-user-score.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-user-score.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
 
         await probe.ExecuteAsync("UPDATE benchmark_runs SET user_score = 0;").ConfigureAwait(false);
@@ -133,7 +133,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task AttemptChecks_BoundTheScoreAndTheStatusVocabulary()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-attempt-checks.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-attempt-checks.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
         var revisionId = await SeedRevisionAsync(probe, "policy-hash-a").ConfigureAwait(false);
 
@@ -149,7 +149,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task WorkItemChecks_TieTheAttemptPointerToTheKind()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-work-checks.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-work-checks.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
         var revisionId = await SeedRevisionAsync(probe, "policy-hash-a").ConfigureAwait(false);
         var attemptId = Guid.NewGuid();
@@ -166,7 +166,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task FilteredUniqueIndexes_ConstrainPrimaryPerRunAndJudgePerAttempt()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-filtered-indexes.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-filtered-indexes.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
         var revisionId = await SeedRevisionAsync(probe, "policy-hash-a").ConfigureAwait(false);
         var firstAttemptId = Guid.NewGuid();
@@ -188,7 +188,7 @@ public sealed class AddBenchmarkJudgePoliciesMigrationTests
     [Test]
     public async Task RevisionHashIndex_RefusesASecondRowForTheSamePolicy()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-judge-policies-hash-unique.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-judge-policies-hash-unique.sqlite").ConfigureAwait(false);
         await SeedProjectAndRunAsync(probe).ConfigureAwait(false);
         _ = await SeedRevisionAsync(probe, "policy-hash-a").ConfigureAwait(false);
         _ = await SeedRevisionAsync(probe, "policy-hash-b", revision: 2).ConfigureAwait(false);

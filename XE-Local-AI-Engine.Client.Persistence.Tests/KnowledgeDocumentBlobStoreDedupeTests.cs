@@ -486,10 +486,11 @@ public sealed class KnowledgeDocumentBlobStoreDedupeTests : IDisposable
         return context;
     }
 
-    private async Task MigrateAsync(string databasePath)
+    // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises the blob
+    // store over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+    private static async Task MigrateAsync(string databasePath)
     {
-        await using var context = CreateContext(databasePath);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
     }
 
     private string GetDatabasePath(string fileName)

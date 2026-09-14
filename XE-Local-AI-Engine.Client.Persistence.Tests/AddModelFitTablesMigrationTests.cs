@@ -12,7 +12,7 @@ public sealed class AddModelFitTablesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesSnapshotBenchmarkAndRecommendationTables()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("model-fit-tables.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-fit-tables.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("model_fit_snapshots").ConfigureAwait(false), "model_fit_snapshots must exist.");
         AssertEx.True(await probe.TableExistsAsync("model_fit_benchmarks").ConfigureAwait(false), "model_fit_benchmarks must exist.");

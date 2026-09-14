@@ -32,10 +32,7 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreOriginMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreOriginMigrationId).ConfigureAwait(false);
 
         await InsertHistoricalRowsAsync(databasePath, conversationId, messageId).ConfigureAwait(false);
 
@@ -65,9 +62,10 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("origin-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreOriginMigrationId).ConfigureAwait(false);
         }
 
@@ -87,10 +85,10 @@ public sealed class NodeChatOriginMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-
             context.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,

@@ -115,6 +115,29 @@ Sonar S1135 is an error under warnings-as-errors. Do not replace `TODO`/`FIXME`/
 
 **Rule:** every `[GeneratedRegex]` names a `matchTimeoutMilliseconds` (copy the shape of `DeploymentPlanner.SubstitutionTokenRegex`). **Failure prevented:** Meziantou MA0009 is an error under the Release analyzer set and silent in Debug, so a Debug-green iteration loop hands the Release gate a red it never saw. **Authority:** `ContainerImageReference.BareImageIdRegex`, paid for in the External Apps follow-ups batch 3 (2026-09-12).
 
+### A test that needs a migrated SQLite database copies the template — replaying the chain is the exception
+
+**Rule:** in `XE-Local-AI-Engine.Client.Persistence.Tests`, a database at head or at a named migration comes from
+`Testing/MigratedDatabaseTemplate.cs` (`CopyChatHeadAsync`, `CopyChatAtAsync`, `CopyIdentityHeadAsync`, or the
+`MigrationSchemaProbe.From*TemplateAsync` entry points). Keep `MigrationSchemaProbe.MigrateChatAsync` /
+`MigrateIdentityAsync`, which still replay from empty, only where the replay is what the test asserts: the applied
+set versus the declared set, the pending-migration set, the migrator's own backup file, file creation, a journal
+mode or a `PRAGMA`. A `WhenRolledBack_*` test copies the head template and runs the down migration for real; a
+`WhenApplied_*` test copies the at-(N-1) template and runs the tail for real; data seeded before migration N goes
+on the at-(N-1) template, never on a head copy. **Failure prevented:** every test paying a full declared-chain DDL
+replay for a schema it never inspects the history of — and, on the other side, a template quietly making
+`MigrationChainTests` vacuous by handing it a database it did not migrate. The template itself is a WAL database —
+EF Core's `SqliteDatabaseCreator.Create` enables WAL when it creates the file, with no product pragma involved, and
+`journal_mode` is a persistent file property the copy carries — so the invariant that makes a single-file copy safe
+is not "never WAL" but "checkpointed, closed, no outstanding sidecar": the builder runs
+`PRAGMA wal_checkpoint(TRUNCATE)`, releases the pool, closes the last connection, and then refuses to publish if a
+`-wal`/`-shm` is still there, because copying the main file while a log holds committed rows loses them.
+**Authority:**
+`MigratedDatabaseTemplate` and `MigratedDatabaseTemplateTests`, twinned on
+`XE-Local-AI-Engine.Tests/TestServerWebAppFactory.BuildMigratedTemplate`; paid for in the backend
+test-performance plan, slice S1 (2026-09-13). For the current per-class cost, run the duration script over a TRX
+set rather than quoting a number from here.
+
 ### Running backend tests
 
 - Tests use TUnit on Microsoft.Testing.Platform. Use `--treenode-filter`, not `--filter`:

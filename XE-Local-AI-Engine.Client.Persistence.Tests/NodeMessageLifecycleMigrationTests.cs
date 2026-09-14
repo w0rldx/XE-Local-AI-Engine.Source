@@ -33,10 +33,7 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         var conversationId = Guid.NewGuid();
         var messageId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, InitialMigrationId).ConfigureAwait(false);
 
         await InsertHistoricalMessageAsync(databasePath, conversationId, messageId, createdAtUtc: 1234).ConfigureAwait(false);
 
@@ -67,9 +64,10 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(InitialMigrationId).ConfigureAwait(false);
         }
 
@@ -91,10 +89,10 @@ public sealed class NodeMessageLifecycleMigrationTests : IDisposable
         var messageId = Guid.NewGuid();
         var requestId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-
             context.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,

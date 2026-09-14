@@ -48,7 +48,7 @@ public sealed class AddConversationListIndexMigrationTests
     [Test]
     public async Task MigrateToHead_CreatesTheListIndexInTheDeclaredColumnOrder()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("conversation-list-index.sqlite");
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-list-index.sqlite");
 
         AssertEx.True(await probe.IndexExistsAsync("conversations", IndexName, unique: false, "purged", "is_pinned", "last_seen_utc", "archived"),
             $"{IndexName} must exist on conversations over (purged, is_pinned, last_seen_utc, archived), in that order.");
@@ -57,7 +57,7 @@ public sealed class AddConversationListIndexMigrationTests
     [Test]
     public async Task ActiveListQuery_UsesTheIndexAndNeedsNoSort()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("conversation-list-active-plan.sqlite");
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-list-active-plan.sqlite");
 
         AssertPlanUsesIndex(await probe.QueryPlanAsync(ActiveQuery), "the active-only list query");
     }
@@ -67,7 +67,7 @@ public sealed class AddConversationListIndexMigrationTests
     {
         // The reason `archived` is the trailing column. This assertion fails on the intuitive
         // (purged, archived, is_pinned, last_seen_utc) order, which leaves this query with a temp b-tree.
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("conversation-list-all-plan.sqlite");
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-list-all-plan.sqlite");
 
         AssertPlanUsesIndex(await probe.QueryPlanAsync(AllQuery), "the show-all list query");
     }
@@ -75,7 +75,7 @@ public sealed class AddConversationListIndexMigrationTests
     [Test]
     public async Task RollingBackOneStep_DropsTheListIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("conversation-list-index-rollback.sqlite");
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("conversation-list-index-rollback.sqlite");
         await probe.MigrateToAsync("20260817201241_AddBenchmarkReadiness");
 
         AssertEx.False(await probe.IndexExistsAsync("conversations", IndexName, unique: false),

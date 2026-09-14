@@ -27,7 +27,7 @@ public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
     [Test]
     public async Task Migrate_FromThePrecedingMigration_AddsTheThreeSchemeColumnsAsNullable()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-launch-identity-scheme-up.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-up.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         foreach (var (table, column) in SchemeColumns)
         {
@@ -49,7 +49,7 @@ public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CarriesTheSchemeColumnsAndRecordsTheMigration()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-launch-identity-scheme-head.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-head.sqlite").ConfigureAwait(false);
 
         foreach (var (table, column) in SchemeColumns)
         {
@@ -63,7 +63,7 @@ public sealed class AddBenchmarkLaunchIdentitySchemeMigrationTests
     [Test]
     public async Task Migrate_WhenRolledBack_DropsOnlyTheSchemeColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-launch-identity-scheme-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-launch-identity-scheme-down.sqlite").ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigrationId).ConfigureAwait(false);
 

@@ -37,7 +37,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_WhenApplied_CreatesBothTranscriptionTables()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcription-tables-up.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcription-tables-up.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("transcription_sessions").ConfigureAwait(false), "Migration should create transcription_sessions.");
         AssertEx.True(await probe.TableExistsAsync("transcript_segments").ConfigureAwait(false), "Migration should create transcript_segments.");
@@ -46,7 +46,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_WhenApplied_TranscriptionSessionsHasExpectedColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcription-sessions-columns.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcription-sessions-columns.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("transcription_sessions").ConfigureAwait(false);
 
@@ -79,7 +79,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_WhenApplied_TranscriptSegmentsHasExpectedColumns()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcript-segments-columns.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcript-segments-columns.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("transcript_segments").ConfigureAwait(false);
 
@@ -104,7 +104,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_WhenApplied_TranscriptSegmentsHasCascadeForeignKeyToSessions()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcript-segments-fk.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcript-segments-fk.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.ForeignKeyExistsAsync("transcript_segments", "session_id", "transcription_sessions").ConfigureAwait(false),
             "transcript_segments should carry an FK to transcription_sessions.");
@@ -115,7 +115,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     [Test]
     public async Task MigrateAsync_WhenApplied_TranscriptSegmentsHasUniqueSessionSeqIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcript-segments-index.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcript-segments-index.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("transcript_segments", "ux_transcript_segments_session_seq", unique: true, "session_id", "seq").ConfigureAwait(false),
             "The unique (session_id, seq) index is the only thing preventing two writers from double-allocating a sequence.");
@@ -133,9 +133,10 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
         const string configText = "{\"languageMode\":\"an-utterly-distinctive-config-phrase\"}";
         var sessionId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             _ = context.Add(NewSession(sessionId, titleText, configText));
             _ = await context.SaveChangesAsync().ConfigureAwait(false);
         }
@@ -160,9 +161,10 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
         const string segmentText = "an-utterly-distinctive-transcript-phrase-for-encryption-assertion";
         var sessionId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             _ = context.Add(NewSession(sessionId, title: null, configJson: "{}"));
             _ = context.Add(NewSegment(sessionId, seq: 1, startMs: 0, segmentText));
             _ = await context.SaveChangesAsync().ConfigureAwait(false);
@@ -185,9 +187,10 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
         const long attackerStartMs = 0;
         const long victimStartMs = 5_000;
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             var attackerSessionId = Guid.NewGuid();
             var victimSessionId = Guid.NewGuid();
             _ = context.Add(NewSession(attackerSessionId, "attacker", "{}"));
@@ -216,9 +219,10 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("transcription-session-column-aad.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = AgentDefinitionTestContextFactory.Create(databasePath, _keyHolder))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             _ = context.Add(NewSession(Guid.NewGuid(), "a title that is not a configuration", "{}"));
             _ = await context.SaveChangesAsync().ConfigureAwait(false);
         }
@@ -239,7 +243,7 @@ public sealed class AddTranscriptionSessionsMigrationTests : IDisposable
     {
         // Up to the predecessor first: neither table may exist yet, which is what proves the ordering rather than
         // merely asserting the file name.
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("transcription-tables-rollback.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("transcription-tables-rollback.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         AssertEx.False(await probe.TableExistsAsync("transcription_sessions").ConfigureAwait(false));
         AssertEx.False(await probe.TableExistsAsync("transcript_segments").ConfigureAwait(false));

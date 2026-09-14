@@ -20,7 +20,7 @@ public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsTheColumnWithNoBackfilledDefault()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-reasoning-budget.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("benchmark_projects").ConfigureAwait(false);
 
@@ -32,7 +32,7 @@ public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
     [Test]
     public async Task ReasoningBudget_MustStayInsideTheProjectContext()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-reasoning-budget-constraint.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-constraint.sqlite").ConfigureAwait(false);
 
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 4096)).ConfigureAwait(false);
         await AssertEx.ThrowsAsync<SqliteException>(() => InsertProjectAsync(probe, reasoningBudgetTokens: 0)).ConfigureAwait(false);
@@ -44,7 +44,7 @@ public sealed class AddBenchmarkProjectReasoningBudgetMigrationTests
     [Test]
     public async Task Migrate_Down_RemovesTheColumnAndKeepsTheRows()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-reasoning-budget-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-reasoning-budget-down.sqlite").ConfigureAwait(false);
         await InsertProjectAsync(probe, reasoningBudgetTokens: 2048).ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);

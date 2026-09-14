@@ -13,7 +13,7 @@ public sealed class InitialNodeIdentitySchemaMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesIdentityTablesAndRefreshTokens()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateIdentityAsync("initial-node-identity.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromIdentityTemplateAsync("initial-node-identity.sqlite").ConfigureAwait(false);
 
         foreach (var table in new[]
                  {

@@ -12,7 +12,7 @@ public sealed class AddKnowledgeBaseTablesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTheDocumentSectionChunkVectorChain()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("knowledge-base-tables.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("knowledge-base-tables.sqlite").ConfigureAwait(false);
 
         foreach (var table in new[]
                  {

@@ -16,7 +16,7 @@ public sealed class AddExternalAppsMigrationTests
     [Test]
     public async Task MigrateToHead_CreatesBothExternalAppTablesWithTheirDeclaredColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("external-apps-schema.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("external-apps-schema.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("external_app_instances").ConfigureAwait(false));
         AssertEx.True(await probe.TableExistsAsync("external_app_instance_events").ConfigureAwait(false));
@@ -61,7 +61,7 @@ public sealed class AddExternalAppsMigrationTests
     {
         // Up to the predecessor first: neither table may exist yet, which is what proves the ordering rather than
         // merely asserting the file name.
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("external-apps-chain.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("external-apps-chain.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         AssertEx.False(await probe.TableExistsAsync("external_app_instances").ConfigureAwait(false));
         AssertEx.False(await probe.TableExistsAsync("external_app_instance_events").ConfigureAwait(false));

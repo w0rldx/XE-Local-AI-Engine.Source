@@ -12,7 +12,7 @@ public sealed class AddBenchmarkProfileRevisionBindingMigrationTests
     [Test]
     public async Task Migrate_ToLatest_BindsBenchmarksToTheirProfile()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-profile-revision-binding.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-profile-revision-binding.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("model_fit_benchmarks").ConfigureAwait(false);
         AssertEx.True(columns.IsSupersetOf(new[]

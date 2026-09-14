@@ -11,7 +11,7 @@ public sealed class AddDevelopmentTemplatesMigrationTests
     [Test]
     public async Task Migrate_ToLatest_CreatesTemplatesWithUniqueAliasAndMaterializations()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("development-templates.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("development-templates.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.TableExistsAsync("development_templates").ConfigureAwait(false), "development_templates must exist.");
         AssertEx.True(await probe.TableExistsAsync("development_template_materializations").ConfigureAwait(false),

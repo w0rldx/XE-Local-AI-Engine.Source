@@ -31,10 +31,7 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         var databasePath = GetDatabasePath("pin-archive-defaults.sqlite");
         var conversationId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePinArchiveMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePinArchiveMigrationId).ConfigureAwait(false);
 
         await InsertHistoricalConversationAsync(databasePath, conversationId).ConfigureAwait(false);
 
@@ -58,9 +55,10 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("pin-archive-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PrePinArchiveMigrationId).ConfigureAwait(false);
         }
 
@@ -77,10 +75,10 @@ public sealed class NodeConversationPinArchiveMigrationTests : IDisposable
         var databasePath = GetDatabasePath("pin-archive-roundtrip.sqlite");
         var conversationId = Guid.NewGuid();
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-
             context.Conversations.Add(new NodeConversation
             {
                 ConversationId = conversationId,

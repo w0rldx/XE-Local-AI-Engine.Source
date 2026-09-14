@@ -313,7 +313,7 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         return state;
     }
 
-    private async Task<List<(Guid ChunkId, float[] Vector)>> SeedDeterministicCorpusAsync(string databasePath, int count, int dimension, int seed)
+    private static async Task<List<(Guid ChunkId, float[] Vector)>> SeedDeterministicCorpusAsync(string databasePath, int count, int dimension, int seed)
     {
         await MigrateAsync(databasePath).ConfigureAwait(false);
         var random = new Random(seed);
@@ -406,10 +406,11 @@ public sealed class ManagedCosineVectorSearchTests : IDisposable
         return MemoryMarshal.AsBytes<float>(values).ToArray();
     }
 
-    private async Task MigrateAsync(string databasePath)
+    // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
+    // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+    private static async Task MigrateAsync(string databasePath)
     {
-        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
     }
 
     private static async Task InsertVectorAsync(SqliteConnection connection, Guid chunkId, Guid documentId, byte[] embedding, DbTransaction? transaction = null)

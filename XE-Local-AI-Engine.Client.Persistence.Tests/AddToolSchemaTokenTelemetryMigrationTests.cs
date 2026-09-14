@@ -37,10 +37,7 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -64,10 +61,7 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var logColumns = await GetColumnNamesAsync(connection, "agent_execution_logs").ConfigureAwait(false);
@@ -90,10 +84,7 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
         var databasePath = GetDatabasePath("tool-schema-tokens-existing-row.sqlite");
         var rowId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreTelemetryMigrationId).ConfigureAwait(false);
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
@@ -128,9 +119,10 @@ public sealed class AddToolSchemaTokenTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("tool-schema-tokens-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreTelemetryMigrationId).ConfigureAwait(false);
         }
 

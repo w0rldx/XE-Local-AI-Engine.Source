@@ -28,10 +28,7 @@ public sealed class AddAgentSkillImportProvenanceMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("skill-provenance-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreProvenanceMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreProvenanceMigrationId).ConfigureAwait(false);
 
         // A skill written before the import feature existed, so the backfill below is exercised on a real row rather
         // than on an empty table.
@@ -88,9 +85,10 @@ public sealed class AddAgentSkillImportProvenanceMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("skill-provenance-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreProvenanceMigrationId).ConfigureAwait(false);
         }
 

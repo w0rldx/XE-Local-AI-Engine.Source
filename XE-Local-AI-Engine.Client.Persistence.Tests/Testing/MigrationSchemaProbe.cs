@@ -50,13 +50,9 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     ///     Applies the <see cref="NodeChatDbContext" /> chain up to <paramref name="targetMigration" /> (null = latest),
     ///     so a suite can observe the schema as it stood before a later migration changed it.
     /// </summary>
-    public static async Task<MigrationSchemaProbe> MigrateChatAsync(string fileName, string? targetMigration)
+    public static Task<MigrationSchemaProbe> MigrateChatAsync(string fileName, string? targetMigration)
     {
-        var (databasePath, rootPath, keyHolder) = Prepare(fileName);
-
-        await ApplyChatAsync(databasePath, keyHolder, targetMigration).ConfigureAwait(false);
-
-        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
+        return CreateAsync(fileName, path => ApplyChatAsync(path, targetMigration));
     }
 
     /// <summary>
@@ -73,31 +69,104 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
     }
 
     /// <summary>Applies the whole <see cref="NodeIdentityDbContext" /> chain to an empty database.</summary>
-    public static async Task<MigrationSchemaProbe> MigrateIdentityAsync(string fileName)
+    public static Task<MigrationSchemaProbe> MigrateIdentityAsync(string fileName)
     {
-        var (databasePath, rootPath, keyHolder) = Prepare(fileName);
+        return CreateAsync(fileName, ApplyIdentityAsync);
+    }
 
-        var options = new DbContextOptionsBuilder<NodeIdentityDbContext>()
-                      .UseSqlite($"Data Source={databasePath}",
-                          static sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
-                      .ConfigureWarnings(static warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
-                      .Options;
+    /// <summary>
+    ///     A probe over a copy of the shared at-head chat template instead of a from-scratch chain replay. Use this
+    ///     wherever the suite only needs a database that is <em>already</em> at head to inspect or mutate; keep
+    ///     <see cref="MigrateChatAsync(string)" /> where the replay itself is the thing under test.
+    /// </summary>
+    public static Task<MigrationSchemaProbe> FromChatTemplateAsync(string fileName)
+    {
+        return CreateAsync(fileName, MigratedDatabaseTemplate.CopyChatHeadAsync);
+    }
 
-        await using (var context = new NodeIdentityDbContext(options))
+    /// <summary>
+    ///     A probe over a copy of the shared template whose chain stops at <paramref name="targetMigration" />. The
+    ///     migrations that follow it still run for real, through <see cref="MigrateToAsync" />.
+    /// </summary>
+    public static Task<MigrationSchemaProbe> FromChatTemplateAsync(string fileName, string targetMigration)
+    {
+        // Checked before anything is allocated, so the documented misuse — a target keyed on a file name or a GUID —
+        // never gets as far as creating this probe's private directory.
+        MigratedDatabaseTemplate.EnsureDeclaredChatMigration(targetMigration);
+
+        return CreateAsync(fileName, path => MigratedDatabaseTemplate.CopyChatAtAsync(path, targetMigration));
+    }
+
+    /// <summary>The <see cref="FromChatTemplateAsync(string)" /> equivalent for the identity chain.</summary>
+    public static Task<MigrationSchemaProbe> FromIdentityTemplateAsync(string fileName)
+    {
+        return CreateAsync(fileName, MigratedDatabaseTemplate.CopyIdentityHeadAsync);
+    }
+
+    /// <summary>
+    ///     The one construction path: allocate the private directory and the key holder, let
+    ///     <paramref name="prepareDatabaseAsync" /> produce the database at that path, then open it. Nothing owns the
+    ///     directory or the holder until the probe exists, so a throw anywhere in between has to undo them here — no
+    ///     <see cref="DisposeAsync" /> will ever run for a probe that was never returned.
+    /// </summary>
+    /// <param name="rootPath">
+    ///     The private directory to create and, on failure, delete. Only a test that has to observe that deletion
+    ///     passes its own; every other caller goes through the overload that allocates a fresh one.
+    /// </param>
+    internal static async Task<MigrationSchemaProbe> CreateAsync(string rootPath, string fileName, Func<string, Task> prepareDatabaseAsync)
+    {
+        ArgumentNullException.ThrowIfNull(prepareDatabaseAsync);
+
+        var (databasePath, keyHolder) = Prepare(rootPath, fileName);
+
+        try
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+            await prepareDatabaseAsync(databasePath).ConfigureAwait(false);
 
-        return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
+            // OpenAsync disposes its own connection when the open throws, so no half-open connection reaches here.
+            return new MigrationSchemaProbe(await OpenAsync(databasePath).ConfigureAwait(false), keyHolder, rootPath, databasePath);
+        }
+        catch
+        {
+            keyHolder.Dispose();
+
+            try
+            {
+                if (Directory.Exists(rootPath))
+                {
+                    Directory.Delete(rootPath, recursive: true);
+                }
+            }
+            catch (IOException)
+            {
+                // The caller's exception says why the probe could not be built; a failure to delete a scratch
+                // directory must not replace it.
+            }
+            catch (UnauthorizedAccessException)
+            {
+                // Same reason as the IOException above: the original failure is the one worth reporting.
+            }
+
+            throw;
+        }
+    }
+
+    private static Task<MigrationSchemaProbe> CreateAsync(string fileName, Func<string, Task> prepareDatabaseAsync)
+    {
+        return CreateAsync(Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N")), fileName, prepareDatabaseAsync);
     }
 
     public async ValueTask DisposeAsync()
     {
+        // Scoped to this probe's connection string, not the process-global ClearAllPools: Microsoft.Data.Sqlite pools
+        // per connection string, each probe uses a unique temp path, and the pooled connection keeps the file handle
+        // that would otherwise make the delete below silently fail. ClearAllPools reaches every other test class's
+        // pool as well — it does not close a connection another class is using, it stops that connection being reused
+        // once it closes — so all it buys at parallel width is throwing away pools this probe has no business
+        // touching. Cleared before the dispose so the connection string is read off a live object.
+        SqliteConnection.ClearPool(_connection);
         await _connection.DisposeAsync().ConfigureAwait(false);
 
-        // Microsoft.Data.Sqlite pools per connection string, and each probe uses a unique temp path; without this the
-        // pooled connection keeps the file handle and the delete below silently fails.
-        SqliteConnection.ClearAllPools();
         _keyHolder.Dispose();
 
         if (Directory.Exists(_rootPath))
@@ -278,6 +347,32 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         return values;
     }
 
+    /// <summary>
+    ///     The hostless migrate-a-file primitive, for <see cref="MigratedDatabaseTemplate" /> to build its templates
+    ///     through the same path the suites use. The key holder is irrelevant here — the migration context carries no
+    ///     encryption interceptors — so this overload owns a throwaway one.
+    /// </summary>
+    internal static async Task ApplyChatAsync(string databasePath, string? targetMigration)
+    {
+        using var keyHolder = new NullNodeSqliteKeyHolder();
+        await ApplyChatAsync(databasePath, keyHolder, targetMigration).ConfigureAwait(false);
+    }
+
+    /// <summary>The identity-chain half of <see cref="ApplyChatAsync(string, string?)" />, to head.</summary>
+    internal static async Task ApplyIdentityAsync(string databasePath)
+    {
+        _ = Directory.CreateDirectory(Path.GetDirectoryName(databasePath)!);
+
+        var options = new DbContextOptionsBuilder<NodeIdentityDbContext>()
+                      .UseSqlite($"Data Source={databasePath}",
+                          static sqlite => sqlite.MigrationsHistoryTable(NodeIdentityDbContext.IdentityMigrationsHistoryTable))
+                      .ConfigureWarnings(static warnings => warnings.Ignore(CoreEventId.ManyServiceProvidersCreatedWarning))
+                      .Options;
+
+        await using var context = new NodeIdentityDbContext(options);
+        await context.Database.MigrateAsync().ConfigureAwait(false);
+    }
+
     private static async Task ApplyChatAsync(string databasePath, INodeSqliteKeyHolder keyHolder, string? targetMigration)
     {
         await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder);
@@ -292,17 +387,29 @@ internal sealed class MigrationSchemaProbe : IAsyncDisposable
         }
     }
 
-    private static (string DatabasePath, string RootPath, INodeSqliteKeyHolder KeyHolder) Prepare(string fileName)
+    private static (string DatabasePath, INodeSqliteKeyHolder KeyHolder) Prepare(string rootPath, string fileName)
     {
-        var rootPath = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(rootPath);
-        return (Path.Combine(rootPath, fileName), rootPath, new NullNodeSqliteKeyHolder());
+        _ = Directory.CreateDirectory(rootPath);
+        return (Path.Combine(rootPath, fileName), new NullNodeSqliteKeyHolder());
     }
 
     private static async Task<SqliteConnection> OpenAsync(string databasePath)
     {
         var connection = new SqliteConnection($"Data Source={databasePath}");
-        await connection.OpenAsync().ConfigureAwait(false);
+
+        try
+        {
+            await connection.OpenAsync().ConfigureAwait(false);
+        }
+        catch
+        {
+            // Nobody else holds this connection yet: a failed open would otherwise leave it — and the pool entry it
+            // may already have taken — behind, and the pooled file handle is what makes the directory undeletable.
+            SqliteConnection.ClearPool(connection);
+            await connection.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
         return connection;
     }
 }

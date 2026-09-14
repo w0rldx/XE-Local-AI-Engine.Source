@@ -29,10 +29,7 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
         var databasePath = GetDatabasePath("agent-definitions-up.sqlite");
         var conversationId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentDefinitionsMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentDefinitionsMigrationId).ConfigureAwait(false);
 
         await InsertHistoricalConversationAsync(databasePath, conversationId).ConfigureAwait(false);
 
@@ -93,9 +90,10 @@ public sealed class AddAgentDefinitionsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-definitions-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentDefinitionsMigrationId).ConfigureAwait(false);
         }
 

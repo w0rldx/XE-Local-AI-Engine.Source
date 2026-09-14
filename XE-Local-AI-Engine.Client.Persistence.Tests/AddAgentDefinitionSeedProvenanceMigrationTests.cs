@@ -18,7 +18,7 @@ public sealed class AddAgentDefinitionSeedProvenanceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_AddsTheProvenanceColumnsDefaultingToUserAuthored()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("seed-provenance.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("agent_definitions").ConfigureAwait(false);
         AssertEx.True(columns.Contains("seed_slug"), "agent_definitions.seed_slug must be added.");
@@ -35,7 +35,7 @@ public sealed class AddAgentDefinitionSeedProvenanceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_UniquelyIndexesSeededSlugsWithoutConstrainingUnseededDefinitions()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("seed-provenance-index.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("seed-provenance-index.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         // Two operator-authored definitions, neither seeded: the filter has to let both through.
         await InsertDefinitionAsync(probe, "First", seedSlug: null).ConfigureAwait(false);

@@ -19,7 +19,7 @@ public sealed class HashMcpServerApiKeyMigrationTests
     [Test]
     public async Task Migrate_OverAnExistingKey_DeletesItRatherThanCarryingItForward()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("hash-mcp-api-key.sqlite", PreHashMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("hash-mcp-api-key.sqlite", PreHashMigrationId).ConfigureAwait(false);
 
         await probe.ExecuteAsync("""
                                  INSERT INTO mcp_server_api_keys (id, prefix, material, created_at_utc)

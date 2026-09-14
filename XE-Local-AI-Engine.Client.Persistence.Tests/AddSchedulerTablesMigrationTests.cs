@@ -52,10 +52,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-app-tables-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -77,10 +74,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-qrtz-tables-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -101,10 +95,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-triggers-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -125,10 +116,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-def-columns-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -170,10 +158,7 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-runs-columns-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreSchedulerMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -210,9 +195,10 @@ public sealed class AddSchedulerTablesMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("scheduler-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreSchedulerMigrationId).ConfigureAwait(false);
         }
 

@@ -21,7 +21,7 @@ public sealed class AddIntegrationFoundationMigrationTests
     [Test]
     public async Task MigrateToHead_CreatesEveryIntegrationTableWithItsDeclaredColumnsAndIndexes()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("integration-foundation.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("integration-foundation.sqlite").ConfigureAwait(false);
 
         foreach (var table in new[]
                  {
@@ -81,7 +81,7 @@ public sealed class AddIntegrationFoundationMigrationTests
     [Test]
     public async Task MigrateToHead_KeysRequestUniquenessOnThePrincipalAndNotGlobally()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("integration-request-uniqueness.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("integration-request-uniqueness.sqlite").ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("integration_executions",
                                      "ux_integration_executions_principal_request",
@@ -106,7 +106,7 @@ public sealed class AddIntegrationFoundationMigrationTests
     [Test]
     public async Task Migrate_BackfillsWorkSessionOwnedConversationsAndLeavesChatsAlone()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("integration-kind-backfill.sqlite", PreviousMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("integration-kind-backfill.sqlite", PreviousMigrationId).ConfigureAwait(false);
 
         const string OwnedConversationId = "1f1a0c66-0000-4000-8000-000000000001";
         const string PlainConversationId = "1f1a0c66-0000-4000-8000-000000000002";

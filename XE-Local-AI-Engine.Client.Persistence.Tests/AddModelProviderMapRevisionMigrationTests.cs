@@ -12,7 +12,7 @@ public sealed class AddModelProviderMapRevisionMigrationTests
     [Test]
     public async Task Migrate_ToLatest_AddsRevisionDefaultedToLegacy()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("model-provider-map-revision.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("model-provider-map-revision.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("model_provider_map").ConfigureAwait(false);
 

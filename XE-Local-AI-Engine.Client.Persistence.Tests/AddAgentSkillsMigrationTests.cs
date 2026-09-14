@@ -28,10 +28,7 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-skills-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentSkillsMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreAgentSkillsMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -80,9 +77,10 @@ public sealed class AddAgentSkillsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("agent-skills-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreAgentSkillsMigrationId).ConfigureAwait(false);
         }
 

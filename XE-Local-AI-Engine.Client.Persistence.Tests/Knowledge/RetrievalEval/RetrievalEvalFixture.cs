@@ -96,10 +96,9 @@ internal sealed class RetrievalEvalFixture : IDisposable
         };
         var optionsWrapper = Options.Create(options);
 
-        await using (var migrationContext = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, keyHolder))
-        {
-            await migrationContext.Database.MigrateAsync(cancellationToken).ConfigureAwait(false);
-        }
+        // A copy of the shared at-head template, not a replay of the whole declared chain: what this fixture exercises
+        // is the ingestion pipeline over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         var documentIdsByKey = new Dictionary<string, Guid>(StringComparer.Ordinal);
 

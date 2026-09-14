@@ -36,10 +36,7 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
         var goldenId = Guid.NewGuid();
         var agentId = Guid.NewGuid();
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreHarvestProvenanceMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreHarvestProvenanceMigrationId).ConfigureAwait(false);
 
         await InsertHistoricalGoldenRowAsync(databasePath, goldenId, agentId).ConfigureAwait(false);
 
@@ -65,9 +62,10 @@ public sealed class AddGoldenConversationHarvestProvenanceMigrationTests : IDisp
     {
         var databasePath = GetDatabasePath("provenance-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreHarvestProvenanceMigrationId).ConfigureAwait(false);
         }
 

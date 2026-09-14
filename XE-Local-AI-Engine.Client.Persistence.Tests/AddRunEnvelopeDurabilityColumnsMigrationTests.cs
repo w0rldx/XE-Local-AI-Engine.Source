@@ -38,10 +38,7 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreDurabilityMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreDurabilityMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -65,10 +62,7 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetColumnNamesAsync(connection).ConfigureAwait(false);
@@ -87,9 +81,10 @@ public sealed class AddRunEnvelopeDurabilityColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-durability-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreDurabilityMigrationId).ConfigureAwait(false);
         }
 

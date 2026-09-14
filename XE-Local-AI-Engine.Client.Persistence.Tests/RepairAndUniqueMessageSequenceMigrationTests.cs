@@ -20,7 +20,7 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_OverCollidingSequences_RenumbersEachConversationContiguously()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("repair-sequence.sqlite", PreRepairMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence.sqlite", PreRepairMigrationId).ConfigureAwait(false);
 
         var conversationId = Guid.NewGuid().ToString();
         await InsertConversationAsync(probe, conversationId).ConfigureAwait(false);
@@ -47,7 +47,7 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_OverWellFormedSequences_LeavesThemUntouched()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("repair-sequence-noop.sqlite", PreRepairMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-noop.sqlite", PreRepairMigrationId).ConfigureAwait(false);
 
         var conversationId = Guid.NewGuid().ToString();
         await InsertConversationAsync(probe, conversationId).ConfigureAwait(false);
@@ -71,7 +71,7 @@ public sealed class RepairAndUniqueMessageSequenceMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_ReplacesTheConversationIndexWithAUniqueSequenceIndex()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("repair-sequence-index.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("repair-sequence-index.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.IndexExistsAsync("messages",
                 "IX_messages_conversation_id_sequence",

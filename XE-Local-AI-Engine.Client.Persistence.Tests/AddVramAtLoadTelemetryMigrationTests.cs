@@ -38,10 +38,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreVramMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreVramMigrationId).ConfigureAwait(false);
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
@@ -68,10 +65,7 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetNodeRunColumnNamesAsync(connection).ConfigureAwait(false);
@@ -84,9 +78,10 @@ public sealed class AddVramAtLoadTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("vram-at-load-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreVramMigrationId).ConfigureAwait(false);
         }
 

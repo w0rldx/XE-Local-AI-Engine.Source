@@ -37,10 +37,7 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreReadinessMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreReadinessMigrationId).ConfigureAwait(false);
 
         await using (var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false))
         {
@@ -69,10 +66,7 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         AssertEx.True((await GetColumnNamesAsync(connection, envelopeTable: true).ConfigureAwait(false)).Contains(ReadinessColumn),
@@ -86,9 +80,10 @@ public sealed class AddModelReadinessTelemetryMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("model-readiness-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreReadinessMigrationId).ConfigureAwait(false);
         }
 

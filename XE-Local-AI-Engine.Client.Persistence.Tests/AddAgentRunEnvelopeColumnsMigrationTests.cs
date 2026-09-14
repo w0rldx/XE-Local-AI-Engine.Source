@@ -49,10 +49,7 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
 
         // Bring the schema up to exactly the migration before this one, then apply the rest, so this migration's Up is
         // exercised as an in-place upgrade of an existing agent_execution_logs table, not just a fresh create.
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PreRunEnvelopeMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PreRunEnvelopeMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -78,10 +75,7 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-fresh.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
         await using var connection = await OpenConnectionAsync(databasePath).ConfigureAwait(false);
         var columns = await GetColumnInfoAsync(connection).ConfigureAwait(false);
@@ -97,9 +91,10 @@ public sealed class AddAgentRunEnvelopeColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("run-envelope-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PreRunEnvelopeMigrationId).ConfigureAwait(false);
         }
 

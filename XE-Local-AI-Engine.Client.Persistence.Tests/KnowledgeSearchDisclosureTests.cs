@@ -120,10 +120,11 @@ public sealed class KnowledgeSearchDisclosureTests : IDisposable
     }
 
 
-    private async Task MigrateAsync(string databasePath)
+    // A copy of the shared at-head template, not a replay of the whole declared chain: this suite exercises a service
+    // over the schema, never the migrator that produced it. See MigratedDatabaseTemplate.
+    private static async Task MigrateAsync(string databasePath)
     {
-        await using var context = AgentDefinitionTestContextFactory.CreateForMigration(databasePath, _keyHolder);
-        await context.Database.MigrateAsync().ConfigureAwait(false);
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
     }
 
     private async Task SeedDocumentAsync(string databasePath, Guid documentId, string status)

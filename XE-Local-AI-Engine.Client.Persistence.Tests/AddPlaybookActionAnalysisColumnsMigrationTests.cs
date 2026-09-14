@@ -28,10 +28,7 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("analysis-columns-up.sqlite");
 
-        await using (var context = CreateContext(databasePath))
-        {
-            await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookAnalysisMigrationId).ConfigureAwait(false);
-        }
+        await MigratedDatabaseTemplate.CopyChatAtAsync(databasePath, PrePlaybookAnalysisMigrationId).ConfigureAwait(false);
 
         await using (var context = CreateContext(databasePath))
         {
@@ -53,9 +50,10 @@ public sealed class AddPlaybookActionAnalysisColumnsMigrationTests : IDisposable
     {
         var databasePath = GetDatabasePath("analysis-columns-rollback.sqlite");
 
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
+
         await using (var context = CreateContext(databasePath))
         {
-            await context.Database.MigrateAsync().ConfigureAwait(false);
             await context.Database.GetService<IMigrator>().MigrateAsync(PrePlaybookAnalysisMigrationId).ConfigureAwait(false);
         }
 

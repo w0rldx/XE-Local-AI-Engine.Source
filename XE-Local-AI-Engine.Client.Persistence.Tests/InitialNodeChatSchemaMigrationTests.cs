@@ -16,7 +16,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CreatesTheConversationTranscriptTables()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("initial-node-chat-schema.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-schema.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         foreach (var table in new[]
                  {
@@ -72,7 +72,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_CascadesTheTranscriptOffTheConversation()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("initial-node-chat-cascade.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-cascade.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         AssertEx.True(await probe.ForeignKeyExistsAsync("messages", "conversation_id", "conversations").ConfigureAwait(false),
             "Messages must be foreign-keyed to their conversation.");
@@ -94,7 +94,7 @@ public sealed class InitialNodeChatSchemaMigrationTests
     [Test]
     public async Task Migrate_ToThisMigration_IndexesTheTranscriptByConversation()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("initial-node-chat-indexes.sqlite", ThisMigrationId).ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("initial-node-chat-indexes.sqlite", ThisMigrationId).ConfigureAwait(false);
 
         // Non-unique at this point in the chain; RepairAndUniqueMessageSequence later replaces the message index with a
         // unique (conversation_id, sequence) one, and that suite asserts the swap.

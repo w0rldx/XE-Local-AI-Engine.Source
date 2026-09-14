@@ -19,7 +19,7 @@ public sealed class AddBenchmarkRunRepeatModeMigrationTests
     [Test]
     public async Task Migrate_ToLatest_BackfillsTheModeAndLeavesTheSamplingUnrecorded()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-repeat-mode.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode.sqlite").ConfigureAwait(false);
 
         var columns = await probe.ColumnsAsync("benchmark_runs").ConfigureAwait(false);
         foreach (var column in AddedColumns)
@@ -37,7 +37,7 @@ public sealed class AddBenchmarkRunRepeatModeMigrationTests
     [Test]
     public async Task Migrate_Down_RemovesTheColumnsAndKeepsTheRepeatColumnsItSitsBeside()
     {
-        await using var probe = await MigrationSchemaProbe.MigrateChatAsync("benchmark-repeat-mode-down.sqlite").ConfigureAwait(false);
+        await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("benchmark-repeat-mode-down.sqlite").ConfigureAwait(false);
 
         await probe.MigrateToAsync(PreviousMigration).ConfigureAwait(false);
 
