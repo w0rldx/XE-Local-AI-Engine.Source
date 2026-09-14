@@ -70,6 +70,20 @@ One-process-per-namespace was fast without coverage but paid static instrumentat
 
 MTP resolves coverage output relative to each results directory. Concurrent projects sharing one directory overwrite reports. `--report-trx` also copied `coverage.cobertura.xml` into the TRX attachment tree; recursive discovery double-counted identical files, so CI uses bounded-depth searches before `merge-cobertura.py` deduplicates source lines.
 
+### HEAVY re-weight convergence (2026-09-14)
+
+Three green `backend-tests` runs, each 16 TRX files and 12,128 tests. A: 34861036286 (develop @3c44cd001). B: 34877183235 (develop @3d21d9e28). C: 34882013960 (PR #60, i.e. @3d21d9e28 plus this change's script and doc edits only). The test code is near-identical across all three: the only change between A and B was a four-line cancellation fix in `FakeWhisperTranscriber.TranscribeAsync` (`XE-Local-AI-Engine.Tests/Transcription/TranscriptionTestDoubles.cs`), which cannot move solo namespaces such as `DevWorkflows.Materialization`, and C adds no test code at all. Leg walls: A 20:17 / 24:49 / 22:23 / 17:36; B 16:26 / 19:30 / 20:43 / 18:20; C 12:50 / 20:50 / 17:34 / 21:59. Total test-seconds 11,462 (A), 9,980 (B), 9,631 (C). The pack simulator reproduced CI's own `groupN:` lines on A and B, 16 bins identical, so a table can be scored against a run that did not build it.
+
+| Table | Shard max/min on A | on B | on C |
+|---|---:|---:|---:|
+| from run A alone (the then-current file) | 1.05 * | 1.43 | 1.14 |
+| from run B alone | 1.36 | 1.11 * | 1.21 |
+| per-run mean of A and B (`--heavy --runs 2`, committed) | 1.14 * | 1.12 * | **1.53** |
+
+`*` marks a score on a run that helped build the table. Each single-run table balances its own run and no other, and the mean does not generalise either: on C, the run held out from all three tables, it scores worse than both single-run tables. Nothing here is a balance fix, because the realised balance is set by how fast each leg's runner is, not by the pack. Under the committed table every shard carries about the same weight-space load, yet C's true per-shard seconds were 1,886 / 2,890 / 2,033 / 2,821, with every bin on shards 1 and 3 slower than every bin on shards 0 and 2 across unrelated namespaces (shard 0 bins 575 / 439 / 517 / 355 s against shard 1's 819 / 696 / 667 / 708 s). Relative leg speed was 0.77 / 1.17 / 0.83 / 1.15 in C and 0.71 / 1.03 / 0.99 / 0.74 in B: about +/-20%, and it moves whole legs. Per-namespace noise rides on top — three-run max/min 1.64x for `GraphWorkflows`, 1.55x for `DevWorkflows.Materialization`, 2.02x for `Endpoints.GraphWorkflows.V1`, 2.71x for `Endpoints.Drafting` — and a namespace holding a bin alone has no neighbours to average it away.
+
+`JOBS=4` runs a shard's four bins concurrently, so a shard's wall is at least its heaviest bin, and the four heaviest namespaces each hold a bin alone. Run-B floors were 905 s (`GraphWorkflows`), 792 s (`DevWorkflows`), 709 s (`Dispatch`) and 649 s (`Materialization`), while shard load divided by four was 522-748 s: every leg was floor-bound, not pack-bound. Setup overhead on top of the floor varied between 4.5 and 7.5 minutes. No table can pull the slowest leg below its solo namespace's own time; only splitting that namespace can.
+
 ### Build/test contamination incident
 
 A build running beside a `--no-build` test rewrote assemblies while MTP was loading them, producing both phantom failures and phantom green results. The first lock implementation used a conventional `flock <file> <command>` form; MSBuild daemons inherited the open descriptor and kept the lock after the command returned. The current helper marks the descriptor close-on-exec and exit 69 identifies a live holder. Assembly snapshots turn concurrent mutation into exit 75 rather than test evidence.
