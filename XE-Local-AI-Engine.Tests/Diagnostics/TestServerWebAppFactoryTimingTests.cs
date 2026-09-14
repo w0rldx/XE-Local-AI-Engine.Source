@@ -8,9 +8,11 @@ using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Opt-in profiler for the cost of ONE <see cref="TestServerWebAppFactory" /> host, the unit that 61 test classes
-///     pay per test and 42 pay per class. It answers the only question that decides whether a per-host optimisation is
-///     worth building: where do the ~2 s go?
+///     Opt-in profiler for the cost of ONE <see cref="TestServerWebAppFactory" /> host — the unit some test classes pay
+///     per test and others pay once per class. The current split, and which classes sit on which side of it, is a
+///     measurement, not a constant: take it from <c>scripts/test-durations.py</c> over a TRX set rather than from a
+///     number written into a comment. This class answers the other question, the one that decides whether a per-host
+///     optimisation is worth building at all: where does the host-build second go?
 ///     <para>
 ///         Skipped unless <c>XE_FIXTURE_TIMING=1</c>. It builds 30+ hosts sequentially, which is minutes of wall clock
 ///         and pure noise inside a normal suite run — and it deliberately measures wall clock, so it must not share the

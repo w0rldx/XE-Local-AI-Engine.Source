@@ -197,6 +197,31 @@ list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight pa
 entries and the folders behind them (IDE0130 makes folder = namespace mandatory); CI runs 34515666107 (green,
 the measurement) and 34730991540 (the timeout).
 
+### Re-measure a TRX set with the script, never quote a class or namespace count from a document
+
+**Rule:** derive per-class, per-test and per-namespace timings — and the counts a document would otherwise hard-code —
+by running `scripts/test-durations.py` over a TRX set (`--heavy` emits the `HEAVY` lines
+`scripts/run-tests-memory-safe.sh` parses, `--counts` the classes/tests/namespaces/files seen); cite the script, not a
+number. **Failure prevented:** a comment in `XE-Local-AI-Engine.Tests/Diagnostics/TestServerWebAppFactoryTimingTests.cs`
+carried a "61 test classes pay per host per test, 42 pay per class" split from 2026-08-23 that was already wrong by
+2026-09-13, and a stale `HEAVY` weight is what pushed a CI shard past its job timeout (entry above). Both are the same
+failure: a measurement frozen into prose. **Authority:** `scripts/test-durations.py` and its tests in
+`scripts/tests/test_test_durations.py`, whose `--heavy` case asserts the runner's own weight regex still parses the
+output.
+
+### An ungrouped local coverage run reds a namespace that covered no product code
+
+**Rule:** when `scripts/run-tests-memory-safe.sh` runs with `COVERAGE_DIR` set and `TEST_GROUPS` unset, read a
+`<namespace>(no-coverage-report)` entry as "this unit exercised no product assembly", not as a test failure — confirm
+against the batch's pass/fail counts before chasing it, and do not change the runner to tolerate an empty report.
+**Failure prevented:** an hour spent debugging three phantom reds, or worse, a real empty report being made to pass.
+The per-unit check requires a Cobertura report with content, so a batch whose tests only touch test-side code produces
+one with none and the run exits 1 although every test passed — `Onboarding` (4/4 green), `Testing` (4/4 green) and
+`Diagnostics` (0 enrolled) on 2026-09-13. CI does not hit it: its `TEST_GROUPS` packing puts those namespaces in bins
+with product-touching ones, so each group's report is non-empty. **Authority:** the per-unit verdict loop in
+`scripts/run-tests-memory-safe.sh` (the `cov` field of each `.result` file) and the header note above its
+"Batch-level parallelism (JOBS)" section.
+
 ### Add a hub, a route family, a React feature or a project — and name it in the wiki, or `python-quality` goes red
 
 After adding a SignalR hub, `LocalApiRoutes` family, React `features/` directory, numbered wiki page, or solution project, update the corresponding wiki inventory and run:
@@ -232,6 +257,21 @@ Only `CudaBuildServiceTests` and `LlamaCppSourceBuildServiceTests` mutate that p
 - PATH-stub suites such as CUDA/source-build tests: they must not overlap any test spawning real `git`, `cmake`, or related tools, not merely other stub suites.
 
 Get parallelism from separate processes/modules rather than weakening these attributes.
+
+### A known flake: `TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp`
+
+**Rule:** treat a failure of
+`XE-Local-AI-Engine.Tests/Endpoints/Transcription/TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp`
+as this known flake — record it, re-run the class alone to confirm, and never silently retry the suite until it is
+green. It is under investigation in the test-performance work and is not a regression introduced by a change that
+happens to trip it. **Failure prevented:** a repeated-until-green gate, which destroys the evidence value of every
+"green ×3" acceptance criterion around it, and the opposite error of blaming an unrelated change. **Authority:**
+observed 2026-09-13 on `develop` @1c2f6e352 — one failure across two full plain-mode runs of the module through
+`scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, the test itself costing 33 s in the failing run; no cause
+identified yet. **Retire this entry** — delete it and move the observation to
+[agent-knowledge-evidence.md](agent-knowledge-evidence.md) — once the test-performance S2 slice lands its fix or the
+flake is root-caused. A fixed flake left here is a stale belief telling the next agent not to blame a change for a
+failure that is now real.
 
 ### A wall-clock budget sized on an idle box is a CI flake waiting to happen — use `TestBudgets.Contended`
 

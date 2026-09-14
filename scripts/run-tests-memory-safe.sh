@@ -61,6 +61,16 @@
 #   --test-bins glob (*.Tests*/bin/*/net*), so a slot cannot be mistaken for contamination.
 #   Cost: ~240 MB per job (JOBS copies), made with cp -a in well under a second on a warm cache.
 #
+# In UNGROUPED coverage mode a namespace that touches no product assembly reports FAILED
+#   The per-unit verdict below demands a Cobertura report with content. A batch whose tests exercise
+#   only test-side code produces one with none, so an ungrouped local coverage run
+#   (COVERAGE_DIR set, TEST_GROUPS unset) exits 1 listing that namespace as
+#   <ns>(no-coverage-report) even though every test in it passed — seen 2026-09-13 for Onboarding
+#   (4/4 green), Testing (4/4 green) and Diagnostics (0 enrolled). CI never hits it: TEST_GROUPS
+#   packs those namespaces into bins alongside product-touching ones and the group's report is
+#   non-empty. Read such a red as "this unit covered no product code", not as a test failure, and
+#   confirm it against the batch's own pass/fail counts before acting on it.
+#
 # Batch-level parallelism (JOBS)
 #   The normal per-process width of 1 is deliberate, but nothing requires the *processes* to run one
 #   after another: every hazard the fresh-process design defends against is process-scoped (env-var
