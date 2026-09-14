@@ -252,6 +252,17 @@ invalidates it — and every consumer gets a `File.Copy`. Reach for it as:
 **head** template and then runs the down migration for real; a `WhenApplied_*` test copies the **at-(N-1)**
 template and then runs the tail for real. Both still exercise the migration they are named after.
 
+A suite fixture that builds its schema with `EnsureCreatedAsync()` is the same mistake wearing a different hat — a
+second definition of the schema, off the entity model. `GraphWorkflowTestFixture` copies the template instead;
+the shared fixtures `DevWorkflowTestFixture`, `ExternalAppTestFixture`, `IntegrationTestFixture`,
+`WorkSessionPersistenceTestSupport` and `DevelopmentPersistenceTestSupport` have not been moved, and dozens of store
+suites still call `EnsureCreatedAsync()` inline — that is the remaining backlog. One test keeps `EnsureCreated` on
+purpose: `AddGraphWorkflowsMigrationTests.MigratedSchema_MatchesWhatEnsureCreatedBuilds` holds its own context through
+`GraphWorkflowTestFixture.CreateEnsureCreatedSchemaAsync`, because a parity test whose two sides both came from the
+migrations asserts nothing. Either way the file is in WAL mode — `EnsureCreated` enables it exactly as the template
+build does — and the at-rest scans stay honest because `SqliteFileProbe.ReadAllBytesAsync` closes the last
+connection first, which checkpoints the log back into the main file.
+
 Keep the from-empty replay (`MigrationSchemaProbe.MigrateChatAsync` / `MigrateIdentityAsync`) where the replay is
 the thing under test, or where the assertion can see how the file was produced: a test that asserts the pending
 migration set, that reads the migrator's own pre-migration backup file, that asserts a file was created, or that

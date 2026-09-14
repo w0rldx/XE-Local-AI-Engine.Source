@@ -52,14 +52,36 @@ internal sealed class GraphWorkflowTestFixture : IDisposable
     public NodeChatDbContext CreateContext() =>
         AgentDefinitionTestContextFactory.Create(DatabasePath, _keyHolder);
 
+    /// <summary>
+    ///     A context over a copy of the shared at-head chat template, so these suites run against the schema the
+    ///     migrations produce rather than a second definition of it built off the entity model.
+    /// </summary>
+    /// <remarks>
+    ///     The copied file is in WAL mode, as every template is — <c>journal_mode</c> is a persistent file property and
+    ///     EF Core's <c>SqliteDatabaseCreator.Create</c> turns it on, so <c>EnsureCreatedAsync</c> left
+    ///     a WAL database here too. The encryption suite scans the MAIN database file and is safe anyway: it reads
+    ///     through <see cref="SqliteFileProbe.ReadAllBytesAsync" />, whose <c>ClearAllPools</c> closes the last
+    ///     connection to the file, and SQLite checkpoints the log back into the main file on that close.
+    ///     <para>
+    ///         Call it once per fixture. The template copy refuses to overwrite an existing file, so a second call on
+    ///         one fixture throws an <see cref="IOException" /> where <c>EnsureCreatedAsync</c> was a no-op.
+    ///     </para>
+    /// </remarks>
     public async Task<NodeChatDbContext> CreateSchemaAsync()
+    {
+        await MigratedDatabaseTemplate.CopyChatHeadAsync(DatabasePath).ConfigureAwait(false);
+        return CreateContext();
+    }
+
+    /// <summary>
+    ///     The schema <c>EnsureCreated</c> builds off the entity model, for the one test that compares it against the
+    ///     migrated schema. Nothing else may use it: a parity test whose two sides both came from the migrations
+    ///     compares migrated against migrated and asserts nothing.
+    /// </summary>
+    public async Task<NodeChatDbContext> CreateEnsureCreatedSchemaAsync()
     {
         var context = CreateContext();
         _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
-
-        // Deliberately the rollback journal, as the Dev Workflow fixture leaves it. WAL holds recent writes in a -wal
-        // sidecar until a checkpoint, and the encryption suite scans the MAIN database file: its positive control —
-        // the plaintext name IS in the file — would then fail whenever no checkpoint had landed yet.
         return context;
     }
 

@@ -177,8 +177,10 @@ public sealed class AddGraphWorkflowsMigrationTests
 
         await using var probe = await MigrationSchemaProbe.FromChatTemplateAsync("graph-workflows-schema-parity.sqlite").ConfigureAwait(false);
 
+        // CreateEnsureCreatedSchemaAsync, not CreateSchemaAsync: the latter copies the migrated template, which is
+        // what every other suite here wants and what would make this test compare the migrated schema against itself.
         using var fixture = new GraphWorkflowTestFixture();
-        await using var created = await fixture.CreateSchemaAsync().ConfigureAwait(false);
+        await using var created = await fixture.CreateEnsureCreatedSchemaAsync().ConfigureAwait(false);
 
         foreach (var table in Tables)
         {

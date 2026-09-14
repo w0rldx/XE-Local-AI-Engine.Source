@@ -51,10 +51,11 @@ internal sealed class DevWorkflowTestFixture : IDisposable
         var context = CreateContext();
         _ = await context.Database.EnsureCreatedAsync().ConfigureAwait(false);
 
-        // Deliberately the rollback journal, as the work-session fixture leaves it. WAL would look more like the node's
-        // own connection, but it holds recent writes in a -wal sidecar until a checkpoint, and the encryption suite
-        // scans the main database file: its positive control — the plaintext title IS in the file — would then fail
-        // whenever no checkpoint had landed yet.
+        // This leaves a WAL database, not a rollback journal: EF Core's SqliteDatabaseCreator.Create enables WAL, and
+        // journal_mode is a persistent file property. The encryption suite scans the MAIN database file and its
+        // positive control — the plaintext title IS in the file — holds anyway, because it reads through
+        // SqliteFileProbe.ReadAllBytesAsync, whose ClearAllPools closes the last connection and SQLite checkpoints the
+        // log back into the main file on that close.
         return context;
     }
 
