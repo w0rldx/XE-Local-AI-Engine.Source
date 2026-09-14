@@ -281,21 +281,6 @@ Only `CudaBuildServiceTests` and `LlamaCppSourceBuildServiceTests` mutate that p
 
 Get parallelism from separate processes/modules rather than weakening these attributes.
 
-### A known flake: `TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp`
-
-**Rule:** treat a failure of
-`XE-Local-AI-Engine.Tests/Endpoints/Transcription/TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp`
-as this known flake — record it, re-run the class alone to confirm, and never silently retry the suite until it is
-green. It is under investigation in the test-performance work and is not a regression introduced by a change that
-happens to trip it. **Failure prevented:** a repeated-until-green gate, which destroys the evidence value of every
-"green ×3" acceptance criterion around it, and the opposite error of blaming an unrelated change. **Authority:**
-observed 2026-09-13 on `develop` @1c2f6e352 — one failure across two full plain-mode runs of the module through
-`scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, the test itself costing 33 s in the failing run; no cause
-identified yet. **Retire this entry** — delete it and move the observation to
-[agent-knowledge-evidence.md](agent-knowledge-evidence.md) — once the test-performance S2 slice lands its fix or the
-flake is root-caused. A fixed flake left here is a stale belief telling the next agent not to blame a change for a
-failure that is now real.
-
 ### A wall-clock budget sized on an idle box is a CI flake waiting to happen — use `TestBudgets.Contended`
 
 Use `TestBudgets.Contended` for completion windows under module/coverage contention. Keep semantic timeouts inside the product option under test. Avoid stopwatch ceilings unless timing is the behavior.
@@ -330,6 +315,10 @@ duration matches the class's own local 30 s budget expiring plus host overhead, 
 (the trace's H2), and `AssertEx.EventuallyAsync(… Count == 0, …)` returns the instant the directory is empty, so a
 brief foreign spill cannot make it time out at all — only a deletion or a starved gate can. Both were addressed in
 one commit (per-process directory + `TestBudgets.Contended`); if the flake recurs, H2 is the surviving suspect.
+**Corollary for any recurrence:** record the failure and re-run that class alone before touching anything else —
+never retry the suite until it comes up green, which destroys the evidence value of every "green ×3" acceptance
+criterion around it. The pre-fix observation is in
+[agent-knowledge-evidence.md](agent-knowledge-evidence.md) §1.
 **Authority:** TUnit `NotInParallelAttribute` is enforced by the in-process scheduler;
 `scripts/run-tests-memory-safe.sh` batching; trace and hypotheses in
 `Plans/test-perf-2026-09-13/research/08-transcription-flake-trace.md`; fixed and controlled 2026-09-14.
@@ -449,7 +438,7 @@ For an automated spike compile, read the existing `DefineConstants`, append `P0_
 
 `BackendTraceCorrelationTests` proved `[NotInParallel]` is insufficient when a shared host itself outlives each test's `ActivityListener`. `ClassDataSource<T>` also needs a true parameterless constructor. Per-test fixture customizations use `ConfigureAdditionalTestServices`, `AdditionalConfiguration`, `EnableDevelopmentMode`, and related init properties; there is no `WithWebHostBuilder`.
 
-`run-tests-memory-safe.sh` partitions by namespace into fresh processes, schedules longest first, refuses an empty unit list, and uses `TEST_GROUPS` for coverage grouping. Batches normally run at width 1; only the local non-coverage `DevWorkflows` namespace family defaults to the measured-safe width 2. `PAR=1` restores full serialization, and grouped/coverage runs stay at width 1 by default. `JOBS=1` restores strict batch sequencing; other `PAR=N` values can reintroduce in-process races. The runner self-guards—an outer assembly guard sees its own build as contamination unless `NO_BUILD=1`. A one-process full run may be trustworthy on a roomy machine, but the batch runner remains the local wall-time/memory tool of record.
+`run-tests-memory-safe.sh` partitions by namespace into fresh processes, schedules longest first, refuses an empty unit list, and uses `TEST_GROUPS` for coverage grouping. Every batch runs at width 1 unless `PAR=N` widens it, and `PAR=N` can reintroduce in-process races. `JOBS` defaults to 16 on a host with at least 32 CPUs and 10 below that — two measured points, not a formula — and `JOBS=1` restores strict batch sequencing. The runner self-guards—an outer assembly guard sees its own build as contamination unless `NO_BUILD=1`. A one-process full run may be trustworthy on a roomy machine, but the batch runner remains the local wall-time/memory tool of record.
 
 ### Test hosts leak temp files to `Path.GetTempPath()` — keep the fixture cleanup
 
@@ -1963,7 +1952,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Open Canvas is gone; only ThemeConfigurator carries that exclusion (§6). |
 | Context management is truncation only; no cross-turn LLM summary exists. | `ConversationSummarizer` + `ConversationCompactionService` fold older turns into a synopsis on a node-local model, manually via `POST chat/conversations/{id}/compact` and automatically in work sessions (§6). |
 | CI runs test projects sequentially. | Projects run concurrently with separate result directories; the main Tests module uses grouped batch runner (§1). |
-| Memory-safe runner defaults to `JOBS=4`; increase in-process width. | Default is `JOBS=10`; process batches, not width, provide the useful concurrency (§1). |
+| Memory-safe runner defaults to `JOBS=4`; increase in-process width. | The default tracks the box — `JOBS=16` on a host with at least 32 CPUs, `JOBS=10` below that — and process batches, not in-process width, provide the useful concurrency (§1). |
 | Coverage should use one process per namespace. | Coverage instrumentation makes that prohibitively expensive; group instead. A local run uses `TEST_GROUPS=$(nproc)`; CI uses `TEST_GROUPS=16` split across 4 `TEST_SHARD` legs (§1). |
 | Development Mode must be unrestricted because restore needs network. | A short warm sandbox restores, then the agent-facing sandbox requests deny-egress where supported (§2). |
 | WSL has no GPU (or a specific older card). | Hardware changes between verifications; always query live (§2). |

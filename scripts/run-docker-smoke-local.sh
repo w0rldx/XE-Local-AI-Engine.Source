@@ -301,7 +301,7 @@ fi
 log "=== Running the real-daemon suites ==="
 env "${REQUIRE_VARIABLE}=1" \
   ${RUNNER[@]+"${RUNNER[@]}"} timeout --signal=TERM --kill-after=60s "${XE_DOCKER_SMOKE_TIMEOUT:-30m}" \
-  dotnet test "${TEST_PROJECT}" --configuration Release --no-build --max-parallel-test-modules 1 \
+  dotnet test "${TEST_PROJECT}" --configuration Release --no-build \
     --treenode-filter "${SUITE_FILTER}" 2>&1 | tee "${OUT_FILE}"
 TEST_STATUS="${PIPESTATUS[0]}"
 

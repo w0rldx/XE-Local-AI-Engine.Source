@@ -288,7 +288,7 @@ ledger_expect "4-sanitized-offer-accepted"
 ledger_expect "5-unsanitized-offer-rejected"
 
 TEST_CMD=(dotnet test "${PROJECT_ROOT}/XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"
-          --configuration Release --no-build --max-parallel-test-modules 1
+          --configuration Release --no-build
           --treenode-filter '/*/*/LlamaGrammarLiveSmokeTests/*')
 
 if [[ -z "${NO_GUARD:-}" ]]; then

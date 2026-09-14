@@ -161,17 +161,16 @@ Component-specific notes:
 From the repository root:
 
 ```bash
-scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
-scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
-scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
-  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+scripts/run-backend-tests.sh
 ```
 
-That backend command is restated from [`AGENTS.md`](AGENTS.md#validation), which is authoritative for it and explains
-why CI's per-project test loop differs. The lock prevents cooperating builds from rewriting test assemblies mid-run;
-the assembly guard detects an unwrapped concurrent build. Exit `69` means the lock was not acquired and nothing ran.
-Exit `75` means the result was **CONTAMINATED and void**—rerun it rather than treating it as red or
-green.
+That one script builds the solution in Release and runs every backend test project enrolled from the solution
+file; CI's `siblings` leg calls it too. It is restated from [`AGENTS.md`](AGENTS.md#validation), which is
+authoritative for it. The build lock it takes prevents cooperating builds from rewriting test assemblies mid-run;
+the assembly guard it wraps each project in detects an unwrapped concurrent build. Exit `69` means the lock was not
+acquired and nothing ran. Exit `75` means the result was **CONTAMINATED and void**—rerun it rather than treating it
+as red or green. With `COVERAGE_DIR` set, the sibling projects run unguarded, because coverage instrumentation
+rewrites their assemblies in place; such a run cannot detect an unwrapped concurrent build.
 
 For the React client:
 

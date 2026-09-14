@@ -89,6 +89,10 @@ The migrated SQLite template measured approximately:
 
 Two assembly MVIDs in the filename prevent reuse after migrations or identity seed code changes. Publication is an atomic same-filesystem rename.
 
+### Transcription framework-temp flake (2026-09-13/14)
+
+`TranscriptionUploadStreamingTests.BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp` failed 2 of 4 full local runs of the module through `scripts/run-tests-memory-safe.sh` at `JOBS=10 PAR=1`, costing 33 seconds in each failing run — the class's own 30-second budget expiring plus host overhead. Two causes were addressed in one commit: the fixed `ASPNETCORE_TEMP` directory was made per-process, and the budget moved to `TestBudgets.Contended`. A negative control on 2026-09-14 (the shared path restored, the two spill-producing tests looped against each other in two processes for 14 rounds, plus a full-namespace pass with four concurrent `LocalChat` sessions) stayed green throughout, so the cross-process hazard is established by inspection rather than by reproduction and CPU starvation under `JOBS=10` remains the surviving suspect for the observed failures. Trace and hypotheses: `Plans/test-perf-2026-09-13/research/08-transcription-flake-trace.md`.
+
 ### Timing-test and build-daemon incidents
 
 In the rc.4.2 manual packaging session, three of five attempts failed because lingering build daemons starved timing-sensitive tests; no corresponding product defect was found. Failure duration aligned with the timing budget. `dotnet build-server shutdown` restored the expected behavior.

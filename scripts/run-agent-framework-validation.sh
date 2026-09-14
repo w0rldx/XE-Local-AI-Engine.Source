@@ -154,12 +154,12 @@ run_step release-agent-deterministic-tests scripts/with-build-lock.sh --lock-fil
   scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test \
     --project XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj \
-    --configuration Release --no-build --max-parallel-test-modules 1
+    --configuration Release --no-build
 run_step release-adapter-architecture-tests scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   scripts/assembly-guard.sh guard --test-bins -- \
   dotnet test \
     --project XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj \
-    --configuration Release --no-build --max-parallel-test-modules 1 \
+    --configuration Release --no-build \
     --treenode-filter '/*/*/(LlamaServerAdapterIntegrationTests|LayerDependencyTests)/*'
 run_step debug-restore scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   dotnet restore XE-Local-AI-Engine.slnx -p:Configuration=Debug

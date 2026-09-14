@@ -81,7 +81,7 @@ scripts/with-build-lock.sh --lock-file "${SHARED_BUILD_LOCK}" -- \
   scripts/assembly-guard.sh guard --test-bins -- \
   timeout --signal=TERM --kill-after=30s 20m \
   dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj \
-    --configuration Release --no-build --max-parallel-test-modules 1 \
+    --configuration Release --no-build \
     --treenode-filter '/*/*/AgentFrameworkHardwareCompatibilityTests/*'
 
 [[ -s "${OUTPUT}" ]] || {

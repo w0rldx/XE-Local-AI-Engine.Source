@@ -85,29 +85,39 @@ unless the Release build reported `0 Error(s)` — a build the analyzers failed 
 reports the old green. Keep break scaffolding analyzer-clean and restore it through a shell trap.
 
 Before a gate chain: `dotnet build-server shutdown`, then export `MSBUILDDISABLENODEREUSE=1` and
-`NUGET_PACKAGES=$HOME/.nuget/packages` for every `dotnet build`/`dotnet test` in the chain — stale MSBuild
-worker nodes carry a deleted `NUGET_PACKAGES` across worktrees (NU5037 / CS0006 on a branch that is fine).
+`NUGET_PACKAGES=$HOME/.nuget/packages` for every `dotnet build`/`dotnet test` in the chain (the gate script below
+does both itself) — stale MSBuild worker nodes carry a deleted `NUGET_PACKAGES` across worktrees (NU5037 / CS0006
+on a branch that is fine).
 Never queue a gate on a worktree a writer is still editing; the result is void and no guard catches source edits.
 
 Backend (repo root):
 
 ```bash
 dotnet tool restore --tool-manifest dotnet-tools.json
-scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
-scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
-scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
-  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+scripts/run-backend-tests.sh
 ```
 
-- Never overlap a build with a `--no-build` test run. The lock serializes cooperating shells (exit **69** = lock
+- That one script IS the backend gate: one Release build, then `XE-Local-AI-Engine.Tests` through
+  `scripts/run-tests-memory-safe.sh` **and** every other test project enrolled from the solution, concurrently,
+  each sibling pinned to a measured `--maximum-parallel-tests` (`XE_TEST_WIDTH_DEFAULT`,
+  `XE_TEST_WIDTH_<Project>`). `NO_BUILD=1` skips the build, `--siblings-only` skips the batched module,
+  `COVERAGE_DIR` adds Cobertura + TRX per project. CI's `siblings` leg calls the same script.
+- Never overlap a build with a `--no-build` test run. The script takes the build lock once for the whole gate and
+  runs each sibling under the assembly guard. The lock serializes cooperating shells (exit **69** = lock
   not acquired, nothing ran); the guard detects an uncooperative build (exit **75** = CONTAMINATED, result void,
   re-run; it is not a red).
+- Cancel it by signalling its **process group** (`kill -TERM -- -<pgid>`), not its PID: `with-build-lock.sh` runs
+  its command in the foreground with no traps, so a PID-only signal kills the wrapper and orphans the lanes. Ctrl-C
+  in a terminal already does the right thing.
+- **With `COVERAGE_DIR` the siblings run UNGUARDED**: coverage instruments statically, rewriting each project's own
+  assemblies, which the guard cannot tell from a foreign build. A sibling coverage run therefore detects no
+  unwrapped concurrent build — the lock still covers cooperating shells, and the batched module keeps its own guard.
 - Scope with `--treenode-filter '/*/*/(ClassA|ClassB)/*'`, never `--filter`. `--list-tests` is authoritative.
   A no-match filter exits 8. Zero tests is never a pass.
 - Verify the whole changed test project before hand-off, not only the class you touched.
-- `scripts/run-tests-memory-safe.sh` is the lower-memory full run of `XE-Local-AI-Engine.Tests` only; it locks
-  and guards itself. Do not wrap it in the guard; if you must, pass `NO_BUILD=1` or every run reports exit 75.
-  Run the other test projects separately.
+- `scripts/run-tests-memory-safe.sh` stays the standalone run of `XE-Local-AI-Engine.Tests` only (that module's
+  lane inside the gate); it locks and guards itself. Do not wrap it in the guard; if you must, pass `NO_BUILD=1`
+  or every run reports exit 75. Run it alone only to iterate — the gate above is what a change is judged on.
 
 Frontend (`XE-Local-AI-Engine.Client.React/`):
 

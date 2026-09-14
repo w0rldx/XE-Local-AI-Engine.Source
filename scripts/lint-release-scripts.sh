@@ -69,6 +69,7 @@ SHELL_TARGETS=(
   "scripts/tests/gpu-smoke.test.sh"
   "scripts/tests/openapi-live-check.test.sh"
   "scripts/tests/release-authority.test.sh"
+  "scripts/run-backend-tests.sh"
   "scripts/run-tests-memory-safe.sh"
   "scripts/run-e2e-local.sh"
   "scripts/run-gpu-smoke-local.sh"

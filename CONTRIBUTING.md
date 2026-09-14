@@ -26,17 +26,18 @@ These are the real gates — a change isn't done until they pass. **The `--confi
 Backend:
 
 ```bash
-scripts/with-build-lock.sh -- dotnet restore XE-Local-AI-Engine.slnx
 dotnet tool restore --tool-manifest dotnet-tools.json
-scripts/with-build-lock.sh -- dotnet build XE-Local-AI-Engine.slnx --configuration Release --no-restore
-scripts/with-build-lock.sh -- scripts/assembly-guard.sh guard --test-bins -- \
-  dotnet test XE-Local-AI-Engine.slnx --configuration Release --no-build --max-parallel-test-modules 1
+scripts/run-backend-tests.sh
 ```
 
-That backend command set is restated from [`AGENTS.md`](AGENTS.md#validation), which is authoritative for it. Exit `69`
-means the build lock was not acquired. Exit `75` means the test result was contaminated and is void; rerun it.
-`scripts/run-tests-memory-safe.sh` is the lower-memory alternative for the `XE-Local-AI-Engine.Tests` module; it does not
-cover the other test projects, so run those too.
+That one script is the whole backend gate: it builds the solution in Release, then runs every test project
+enrolled from `XE-Local-AI-Engine.slnx` concurrently — `XE-Local-AI-Engine.Tests` through
+`scripts/run-tests-memory-safe.sh`, the rest as `dotnet test` at a pinned width — under one build lock, with the
+assembly guard on each sibling. CI's `siblings` leg calls the same script. It is restated from
+[`AGENTS.md`](AGENTS.md#validation), which is authoritative for it. Exit `69` means the build lock was not
+acquired and nothing ran. Exit `75` means the result was contaminated and is void; rerun it. Setting `COVERAGE_DIR`
+runs the siblings **unguarded** — coverage rewrites their assemblies in place, so the guard would call every such run
+contaminated — which means a sibling coverage run cannot detect an unwrapped concurrent build.
 
 Frontend CI gates (run `dotnet tool restore --tool-manifest dotnet-tools.json` once from the repository root, then run
 these commands from `XE-Local-AI-Engine.Client.React/`):

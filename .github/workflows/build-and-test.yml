@@ -198,107 +198,41 @@ jobs:
       # a hard dependency of this gate, which used to turn a registry blip or a rate limit into a red pull
       # request. The daemon half is proven before an RC by scripts/run-docker-smoke-local.sh.
 
-      # Auto-enrolling backend test run: the project list is read from the solution file, so a new
-      # test suite is picked up without editing this workflow. E2E is excluded here (it needs
-      # Playwright browsers + builds the SPA, so it runs in the dedicated e2e workflow).
+      # Auto-enrolling backend test run, through the SAME script as the local gate
+      # (scripts/run-backend-tests.sh): the project list is read from the solution file, so a new test
+      # suite is picked up without editing this workflow, and the enrolment rule, the per-project
+      # --results-directory, the concurrency and the hollow-gate guard all live in one implementation
+      # with two callers instead of two copies that drift. E2E is excluded there (it needs Playwright
+      # browsers + builds the SPA, so it runs in the dedicated e2e workflow).
       #
-      # One `dotnet test` per project rather than one over the solution, because MTP resolves
-      # --coverage-output relative to --results-directory: a single shared directory would let
-      # parallel modules overwrite each other's Cobertura report. Each project therefore gets its
-      # own results directory, and every report is merged by the `build-and-test` job.
+      # --siblings-only: this leg is defined as "everything except the batched module", which the
+      # tests-* legs shard below. The script still fails loudly if that module has fallen out of the
+      # solution, so it can never silently become one more plain `dotnet test` in this loop.
       #
-      # Those per-project results directories are also why the projects can run CONCURRENTLY: the
-      # report collision was the only reason this loop was ever serial. Each project's output is
-      # prefixed with its module name so interleaved logs stay attributable, and every background
-      # PID is waited on individually so a failure in any project fails the step.
+      # Per-project results directories are what let the projects run CONCURRENTLY: MTP resolves
+      # --coverage-output relative to --results-directory, so a single shared directory would let
+      # parallel modules overwrite each other's Cobertura report. That collision was the only reason
+      # this loop was ever serial. Each lane's console output is buffered into its own results
+      # directory and printed only if that lane fails, so interleaved logs stay attributable, and
+      # every background PID is waited on individually so a failure in any project fails the step.
       #
-      # --maximum-parallel-tests caps the width of these projects, because TUnit's default is
-      # ProcessorCount*4, which is what timed out on shared runners. It stays at 2: that is the last
-      # width actually measured green here, and this leg fits its budget at that width (19.4 min of
-      # wall for Client.Persistence.Tests). The dedicated runner may well afford more, but raising it
-      # is a separate, measured change — not a rider on the split.
+      # XE_TEST_WIDTH_DEFAULT caps --maximum-parallel-tests, because TUnit's default is thread-pool
+      # driven and unbounded, which is what timed out on shared runners. It stays at 2: that is the
+      # last width actually measured green HERE, and this leg fits its budget at that width (19.4 min
+      # of wall for Client.Persistence.Tests). The script's local defaults are higher (4 for
+      # Client.Persistence.Tests, 8 elsewhere) and were measured on a 32-core box; raising CI's is a
+      # separate, measured change — not a rider on the script.
+      # NO_BUILD: the solution was already built in Release above.
       # TZ=Europe/Berlin exposes non-UTC time-zone bugs (e.g. CapabilityReporterTests).
       # global.json pins the Microsoft.Testing.Platform runner.
       - name: Run sibling backend test projects with coverage (auto-enrolled)
         if: matrix.leg == 'siblings'
         env:
           TZ: Europe/Berlin
-          COVERAGE_ROOT: ${{ runner.temp }}/backend-coverage
-        run: |
-          set -euo pipefail
-          mapfile -t test_projects < <(
-            grep -oE 'Project Path="[^"]*"' XE-Local-AI-Engine.slnx \
-              | sed -E 's/Project Path="([^"]*)"/\1/' \
-              | grep -E '\.Tests(\.[A-Za-z0-9]+)*\.csproj$' \
-              | grep -v 'E2ETests' \
-              | sort)
-          if [[ "${#test_projects[@]}" -eq 0 ]]; then
-            echo "ERROR: zero test projects discovered in XE-Local-AI-Engine.slnx." >&2
-            exit 1
-          fi
-          printf 'Enrolled test project: %s\n' "${test_projects[@]}"
-
-          parallel_tests=2
-
-          run_project() {
-            local project="$1" module="$2"
-            dotnet test "$project" --configuration Release --no-build \
-              --maximum-parallel-tests "$parallel_tests" \
-              --coverage --coverage-output coverage.cobertura.xml --coverage-output-format cobertura \
-              --report-trx \
-              --results-directory "$COVERAGE_ROOT/$module" \
-              2>&1 | tee "$COVERAGE_ROOT-$module.log" | sed "s/^/[$module] /"
-            # Read dotnet test's own status, not the pipeline's: `sed` is last and always exits 0,
-            # so without this the gate would depend on the `set -euo pipefail` at the top of this
-            # step still being in force here. Capture it before anything else — the next command
-            # overwrites PIPESTATUS.
-            local status="${PIPESTATUS[0]}"
-            # Hollow-gate guard: MTP always emits a "Passed!" or "Failed!" summary per suite that
-            # ran. A suite that enrolled nothing prints no summary and still exits 0 — this catches
-            # that silent green.
-            if ! grep -qE 'Passed!|Failed!' "$COVERAGE_ROOT-$module.log"; then
-              echo "ERROR: $module produced no test-suite summary — nothing ran." \
-                   "Check project names or IsTestingPlatformApplication." >&2
-              return 1
-            fi
-            return "$status"
-          }
-
-          # This leg is defined as "everything except the batched module", so a batched module that
-          # fell out of the solution must be loud here: otherwise it would silently run as one more
-          # plain `dotnet test` in this loop while the tests-* legs sharded a project nothing
-          # enrolled. Rename batched_module here if the project moved.
-          batched_module=XE-Local-AI-Engine.Tests
-          declare -A module_projects=()
-          for project in "${test_projects[@]}"; do
-            module_projects["$(basename "$project" .csproj)"]="$project"
-          done
-          if [[ -z "${module_projects[$batched_module]:-}" ]]; then
-            echo "ERROR: $batched_module is not enrolled from the solution." >&2
-            exit 1
-          fi
-          unset 'module_projects[$batched_module]'
-          if [[ "${#module_projects[@]}" -eq 0 ]]; then
-            echo "ERROR: no sibling test projects left after excluding $batched_module." >&2
-            exit 1
-          fi
-
-          declare -A test_pids=()
-          for module in "${!module_projects[@]}"; do
-            run_project "${module_projects[$module]}" "$module" &
-            test_pids["$module"]=$!
-          done
-
-          failed_modules=()
-          for module in "${!test_pids[@]}"; do
-            if ! wait "${test_pids[$module]}"; then
-              failed_modules+=("$module")
-            fi
-          done
-          if [[ "${#failed_modules[@]}" -gt 0 ]]; then
-            echo "ERROR: test run failed for: ${failed_modules[*]}" >&2
-            exit 1
-          fi
+          NO_BUILD: 1
+          COVERAGE_DIR: ${{ runner.temp }}/backend-coverage
+          XE_TEST_WIDTH_DEFAULT: 2
+        run: scripts/run-backend-tests.sh --siblings-only
 
       # XE-Local-AI-Engine.Tests does not run as one `dotnet test`: it runs through
       # scripts/run-tests-memory-safe.sh as TEST_GROUPS processes, each covering a packed set of test
