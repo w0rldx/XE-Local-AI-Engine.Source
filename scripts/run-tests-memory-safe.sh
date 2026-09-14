@@ -300,10 +300,10 @@ fi
 # namespace that took >= 10s is listed, descending; the trailing comment is that measurement.
 # Weights are CI seconds from run 34861036286 (coverage ON, JOBS=4, in-process width 1, and the
 # TEST_GROUPS=16 pack split across four shards) — the environment the packer is actually scheduling
-# for, and the one a local 16-core no-coverage run understates by up to 8x. NOT harmless if stale:
-# an older table carried DevWorkflows at a local 196s while CI spent 1651s on it, the packer gave
-# that one unsplittable namespace a bin to itself, and shard 0 hit the 45-minute job timeout
-# (run 34730991540). Re-measure whenever a namespace grows.
+# for, and the one a local 16-core no-coverage run understates (the 2026-09-13 comparison saw up to
+# 8x). NOT harmless if stale: an older table carried DevWorkflows at a local 196s while CI spent
+# 1651s on it, the packer gave that one unsplittable namespace a bin to itself, and shard 0 hit the
+# 45-minute job timeout (run 34730991540). Re-measure whenever a namespace grows.
 # Two sources, in order of preference:
 #   * the TRX artifacts of a green CI run — sum each test's duration per namespace; this is the only
 #     source that reflects coverage on and width 1, and it works under the sharded TEST_GROUPS shape;
@@ -316,8 +316,9 @@ fi
 # Measured once, on run 34515666107 under TEST_GROUPS=4: a 15s cut-off left 71 namespaces hiding
 # 248s from the packer and packed worse than the stale table it replaced (486s vs 479s of true load
 # on the fullest bin); 10s brought that to 439s, and below 10s bought ~13s for 11 more entries.
-# The seconds move with every re-measure — on run 34861036286 the 10s cut-off hides 96s across 64
-# namespaces — the cut-off does not.
+# The seconds move with every re-measure — on run 34861036286 the 64 unlisted namespaces total
+# ~104s of real work, ~40s more than the 64s their weight-1 stubs give the packer — the cut-off
+# does not.
 HEAVY=(
   XE_Local_AI_Engine.Tests.DevWorkflows.Materialization # 1008s
   XE_Local_AI_Engine.Tests.GraphWorkflows              # 944s
@@ -391,7 +392,8 @@ for ns in "${NAMESPACES[@]}"; do [[ -z "${IS_HEAVY[$ns]:-}" ]] && ORDERED+=("$ns
 # JOBS=4:
 #   98 batches            1991 CPU-s   7:07 wall   868 MB/proc
 #   TEST_GROUPS=8          830 CPU-s   3:12 wall  1557 MB/proc
-#   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc   <- CI uses this shape
+#   TEST_GROUPS=4          684 CPU-s   2:43 wall  1532 MB/proc   <- four groups per CI leg:
+#                                                                    TEST_GROUPS=16 over TEST_SHARD=i/4
 #   one process, width 4   677 CPU-s   7:44 wall  7719 MB (one)
 # TEST_GROUPS=4 costs the same CPU as a single process (the floor) while actually using the cores:
 # 4.2x parallelism against 1.46x, because per-test host builds serialize behind the static
