@@ -391,9 +391,12 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
             {
                 File.Move(scratchDatabase, templatePath);
             }
-            catch (IOException)
+            catch (IOException) when (File.Exists(templatePath))
             {
-                // Another test process published the same-keyed template first; use theirs.
+                // Another test process published the same-keyed template first; use theirs. The filter is what makes
+                // that comment true: without it a full disk or a read-only temp directory is swallowed too, and the
+                // method returns a path that does not exist. Its twin is MigratedDatabaseTemplate.BuildAsync in
+                // XE-Local-AI-Engine.Client.Persistence.Tests, which carries the same filter for the same reason.
             }
         }
         finally

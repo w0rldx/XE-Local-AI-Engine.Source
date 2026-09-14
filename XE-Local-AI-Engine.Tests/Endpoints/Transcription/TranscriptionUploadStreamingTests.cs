@@ -25,8 +25,18 @@ public static class FrameworkTempSentinel
 
     private static string? _previousTempDirectory;
 
-    /// <summary>Where ASP.NET Core spills buffered form files once the hook below has pointed it here.</summary>
-    public static string Directory { get; } = Path.Combine(Path.GetTempPath(), "xe-local-ai-engine-tests-framework-temp");
+    /// <summary>
+    ///     Where ASP.NET Core spills buffered form files once the hook below has pointed it here.
+    ///     <para>
+    ///         Named per OS PROCESS, because <c>[NotInParallel]</c> — keyed or bare — only serializes tests that one
+    ///         process's own execution engine scheduled. The runner gives each namespace a process of its own and runs
+    ///         several at once, all sharing the box's temp root, so a fixed path here lets a sibling process's spill
+    ///         land in the directory this one is asserting is empty. The prefix stays so the directory is still
+    ///         recognisable as this suite's, and <see cref="Restore" /> still deletes the one it made.
+    ///     </para>
+    /// </summary>
+    public static string Directory { get; } =
+        Path.Combine(Path.GetTempPath(), $"xe-local-ai-engine-tests-framework-temp-{Environment.ProcessId}");
 
     /// <summary>The spill files present right now; a buffered upload larger than 64 KB puts one here while it runs.</summary>
     public static IReadOnlyList<string> Files() =>
@@ -83,7 +93,11 @@ public sealed class TranscriptionUploadStreamingTests
     /// <summary>
     ///     Shared with <c>ConversationUploadEndpointTests</c>, the only other class in this assembly that posts a
     ///     multipart file past the spill threshold. The sentinel directory is process-wide, so a concurrent spill from
-    ///     anywhere else would read as this endpoint's.
+    ///     anywhere else IN THIS PROCESS would read as this endpoint's.
+    ///     <para>
+    ///         It is the whole guard only when the runner schedules both classes into one process. Across processes
+    ///         nothing here reaches, which is why <see cref="FrameworkTempSentinel.Directory" /> carries the process id.
+    ///     </para>
     /// </summary>
     internal const string FrameworkTempSentinelKey = "framework-temp-sentinel";
 
@@ -91,7 +105,13 @@ public sealed class TranscriptionUploadStreamingTests
 
     private const string BufferedControlRoute = "/transcription-buffered-control";
 
-    private static readonly TimeSpan GateTimeout = TimeSpan.FromSeconds(30);
+    /// <summary>
+    ///     The shared contended budget rather than a local number. Every wait it bounds is a failure deadline on
+    ///     something expected within milliseconds — a gate completing, a directory going empty — so a green run
+    ///     returns at once and only a genuinely stuck one spends it. None of them is a "stays empty" window, which
+    ///     is the one shape widening would weaken.
+    /// </summary>
+    private static readonly TimeSpan GateTimeout = TestBudgets.Contended;
 
     [Test]
     public async Task Upload_WhileRequestActive_LeavesNoFrameworkTempFile()

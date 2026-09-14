@@ -27,6 +27,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
     private readonly Lock _gate = new();
     private readonly List<Guid> _created = [];
     private readonly List<string> _objectives = [];
+    private readonly Dictionary<Guid, string> _handedObjectives = [];
     private readonly List<(string Verb, Guid SessionId)> _calls = [];
     private readonly List<(string Verb, WorkSessionRuntimeOverride? Runtime)> _runtimes = [];
     private readonly IServiceScopeFactory _scopes;
@@ -48,6 +49,21 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
 
     /// <summary>Every objective it was handed, so a test can assert what the agent was actually asked.</summary>
     public IReadOnlyList<string> Objectives => Snapshot(_objectives);
+
+    /// <summary>
+    ///     The objective a session was handed, as the agent got it — before the store encoded it as UTF-8. A test whose
+    ///     subject is the text itself, rather than what was persisted, has to read it here: an unpaired surrogate
+    ///     survives in memory but comes back off the row as U+FFFD, so the row cannot show a cut through a pair.
+    /// </summary>
+    public string HandedObjective(Guid sessionId)
+    {
+        lock (_gate)
+        {
+            return _handedObjectives.TryGetValue(sessionId, out var objective)
+                ? objective
+                : throw new KeyNotFoundException($"No objective was handed to session {sessionId}.");
+        }
+    }
 
     /// <summary>
     ///     Every runtime pin it was handed, keyed by the verb that carried it: <c>create</c> once, then <c>start</c> or
@@ -119,6 +135,7 @@ internal sealed class FakeDevWorkflowAgentSession : IWorkflowOwnedWorkSessionLif
         {
             _created.Add(created.Id);
             _calls.Add(("create", created.Id));
+            _handedObjectives[created.Id] = objective;
         }
 
         return ToDetail(created);

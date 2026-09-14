@@ -116,6 +116,20 @@ seeded agent templates are idempotent on a unique `seed_slug`, and resolving `Tr
 **process-global** `ActivityListener` (why `ApiFoundation/BackendTraceCorrelationTests.cs` stays per-test).
 Agent-definition *names* are indexed but **not** unique, so duplicate seed names are safe.
 
+### When a test fails condition 1 or 2, scope the read before you take a private host
+
+A test that reads a container-singleton fake's history by POSITION — `fake.Objectives[^1]`, `fake.Created.Count`,
+`fake.Calls.Single()` — fails conditions 1 and 2 on a shared host, because that history is every sibling's too. The
+fix is usually not a private host: read the same value off the row the test's own run owns, and the assertion both
+survives sharing and names what it is about. `DevWorkflowHarness.ReadObjectiveAsync(runId, nodeKey)` is the worked
+example — it answers the objective from the node run's own session row instead of the fake's list, which turned
+seventeen positional reads in `DevWorkflows/Execution/DevWorkflowAgentExecutorTests` into id-scoped ones.
+
+**Never buy eligibility by resetting shared state.** `ClearReceivedCalls()`, clearing a fake's list, or deleting rows
+between tests makes the suite order-dependent instead of independent. If no id-scoped read expresses the claim — a
+host-wide switch, a signal channel that drains, an absolute row count — that test keeps its own host and says so at
+the construction site.
+
 ### Per-host knobs (there is no `WithWebHostBuilder`)
 
 | Init property | Use it for |

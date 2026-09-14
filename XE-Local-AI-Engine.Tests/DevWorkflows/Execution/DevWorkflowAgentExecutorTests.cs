@@ -809,24 +809,25 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_ForANodeThatDecomposesIntoDevTasks_CarriesWhatEachTaskBecomes()
     {
-        // Two private hosts: each asserts on Objectives.Single(), which is a claim about every objective its fake was
-        // handed, and the shared host would let one graph's node answer the other's assertion.
-        await using var decomposing = new DevWorkflowHarness();
-        var decomposingRun = await decomposing.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
-        _ = await decomposing.AdvanceUntilQuiescentAsync(decomposingRun).ConfigureAwait(false);
+        // Two runs on the class host rather than two hosts: each objective is read back off its own node run's
+        // session, so the pair cannot answer each other's assertion however the two runs interleave.
+        await using var harness = new DevWorkflowHarness(Host);
+        var decomposingRun = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoDevTasks, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(decomposingRun).ConfigureAwait(false);
 
-        await using var plain = new DevWorkflowHarness();
-        var plainRun = await plain.StartRunAsync(SingleAgent).ConfigureAwait(false);
-        _ = await plain.AdvanceUntilQuiescentAsync(plainRun).ConfigureAwait(false);
+        var plainRun = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
+        _ = await harness.AdvanceUntilQuiescentAsync(plainRun).ConfigureAwait(false);
 
-        AssertEx.Contains(decomposing.Agent.Objectives.Single(),
+        var decomposingObjective = await harness.ReadObjectiveAsync(decomposingRun, "decompose").ConfigureAwait(false);
+        var plainObjective = await harness.ReadObjectiveAsync(plainRun, "research").ConfigureAwait(false);
+        AssertEx.Contains(decomposingObjective,
             "must finish by submitting a NON-EMPTY code change",
             message: "the decomposing node is told the one rule every slice it writes has to satisfy.");
-        AssertEx.Contains(decomposing.Agent.Objectives.Single(),
+        AssertEx.Contains(decomposingObjective,
             "may never modify, delete or rename a test file that already exists",
             message: "and the one an existing-test slice is refused by.");
-        AssertEx.False(plain.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
-            $"a node with no materialization writes no tasks and is told nothing about them: {plain.Agent.Objectives.Single()}");
+        AssertEx.False(plainObjective.Contains("What each task becomes", StringComparison.Ordinal),
+            $"a node with no materialization writes no tasks and is told nothing about them: {plainObjective}");
     }
 
     /// <summary>
@@ -838,14 +839,13 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_ForADecompositionWithNoDevTaskInItsTemplate_OmitsWhatEachTaskBecomes()
     {
-        // A private host for the same reason the pair above uses two: Objectives.Single() is a claim about every
-        // objective the fake was handed.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        AssertEx.False(harness.Agent.Objectives.Single().Contains("What each task becomes", StringComparison.Ordinal),
-            $"an Agent-and-Tool template produces no coder attempt, so its decomposition is told nothing about one: {harness.Agent.Objectives.Single()}");
+        var objective = await harness.ReadObjectiveAsync(runId, "decompose").ConfigureAwait(false);
+        AssertEx.False(objective.Contains("What each task becomes", StringComparison.Ordinal),
+            $"an Agent-and-Tool template produces no coder attempt, so its decomposition is told nothing about one: {objective}");
     }
 
     /// <summary>
@@ -856,11 +856,11 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_ForADecompositionWithADevTaskBelowItsTemplateRoot_CarriesWhatEachTaskBecomes()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        AssertEx.Contains(harness.Agent.Objectives.Single(),
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "decompose").ConfigureAwait(false),
             "must finish by submitting a NON-EMPTY code change",
             message: "the DevTask under the template root is a coder attempt, so its decomposition is bound by the coder's contract.");
     }
@@ -889,13 +889,13 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_CarriesTheRequestAndTheUpstreamArtifacts()
     {
-        // A private host: Objectives.Single() is an assertion about every objective the shared fake was handed.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(AgentThenGate, "Explain how the inference path works.").ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        AssertEx.Contains(harness.Agent.Objectives.Single(), "Explain how the inference path works.");
-        AssertEx.Contains(harness.Agent.Objectives.Single(), "Research", message: "the node's own label says which step this is.");
+        var objective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
+        AssertEx.Contains(objective, "Explain how the inference path works.");
+        AssertEx.Contains(objective, "Research", message: "the node's own label says which step this is.");
     }
 
     /// <summary>
@@ -941,8 +941,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_CarriesTheOperatorsReasonThroughTheCloneThatWasSkippedBehindIt()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(MaterializedSlicesIntoAVerification).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -964,7 +963,7 @@ public sealed class DevWorkflowAgentExecutorTests
             "the clone skipped behind the decision quotes it rather than restating it generically.");
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status);
-        AssertEx.Contains(harness.Agent.Objectives[^1],
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false),
             "- 'validate#a' was skipped: Skipped: upstream 'implement#a' was skipped by an operator: "
             + "This slice names a file the repository does not have.",
             message: "and the verification node is handed the operator's own sentence, two nodes from where it was written.");
@@ -979,8 +978,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_NamesTheStepsAPersonSkipped()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -994,7 +992,7 @@ public sealed class DevWorkflowAgentExecutorTests
             (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
             "the join carried the branch that produced, so the verification node ran.");
 
-        var objective = harness.Agent.Objectives[^1];
+        var objective = await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false);
         AssertEx.Contains(objective, "### Skipped steps");
         AssertEx.Contains(objective,
             "- 'doomed' was skipped: Skipped by an operator: No repository binding exists for this branch.",
@@ -1011,8 +1009,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_WhenAnUpstreamArtifactWouldFillIt_StillNamesTheStepsAPersonSkipped()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(TwoBranchesIntoAVerification).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1026,7 +1023,7 @@ public sealed class DevWorkflowAgentExecutorTests
             (await harness.ReadNodeRunAsync(runId, "verify").ConfigureAwait(false)).Status,
             "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
 
-        var objective = harness.Agent.Objectives[^1];
+        var objective = await harness.ReadObjectiveAsync(runId, "verify").ConfigureAwait(false);
         AssertEx.Contains(objective, " characters.)", message: "the document that DID arrive is truncated, which is what leaves the list nothing to fit in.");
         AssertEx.Contains(objective, "### Skipped steps");
         AssertEx.Contains(objective,
@@ -1046,8 +1043,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_CarriesTheContentsOfTheUpstreamArtifactsAndNotJustTheirNames()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the SECOND one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1056,9 +1052,9 @@ public sealed class DevWorkflowAgentExecutorTests
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
-        AssertEx.Equal(expected: 2, harness.Agent.Objectives.Count, "the plan node was handed an objective of its own.");
-
-        var objective = harness.Agent.Objectives[1];
+        var researchObjective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
+        AssertEx.NotEqual(researchObjective, objective, "the plan node was handed an objective of its own.");
         AssertEx.Contains(objective, "research.md", message: "the reference is still there — the audit is what it answers.");
         AssertEx.Contains(objective, ResearchMarkdown, message: "and so are the bytes, which is what the plan node is asked to transform.");
     }
@@ -1098,7 +1094,7 @@ public sealed class DevWorkflowAgentExecutorTests
         harness.Agent.HasCapacity = true;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, "research.md", message: "the reference survives: the artifact does exist and the audit still says so.");
         AssertEx.Contains(objective, nameof(DevWorkflowArtifactReadStatus.HashMismatch), message: "and the objective names why its contents are missing.");
         AssertEx.False(objective.Contains("xxxxxxxxxx", StringComparison.Ordinal), "unverified bytes must never reach the agent.");
@@ -1112,8 +1108,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_WhenAnUpstreamArtifactIsLongerThanItCanHold_TruncatesItAndSaysSo()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the SECOND one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1125,7 +1120,7 @@ public sealed class DevWorkflowAgentExecutorTests
             (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status,
             "the node ran: an over-long objective would have been refused and blocked it for a human.");
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, " characters.)", message: "the marker says how much of the document the agent is not seeing.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling this lane holds itself to.");
@@ -1168,8 +1163,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_WithManyUpstreamArtifacts_RendersEveryOneAndStaysInsideTheLimit()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(FanInToPlan(width: 6)).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1184,7 +1178,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
 
-        var objective = harness.Agent.Objectives[^1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         for (var branch = 1; branch <= 6; branch++)
         {
             AssertEx.Contains(objective, $"research-{branch}.md", message: "every branch the node inherited from is named, however little room each one got.");
@@ -1201,8 +1195,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_WhenTheNodesOwnInstructionsFillMostOfIt_SqueezesTheArtifactRatherThanOverrunning()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the SECOND one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6000))).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1214,7 +1207,7 @@ public sealed class DevWorkflowAgentExecutorTests
             (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status,
             "the node ran: an over-long objective is refused, and the refusal blocks it for a human.");
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, "research.md", message: "the reference still reaches the agent even when the contents barely do.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling.");
@@ -1253,7 +1246,7 @@ public sealed class DevWorkflowAgentExecutorTests
         harness.Agent.HasCapacity = true;
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, "research.md", message: "the node is still told the artifact exists.");
         AssertEx.Contains(objective, "too large to include here", message: "and why it is holding a reference rather than contents.");
         AssertEx.False(objective.Contains("did not verify", StringComparison.Ordinal),
@@ -1270,8 +1263,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_WhenOnlyAReferenceFits_KeepsItAndStillStopsAtTheLimit()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the SECOND one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         // Sized so the section header and the artifact's own header still fit but nothing is left for a body: the
         // rendered marker plus that header overrun the ceiling, which is the only shape that reaches the guard.
         var runId = await harness.StartRunAsync(ResearchThenPlanInstructed(new string('i', 6820))).ConfigureAwait(false);
@@ -1283,7 +1275,7 @@ public sealed class DevWorkflowAgentExecutorTests
 
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, (await harness.ReadNodeRunAsync(runId, "plan").ConfigureAwait(false)).Status);
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, "research.md", message: "the reference is the half worth keeping when the contents cannot fit.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
             $"the objective was {objective.Length} characters, past the ceiling — the header and the marker were not counted.");
@@ -1296,8 +1288,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_ForAnArtifactThatIsNotText_GivesTheReferenceAndSaysWhyTheresNoContent()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the SECOND one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(ResearchThenPlan).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1305,7 +1296,7 @@ public sealed class DevWorkflowAgentExecutorTests
         await harness.SettleAgentAsync(runId, "research").ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var objective = harness.Agent.Objectives[1];
+        var objective = await harness.ReadObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Contains(objective, "diagram.png", message: "the node is told the artifact exists.");
         AssertEx.Contains(objective, "not text", message: "and why it is holding a reference rather than contents.");
         AssertEx.True(objective.Length <= DevWorkflowAgentExecutor.MaxObjectiveCharacters,
@@ -1324,8 +1315,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task TheObjective_TruncatingAnArtifactOfAstralCharacters_NeverCutsThroughASurrogatePair()
     {
-        // A private host: Objectives is the shared fake's whole history, and this asserts on the LAST one.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(FanInToPlan(width: 2)).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1336,7 +1326,7 @@ public sealed class DevWorkflowAgentExecutorTests
         await harness.SettleAgentAsync(runId, "r2").ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var objective = harness.Agent.Objectives[^1];
+        var objective = await harness.ReadHandedObjectiveAsync(runId, "plan").ConfigureAwait(false);
         AssertEx.Equal(objective,
             Encoding.UTF8.GetString(Encoding.UTF8.GetBytes(objective)),
             "an unpaired surrogate comes back from UTF-8 as U+FFFD, so a round trip that changes the text is a cut through a pair.");
@@ -1738,8 +1728,7 @@ public sealed class DevWorkflowAgentExecutorTests
     [Test]
     public async Task AnAgentNodeRetriedByAnOperator_IsToldWhatTheySaid()
     {
-        // A host of its own: this reads the fake agent's Objectives list by position.
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1755,7 +1744,7 @@ public sealed class DevWorkflowAgentExecutorTests
                      .ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
-        var objective = harness.Agent.Objectives[^1];
+        var objective = await harness.ReadObjectiveAsync(runId, "research").ConfigureAwait(false);
         AssertEx.Contains(objective, "## Operator retry");
         AssertEx.Contains(objective, "Read the llama-server launch args before you answer.");
         AssertEx.False(objective.Contains("operatorRetryAttempt", StringComparison.Ordinal),

@@ -27,6 +27,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowNodeRunTelemetryTests
 {
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
     /// <summary>The agent definition the harness's seeded catalog binds, so the node run actually owns a work session.</summary>
     private const string BoundAgentId = "6f5b1f3a-1c2d-4f5e-8a9b-0c1d2e3f4a5b";
 
@@ -81,7 +84,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     [Test]
     public async Task Succeeded_Settle_WritesNonEmptyRoute()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -159,7 +162,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     {
         var seen = new Dictionary<DevWorkflowNodeRunStatus, string>();
 
-        await using (var harness = new DevWorkflowHarness())
+        await using (var harness = new DevWorkflowHarness(Host))
         {
             var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
             _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -180,7 +183,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
                      DevWorkflowDecisionKind.Skip
                  })
         {
-            await using var harness = new DevWorkflowHarness();
+            await using var harness = new DevWorkflowHarness(Host);
             var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
             await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
             AssertTelemetryGate(await harness.ReadNodeRunsAsync(runId).ConfigureAwait(false), seen);
@@ -239,7 +242,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Null(cap.CaptureConsumption(),
             "A disposed scope answers nothing — which is exactly why the names have to be persisted on the step row instead.");
 
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await AppendStepConsumptionAsync(harness, runId, "research", detailJson).ConfigureAwait(false);
@@ -321,7 +324,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
         AssertEx.Null(legacyDetail.ToolNames, "A row that predates the field has no list, which is not the same as an empty one.");
         AssertEx.Equal(expected: 0L, legacyDetail.ToolSchemaTokens, "And no schema tokens either, rather than a parse failure.");
 
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(AgentThenGate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -345,7 +348,7 @@ public sealed class DevWorkflowNodeRunTelemetryTests
     [Test]
     public async Task ADevTaskNodeRun_WritesNoToolNames()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(DevWorkflowGraphs.AnyJoinOverADeadBranch, developmentProjectId: Guid.NewGuid()).ConfigureAwait(false);
         await harness.AdvanceThroughToolLaneAsync(runId).ConfigureAwait(false);
 

@@ -613,6 +613,30 @@ internal sealed class DevWorkflowHarness : IAsyncDisposable
         (await ReadNodeRunAsync(runId, nodeKey).ConfigureAwait(false)).WorkSessionId
         ?? throw new AssertionException($"Node run '{nodeKey}' of run {runId} owns no work session.");
 
+    /// <summary>
+    ///     The objective the node run's current attempt was handed, read back off its own session row.
+    ///     <para>
+    ///         Off the ROW rather than off <see cref="FakeDevWorkflowAgentSession.Objectives" />, because the fake is a
+    ///         container singleton: on the class host its history is every sibling's too, and a positional read of it
+    ///         asserts about whichever objective happened to be last. This names the node under test instead.
+    ///     </para>
+    /// </summary>
+    public async Task<string> ReadObjectiveAsync(Guid runId, string nodeKey)
+    {
+        var sessionId = await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false);
+        await using var scope = Services.CreateAsyncScope();
+        return (await scope.ServiceProvider.GetRequiredService<IAgentWorkSessionStore>().GetAsync(sessionId).ConfigureAwait(false)).Objective;
+    }
+
+    /// <summary>
+    ///     The objective the node run's current attempt was handed, taken off the fake as the agent got it rather than
+    ///     off the session row. The row has been through UTF-8, which turns an unpaired surrogate into U+FFFD: a test
+    ///     about the TEXT — a cut through a surrogate pair — can only see it before persistence. Everything asserting
+    ///     about persisted content uses <see cref="ReadObjectiveAsync" />.
+    /// </summary>
+    public async Task<string> ReadHandedObjectiveAsync(Guid runId, string nodeKey) =>
+        Agent.HandedObjective(await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false));
+
     /// <summary>Lands the node run's session on a terminal status, which is all "the agent finished" means here.</summary>
     public async Task SettleAgentAsync(Guid runId, string nodeKey, AgentWorkSessionStatus status = AgentWorkSessionStatus.Completed) =>
         _ = await Agent.SettleAsync(await ReadSessionIdAsync(runId, nodeKey).ConfigureAwait(false), status).ConfigureAwait(false);

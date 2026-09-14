@@ -2198,6 +2198,9 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => question is not null, TimeSpan.FromSeconds(5));
+        // real-timer: the turn budget is a REAL 1 s deadline armed with CancellationTokenSource.CancelAfter inside the runner, not a
+        // TimeProvider a fake can advance. Outliving it is the assertion, so the wait has to be real wall-clock time; 2 s
+        // is that 1 s plus margin for a contended runner, and the park is asserted immediately after it.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the turn must still be parked after the (unextended) invocation deadline would have fired");
@@ -2226,6 +2229,8 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        // real-timer: the same real CancelAfter deadline as the question park above: 1 s of turn budget has to actually elapse before
+        // "still parked" means anything, and no fake clock reaches it.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an operator weighing an approval must not be pre-empted by the model's own turn budget");
@@ -2257,6 +2262,8 @@ public sealed class InvocationRunnerTests
 
         var runTask = RunAsync(runner, package);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
+        // real-timer: the same real CancelAfter deadline: the attached park's full budget is only proved by outliving the 1 s turn
+        // budget in real time.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "an attached operator weighing an approval must keep the full park budget");
@@ -2320,6 +2327,8 @@ public sealed class InvocationRunnerTests
 
         // The reload lands well inside the detached park's 1 s budget and re-arms the deadline via AttachmentChanged.
         using var reattached = tracker.Attach(invocationId);
+        // real-timer: the same real CancelAfter deadline: the re-armed budget is only proved by outliving the detached park's 1 s
+        // budget in real time.
         await Task.Delay(TimeSpan.FromSeconds(2));
 
         AssertEx.False(runTask.IsCompleted, "the re-attached park must get the full budget back from the moment of re-attach");

@@ -966,7 +966,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AnOperatorRetryWithAReason_WidensTheCapByOneAndCarriesTheReasonOntoTheNextAttempt()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1003,7 +1003,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task AnOperatorRetryWithNoComment_StillWidensTheCapAndDropsThePreviousReason()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 
@@ -1036,7 +1036,7 @@ public sealed class DevWorkflowDispatcherTests
     [Test]
     public async Task ASecondOperatorRetry_WidensTheCapAgain()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await harness.StartRunAsync(SingleAgent).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
 

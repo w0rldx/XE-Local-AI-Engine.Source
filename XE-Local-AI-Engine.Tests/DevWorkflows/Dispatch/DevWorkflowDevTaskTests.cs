@@ -20,6 +20,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class DevWorkflowDevTaskTests
 {
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
     /// <summary>
     ///     The <c>DevTask</c> shape end to end: plan it, implement it, validate the result, and put it in front of a human.
     ///     <para>
@@ -895,8 +898,9 @@ public sealed class DevWorkflowDevTaskTests
     [Test]
     public async Task ATaskADevTaskNodeRunDrives_NamesThatRunBackOnTheDevelopmentTask()
     {
-        // A host of its own with the REAL Development management service: this is about what Dev Mode's own page reads.
-        await using var harness = new DevWorkflowHarness();
+        // The class host, whose Development management service is the REAL one: the scripted chain the rest of this
+        // class uses is a stand-in, and this is about what Dev Mode's own page reads.
+        await using var harness = new DevWorkflowHarness(Host);
         var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
         var undrivenTaskId = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
         var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
@@ -929,9 +933,9 @@ public sealed class DevWorkflowDevTaskTests
     [Test]
     public async Task ADevModeApply_IsRefusedWhileALiveWorkflowRunOwnsTheTask_AndOnlyForACallerThatIsNotThatRun()
     {
-        // The REAL Development management service: the scripted chain is the thing under test's stand-in everywhere
-        // else, and a guard asserted against a stand-in is not asserted at all.
-        await using var harness = new DevWorkflowHarness();
+        // The class host's REAL Development management service: the scripted chain is the thing under test's stand-in
+        // everywhere else, and a guard asserted against a stand-in is not asserted at all.
+        await using var harness = new DevWorkflowHarness(Host);
         var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
         var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);
         await PinTaskAsync(harness, runId, "implement", taskId).ConfigureAwait(false);
@@ -980,7 +984,7 @@ public sealed class DevWorkflowDevTaskTests
     [Test]
     public async Task ADevModeApply_OnATaskNoWorkflowDrives_IsNotRefusedByTheOwnershipGuard()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var (projectId, taskId) = await SeedDevelopmentTaskAsync(harness).ConfigureAwait(false);
         var undriven = await AddTaskAsync(harness, projectId, "Nobody's workflow drives this").ConfigureAwait(false);
         var runId = await harness.StartRunAsync(SingleDevTask, "Add the feature.", projectId).ConfigureAwait(false);

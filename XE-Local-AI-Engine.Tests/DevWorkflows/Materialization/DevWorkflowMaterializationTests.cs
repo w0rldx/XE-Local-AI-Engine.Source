@@ -10,15 +10,22 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///     Dynamic materialization: a decomposition reads its own task package and grows the run into it, cloning the
 ///     template subtree once per task in the same transaction that rewrites the run's pinned graph.
 ///     <para>
-///         Every test takes a host of its own. The graph cache's parse count, the scripted sandbox and the scripted
-///         agent are all container singletons, and these fixtures share node keys — a shared host would let one test's
-///         script answer another's node run, and one test's parse another's assertion.
+///         Most tests share the class host: every assertion here is scoped to the test's own run id, and the fixtures
+///         that are not — the graph cache's parse count, the scripted sandbox's script, the scripted agent's objective
+///         history — belong to the handful of tests that keep a host of their own and say so at the construction site.
 ///     </para>
 /// </summary>
 public sealed class DevWorkflowMaterializationTests
 {
-    /// <summary>A project id on the work item, because a graph with tool nodes in it is only startable with one.</summary>
-    private static readonly Guid DevelopmentProjectId = Guid.NewGuid();
+    [ClassDataSource<DevWorkflowHostFixture>(Shared = SharedType.PerClass)]
+    public required DevWorkflowHostFixture Host { get; init; }
+
+    /// <summary>
+    ///     A project id on the work item, because a graph with tool nodes in it is only startable with one. Minted per
+    ///     TEST — TUnit builds a fresh instance of this class for each one — so concurrent siblings on the class host
+    ///     never stamp their runs with the same id and nothing here can come to be asserted by a shared one.
+    /// </summary>
+    private readonly Guid _developmentProjectId = Guid.NewGuid();
 
     /// <summary>Two tasks, the second depending on the first — the smallest package that exercises every wiring rule.</summary>
     private const string TwoTasks = """
@@ -60,7 +67,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionClonesItsTemplateSubtreeOncePerTaskAndWiresTheClonesIntoItsJoin()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
@@ -80,7 +87,7 @@ public sealed class DevWorkflowMaterializationTests
         foreach (var child in nodeRuns.Where(static nodeRun => nodeRun.NodeKey.Contains('#', StringComparison.Ordinal)))
         {
             AssertEx.Equal(decompose.Id, child.MaterializedFromNodeRunId, $"'{child.NodeKey}' names the decomposition it came from, which is how a reader groups it.");
-            AssertEx.Equal(DevelopmentProjectId, child.DevelopmentProjectId, "a child implements a slice of the SAME project, which is what carries the trust decision.");
+            AssertEx.Equal(_developmentProjectId, child.DevelopmentProjectId, "a child implements a slice of the SAME project, which is what carries the trust decision.");
         }
 
         AssertEx.Equal(expected: 1, (await harness.ReadNodeRunAsync(runId, "implement#alpha").ConfigureAwait(false)).MaterializationIndex);
@@ -115,7 +122,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task EachChildCarriesTheBriefItsTaskNamed()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
@@ -139,7 +146,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADevTaskSliceThatNamesNoFileItWillChangeIsRefusedRatherThanSentToACoderThatCannotFinish()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
                 """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
                 DevWorkflowGraphs.DecompositionIntoDevTasks)
@@ -168,7 +175,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADevTaskSliceWhoseChangesLeaveTheWorkspaceIsRefused()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
                 """[{"id":"alpha","goal":"Add the method.","changes":["/etc/passwd"]}]""",
                 DevWorkflowGraphs.DecompositionIntoDevTasks)
@@ -191,7 +198,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADevTaskSliceCarriesTheFilesItNamedIntoTheCodersBrief()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
                 """
                 [
@@ -221,7 +228,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADevTaskBelowAnAgentRootStillRequiresChanges()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
                 """[{"id":"survey","title":"Survey the style","goal":"Read the calculator and capture the style profile."}]""",
                 DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
@@ -241,7 +248,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADevTaskBelowAnAgentRootMaterializesOnceItNamesItsChanges()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness,
                 """[{"id":"alpha","title":"Add Square","goal":"Add a Square method.","changes":["src/Calc/Calculator.cs"]}]""",
                 DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask)
@@ -264,7 +271,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task AnAgentRootedDecompositionStillMaterializesWithoutChanges()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
 
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
@@ -283,6 +290,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task TheTickThatMaterializesEndsThereAndTheNextOneReParses()
     {
+        // A private host: the graph cache is a container singleton, so a concurrent sibling's parse would move ParseCount.
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
 
@@ -317,6 +325,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task AReplayedMaterializationWritesNothingASecondTime()
     {
+        // A private host: RestartAsync runs the startup reconcilers, which sweep every run in the database.
         await using var harness = new DevWorkflowHarness();
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
@@ -349,7 +358,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task MaterializedGraphStillValidates()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         // TwoDevTasks rather than TwoTasks: this template roots in a DevTask, and a package whose tasks name no
         // 'changes' is refused there before anything is cloned — which would leave this asserting the definition.
         var runId = await DecomposeAsync(harness, TwoDevTasks, DevWorkflowGraphs.DecompositionIntoDevTasksAndIntegration).ConfigureAwait(false);
@@ -373,7 +382,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionThatFoundNoWorkCompletesTheRunThroughItsJoin()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, "[]").ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -409,7 +418,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionThatFoundNoWorkAndHasNoCheckSaysTheRevisionDidNotMove()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, "[]", DevWorkflowGraphs.DecompositionIntoAnAgentOverADevTask).ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -438,7 +447,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionsRouteNamesTheCloneRootsItsExpansionAdmitted()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
 
         // One tick settles the decomposition AND expands it, which is why the stale document was never observable
@@ -469,7 +478,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionThatFoundNoWorkWritesOneNotApplicableValidateRow()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, "[]").ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -579,7 +588,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task AMalformedTaskPackageIsHandedBackToTheNodeThatWroteIt()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, "not a task package at all").ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -587,7 +596,9 @@ public sealed class DevWorkflowMaterializationTests
         var decompose = await harness.ReadNodeRunAsync(runId, "decompose").ConfigureAwait(false);
         AssertEx.Equal(expected: 2, decompose.Attempt, "the decomposition re-runs rather than the run stalling on output nothing can read.");
         AssertEx.Equal(DevWorkflowNodeRunStatus.Running, decompose.Status);
-        AssertEx.Contains(harness.Agent.Objectives[^1], "not valid JSON", message: "and it is TOLD what was wrong, or it composes the same answer again.");
+        AssertEx.Contains(await harness.ReadObjectiveAsync(runId, "decompose").ConfigureAwait(false),
+            "not valid JSON",
+            message: "and it is TOLD what was wrong, or it composes the same answer again.");
 
         _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", TwoTasks).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
@@ -603,7 +614,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecompositionWhoseOutputStaysUnusableStandsDownForAHuman()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, "not a task package at all").ConfigureAwait(false);
 
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
@@ -673,7 +684,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ATaskPackageWithAHoleWhereATaskShouldBeIsRefusedRatherThanWedgingTheRun()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         string[] packages =
         [
             "[null]",
@@ -730,7 +741,7 @@ public sealed class DevWorkflowMaterializationTests
                                       }
                                       """;
 
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, """[{"id":"alpha","goal":"Do the half nobody named."}]""", CollidingGraph).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
@@ -779,7 +790,7 @@ public sealed class DevWorkflowMaterializationTests
                                          }
                                          """;
 
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, """[{"id":"b#c","goal":"one"},{"id":"c","goal":"two"}]""", AmbiguousTemplate).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);
@@ -801,7 +812,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task ADecomposingNodesOwnOutputIsPromotedAsTheKindItDeclares()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await DecomposeAsync(harness, TwoTasks).ConfigureAwait(false);
         _ = await harness.AdvanceAsync(runId).ConfigureAwait(false);
 
@@ -820,7 +831,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task TheNodeBehindAMaterializedJoinInheritsThePlanTheTaskPackageAndEveryChildsReport()
     {
-        await using var harness = new DevWorkflowHarness();
+        await using var harness = new DevWorkflowHarness(Host);
         var runId = await VerifiableDecompositionAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
 
         await DriveToCompletionAsync(harness, runId).ConfigureAwait(false);
@@ -852,6 +863,7 @@ public sealed class DevWorkflowMaterializationTests
     [Test]
     public async Task SkippingOneSlicesValidationLeavesItsSiblingAloneAndTheJoinWaitsThenFiresOnIt()
     {
+        // A private host: the script is pinned to 'validate#alpha', a node key this class's other fixtures also carry.
         await using var harness = new DevWorkflowHarness();
         harness.Tools.Answer("validate#alpha", FakeDevWorkflowToolCommands.Failing());
         var runId = await VerifiableDecompositionAsync(harness, TwoIndependentTasks).ConfigureAwait(false);
@@ -899,9 +911,9 @@ public sealed class DevWorkflowMaterializationTests
     ///     Starts a run on the shape a verification sits behind and takes it to the point where an approved plan and a
     ///     read task package are both on the run.
     /// </summary>
-    private static async Task<Guid> VerifiableDecompositionAsync(DevWorkflowHarness harness, string package)
+    private async Task<Guid> VerifiableDecompositionAsync(DevWorkflowHarness harness, string package)
     {
-        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionWithVerification, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(DevWorkflowGraphs.DecompositionWithVerification, developmentProjectId: _developmentProjectId).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         _ = await harness.SaveAgentArtifactAsync(runId, "plan", "plan.md", "1. Parse it. 2. Write it.").ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "plan").ConfigureAwait(false);
@@ -915,9 +927,9 @@ public sealed class DevWorkflowMaterializationTests
     }
 
     /// <summary>Starts a decomposing run and takes it to the point where its package is written and its session done.</summary>
-    private static async Task<Guid> DecomposeAsync(DevWorkflowHarness harness, string package, string? graphJson = null)
+    private async Task<Guid> DecomposeAsync(DevWorkflowHarness harness, string package, string? graphJson = null)
     {
-        var runId = await harness.StartRunAsync(graphJson ?? DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: DevelopmentProjectId).ConfigureAwait(false);
+        var runId = await harness.StartRunAsync(graphJson ?? DevWorkflowGraphs.DecompositionSubtree, developmentProjectId: _developmentProjectId).ConfigureAwait(false);
         _ = await harness.AdvanceUntilQuiescentAsync(runId).ConfigureAwait(false);
         _ = await harness.SaveAgentArtifactAsync(runId, "decompose", "tasks.json", package).ConfigureAwait(false);
         await harness.SettleAgentAsync(runId, "decompose").ConfigureAwait(false);

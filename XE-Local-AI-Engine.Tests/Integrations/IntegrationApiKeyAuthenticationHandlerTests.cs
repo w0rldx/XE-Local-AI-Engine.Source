@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Integrations;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -19,6 +20,9 @@ using XE_Local_AI_Engine.Tests.Testing;
 /// </summary>
 public sealed class IntegrationApiKeyAuthenticationHandlerTests
 {
+    [ClassDataSource<IntegrationApiKeyHostFixture>(Shared = SharedType.PerClass)]
+    public required IntegrationApiKeyHostFixture Host { get; init; }
+
     private const string ValidKey = "xeint_abcdefghijklmnopqrstuvwxyz0123456789";
 
     private const string RotatedKey = "xeint_zyxwvutsrqponmlkjihgfedcba9876543210";
@@ -27,7 +31,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     public async Task Authenticate_WithNoAuthorizationHeader_ProducesNoResult()
     {
         // NoResult rather than Fail, so the challenge that emits WWW-Authenticate still runs.
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
 
         var result = await AuthenticateAsync(factory, presented: null).ConfigureAwait(false);
 
@@ -40,7 +44,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     [Arguments("xeint_no-bearer-prefix")]
     public async Task Authenticate_WithANonBearerScheme_Fails(string header)
     {
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
         await using var scope = factory.Services.CreateAsyncScope();
         var context = CreateContext(scope);
         context.Request.Headers.Authorization = header;
@@ -59,7 +63,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     {
         // A short value must not reach an unguarded slice inside the key service: the handler has no try/catch, so an
         // exception there is a 500 where a 401 is required, reachable by anyone.
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
 
         var result = await AuthenticateAsync(factory, presented).ConfigureAwait(false);
 
@@ -69,7 +73,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     [Test]
     public async Task Authenticate_WithAValidKey_MintsPrincipalAndPrefixClaimsAndNoRole()
     {
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
 
         var result = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
 
@@ -86,7 +90,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     {
         // The rotation property ruling R4-6 exists for: ownership keys on the principal, so a second credential reaches
         // the same sessions and executions while remaining separately attributable and separately revocable.
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
 
         var original = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
         var rotated = await AuthenticateAsync(factory, RotatedKey).ConfigureAwait(false);
@@ -103,7 +107,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     {
         // THE load-bearing assertion of ruling R2-6: a revoked credential and a never-issued one produce a
         // byte-identical rejection, so a caller can never learn that the key it holds was once real.
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
 
         var (revokedStatus, revokedChallenge, revokedBody) = await ChallengeAsync(factory, "xeint_revoked-credential-material-here").ConfigureAwait(false);
         var (unknownStatus, unknownChallenge, unknownBody) = await ChallengeAsync(factory, "xeint_never-issued-credential-material").ConfigureAwait(false);
@@ -119,7 +123,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     [Test]
     public async Task IntegrationPolicy_IsSatisfiedByTheKeySchemeAndNeverByAnOperatorRole()
     {
-        await using var factory = CreateFactory();
+        var factory = Host.Factory;
         var authenticated = await AuthenticateAsync(factory, ValidKey).ConfigureAwait(false);
         var authorization = factory.Services.GetRequiredService<IAuthorizationService>();
 
@@ -173,7 +177,7 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
     ///     including the "revoked" probe — as the same <see langword="null" />, which is exactly what the real service
     ///     does for a revoked row.
     /// </summary>
-    private static TestServerWebAppFactory CreateFactory()
+    internal static TestServerWebAppFactory CreateFactory()
     {
         var keyService = Substitute.For<IIntegrationApiKeyService>();
         _ = keyService.ValidateAsync(Arg.Any<string?>(), Arg.Any<CancellationToken>())
@@ -193,4 +197,20 @@ public sealed class IntegrationApiKeyAuthenticationHandlerTests
             }
         };
     }
+}
+
+/// <summary>
+///     One host for the whole class: every test here sends its credential on the request and asserts on that response
+///     alone, and the stood-in key service answers from the argument rather than from state, so nothing a test does is
+///     visible to the next one.
+/// </summary>
+public sealed class IntegrationApiKeyHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = IntegrationApiKeyAuthenticationHandlerTests.CreateFactory();
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
 }

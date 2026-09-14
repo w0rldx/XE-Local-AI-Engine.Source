@@ -19,7 +19,8 @@ using SecurityOptions = XE_Local_AI_Engine.Client.Configuration.SecurityOptions;
 ///     Keyed <c>[NotInParallel]</c> because the oversize case posts a 2 MB form file, which spills into the same
 ///     process-wide framework temp directory <c>TranscriptionUploadStreamingTests</c> watches as its sentinel. These
 ///     are the only two classes in the assembly that post past the spill threshold; letting them overlap would read
-///     this test's spill as a leak from the transcription upload path.
+///     this test's spill as a leak from the transcription upload path. The key does that only WITHIN a process — the
+///     runner puts these two namespaces in different ones — so the sentinel directory carries the process id too.
 /// </remarks>
 [NotInParallel(TranscriptionUploadStreamingTests.FrameworkTempSentinelKey)]
 public sealed class ConversationUploadEndpointTests

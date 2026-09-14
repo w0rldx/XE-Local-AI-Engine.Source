@@ -307,6 +307,33 @@ If the operation can fault before publishing the awaited signal, inspect/await t
 
 **Adding a migration can red the module through a test that never mentions migrations.** `NodeChatMigrationRecoveryServiceTests` applies the WHOLE migration set against a real SQLite file under a wall-clock attempt budget, and starvation there does not read as a slow test: the attempt is cancelled MID-APPLY, leaving a half-rebuilt `ef_temp_*` table behind, and the retry dies on `table "ef_temp_<name>" already exists`. Two migrations plus five new migration tests (2026-08-25) were enough to tip it over on a 16-core box, with a different test of the class failing each run. The fix is `[NotInParallel]` on that class, not a bigger budget: its abandoned-lock test's first attempt is MEANT to exhaust the budget, so raising it buys the same increase in dead wall clock.
 
+### `[NotInParallel]` is process-local, so a fixed path under the OS temp dir is shared by the runner's other processes
+
+**Rule:** any file-system path a test asserts the CONTENTS of must be unique per OS process — suffix it with
+`Environment.ProcessId` (or a Guid) at the single place it is defined, and do not let a keyed `[NotInParallel]` stand
+in for that. The attribute is a constraint one process's own execution engine applies to the tests it scheduled; it
+has no reach into a sibling process. `scripts/run-tests-memory-safe.sh` runs one fresh process per namespace with
+`JOBS` of them at once and gives none of them a `TMPDIR` of its own, so every process's `Path.GetTempPath()` is the
+same directory, and two classes in different namespaces sharing a key coordinate nothing.
+**Prevents:** a sibling process writing into — or, at its session end, recursively DELETING — the directory this
+process is asserting about. `FrameworkTempSentinel.Directory`
+(`Tests/Endpoints/Transcription/TranscriptionUploadStreamingTests.cs`) pointed `ASPNETCORE_TEMP` at a fixed
+`xe-local-ai-engine-tests-framework-temp`, and `ConversationUploadEndpointTests` (`Endpoints.LocalChat`, a different
+namespace and so a different process) spilled a 2 MB payload into it; both classes carried a keyed `[NotInParallel]`
+written to prevent exactly that overlap, which across processes it cannot do.
+**Honest limit on the evidence:** this hazard is established by inspection, NOT by a reproduction. A negative
+control on 2026-09-14 — the fixed shared path restored, the two spill-producing tests looped against each other in
+two processes, 14 rounds, plus a full-namespace pass with four concurrent `LocalChat` sessions — stayed green every
+time. So the fix removes a real hazard but is not proven to be what fixed the observed
+`BufferedControlEndpoint_WhileRequestActive_DoesSpillToFrameworkTemp` flake (2 of 4 full local runs, ~33 s). That
+duration matches the class's own local 30 s budget expiring plus host overhead, i.e. CPU starvation under `JOBS=10`
+(the trace's H2), and `AssertEx.EventuallyAsync(… Count == 0, …)` returns the instant the directory is empty, so a
+brief foreign spill cannot make it time out at all — only a deletion or a starved gate can. Both were addressed in
+one commit (per-process directory + `TestBudgets.Contended`); if the flake recurs, H2 is the surviving suspect.
+**Authority:** TUnit `NotInParallelAttribute` is enforced by the in-process scheduler;
+`scripts/run-tests-memory-safe.sh` batching; trace and hypotheses in
+`Plans/test-perf-2026-09-13/research/08-transcription-flake-trace.md`; fixed and controlled 2026-09-14.
+
 ### A silent `return` on the wrong OS reports a green pass, not a skip
 
 **Rule:** gate a platform-specific test with TUnit's built-in `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` (`OS` is `TUnit.Core.Enums.OS`, imported as `using OS = TUnit.Core.Enums.OS;` because that namespace's `LogLevel` collides with the logging one), or with `Skip.Test("<why>")` after a capability probe. Never `if (!OperatingSystem.IsWindows()) return;`. Both attributes are `SkipAttribute` subclasses whose reason names the platform; the proof test is `XE-Local-AI-Engine.Tests/Testing/PlatformSkipTests.cs`. A guard that depends on more than the OS keeps `Skip.Unless(...)` in the body on top of the attribute. `[RunOn]` is invisible to the CA1416 platform analyzer, so a method that calls a Linux-only API also carries `[UnsupportedOSPlatform("windows")]`. Prevents a suite reporting green on a platform where it verified nothing: 137 guards across 21 files were converted (107 `[RunOn(OS.Linux)]`, 28 `[ExcludeOn(OS.Windows)]`, 1 each of the inverses), concentrated in `ProcessSandboxRuntimeProviderTests`, `LlamaCppSourceBuildServiceTests`, `TrainingRuntimeServiceTests`, `SourceBuildRecoveryTests` and `CoderWorkspaceReaderTests`. Authority: test-principles audit 2026-09-05; the fallback shape for a probed capability is `Testing/SymlinkSupport.cs` / `Testing/JunctionSupport.cs`.

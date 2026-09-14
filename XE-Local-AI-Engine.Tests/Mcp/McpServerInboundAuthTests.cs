@@ -12,6 +12,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using NSubstitute;
+using TUnit.Core.Interfaces;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Mcp;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -33,12 +34,20 @@ public sealed class McpServerInboundAuthTests
 
     private const string McpEndpointRoute = "/api/local/v1/mcp/server";
     private const string KeyManagementRoute = "/api/local/v1/mcp/server-key";
-    private const string ValidKey = "xemcp_valid-test-key";
+    internal const string ValidKey = "xemcp_valid-test-key";
+
+    /// <summary>
+    ///     The default shape — one live Delegate-scoped key — shared by every test that asserts on its own request's
+    ///     response. The stood-in key service answers from the credential it is handed and keeps nothing, so nothing
+    ///     one test sends is visible to the next. The scope and the no-key-configured shapes build their own hosts.
+    /// </summary>
+    [ClassDataSource<McpServerInboundAuthHostFixture>(Shared = SharedType.PerClass)]
+    public required McpServerInboundAuthHostFixture Host { get; init; }
 
     [Test]
     public async Task McpEndpoint_WithoutAnyCredential_IsUnauthorized()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var content = EmptyRpcContent();
@@ -50,7 +59,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task McpEndpoint_WithoutAnyCredential_EmitsABearerChallenge()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var content = EmptyRpcContent();
@@ -63,7 +72,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task McpEndpoint_WithAWrongKey_IsUnauthorized()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
@@ -81,7 +90,7 @@ public sealed class McpServerInboundAuthTests
     {
         // The whole point of giving the MCP endpoint its own scheme: an operator token (or a stolen browser session)
         // must not be a way to drive the MCP tool surface.
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
@@ -97,7 +106,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task McpEndpoint_WithTheCorrectKey_PassesAuthentication()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
@@ -169,7 +178,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task McpEndpoint_ToolsList_AdvertisesExactlyEightReadOnlyToolsWithoutHostPathFields()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, McpEndpointRoute)
         {
@@ -283,7 +292,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task KeyManagementEndpoints_WithoutTheOperatorJwt_AreUnauthorized()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var getResponse = await client.GetAsync(new Uri(KeyManagementRoute, UriKind.Relative)).ConfigureAwait(false);
@@ -297,7 +306,7 @@ public sealed class McpServerInboundAuthTests
     public async Task KeyManagementEndpoints_WithTheMcpApiKey_AreStillUnauthorized()
     {
         // The reverse direction: an MCP client must not be able to read or rotate the very credential that admits it.
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
 
         using var request = new HttpRequestMessage(HttpMethod.Get, KeyManagementRoute);
@@ -330,7 +339,7 @@ public sealed class McpServerInboundAuthTests
     [Arguments("delegate", McpServerApiKeyScope.Delegate)]
     public async Task GenerateKey_WithExplicitScope_RotatesAndReturnsThatScope(string requestedScope, McpServerApiKeyScope expectedScope)
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, KeyManagementRoute)
         {
@@ -353,7 +362,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task GenerateKey_WithNoRequestBody_PreservesLegacyDelegateBehavior()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, KeyManagementRoute);
         factory.AddNodeBearerToken(request);
@@ -371,7 +380,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task GenerateKey_WithEmptyJsonContent_PreservesGeneratedClientDelegateBehavior()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, KeyManagementRoute)
         {
@@ -391,7 +400,7 @@ public sealed class McpServerInboundAuthTests
     [Test]
     public async Task GenerateKey_WithPresentNonJsonBody_IsRejectedAsUnsupportedMediaType()
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, KeyManagementRoute)
         {
@@ -469,7 +478,7 @@ public sealed class McpServerInboundAuthTests
     [Arguments("0")]
     public async Task GenerateKey_WithAnUnsupportedScope_IsRejected(string rawScope)
     {
-        await using var factory = CreateFactory(ValidKey);
+        var factory = Host.Factory;
         using var client = factory.CreateClient();
         using var request = new HttpRequestMessage(HttpMethod.Post, KeyManagementRoute)
         {
@@ -540,7 +549,7 @@ public sealed class McpServerInboundAuthTests
         return await context.AuthenticateAsync(McpApiKeyAuthenticationHandler.SchemeName).ConfigureAwait(false);
     }
 
-    private static TestServerWebAppFactory CreateFactory(string? storedKey,
+    internal static TestServerWebAppFactory CreateFactory(string? storedKey,
         McpServerApiKeyScope scope = McpServerApiKeyScope.Delegate)
     {
         var apiKeyService = Substitute.For<IMcpServerApiKeyService>();
@@ -579,4 +588,16 @@ public sealed class McpServerInboundAuthTests
     private sealed record GeneratedKeyBody(string Key, KeyMetadataBody ApiKey);
 
     private sealed record KeyMetadataBody(string Scope);
+}
+
+/// <summary>The default host for <see cref="McpServerInboundAuthTests" />: one live Delegate-scoped key.</summary>
+public sealed class McpServerInboundAuthHostFixture : IAsyncInitializer, IAsyncDisposable
+{
+    public TestServerWebAppFactory Factory { get; } = McpServerInboundAuthTests.CreateFactory(McpServerInboundAuthTests.ValidKey);
+
+    public Task InitializeAsync() =>
+        Task.CompletedTask;
+
+    public ValueTask DisposeAsync() =>
+        Factory.DisposeAsync();
 }
