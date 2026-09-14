@@ -10,7 +10,8 @@ run. Three outputs, because three questions get asked of the same data:
 * `--heavy` — one line per namespace in the exact shape of the `HEAVY` list in
   `scripts/run-tests-memory-safe.sh`, so its packer weights can be re-measured rather than guessed
   (docs/agent-knowledge.md section 1: the weights are load-bearing and the packer cannot split a
-  namespace);
+  namespace); pass `--runs N` when the paths hold N runs of the same suite and the seconds are
+  divided by N, so the weights are a per-run mean instead of one run's noise;
 * `--counts` — the classes/tests/namespaces/files the run actually contained, so a document can cite
   this script instead of hard-coding a number that goes stale.
 
@@ -104,15 +105,17 @@ def print_tables(results: list[tuple[float, str, str]], top: int, top_tests: int
             break
 
 
-def print_heavy(results: list[tuple[float, str, str]]) -> None:
+def print_heavy(results: list[tuple[float, str, str]], runs: int = 1) -> None:
     # Attribution is by the test class's own namespace, never by the TRX directory: under CI's
     # TEST_GROUPS shape that directory is a group, not a namespace. The known asymmetry is that a few
     # tests live in a parent namespace and are also matched by a child batch, so the parent's weight
     # absorbs a cost the child's batch pays too — which is what the packer should see, since both
     # batches really do run them.
+    # `runs` > 1 means the paths hold that many runs of the same suite: divide before the cut-off and
+    # the rounding, so the emitted weight is one run's mean rather than the sum of N.
     per_namespace = sum_by(results, "namespace")
     for name, (seconds, _tests) in sorted(per_namespace.items(), key=lambda item: (-item[1][0], item[0])):
-        weight = round(seconds)
+        weight = round(seconds / runs)
         if weight < HEAVY_MINIMUM_SECONDS:
             break
         if not name or "?" in name:
@@ -152,11 +155,22 @@ def main(argv: list[str] | None = None) -> int:
     )
     mode.add_argument("--counts", action="store_true", help="print only the classes/tests/namespaces/files seen")
     parser.add_argument(
+        "--runs",
+        type=int,
+        default=1,
+        help="the paths hold this many runs of the same suite; --heavy divides by it (default: 1)",
+    )
+    parser.add_argument(
         "--strip-prefix",
         default=DEFAULT_STRIP_PREFIX,
         help=f"namespace prefix trimmed from the tables (default: {DEFAULT_STRIP_PREFIX})",
     )
     args = parser.parse_args(argv)
+    if args.runs < 1:
+        parser.error(f"--runs must be at least 1, got {args.runs}")
+    if args.runs != 1 and not args.heavy:
+        # Accepting it elsewhere would hand back the N-run sum to a caller who asked for a mean.
+        parser.error("--runs applies to --heavy only")
 
     missing = [path for path in args.paths if not path.exists()]
     if missing:
@@ -172,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.counts:
         print_counts(results, files)
     elif args.heavy:
-        print_heavy(results)
+        print_heavy(results, args.runs)
     else:
         print_tables(results, args.top, args.top_tests, args.strip_prefix)
     return 0

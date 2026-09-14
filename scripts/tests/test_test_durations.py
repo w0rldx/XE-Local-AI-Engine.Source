@@ -144,6 +144,40 @@ class TestDurationsTests(unittest.TestCase):
 
         self.assertNotIn("Suite.Tests.Beta", out)
 
+    def test_runs_averages_a_duplicated_set_back_to_one_runs_weights(self) -> None:
+        # The same fixture passed twice is two runs of the same suite: --runs 2 must divide it back.
+        one_run = run([str(self.root), "--heavy"])
+
+        two_runs = run([str(self.root), str(self.root), "--heavy", "--runs", "2"])
+
+        self.assertEqual(one_run, two_runs)
+        self.assertIn("# 30s", one_run)
+
+    def test_runs_divides_before_the_cut_off_and_not_after_it(self) -> None:
+        # Gamma sums to 18 s across the doubled set and 9 s per run: only dividing BEFORE the 10 s
+        # cut-off drops it. Dividing after would list it at 9 s, which the packer's own regex accepts.
+        gamma = self.root / "Gamma"
+        gamma.mkdir()
+        write_trx(gamma / "run.trx", [("Suite.Tests.Gamma.EdgeTests", "Borderline", "00:00:09.0000000", "Passed")])
+        doubled = [str(self.root), str(self.root), "--heavy"]
+
+        self.assertIn("Suite.Tests.Gamma", run(doubled))  # 18 s summed, above the cut-off
+        self.assertNotIn("Suite.Tests.Gamma", run([*doubled, "--runs", "2"]))
+
+    def test_runs_below_one_is_rejected(self) -> None:
+        with self.assertRaises(SystemExit) as caught:
+            run([str(self.root), "--heavy", "--runs", "0"])
+
+        self.assertEqual(2, caught.exception.code)
+
+    def test_runs_outside_heavy_is_rejected_rather_than_silently_ignored(self) -> None:
+        # --counts and the default table report sums: accepting --runs there would answer a request
+        # for a per-run mean with the N-run total.
+        with self.assertRaises(SystemExit) as caught:
+            run([str(self.root), "--counts", "--runs", "2"])
+
+        self.assertEqual(2, caught.exception.code)
+
     def test_counts_reports_the_files_and_namespaces_seen(self) -> None:
         out = run([str(self.root), "--counts"])
 

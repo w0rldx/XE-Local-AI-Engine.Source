@@ -217,15 +217,34 @@ table was also missing `GraphWorkflows` (503 s) and `Integrations` (366 s) entir
 weighs 1 — so the pack was balancing on numbers that described a different machine. **Authority:** the `HEAVY`
 list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight parse in
 `scripts/run-tests-memory-safe.sh`; the four `XE_Local_AI_Engine.Tests.DevWorkflows[.Execution|.Materialization|.Dispatch]`
-entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the CI run named in the `HEAVY`
-header comment (34861036286 as of 2026-09-14, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards) and
+entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the CI runs named in the `HEAVY`
+header comment (as of 2026-09-14 the per-run mean of 34861036286 and 34877183235 via
+`scripts/test-durations.py --heavy --runs 2`, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards) and
 run 34730991540 (the timeout).
+
+### A HEAVY weight from one CI run is noise, and no table can balance the legs better than runner speed allows
+
+**Rule:** weight the `HEAVY` table from the mean of the green runs available (`scripts/test-durations.py --heavy
+--runs N` over their `tests-{0..3}` TRX artifacts), because the mean is the lowest-variance estimate of a
+namespace's expected seconds; re-weight only when the namespace set changes (one added, split or gone) or a weight
+is off by more than the run-to-run noise (>2x), never to chase shard balance, and score any re-weight on a run that
+did not build it, knowing ~1.5 is the noise level. **Failure prevented:** (a) the single-run table measured from
+34861036286 predicted a 1.05 shard max/min in-sample and realised 1.43 on the next green run (34877183235, whose
+only test-code delta was a four-line cancellation fix in one Transcription test double), where
+`DevWorkflows.Materialization` swung 1008s -> 649s; (b) believing the fix generalised — the two-run mean scored
+1.14 and 1.12 on the runs that built it but 1.53 on the first held-out one (34882013960), because weight-balanced
+shards ran at 0.77-1.17x relative speed inside that single run and per-leg runner speed dominates the table; (c)
+re-weighting in the wrong place: a shard's wall is floor-bound by the solo namespace in its heaviest bin plus job
+setup, so only splitting that namespace moves the slowest leg (entry above). **Authority:** runs 34861036286,
+34877183235 and 34882013960, the `--runs` option in `scripts/test-durations.py` and its tests, and
+[agent-knowledge-evidence.md](agent-knowledge-evidence.md) §1 (*HEAVY re-weight convergence*).
 
 ### Re-measure a TRX set with the script, never quote a class or namespace count from a document
 
 **Rule:** derive per-class, per-test and per-namespace timings — and the counts a document would otherwise hard-code —
 by running `scripts/test-durations.py` over a TRX set (`--heavy` emits the `HEAVY` lines
-`scripts/run-tests-memory-safe.sh` parses, `--counts` the classes/tests/namespaces/files seen); cite the script, not a
+`scripts/run-tests-memory-safe.sh` parses — with `--runs N` when the set holds N runs of the same suite, so the
+weights come out as a per-run mean; `--counts` the classes/tests/namespaces/files seen); cite the script, not a
 number. **Failure prevented:** a comment in `XE-Local-AI-Engine.Tests/Diagnostics/TestServerWebAppFactoryTimingTests.cs`
 carried a "61 test classes pay per host per test, 42 pay per class" split from 2026-08-23 that was already wrong by
 2026-09-13, and a stale `HEAVY` weight is what pushed a CI shard past its job timeout (entry above). Both are the same
