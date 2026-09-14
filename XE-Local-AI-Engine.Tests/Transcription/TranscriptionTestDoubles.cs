@@ -78,7 +78,10 @@ internal sealed class FakeWhisperTranscriber : IWhisperTranscriber
 
         if (Gate is not null)
         {
-            await Gate.Task.WaitAsync(ct).ConfigureAwait(false);
+            // Await the gate and check the token separately: Task.WaitAsync(ct) takes a fast path when the antecedent
+            // is already complete and never consults the token, which silently loses a cancellation the test just made.
+            await Gate.Task.ConfigureAwait(false);
+            ct.ThrowIfCancellationRequested();
         }
 
         return Failure is not null ? throw Failure : Result;

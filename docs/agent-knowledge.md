@@ -217,8 +217,9 @@ table was also missing `GraphWorkflows` (503 s) and `Integrations` (366 s) entir
 weighs 1 — so the pack was balancing on numbers that described a different machine. **Authority:** the `HEAVY`
 list and its `sed -nE 's/^  ([A-Za-z0-9_.]+) +# *([0-9]+)s.*/\1 \2/p'` weight parse in
 `scripts/run-tests-memory-safe.sh`; the four `XE_Local_AI_Engine.Tests.DevWorkflows[.Execution|.Materialization|.Dispatch]`
-entries and the folders behind them (IDE0130 makes folder = namespace mandatory); CI runs 34515666107 (green,
-the measurement) and 34730991540 (the timeout).
+entries and the folders behind them (IDE0130 makes folder = namespace mandatory); the CI run named in the `HEAVY`
+header comment (34861036286 as of 2026-09-14, coverage on, JOBS=4, width 1, TEST_GROUPS=16 over four shards) and
+run 34730991540 (the timeout).
 
 ### Re-measure a TRX set with the script, never quote a class or namespace count from a document
 
