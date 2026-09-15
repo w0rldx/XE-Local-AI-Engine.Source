@@ -163,6 +163,13 @@ public sealed class TranscriptionRuntimeStatusResponse
     /// </summary>
     public required bool VadInstalled { get; init; }
 
+    /// <summary>
+    ///     Whether this node can capture the audio of a single application. Windows only, and only at or above the
+    ///     build Microsoft documents for process loopback. The SPA hides the per-application source entirely when it
+    ///     is <see langword="false" /> rather than offering an option that cannot work.
+    /// </summary>
+    public required bool ProcessCaptureSupported { get; init; }
+
     public WhisperInstalledRuntimeResponse? ManagedRuntime { get; init; }
 
     public required TranscriptionRuntimeActivityResponse Activity { get; init; }

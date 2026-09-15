@@ -4,7 +4,11 @@ import { renderHook } from "@testing-library/react";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it, vi } from "vitest";
 
-import { useTranscriptionSession } from "@/features/transcription/queries/useTranscriptionQueries";
+import {
+	useCaptureProcesses,
+	useStartProcessCapture,
+	useTranscriptionSession,
+} from "@/features/transcription/queries/useTranscriptionQueries";
 import { localApiPath } from "@/test/msw/Handlers";
 import { server } from "@/test/msw/Server";
 import { createProvidersWrapper } from "@/test/RenderWithProviders";
@@ -111,5 +115,77 @@ describe("useTranscriptionSession", () => {
 		} finally {
 			vi.useRealTimers();
 		}
+	});
+});
+
+const processesPath = localApiPath("transcription/capture/processes");
+const processCapturePath = localApiPath(`transcription/sessions/${sessionId}/capture/process`);
+
+describe("useCaptureProcesses", () => {
+	// The picker renders the rows, so the hook hands it the list rather than the envelope the endpoint wraps it in.
+	it("returns the processes the node reports", async () => {
+		server.use(
+			http.get(processesPath, () =>
+				HttpResponse.json({ supported: true, processes: [{ pid: 4242, name: "Zoom Meetings", hasAudio: true }] }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useCaptureProcesses(true), { wrapper });
+
+		await vi.waitFor(() => expect(result.current.isSuccess).toBe(true));
+		expect(result.current.data).toEqual([{ pid: 4242, name: "Zoom Meetings", hasAudio: true }]);
+	});
+
+	// Enumerating the box's audio sessions is work the node should not do for a dialog that is closed or open on a
+	// source the browser captures itself.
+	it("asks the node for nothing while it is disabled", async () => {
+		let reads = 0;
+		server.use(
+			http.get(processesPath, () => {
+				reads += 1;
+				return HttpResponse.json({ supported: true, processes: [] });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useCaptureProcesses(false), { wrapper });
+
+		await vi.waitFor(() => expect(result.current.fetchStatus).toBe("idle"));
+		expect(reads).toBe(0);
+	});
+});
+
+describe("useStartProcessCapture", () => {
+	it("posts the chosen process against the session route", async () => {
+		let posted: { sessionId: string; processId: number } | null = null;
+		server.use(
+			http.post(processCapturePath, async ({ request }) => {
+				const body = (await request.json()) as { processId: number };
+				posted = { sessionId, processId: body.processId };
+				return HttpResponse.json({ sessionId, capturing: true });
+			}),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useStartProcessCapture(), { wrapper });
+		await result.current.mutateAsync({ sessionId, processId: 4242 });
+
+		expect(posted).toEqual({ sessionId, processId: 4242 });
+	});
+
+	// A refusal has to reach the caller: `useLiveCapture` ends the live session on it, and a swallowed rejection would
+	// leave a session open with nothing feeding it.
+	it("rejects when the node refuses the capture", async () => {
+		server.use(
+			http.post(processCapturePath, () =>
+				HttpResponse.json({ reason: "capture-not-supported", message: "not supported" }, { status: 400 }),
+			),
+		);
+		const { wrapper } = createProvidersWrapper();
+
+		const { result } = renderHook(() => useStartProcessCapture(), { wrapper });
+
+		await expect(result.current.mutateAsync({ sessionId, processId: 4242 })).rejects.toBeDefined();
 	});
 });

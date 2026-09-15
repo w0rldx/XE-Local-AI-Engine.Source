@@ -620,6 +620,19 @@ public static class LocalApiRoutes
         /// </summary>
         public const string SessionLiveStart = "transcription/sessions/{sessionId}/live/start";
 
+        /// <summary>
+        ///     Windows-only: the processes that currently hold an active render audio session, i.e. the ones
+        ///     per-application capture can actually target. Empty — never 404 — on a host without process loopback.
+        /// </summary>
+        public const string CaptureProcesses = "transcription/capture/processes";
+
+        /// <summary>
+        ///     Starts (POST) and stops (DELETE) server-side per-application capture for a session that is ALREADY
+        ///     live, so <see cref="SessionLiveStart" /> must have run first. There is no scope parameter: WASAPI
+        ///     offers only "the target process and its descendants".
+        /// </summary>
+        public const string SessionProcessCapture = "transcription/sessions/{sessionId}/capture/process";
+
         // SignalR push hub for live transcription sessions. Full path (mapped via MapHub, not the FastEndpoints
         // prefix), mirroring the other local hubs. It shares the family's first segment, so the feature gate's
         // 404 covers its negotiate too.

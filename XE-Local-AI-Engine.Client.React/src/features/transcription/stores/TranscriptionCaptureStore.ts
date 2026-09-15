@@ -22,10 +22,19 @@ interface TranscriptionCaptureStoreState {
 	 * browser calls the default input". Never pruned: a session id and a device id are a few dozen bytes each.
 	 */
 	readonly deviceIdBySession: Readonly<Record<string, string | null>>;
+	/**
+	 * The application each Windows process-capture session was created against, by session id. A separate map from
+	 * `deviceIdBySession` rather than a sentinel in it: a WASAPI process id is a number from a different domain than a
+	 * browser `MediaDeviceInfo.deviceId`, and one keyspace would let a microphone id and a process id collide across
+	 * two sessions. A missing entry means the pid was never recorded, which the session view reports rather than
+	 * guessing a process to capture.
+	 */
+	readonly processIdBySession: Readonly<Record<string, number | null>>;
 	readonly showPartials: boolean;
 	readonly actions: {
 		readonly setLastSourceKind: (sourceKind: TranscriptionSourceKind) => void;
 		readonly rememberDevice: (sessionId: string, deviceId: string | null) => void;
+		readonly rememberProcess: (sessionId: string, processId: number | null) => void;
 		readonly setShowPartials: (showPartials: boolean) => void;
 	};
 }
@@ -35,11 +44,14 @@ export const useTranscriptionCaptureStore = create<TranscriptionCaptureStoreStat
 		(set) => ({
 			lastSourceKind: "File",
 			deviceIdBySession: {},
+			processIdBySession: {},
 			showPartials: true,
 			actions: {
 				setLastSourceKind: (lastSourceKind) => set({ lastSourceKind }),
 				rememberDevice: (sessionId, deviceId) =>
 					set((state) => ({ deviceIdBySession: { ...state.deviceIdBySession, [sessionId]: deviceId } })),
+				rememberProcess: (sessionId, processId) =>
+					set((state) => ({ processIdBySession: { ...state.processIdBySession, [sessionId]: processId } })),
 				setShowPartials: (showPartials) => set({ showPartials }),
 			},
 		}),
@@ -49,6 +61,7 @@ export const useTranscriptionCaptureStore = create<TranscriptionCaptureStoreStat
 			partialize: (state) => ({
 				lastSourceKind: state.lastSourceKind,
 				deviceIdBySession: state.deviceIdBySession,
+				processIdBySession: state.processIdBySession,
 				showPartials: state.showPartials,
 			}),
 		},

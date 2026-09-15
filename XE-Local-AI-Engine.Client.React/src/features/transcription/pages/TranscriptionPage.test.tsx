@@ -39,6 +39,7 @@ function runtimeRoutes() {
 			supportsTranscode: true,
 			idleTimeoutMinutes: 10,
 			vadInstalled: true,
+			processCaptureSupported: true,
 			managedRuntime: null,
 			activity: {
 				activeTranscriptionCount: 0,
@@ -99,7 +100,7 @@ describe("TranscriptionPage", () => {
 	// per-session devices are reset per test rather than carried from the one before.
 	beforeEach(() => {
 		navigate.mockClear();
-		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {} });
+		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {}, processIdBySession: {} });
 	});
 
 	afterEach(() => {
@@ -181,6 +182,32 @@ describe("TranscriptionPage", () => {
 			expect(navigate).toHaveBeenCalledWith({ to: "/transcription/$sessionId", params: { sessionId } });
 		});
 		expect(useTranscriptionCaptureStore.getState().deviceIdBySession).toEqual({ [sessionId]: null });
+	});
+
+	// The pid is chosen in the dialog but only reaches the node once the session is live, so the create path is the one
+	// place that can tie it to the new session id — the same point the microphone is remembered at.
+	it("remembers the application against the session it created", async () => {
+		server.use(
+			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
+			jsonRoute("post", "transcription/sessions", detail()),
+			jsonRoute("get", "transcription/capture/processes", {
+				supported: true,
+				processes: [{ pid: 4242, name: "Zoom Meetings", hasAudio: true }],
+			}),
+			...runtimeRoutes(),
+		);
+		renderPage();
+
+		fireEvent.click(await screen.findByTestId("transcription-create"));
+		fireEvent.click(await screen.findByRole("radio", { name: "Application audio (Windows)" }));
+		fireEvent.click(await screen.findByTestId("new-transcription-session-process"));
+		fireEvent.click(await screen.findByRole("option", { name: "Zoom Meetings", hidden: true }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		await waitFor(() => {
+			expect(navigate).toHaveBeenCalledWith({ to: "/transcription/$sessionId", params: { sessionId } });
+		});
+		expect(useTranscriptionCaptureStore.getState().processIdBySession).toEqual({ [sessionId]: 4242 });
 	});
 
 	// The 415 carries the readable-container list; showing only "unsupported" would leave the operator guessing which

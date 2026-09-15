@@ -362,7 +362,8 @@ public sealed class TranscriptionModelEndpointTests
                 Catalog.SelectedModelId,
                 Catalog.RecommendedModelId,
                 IdleTimeoutMinutes: 15,
-                VadInstalled: true));
+                VadInstalled: true,
+                ProcessCaptureSupported: false));
 
         public Task<WhisperServerEvictResult> EjectAsync(CancellationToken ct) =>
             Task.FromResult(new WhisperServerEvictResult(Evicted: true,

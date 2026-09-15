@@ -1,4 +1,17 @@
-import { Button, FileInput, Group, NumberInput, Progress, SegmentedControl, Select, Stack, Switch, Text } from "@mantine/core";
+import {
+	ActionIcon,
+	Button,
+	FileInput,
+	Group,
+	NumberInput,
+	Progress,
+	SegmentedControl,
+	Select,
+	Stack,
+	Switch,
+	Text,
+} from "@mantine/core";
+import { IconRefresh } from "@tabler/icons-react";
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 
@@ -11,6 +24,7 @@ import {
 	transcriptionDialogSourceKinds,
 	transcriptionLanguageCodes,
 } from "@/features/transcription/models/TranscriptionModels";
+import { useCaptureProcesses, useTranscriptionRuntimeStatus } from "@/features/transcription/queries/useTranscriptionQueries";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 
 export interface NewTranscriptionSessionValues {
@@ -26,6 +40,12 @@ export interface NewTranscriptionSessionValues {
 	readonly file: File | null;
 	/** The chosen microphone, or null for the browser default. Never sent to the node — capture is client-side. */
 	readonly deviceId: string | null;
+	/**
+	 * The application to capture, for an ApplicationProcess session; null for every other source. Unlike the device
+	 * id this one does reach the node — as the capture/process body once the session is live — so the create path
+	 * has to remember it against the new session id.
+	 */
+	readonly processId: number | null;
 }
 
 interface NewTranscriptionSessionDialogProps {
@@ -53,6 +73,10 @@ function usesMicrophone(sourceKind: TranscriptionSourceKind): boolean {
 
 function usesSystemAudio(sourceKind: TranscriptionSourceKind): boolean {
 	return sourceKind === "SystemAudio" || sourceKind === "MicrophoneAndSystem";
+}
+
+function usesProcess(sourceKind: TranscriptionSourceKind): boolean {
+	return sourceKind === "ApplicationProcess";
 }
 
 /**
@@ -91,7 +115,17 @@ export function NewTranscriptionSessionDialog({
 	const { t, i18n } = useTranslation();
 	const lastSourceKind = useTranscriptionCaptureStore((state) => state.lastSourceKind);
 	const setLastSourceKind = useTranscriptionCaptureStore((state) => state.actions.setLastSourceKind);
-	const [sourceKind, setSourceKind] = useState<TranscriptionSourceKind>(lastSourceKind);
+	const [selectedSourceKind, setSourceKind] = useState<TranscriptionSourceKind>(lastSourceKind);
+	// The node reports whether it can capture one application at all; the option is absent where it cannot, rather
+	// than present and refused. Windows 10 build 20348 and later is the whole of the support policy.
+	const runtimeQuery = useTranscriptionRuntimeStatus();
+	const processCaptureSupported = runtimeQuery.data?.processCaptureSupported === true;
+	// The remembered kind is persisted; the option list is not. A box that stopped reporting support — and every
+	// render before the runtime status has answered — would otherwise leave the SegmentedControl holding a value that
+	// is not in its own `data`: nothing highlighted, an empty picker below it, and Create disabled with nothing on
+	// screen saying why. Falling back to a kind that is always offered keeps the dialog usable.
+	const sourceKind: TranscriptionSourceKind =
+		!processCaptureSupported && selectedSourceKind === "ApplicationProcess" ? "File" : selectedSourceKind;
 	// The microphone is remembered per SESSION, by the create path that knows the new session's id — not globally,
 	// where a stale id would reach a later session that was configured for the system default.
 	const [deviceId, setDeviceId] = useState(DEFAULT_DEVICE);
@@ -101,10 +135,22 @@ export function NewTranscriptionSessionDialog({
 	const [maxWindowSeconds, setMaxWindowSeconds] = useState(DEFAULT_MAX_WINDOW_SECONDS);
 	const [channelAttribution, setChannelAttribution] = useState(false);
 	const [file, setFile] = useState<File | null>(null);
+	const [processId, setProcessId] = useState<number | null>(null);
 
 	const languageChoices = useMemo(() => languageOptions(i18n.language), [i18n.language]);
 	const isFileSource = sourceKind === "File";
-	const canSubmit = (isFileSource ? file !== null : true) && !isSubmitting;
+	// Enumerated only while the dialog is open on this source: listing the box's audio sessions is work the node
+	// should not do for a picker nobody is looking at.
+	const processQuery = useCaptureProcesses(opened && usesProcess(sourceKind));
+	const processes = processQuery.data ?? [];
+	// Derived, not stored: an application the operator picked can exit before they submit, and a refresh then returns
+	// a list it is no longer in. Keeping the id in state would leave a blank Select over a live pid and create the row
+	// against a process nobody can capture.
+	const chosenProcessId = processId !== null && processes.some((process) => process.pid === processId) ? processId : null;
+	// A pid is the one thing this source cannot be started without, so submit waits for it rather than creating a row
+	// the session view could never capture for.
+	const canSubmit =
+		(isFileSource ? file !== null : true) && (usesProcess(sourceKind) ? chosenProcessId !== null : true) && !isSubmitting;
 
 	// Enumerated only while a microphone source is selected and the dialog is open: the list needs no permission, but
 	// asking for it on a page that is not about to record is a device query the operator did not ask for.
@@ -134,11 +180,15 @@ export function NewTranscriptionSessionDialog({
 		setMaxWindowSeconds(DEFAULT_MAX_WINDOW_SECONDS);
 		setChannelAttribution(false);
 		setFile(null);
+		setProcessId(null);
 		onClose();
 	};
 
 	const submit = (): void => {
 		if (isFileSource && file === null) {
+			return;
+		}
+		if (usesProcess(sourceKind) && chosenProcessId === null) {
 			return;
 		}
 		const chosenDevice = deviceId === DEFAULT_DEVICE ? null : deviceId;
@@ -162,6 +212,7 @@ export function NewTranscriptionSessionDialog({
 			channelAttribution,
 			file: stagedFile,
 			deviceId: chosenDevice,
+			processId: usesProcess(sourceKind) ? chosenProcessId : null,
 		});
 	};
 
@@ -195,10 +246,14 @@ export function NewTranscriptionSessionDialog({
 					<SegmentedControl
 						value={sourceKind}
 						onChange={(value) => setSourceKind(value as TranscriptionSourceKind)}
-						data={transcriptionDialogSourceKinds.map((value) => ({
-							value,
-							label: t(`pages.transcription.source.${value}`),
-						}))}
+						// The fifth option is absent, never disabled: per-application capture exists only on a recent
+						// Windows build, and an option that can never be chosen on this box explains nothing.
+						data={[...transcriptionDialogSourceKinds, ...(processCaptureSupported ? (["ApplicationProcess"] as const) : [])].map(
+							(value) => ({
+								value,
+								label: t(`pages.transcription.source.${value}`),
+							}),
+						)}
 						aria-label={t("pages.transcription.dialog.sourceLabel")}
 						data-testid="new-transcription-session-source"
 					/>
@@ -236,6 +291,43 @@ export function NewTranscriptionSessionDialog({
 						]}
 						data-testid="new-transcription-session-device"
 					/>
+				) : null}
+				{usesProcess(sourceKind) ? (
+					<Stack gap={4}>
+						<Group gap="xs" align="flex-end" wrap="nowrap">
+							<Select
+								label={t("pages.transcription.dialog.processLabel")}
+								placeholder={t("pages.transcription.dialog.processPlaceholder")}
+								value={chosenProcessId === null ? null : String(chosenProcessId)}
+								onChange={(value) => setProcessId(value === null ? null : Number(value))}
+								allowDeselect={false}
+								disabled={processes.length === 0}
+								data={processes.map((process) => ({ value: String(process.pid), label: process.name }))}
+								flex={1}
+								data-testid="new-transcription-session-process"
+							/>
+							<ActionIcon
+								variant="light"
+								size="lg"
+								loading={processQuery.isFetching}
+								aria-label={t("pages.transcription.dialog.processRefresh")}
+								onClick={() => {
+									processQuery.refetch().catch(() => undefined);
+								}}
+								data-testid="new-transcription-session-process-refresh"
+							>
+								<IconRefresh size={16} />
+							</ActionIcon>
+						</Group>
+						{processes.length === 0 && !processQuery.isFetching ? (
+							<Text size="xs" c="dimmed" data-testid="new-transcription-session-process-empty">
+								{t("pages.transcription.dialog.processEmpty")}
+							</Text>
+						) : null}
+						<Text size="xs" c="dimmed" data-testid="new-transcription-session-process-hint">
+							{t("pages.transcription.dialog.processDescription")}
+						</Text>
+					</Stack>
 				) : null}
 				{usesSystemAudio(sourceKind) ? (
 					<Text size="xs" c="dimmed" data-testid="new-transcription-session-share-hint">

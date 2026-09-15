@@ -5,6 +5,7 @@ using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
+using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 using XE_Local_AI_Engine.Client.Services.Transcription.Live;
 using XE_Local_AI_Engine.Providers.HuggingFace;
@@ -71,6 +72,24 @@ internal static class AddNodeTranscriptionExtensions
         // hosted service, so a background-timer design would be dead there. Everything is driven by pushed frames plus
         // timers created from the injected TimeProvider.
         builder.Services.AddSingleton<ILiveTranscriptionSessionRegistry, LiveTranscriptionSessionRegistry>();
+
+        // Per-application audio capture. WASAPI process loopback is a Windows mechanism with no Linux or macOS
+        // equivalent — no per-process binding exists in PipeWire or PulseAudio — so elsewhere the NotSupported
+        // source fails closed with a named error rather than opening a live session that silently receives nothing.
+        // The Windows type carries [SupportedOSPlatform("windows")]; this branch is what makes that attribute
+        // honest, and it is why no CA1416 suppression appears anywhere in the feature.
+        if (OperatingSystem.IsWindows())
+        {
+            builder.Services.AddSingleton<IProcessAudioCaptureSource, WindowsProcessAudioCaptureSource>();
+        }
+        else
+        {
+            builder.Services.AddSingleton<IProcessAudioCaptureSource, NotSupportedProcessAudioCaptureSource>();
+        }
+
+        // Singleton, and registered on every OS: a capture outlives the request that started it, so a cancelled
+        // HTTP request must not kill it. On a host without process loopback it simply never starts one.
+        builder.Services.AddSingleton<ProcessAudioCaptureCoordinator>();
 
         // The transcription service. Singleton: the in-flight cancellation registry must outlive the request that
         // started a transcription, and it composes the singleton whisper runtime; it opens its own scope per store

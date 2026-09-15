@@ -230,6 +230,14 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
                 throw new InvalidOperationException($"Transcription session {sessionId} is not live.");
             }
 
+            // Attaching satisfies the producer-attachment deadline; waiting for the first FRAME does not. A native
+            // capture of an application that happens to be silent pushes nothing — WASAPI never yields a silent
+            // packet at all — so a session with a healthy running recorder would be reaped as NeverAttached once
+            // the deadline elapsed. The browser abandonment grace is untouched: a closed tab still ends the
+            // session whatever else is feeding it.
+            session.AttachmentTimer?.Dispose();
+            session.AttachmentTimer = null;
+
             session.Producer = producer;
         }
 

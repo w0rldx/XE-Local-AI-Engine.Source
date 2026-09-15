@@ -100,6 +100,16 @@
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
     <PackageVersion Include="ModelContextProtocol.AspNetCore" Version="2.2.0" />
+    <!-- WASAPI process-loopback capture for Windows per-application audio (transcription source kind
+         ApplicationProcess). NOTE the package id: the `NAudio` META-package multi-targets
+         net9.0;net9.0-windows;net9.0-windows10.0.19041.0 and drags in Midi/Asio/WinMM, which would force a Windows
+         TFM onto XE-Local-AI-Engine.Client.Application. `NAudio.Wasapi` ships a single plain `lib/net9.0` asset
+         carrying an assembly-level [SupportedOSPlatform("windows")] precisely so cross-platform consumers build on
+         Linux without EnableWindowsTargeting; CA1416 then enforces Windows-only use at compile time. Its only
+         dependency, NAudio.Core, declares System.Numerics.Tensors >= 9.0.0, which the 10.0.11 pin below satisfies
+         upward under CentralPackageTransitivePinningEnabled. Both packages are MIT with a copyright string, so the
+         release license corpus resolves them to third-party/nuget/standard/MIT.txt and no new notice file exists. -->
+    <PackageVersion Include="NAudio.Wasapi" Version="3.1.0" />
     <PackageVersion Include="NSubstitute" Version="6.2.0" />
     <!-- Mechanical enforcement of correct NSubstitute usage (non-virtual member substitution,
          unused Received checks). Test-project only, PrivateAssets="all". -->

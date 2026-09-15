@@ -103,6 +103,26 @@ describe("CaptureControls", () => {
 		);
 	});
 
+	// The node's three typed capture refusals each need a different thing from the operator, so each renders its own
+	// sentence from the shipped bundle rather than the generic "the node refused" one.
+	it.each([
+		{ error: "capture-not-supported" as const, expected: "Windows 10 build 20348 or later" },
+		{ error: "session-not-live" as const, expected: "was not open on the node" },
+		{ error: "capture-already-running" as const, expected: "already capturing an application" },
+	])("names what to do about a $error refusal", ({ error, expected }) => {
+		renderControls({ error });
+
+		expect(screen.getByTestId("transcription-capture-error").textContent).toContain(expected);
+	});
+
+	// A stop the node never confirmed is not a finished session. The sentence has to say the retry is coming and that
+	// leaving the page would abandon it, which "the node refused to open this live session" does not.
+	it("tells the operator a stop the node never confirmed will be retried", () => {
+		renderControls({ error: "stop-failed" });
+
+		expect(screen.getByTestId("transcription-capture-error").textContent).toContain("never confirmed it");
+	});
+
 	it("warns that the transcript may be incomplete when the replay drain stalled", () => {
 		renderControls({ state: "capturing", replayStalled: true });
 

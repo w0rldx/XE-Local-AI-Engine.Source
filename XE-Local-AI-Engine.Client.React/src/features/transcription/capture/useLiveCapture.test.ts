@@ -24,13 +24,15 @@ const sessionId = "11111111-0000-4000-8000-000000000001";
 // of it, so the transport is replaced by a scriptable double rather than a second copy of the SignalR fake.
 const hub = vi.hoisted(() => ({
 	pushFrame: vi.fn<(channel: CaptureChannel, pcm: Int16Array) => Promise<void>>(),
-	endSession: vi.fn<() => Promise<void>>(),
+	endSession: vi.fn<() => Promise<boolean>>(),
 	status: "Transcribing",
+	// Mutable so a test can take the transport down and bring it back; the factory reads it per render.
+	connected: true,
 }));
 
 vi.mock("@/features/transcription/hooks/useTranscriptionHub", () => ({
 	useTranscriptionHub: () => ({
-		connected: true,
+		connected: hub.connected,
 		subscriptionReady: true,
 		replayStalled: null,
 		subscribeFailed: null,
@@ -59,6 +61,8 @@ function deferred<T>(): Deferred<T> {
 }
 
 const livePath = localApiPath(`transcription/sessions/${sessionId}/live/start`);
+const processCapturePath = localApiPath(`transcription/sessions/${sessionId}/capture/process`);
+const processId = 4242;
 
 interface Harness {
 	readonly order: string[];
@@ -102,6 +106,43 @@ function liveStartOk(): void {
 	server.use(http.post(livePath, () => HttpResponse.json({ sessionId, status: "Transcribing", lastSeq: 0 })));
 }
 
+/**
+ * Answers `capture/process` 200 and records, in `calls`, the order the network saw — the same shared array the
+ * `live/start` route below pushes into, so "which endpoint was hit first" is read off one list rather than inferred
+ * from two mocks.
+ */
+function processCaptureOk(calls: string[]): void {
+	server.use(
+		http.post(processCapturePath, async ({ request }) => {
+			const body = (await request.json()) as { processId: number };
+			calls.push(`capture/process:${body.processId}`);
+			return HttpResponse.json({ sessionId, capturing: true });
+		}),
+	);
+}
+
+const cancelPath = localApiPath(`transcription/sessions/${sessionId}/cancel`);
+
+/** Records every POST to this session's cancel route, which is the REST path an undeliverable `EndSession` falls to. */
+function cancelRoute(calls: string[]): void {
+	server.use(
+		http.post(cancelPath, () => {
+			calls.push("cancel");
+			return new HttpResponse(null, { status: 204 });
+		}),
+	);
+}
+
+/** The other half of a total outage: the node is unreachable over REST as well. */
+function cancelRouteFails(calls: string[]): void {
+	server.use(
+		http.post(cancelPath, () => {
+			calls.push("cancel");
+			return HttpResponse.json({ detail: "unreachable" }, { status: 500 });
+		}),
+	);
+}
+
 function renderCapture() {
 	const { wrapper } = createProvidersWrapper();
 	return renderHook(() => useLiveCapture(sessionId), { wrapper });
@@ -122,8 +163,10 @@ describe("useLiveCapture", () => {
 		hub.pushFrame.mockReset();
 		hub.pushFrame.mockResolvedValue(undefined);
 		hub.endSession.mockReset();
-		hub.endSession.mockResolvedValue(undefined);
+		// The hub delivered `EndSession` unless a test says otherwise.
+		hub.endSession.mockResolvedValue(true);
 		hub.status = "Transcribing";
+		hub.connected = true;
 	});
 
 	afterEach(() => {
@@ -387,6 +430,213 @@ describe("useLiveCapture", () => {
 		expect(sources.has("microphone")).toBe(false);
 		sources.get("systemAudio")?.emit(new Int16Array([1]));
 		expect(hub.pushFrame).not.toHaveBeenCalled();
+	});
+
+	// S5: the node records the application itself. A browser capture source here would open an AudioContext for audio
+	// that never enters this tab, and would push frames onto a lane the node fills from its own recorder.
+	it("opens no capture source for an application-capture session", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		processCaptureOk(calls);
+		const { factory, order, sources } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+
+		expect(order).toEqual([]);
+		expect(sources.size).toBe(0);
+		expect(calls).toEqual([`capture/process:${processId}`]);
+		expect(result.current.state).toBe("capturing");
+		expect(hub.pushFrame).not.toHaveBeenCalled();
+	});
+
+	// R30a: capture attaches to a session that is ALREADY live. Posting it first gives the node a recorder with no
+	// lane to push into, which the endpoint answers with a 409 — so the order is the contract, not an optimisation.
+	it("attaches process capture only after live/start has resolved", async () => {
+		const calls: string[] = [];
+		const gate = deferred<void>();
+		server.use(
+			http.post(livePath, async () => {
+				await gate.promise;
+				calls.push("live/start");
+				return HttpResponse.json({ sessionId, status: "Transcribing", lastSeq: 0 });
+			}),
+		);
+		processCaptureOk(calls);
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await act(async () => {
+			const started = result.current.start({ kind: "process", processId }, factory);
+			// One turn of the event loop: enough for `live/start` to be issued, not enough for the gate to open.
+			await Promise.resolve();
+			gate.resolve(undefined);
+			await started;
+		});
+
+		// The gated handler can only push once the gate opens, so this list IS the order the node saw. A
+		// `capture/process` issued first would land ahead of `live/start` here.
+		expect(calls).toEqual(["live/start", `capture/process:${processId}`]);
+	});
+
+	// The dialog only offers this source where the node reported support, but the node is the source of truth, and its
+	// three refusals need three different things from the operator. Collapsing them into `start-failed` ("it may
+	// already have finished") states something false for every one of them.
+	it.each([
+		{ status: 400, reason: "capture-not-supported" },
+		{ status: 409, reason: "session-not-live" },
+		{ status: 409, reason: "capture-already-running" },
+	])("reports the node's own reason when it refuses process capture with $reason", async ({ status, reason }) => {
+		liveStartOk();
+		server.use(http.post(processCapturePath, () => HttpResponse.json({ reason, message: "refused" }, { status })));
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+
+		expect(result.current.error).toBe(reason);
+		expect(result.current.state).toBe("idle");
+		// Whatever the reason, the live session the node opened a moment ago must not be left with nothing feeding it.
+		expect(hub.endSession).toHaveBeenCalledTimes(1);
+	});
+
+	// A refusal the SPA does not know a sentence for must still read as a refusal, not as a missing translation key.
+	it("falls back to the generic refusal for a reason it has no message for", async () => {
+		liveStartOk();
+		server.use(http.post(processCapturePath, () => HttpResponse.json({ reason: "teapot", message: "refused" }, { status: 409 })));
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+
+		expect(result.current.error).toBe("start-failed");
+	});
+
+	// Stop is the hub's EndSession for this source too: the node stops its own recorder as it ends the session, so
+	// there is no second call for the SPA to make and no path where the recorder outlives the session.
+	it("ends the session over the hub when an application capture is stopped", async () => {
+		liveStartOk();
+		processCaptureOk([]);
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+		await act(async () => {
+			await result.current.stop();
+		});
+
+		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(result.current.state).toBe("idle");
+	});
+
+	// Codex P1: `endSession` resolves false when there is no connected hub, and that used to end the run silently —
+	// the UI went idle, the reconnect re-subscribed and disarmed the node's abandonment grace, and the node kept the
+	// session open. For an ApplicationProcess session that means the node goes on recording the operator's
+	// application. Not branched on the kind: a browser-fed session was left stuck in Transcribing by the same gap.
+	it("ends the session over REST when the hub cannot deliver EndSession", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		cancelRoute(calls);
+		hub.endSession.mockResolvedValue(false);
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		await act(async () => {
+			await result.current.stop();
+		});
+
+		expect(calls).toEqual(["cancel"]);
+		expect(result.current.state).toBe("idle");
+	});
+
+	// An invoke that threw delivered nothing either, so it takes the same fallback rather than being swallowed.
+	it("ends the session over REST when the hub's EndSession rejects", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		cancelRoute(calls);
+		hub.endSession.mockRejectedValue(new Error("transport gone"));
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+		await act(async () => {
+			await result.current.stop();
+		});
+
+		expect(calls).toEqual(["cancel"]);
+	});
+
+	// The hub path stays the only one taken when it works: a cancel beside a delivered EndSession would race the
+	// node's own termination and turn a Completed session into a Cancelled one.
+	it("does not touch the cancel endpoint when the hub delivered EndSession", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		cancelRoute(calls);
+		const { factory } = harness();
+		const { result } = renderCapture();
+
+		await startCapture(result, { kind: "microphone" }, factory);
+		await act(async () => {
+			await result.current.stop();
+		});
+
+		expect(hub.endSession).toHaveBeenCalledTimes(1);
+		expect(calls).toEqual([]);
+		// A stop the node acknowledged is not a failure, so nothing is reported.
+		expect(result.current.error).toBeNull();
+	});
+
+	// Codex r2 P1: with the hub down AND the cancel endpoint failing, the stop existed only in this browser. Going
+	// idle told the operator it had worked, and the reconnect then re-subscribed and disarmed the node's abandonment
+	// grace — so the node never heard about the stop at all and kept recording.
+	it("keeps a stop neither transport acknowledged and redelivers it on reconnect", async () => {
+		liveStartOk();
+		processCaptureOk([]);
+		const calls: string[] = [];
+		cancelRouteFails(calls);
+		hub.endSession.mockResolvedValue(false);
+		const { factory } = harness();
+		const { result, rerender } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+		hub.connected = false;
+		rerender();
+		await act(async () => {
+			await result.current.stop();
+		});
+
+		// The sources are already stopped, so the machine is idle — but the operator is told the node never confirmed.
+		expect(calls).toEqual(["cancel"]);
+		expect(result.current.error).toBe("stop-failed");
+		expect(result.current.state).toBe("idle");
+
+		hub.endSession.mockResolvedValue(true);
+		hub.endSession.mockClear();
+		await act(async () => {
+			hub.connected = true;
+			rerender();
+		});
+
+		await vi.waitFor(() => expect(hub.endSession).toHaveBeenCalledTimes(1));
+		await vi.waitFor(() => expect(result.current.error).toBeNull());
+	});
+
+	// Leaving the page takes the transport with it, so the unmount teardown is exactly the case where the hub cannot
+	// deliver. Without the fallback the node only stopped on its 60 s abandonment grace.
+	it("ends the session over REST when the page is left with no hub", async () => {
+		liveStartOk();
+		const calls: string[] = [];
+		cancelRoute(calls);
+		hub.endSession.mockResolvedValue(false);
+		const { factory } = harness();
+		const { result, unmount } = renderCapture();
+
+		await startCapture(result, { kind: "process", processId }, factory);
+		unmount();
+
+		// The unmount teardown is fire-and-forget, so the assertion waits for the request rather than the promise.
+		await vi.waitFor(() => expect(calls).toEqual(["cancel"]));
 	});
 
 	// Plan §4.2: WhenAPushReportsOverloaded_StopsEverySourceEndsTheSessionAndShowsTheError

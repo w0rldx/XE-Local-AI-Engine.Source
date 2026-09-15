@@ -1832,6 +1832,40 @@
         ]
       }
     },
+    "/api/local/v1/transcription/capture/processes": {
+      "get": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "listCaptureProcesses",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1CaptureProcessListResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
     "/api/local/v1/transcription/models": {
       "get": {
         "tags": [
@@ -2036,6 +2070,123 @@
                 }
               }
             }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      }
+    },
+    "/api/local/v1/transcription/sessions/{sessionId}/capture/process": {
+      "post": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "startProcessCapture",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "requestBody": {
+          "x-name": "StartProcessCaptureRequest",
+          "description": "",
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1StartProcessCaptureRequest"
+              }
+            }
+          },
+          "required": true,
+          "x-position": 1
+        },
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1ProcessCaptureStatusResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "JWTBearerAuth": []
+          },
+          {
+            "Bearer": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": [
+          "Transcription"
+        ],
+        "operationId": "stopProcessCapture",
+        "parameters": [
+          {
+            "name": "sessionId",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "guid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "No Content"
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "403": {
+            "description": "Forbidden"
+          },
+          "404": {
+            "description": "Not Found"
           }
         },
         "security": [
@@ -24850,6 +25001,7 @@
           "supportsTranscode",
           "idleTimeoutMinutes",
           "vadInstalled",
+          "processCaptureSupported",
           "activity"
         ],
         "properties": {
@@ -24898,6 +25050,9 @@
             "format": "int32"
           },
           "vadInstalled": {
+            "type": "boolean"
+          },
+          "processCaptureSupported": {
             "type": "boolean"
           },
           "managedRuntime": {
@@ -25155,6 +25310,46 @@
           }
         }
       },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1CaptureProcessListResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "supported",
+          "processes"
+        ],
+        "properties": {
+          "supported": {
+            "type": "boolean"
+          },
+          "processes": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/XE_Local_AI_EngineClientEndpointsTranscriptionV1CaptureProcessResponse"
+            }
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1CaptureProcessResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "pid",
+          "name",
+          "hasAudio"
+        ],
+        "properties": {
+          "pid": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "name": {
+            "type": "string"
+          },
+          "hasAudio": {
+            "type": "boolean"
+          }
+        }
+      },
       "XE_Local_AI_EngineClientEndpointsTranscriptionV1TranscriptionModelListResponse": {
         "type": "object",
         "additionalProperties": false,
@@ -25274,6 +25469,51 @@
           },
           "lastSeq": {
             "type": "integer"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1ProcessCaptureStatusResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "sessionId",
+          "capturing"
+        ],
+        "properties": {
+          "sessionId": {
+            "type": "string",
+            "format": "guid"
+          },
+          "capturing": {
+            "type": "boolean"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "reason",
+          "message"
+        ],
+        "properties": {
+          "reason": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          }
+        }
+      },
+      "XE_Local_AI_EngineClientEndpointsTranscriptionV1StartProcessCaptureRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "processId": {
+            "type": "integer",
+            "format": "int32",
+            "minimum": 0,
+            "exclusiveMinimum": true
           }
         }
       },

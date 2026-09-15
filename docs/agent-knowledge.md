@@ -636,6 +636,42 @@ The remote here is `public`, not `origin` (§0), so any review or diff tool that
 `origin` reports that it cannot detect one. Pass the base branch explicitly (`--base develop` or the tool's
 equivalent); do not add an `origin` remote alias to work around it. Operator ruling 2026-09-05.
 
+### PROPOSED (awaiting operator approval): a Windows-only NuGet needs no Windows TFM — reference the LEAF package and guard with attributes
+
+**Rule:** before adding a Windows TFM or `EnableWindowsTargeting` for an OS-specific dependency, check what the
+package actually ships. A leaf package such as `NAudio.Wasapi` ships a single plain `lib/netX.0` asset carrying an
+**assembly-level `[SupportedOSPlatform("windows")]`**, precisely so cross-platform consumers build on Linux
+unchanged; its meta-package (`NAudio`) multi-targets `netX.0;netX.0-windows;netX.0-windows10.0.*` and drags in
+unrelated subsystems, and referencing *that* is what forces a Windows TFM onto a plain `net10.0` project. With the
+leaf package, CA1416 is satisfied by a **type-level** `[SupportedOSPlatform]` on the Windows implementation plus an
+`OperatingSystem.IsWindows()` branch at the single DI call site — the branch is what makes the attribute honest.
+A **versioned** API annotation (`windows10.0.19041.0`) needs a matching `OperatingSystem.IsWindowsVersionAtLeast(…)`
+guard at the call site; a class-level `"windows"` does not satisfy it. In tests the same wall applies: the
+`IsTestOrToolingProject` exemption covers only `Meziantou.Analyzer` and `BannedApiAnalyzers`, so a Windows-gated test
+class needs `[SupportedOSPlatform("windows10.0.19041.0")]` **in addition to** `[RunOn(OS.Windows)]`, which Roslyn
+cannot see. **Never `#pragma warning disable CA1416`** — a suppression is how a Windows-only call reaches a Linux
+host. **Prevents:** a repo-wide first (`TargetFramework` is singular in `Directory.Build.props`), a needless
+`Providers.*` project that could not reach what it must, and the far worse failure of a suppressed platform check.
+**Authority:** `NAudio.Wasapi` 3.1.0 package layout and its own csproj comment; `Directory.Packages.props` (the
+`NAudio.Wasapi` entry); `XE-Local-AI-Engine.Client.Application/Services/Transcription/Capture/`
+(`WindowsProcessAudioCaptureSource`, `ProcessAudioCaptureSupport`); `XE-Local-AI-Engine.Tests/Transcription/WindowsProcessLoopbackTests.cs`;
+paid for in `Plans/audio-transcription-2026-09-11/progress/S5-notes.md` §C1–C2.
+
+### PROPOSED (awaiting operator approval): NAudio's `CaptureAsync` starts the client itself and silently drops Silent packets
+
+**Rule:** `WasapiRecorder.CaptureAsync(ct)` is not a passive enumerator over a stream someone else started. It throws
+`InvalidOperationException("Already recording")` unless the capture state is `Stopped`, initialises and starts the
+audio client itself, and stops and resets it in its own `finally` — so a `StartRecording()` before the loop **throws**
+and a `StopRecording()` after it is a no-op; `await using` on the recorder is the whole teardown. Its loop also yields
+only packets whose `AudioClientBufferFlags.Silent` bit is clear, so **silence never reaches the consumer** and no
+consumer-side code can change that; writing silence would need the zero-copy `DataAvailable` event, whose
+`ReadOnlySpan<byte>` cannot cross an `await`. **Prevents:** an "Already recording" crash on the first capture written
+from the obvious lifecycle, and — the quieter one — a sample-derived audio clock silently read as wall time. In this
+product the consequence is documented rather than fixed: a per-application capture's `Others` lane lags wall time
+during silence. **Authority:** upstream `NAudio` 3.1.0 `src/NAudio.Wasapi/WasapiRecorder.cs`, read from source;
+`XE-Local-AI-Engine.Client.Application/Services/Transcription/Capture/WindowsProcessAudioCaptureSource.cs`;
+`docs/wiki/24-audio-transcription.md`; `Plans/audio-transcription-2026-09-11/progress/S5-notes.md` §C2 deviations 4–5.
+
 ---
 
 ## 2. Dev environment & local runtime

@@ -23,6 +23,7 @@ internal static class TranscriptionRuntimeMapper
             SupportsTranscode = view.Runtime.SupportsTranscode,
             IdleTimeoutMinutes = view.IdleTimeoutMinutes,
             VadInstalled = view.VadInstalled,
+            ProcessCaptureSupported = view.ProcessCaptureSupported,
             ManagedRuntime = view.ManagedRuntime?.ToResponse(),
             Activity = view.Activity.ToResponse()
         };

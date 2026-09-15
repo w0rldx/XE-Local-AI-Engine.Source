@@ -12,9 +12,10 @@ This page covers what exists today: the runtime and its model catalogue (deliver
 documented in full on [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime)),
 the session/segment data model, the **batch file-upload** transcription path with its endpoints and React feature,
 the **live** transcription pipeline (live-start endpoint, `TranscriptionHub` and the segmenter — see
-[Live sessions](#live-sessions)), and the **browser capture** that feeds it (see
-[Browser capture and the live UI](#browser-capture-and-the-live-ui)). Windows per-application capture and dictation
-are **not built yet** — see [What is not here yet](#what-is-not-here-yet).
+[Live sessions](#live-sessions)), the **browser capture** that feeds it (see
+[Browser capture and the live UI](#browser-capture-and-the-live-ui)), and **Windows per-application capture**, the one
+server-side capture source (see [Windows per-application capture](#windows-per-application-capture)). Dictation is
+**not built yet** — see [What is not here yet](#what-is-not-here-yet).
 
 The decisions behind the feature — browser-first capture, channel attribution instead of diarization, the managed
 Linux CUDA source build, the slice order, and the never-persist-audio rule — are recorded in
@@ -27,6 +28,7 @@ Linux CUDA source build, the slice order, and the never-persist-audio rule — a
 | Runtime supervision, transcriber, argument builder, pins, catalogue | `XE-Local-AI-Engine.Providers.WhisperCpp/` (`IWhisperServerSupervisor`, `IWhisperTranscriber`, `WhisperCppReleasePins`, `WhisperModelCatalog`) |
 | Runtime/model application services | `XE-Local-AI-Engine.Client.Application/Services/Transcription/` (`ITranscriptionRuntimeService`, `IWhisperModelDownloadCoordinator`, `WhisperModelPathResolver`) |
 | Session lifecycle + batch transcription | `…/Services/Transcription/Implementation/TranscriptionService.cs` (`ITranscriptionService`) |
+| Windows per-application capture | `…/Services/Transcription/Capture/` (`IProcessAudioCaptureSource`, `WindowsProcessAudioCaptureSource`, `NotSupportedProcessAudioCaptureSource`, `ProcessAudioCaptureCoordinator`, `ProcessAudioCaptureSupport`, `ProcessAudioCaptureCandidates`, `Wasapi16kMonoPcmConverter`) |
 | Container sniffing and engine-side transcode | `…/Services/Transcription/AudioContainerSniffer.cs`, `…/Implementation/FfmpegAudioTranscoder.cs` (`IAudioTranscoder`) |
 | Entities + store | `XE-Local-AI-Engine.Client.Persistence/Entities/{TranscriptionSession,TranscriptSegment,TranscriptionEnums}.cs`, `Stores/ITranscriptionSessionStore.cs`, `Implementation/TranscriptionSessionStore.cs` |
 | Options | `…/Services/Transcription/TranscriptionOptions.cs`, `XE-Local-AI-Engine.Providers.WhisperCpp/Options/WhisperRuntimeOptions.cs` |
@@ -62,9 +64,11 @@ Two entities, both `internal sealed record class`, both mapped in `Configuration
 `TranscriptionSourceKind` carries `File`, `Microphone`, `SystemAudio`, `MicrophoneAndSystem`, `Dictation` and
 `ApplicationProcess` from day one, and `TranscriptChannel` carries `Mono`, `You` and `Others`, because both are
 persisted as ints and adding a member later would be a schema change. `File` (batch upload) and the live capture kinds
-`Microphone`, `SystemAudio` and `MicrophoneAndSystem` are creatable from the SPA (`CaptureControls.tsx`); `Dictation` and
-`ApplicationProcess` are not creatable from any surface yet. `You` and `Others` label the two channels of a mixed
-session; single-source sessions carry `Mono`.
+`Microphone`, `SystemAudio` and `MicrophoneAndSystem` are creatable from the SPA on every host, and `ApplicationProcess`
+on a Windows host that reports `processCaptureSupported`; only `Dictation` is not creatable from any surface yet.
+`TranscriptionService.LiveChannelsFor` maps `SystemAudio` **and `ApplicationProcess`** to the `Others` lane and
+`MicrophoneAndSystem` to both (`You` and `Others`), which is what lets a Windows per-application capture share the
+browser's system-audio lane rather than inventing one; single-source sessions carry `Mono`.
 
 **Encryption** goes through the same column path as chat: `NodeEncryptionSaveChangesInterceptor` encrypts on write and
 `NodeEncryptionMaterializationInterceptor` decrypts on materialization, with AAD bound to the column names
@@ -146,6 +150,9 @@ Routes under `transcription/*` (`LocalApiRoutes.Transcription`), one endpoint cl
 | `DeleteTranscriptionSessionEndpoint` | `DELETE transcription/sessions/{sessionId}` | Cancels anything in flight, then deletes the session and its segments. |
 | `CancelTranscriptionSessionEndpoint` | `POST transcription/sessions/{sessionId}/cancel` | Signals the in-flight transcription for this session. |
 | `UploadTranscriptionAudioEndpoint` | `POST transcription/sessions/{sessionId}/file` | The streaming multipart upload and the batch transcription it drives. |
+| `ListCaptureProcessesEndpoint` | `GET transcription/capture/processes` | The per-application capture picker: `{ supported, processes: [{ pid, name, hasAudio }] }`, one row per non-expired render session, `hasAudio` telling the operator which of them is playing right now. Only the id and the name — no path, window title or command line. |
+| `StartProcessCaptureEndpoint` | `POST transcription/sessions/{sessionId}/capture/process` | Attaches server-side capture of one process to a session that is already live. 400 `capture-not-supported`, 409 `session-not-live` / `capture-already-running`. |
+| `StopProcessCaptureEndpoint` | `DELETE transcription/sessions/{sessionId}/capture/process` | Stops that capture: 204, or 404 when the session was not capturing. It does **not** end the session. |
 
 The runtime and model-catalogue routes of the same family — `transcription/runtime*`, `transcription/models*` and the
 three source-build routes — are listed in [API & Hubs](09-api-and-hubs.md). The whole prefix is gated: with
@@ -235,15 +242,16 @@ calls into it per lane.
 `TimeProvider`. One session holds one lane per channel and one session-wide commit lock:
 
 - `PushAudioAsync` is the in-process audio entry point; `TranscriptionHub` merely forwards `PushAudioFrame` into it,
-  which is also how S5's Windows process capture will feed a lane without a socket — `AttachProducer` /
-  `ILiveAudioProducer` / `LiveProducerRegistration` are the seam for a non-hub producer.
+  which is also how [Windows per-application capture](#windows-per-application-capture) feeds a lane without a
+  socket — `AttachProducer` / `ILiveAudioProducer` / `LiveProducerRegistration` are the seam for a non-hub producer.
 - Every commit — allocating `Seq` (from 1, or after the row's last persisted seq), persisting when the session is
   `Persist`, then publishing — crosses one session-wide lock. **Persistence is a subscriber of the commit, never its
   source**: a persist-free dictation session (S6) streams the identical event sequence with no rows behind it.
 - **One termination path, `EndAsync(reason)`, with six callers:** the hub's `EndSession` (`Completed`);
   cancel/delete via `TranscriptionService.CancelAsync` (`Cancelled`); the disconnect grace,
   `Transcription:AbandonedSessionGraceSeconds` (60 s) with no hub connection left (`Abandoned`); a 60 s
-  producer-attachment deadline with nothing ever feeding the session (`NeverAttached`); the pending-audio budget —
+  producer-attachment deadline with **no producer ever attaching** — `AttachProducer` disarms it, not the first
+  frame, so a silent native capture is not reaped (`NeverAttached`); the pending-audio budget —
   two windows' worth, capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
   flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
 - Persisted status mapping: `Completed` → `Completed`; `Cancelled`, `Abandoned`, `NeverAttached` → `Cancelled`;
@@ -418,6 +426,329 @@ no equivalent fake for `getDisplayMedia`. The system-audio path is therefore cov
 manual live check, never by the E2E — a real boundary, not an oversight. See
 [Testing & Validation](13-testing-and-validation.md#xe-local-ai-enginetestse2etests--playwright).
 
+## Windows per-application capture
+
+The one capture source that is **not** the browser. WASAPI process loopback records the audio of a single running
+application on the node itself, converts it in-process and pushes it into the session's `Others` lane through
+`ILiveTranscriptionSessionRegistry.PushAudioAsync` — the same in-process seam `TranscriptionHub.PushAudioFrame`
+forwards into. **No PCM crosses SignalR on this path**: the browser picks a process and starts the session, and the
+node does the rest. Everything below lives in
+`XE-Local-AI-Engine.Client.Application/Services/Transcription/Capture/`.
+
+### Packaging: one NuGet on `Client.Application`, no new project, no Windows TFM
+
+`NAudio.Wasapi` 3.1.0 is a `PackageReference` on `XE-Local-AI-Engine.Client.Application`, pinned centrally in
+`Directory.Packages.props`. No project was created and no `TargetFramework` changed. Both rejected alternatives cost
+more than they buy:
+
+- **A `Providers.WindowsAudioCapture` project** may reference only `Providers.Abstractions`
+  (`LayerDependencyTests.ApprovedProjectReferences`), so it could not see `ILiveTranscriptionSessionRegistry` — the
+  one thing the capture pump exists to reach. Making it legal would mean pushing `IProcessAudioCaptureSource` down
+  into `Providers.Abstractions`, adding an inbound edge, a solution entry, two architecture-test registrations and a
+  project-layout row, all so roughly two hundred lines of glue could live one assembly further away. Process loopback
+  is neither a model runtime nor a model source, which is what `Providers.*` is for.
+- **Multi-targeting `net10.0;net10.0-windows10.0.19041.0`** is unnecessary. The **package id is the whole trick**:
+  the `NAudio` meta-package multi-targets and drags in Midi/Asio/WinMM, which would force a Windows TFM onto this
+  project, while the leaf `NAudio.Wasapi` ships a single plain `lib/net9.0` asset carrying an assembly-level
+  `[SupportedOSPlatform("windows")]` precisely so cross-platform consumers build on Linux without
+  `EnableWindowsTargeting`. `Directory.Build.props` sets one `TargetFramework` for the whole repo; overriding it in
+  one csproj would be a repo-wide first with no payoff.
+
+That assembly-level attribute plus `AnalysisMode=All` and `TreatWarningsAsErrors` makes every use of an NAudio WASAPI
+type from an unattributed call site a **CA1416 build error**. The repo's existing answer applies: a type-level
+`[SupportedOSPlatform("windows")]` on `WindowsProcessAudioCaptureSource` (as `WindowsImageJobObjectProcessHandle`
+does) and an `OperatingSystem.IsWindows()` branch at the single DI call site in `AddNodeTranscriptionExtensions`,
+which is what makes the attribute honest. **There is no CA1416 suppression anywhere in the feature**, in product code
+or in tests — a suppression here is exactly how a Windows-only call reaches a Linux host.
+
+### Two version numbers, two jobs
+
+They are deliberately not merged, and neither is redundant:
+
+| Number | Where | What it decides |
+|---|---|---|
+| **20348** | `ProcessAudioCaptureSupport.MinimumWindowsBuild`, read by `IsSupported` | The **capability policy**. Microsoft documents `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS` — the struct that actually carries the loopback mode — as Windows Server 2022 / build 20348. |
+| **19041** | `OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041)` inside `CaptureAsync` | The **analyzer guard**. NAudio annotates `WasapiRecorderBuilder.WithProcessLoopback` `[SupportedOSPlatform("windows10.0.19041.0")]`, and a class-level `"windows"` does not satisfy a versioned API. |
+
+20348 is the higher floor, so the analyzer guard is unreachable in practice — the analyzer cannot know that. The
+conservative number was chosen because being wrong this way hides a feature, while being wrong the other way is a hard
+COM failure the operator cannot act on. **The conflict is unresolved and is resolved by evidence, not by editing the
+constant**: if capture is observed working on a build between 19041 and 20347, report the observation rather than
+silently lowering `MinimumWindowsBuild`.
+
+`IsBuildSupported(int major, int build)` takes no `minor` parameter. Every Windows 10 and 11 release reports major 10,
+minor 0, and an unused parameter is an `IDE0060` build error here. It takes the version rather than reading
+`Environment.OSVersion` so the policy is testable on every operating system rather than only on the one it describes —
+comparing `IsSupported` against its own predicate would be a tautology that cannot fail.
+
+### There is exactly one scope, and it is not a choice
+
+`ProcessLoopbackMode` has two members and **neither means "the target alone"**:
+
+| Member | What it captures |
+|---|---|
+| `IncludeTargetProcessTree` | the target process **and its descendants** |
+| `ExcludeTargetProcessTree` | **everything on the endpoint except** the target and its descendants |
+
+Read quickly, `ExcludeTargetProcessTree` looks like "just this application". It is the opposite: offering it as a
+"this application only" scope would record every other application on the box while the interface claimed one — a
+privacy inversion. `WindowsProcessAudioCaptureSource.CaptureMode` is `IncludeTargetProcessTree` and is the only mode
+this product has: there is no scope enum, no scope field on `StartProcessCaptureRequest`, and
+`ExcludeTargetProcessTree` appears nowhere in product code.
+`WindowsProcessLoopbackTests.CaptureUses_IncludeTargetProcessTree_Never_Exclude` asserts the constant so it cannot
+creep back.
+
+The consequence binds the user interface: the copy promises **the application *and its child processes***, never
+"only this application". Excluding a target's children is not implementable on Windows through this flag — it would
+need a different mechanism entirely — and is recorded as a limitation rather than approximated.
+
+### Format: no `WithFormat`, convert in managed code
+
+The recorder is built with `BuildAsync()`, never the synchronous `Build()`, which throws once process loopback is
+configured — the activation path is asynchronous. No format is requested. The process-loopback virtual device rejects
+`AutoConvertPcm`, so a format it does not accept is an `IAudioClient::Initialize` failure rather than a silent
+resample; taking NAudio's documented 44.1 kHz stereo float fallback is the one path that always initialises, at the
+cost of a resample the target hardware will not notice. **What `recorder.WaveFormat` actually reports on a real
+Windows box is not verified here** and belongs in the operator's round.
+
+`Wasapi16kMonoPcmConverter` turns whatever arrives into the 16 kHz mono little-endian int16 the segmenter accepts:
+`BufferedWaveProvider` → `ToSampleProvider()` → `StereoToMonoSampleProvider` (only when stereo) →
+`WdlResamplingSampleProvider` (only when the rate differs), so a source that is already 16 kHz mono degenerates to a
+format conversion and no call site needs a branch. It is written against `NAudio.Core` only — no WASAPI type appears
+in it — which is why it is fully managed, runs on Linux and is **the one part of this feature the CI gate actually
+executes**. `WdlResamplingSampleProvider` is what buys that; `MediaFoundationResampler` would not.
+
+Three details are load-bearing:
+
+- **`ReadFully = false`.** The default is `true`, which zero-fills an underflow and returns the full requested count —
+  a drain written as `while (Read(buffer) > 0)` would then never terminate and would manufacture unlimited silent PCM
+  that the segmenter would faithfully transcribe as an endless empty window. `Converter_ReturnsZeroOnAnEmptyFollowUpRead`
+  and `Converter_TotalOutputIsBoundedByTotalInput` both fail if the default is left in place.
+- **The drain is bounded** at 64 iterations per WASAPI packet, in 32 000-byte chunks (one second of output). The bound
+  is belt-and-braces: `ReadFully = false` already terminates the drain, and one packet can never produce more 16 kHz
+  mono output than it carried input, so tripping the cap means a bug in the conversion chain.
+- **The float→int16 scale is 32768, clamped asymmetrically** to `[short.MinValue, short.MaxValue]`. NAudio's
+  int16→float conversion divides by 32768, so scaling by 32767 would cost one least-significant bit on exactly the
+  passthrough case this converter must not degrade; with 32768 the already-16 kHz-mono test asserts **exact**
+  equality.
+
+`DiscardOnBufferOverflow` is `false`: the pump drains after every packet, so a full buffer means the conversion
+stopped keeping up and the session should fail visibly rather than quietly losing the newest audio.
+
+### The coordinator, and why it is not the producer
+
+`ProcessAudioCaptureCoordinator` is a singleton registered on **every** operating system, `IAsyncDisposable`, running
+captures on tasks that outlive the request that started them — a cancelled HTTP request must not kill a recording the
+operator is still making.
+
+- **The coordinator is not itself `ILiveAudioProducer`.** `ILiveAudioProducer.StopAsync` carries no session id, so one
+  singleton attached to several sessions could not tell which session the registry meant. A private per-session
+  `SessionCapture` is the producer instead: it owns that session's linked cancellation source, its capture task and
+  its detach handle, and it is what `AttachProducer` receives.
+- **Attachment happens before the recorder exists**, and **attaching is what satisfies the producer-attachment
+  deadline** — waiting for the first frame does not. `AttachProducer` disposes the session's `AttachmentTimer` inside
+  the session gate, right after the admission check. A native capture of an application that happens to be silent
+  pushes nothing, because WASAPI never yields a silent packet at all, so gating on audio would have reaped a session
+  with a healthy running recorder as `NeverAttached` once the deadline elapsed. The browser abandonment grace is
+  untouched: a closed tab still ends the session whatever else is feeding it.
+- **Attach and stop are one critical section, under `SessionCapture`'s own `Lock`.** The coordinator publishes the
+  handle into its dictionary **before** calling `Attach`, so a stop can land in the gap and find nothing to cancel.
+  It records the request instead; `Attach` publishes the registration and then, **before scheduling anything**,
+  honours a recorded stop and returns, all inside the lock. That ordering is load-bearing: scheduling the loop first
+  and cancelling afterwards left a window, because the worker does not take this lock, so it could clear its
+  cancellation check and enter `CaptureAsync` — building a WASAPI recorder *after* the stop had already returned —
+  before cleanup got to cancel. Not scheduling at all is the only ordering with no window, and it leaves `Capture` as
+  a completed task, which every caller already tolerates. Teardown itself is one method, `CleanUpLocked`, which cancels,
+  detaches and disposes **exactly once and in that order** — cancel always before dispose, one caller owning both,
+  so no stack ever sees a half-torn-down handle. A stop that arrives before anything is published simply drops the
+  dictionary entry and leaves the teardown to `Attach`, which sees the recorded request under the same lock.
+  Without this the capture could run **untracked** — absent from the dictionary, so no later stop, no `IsCapturing`
+  and no `DisposeAsync` could reach it — while it kept pushing PCM into a session whose operator had been told
+  capture stopped; the other variant disposed the source out from under `Attach`, whose next `.Token` read threw
+  `ObjectDisposedException`, which derives from `InvalidOperationException` and so was caught by `Start` and
+  reported as `SessionNotLive` for a capture that had in fact started. The cancellation token is likewise read into
+  a local **before** the task lambda, because a lambda that reads `.Token` when the pool thread runs it can find the
+  source already disposed. `RunAsync` throws on an already-cancelled token before it builds a recorder.
+- **Cancelling the registry's `ProducerToken` is the one stop signal.** Every handle links its own source to that
+  token, so ending a session for any reason — including the pending-audio budget overflowing into `Overloaded` —
+  stops the capture at its next iteration. A private token the registry cannot reach is how a recorder outlives its
+  session.
+- **`Start` is synchronous** and returns `StartProcessCaptureOutcome` (`Started`, `NotSupported`, `SessionNotLive`,
+  `AlreadyCapturing`). Nothing in it performs I/O, and a `Task`-returning start would suggest it waits for the
+  capture, which is exactly what it must not do. It asks `IsLive` before attaching so the caller gets a typed refusal
+  rather than a recorder with nowhere to push; the registry re-checks under its own lock, and a session that stopped
+  being live in between surfaces as a refused attach, not a stranded producer.
+- **`StopAsync` cancels and returns — it never awaits the capture task.** A `PushAudioAsync` blocked behind inference
+  would otherwise hold the registry's bounded producer-stop wait. `StopAsync_ReturnsWhileAPushIsBlockedBehindInference`
+  is the proof: adding an `await` on the capture task turns it red.
+- **The coordinator never ends a session and names no session status.** Stopping capture and ending a live session are
+  different acts; the second belongs to the registry's single `EndAsync` path.
+- **`DisposeAsync`** stops and detaches every capture, then bounds the drain at three seconds on the injected
+  `TimeProvider` — a bound on shutdown, not a wait for an event, so one wedged capture cannot hold the process open.
+
+### The call order
+
+Unchanged from the live path, with one step added at the end:
+
+1. `POST transcription/sessions` with `SourceKind = ApplicationProcess`.
+2. `SubscribeSession(sessionId, 0)` on `TranscriptionHub`.
+3. `POST transcription/sessions/{sessionId}/live/start` — awaited.
+4. `POST transcription/sessions/{sessionId}/capture/process` with `{ processId }`.
+
+`StartProcessCaptureEndpoint` verifies step 3 happened by asking the registry, because starting a recorder for a
+session with no lanes would capture audio with nowhere to put it. The two refusal families are different on purpose:
+**400** `capture-not-supported` when the host cannot capture process audio at all, because retrying can never work;
+**409** `session-not-live` or `capture-already-running`, because the caller can fix either and try again. Both carry a
+reason code rather than prose, in the shape `TranscriptionRuntimeBlockedResponse` already uses. `ProcessId` must be
+positive — `StartProcessCaptureRequestValidator` rejects anything else with a 400 — and the generated client types
+`processId` as **optional** (`processId?: number`), so the server-side check is the only one there is.
+
+**Ending the session is the hub's `EndSession`**, which runs the registry's single termination path and, by cancelling
+`ProducerToken`, stops the node's recorder with it. The `DELETE` route stops **only** the capture and leaves the
+session live; it is a convenience over the termination path, never an alternative to it, and the SPA does not call it
+— `useLiveCapture`'s teardown ends the whole session instead, over the hub where it can and over the REST cancel
+route where it cannot (see [the REST fallback](#stopping-when-the-hub-cannot-deliver-the-rest-fallback)).
+
+In the browser this source is the odd one out: `useLiveCapture` acquires **no** source, opens no `AudioContext` and
+forwards no frame for `{ kind: "process" }`. It posts the capture request after `live/start` returns and moves
+straight to the capturing phase, and `TranscriptionSessionPage` treats an `ApplicationProcess` session as live through
+an explicit allow-list rather than "everything but `File`", because the browser contributes nothing to it. The
+*Application audio* source appears in the new-session dialog only when the runtime status reports
+`processCaptureSupported` — hidden on an unsupported node, never disabled.
+
+The runtime-status response carries `processCaptureSupported`, populated from `IProcessAudioCaptureSource.IsSupported`
+by `TranscriptionRuntimeService` and projected through `TranscriptionRuntimeView`. It lives on the view rather than
+being passed in at the endpoint because two endpoints project that view and two places could disagree; the positional
+parameter is required, so a forgotten wire-up cannot silently report `false`.
+
+### Silence never arrives, and the audio clock lags because of it
+
+NAudio's `WasapiRecorder.CaptureAsync` yields only packets whose `AudioClientBufferFlags.Silent` bit is clear —
+**silent buffers never reach this product at all**. Nothing here special-cases them; the drop happens upstream. The
+consequence is real and worth knowing before reading a transcript: the segmenter's clock is audio time, derived from
+the cumulative pushed byte count, so during silence the `Others` lane's clock **lags wall time**. The VAD-driven
+segmenter tolerates this, and the timestamps stay internally consistent, but they are not wall-clock offsets from the
+start of the recording. Writing silence instead would require the zero-copy `DataAvailable` event, whose buffer is a
+`ReadOnlySpan<byte>` valid only inside the callback and therefore cannot cross an `await`.
+
+### A capture that dies leaves the session live and silent
+
+The companion consequence, and the sharper one. A detached capture can end on its own in several ways: `BuildAsync`
+refuses because the pid is already gone or CoreAudio refuses the activation, the target process exits mid-capture, or
+the converter's buffer overflows because conversion stopped keeping up. All of them are caught and logged by the
+capture loop, which then removes its own handle. **Nothing ends the session.** By that point `Start` has already
+answered 200 with `capturing: true`; the producer attached, which disarmed the registry's producer-attachment
+deadline, so the `NeverAttached` sweep will not fire either; and S5 never calls `EndAsync`,
+because stopping a capture and ending a live session are different acts. The session therefore stays live, receives
+nothing more, and the only client-visible signals are indirect: `IsCapturing` reports `false`, and a later `DELETE`
+on the capture route answers **404** instead of 204. The browser abandonment grace is the one thing that still ends
+such a session, and only if the operator closes the tab.
+
+This is intended rather than overlooked — the coordinator's own remarks state that it never ends a session and names
+no session status, so that the registry keeps exactly one termination path. It is also the least pleasant thing about
+the design from the operator's seat, which is why the Windows round has to record what actually happens: killing the
+target process mid-session is a step in the live-validation plan, and what the transcript, the status and the capture
+route report afterwards is the observation that decides whether a future slice needs a "capture ended" signal on the
+hub.
+
+### Stopping when the hub cannot deliver: the REST fallback
+
+Every client stop funnels through one teardown, and that teardown now has two ways to reach the node.
+`useTranscriptionHub.endSession` **reports delivery**: it resolves `false` when there is no connected transport to
+invoke `EndSession` on. A throwing invoke is treated the same way, but for a different reason — the client cannot
+tell whether the node processed the call before the transport dropped, so it assumes the worst. In both cases
+`useLiveCapture` falls back to the REST cancel route, `POST transcription/sessions/{sessionId}/cancel`, which reaches
+the registry's single `EndAsync` path with `LiveEndReason.Cancelled` and stops the producer at once. Sending it after
+an `EndSession` that did land is **redundant and harmless**: `BeginEnd` is idempotent under the session gate — a
+session that already has an end task returns it untouched — so the first end wins and keeps **its own** reason. A
+session genuinely completed over the hub therefore stays `Completed`; the late cancel changes nothing. The fallback
+covers **every** stop path, including `abandon(true)` — the unmount that lands while `live/start` is still in
+flight — and it applies to every request kind, not only process capture.
+
+**A stop that neither transport acknowledged is not dropped.** It is held pending, surfaced to the operator as
+`stop-failed` rather than a silent return to idle, and redelivered the moment the hub reconnects. That redelivery
+matters because the reconnect is the *same* event that re-subscribes and disarms the node's abandonment grace: without
+it, a stop whose only record lived in this browser would never reach the node at all, and the grace that would
+otherwise have caught the session has just been disarmed. The pending flag clears on the first acknowledgement from
+either transport, and clearing it only resets the `stop-failed` message — a teardown triggered by an `overloaded`
+push keeps saying so.
+
+**A stop that actually ends the session over REST finalizes the row as `Cancelled`, not `Completed`.** That matters: only `Completed`
+flushes the segmenter's retained tail, so a session ended over REST keeps every committed segment but not the last
+partial window. It is the same status an abandoned session already receives, so the outcome does not change with the
+delivery route — what changes is the timing.
+
+Before this existed the failure was silent and open-ended. A Stop pressed while the transport was down ended nothing,
+the view went idle, and the reconnect re-subscribed and disarmed the node's abandonment grace, leaving the session —
+and for per-application capture, the recorder on the operator's application — running **indefinitely**. For a
+browser-fed source the same gap left a session stuck in `Transcribing`, the same bug with a quieter symptom.
+
+The 60 s browser abandonment grace (`Transcription:AbandonedSessionGraceSeconds`, armed on the last hub disconnect,
+ending the session as `Abandoned`) survives as the backstop for the one case no client code can cover: a browser that
+**dies without running teardown at all** — a crash, a killed process, power loss. In that window the node keeps
+capturing the target application, because the recorder lives on the node and has no idea the browser is gone. The
+clock starts at the **disconnect**, not at the unmount, so the exposure is at most a minute and often less. The
+Windows round should still record what lands in the transcript after a tab is closed mid-capture, since that is the
+path the fallback is supposed to make instant.
+
+### Known limitations
+
+- **The target process exiting mid-capture is caught and logged**, not raised: the capture loop treats any failure as
+  "capture ended", the session lives on until something ends it through the registry, and nothing escapes as an
+  unobserved task fault. Which of the two shapes NAudio produces there — a clean end of the sequence or a COM
+  exception — is not verified.
+- **More than two channels is refused** with a `NotSupportedException`. `StereoToMonoSampleProvider` downmixes two
+  channels only, and failing loudly beats interleaving channels into the transcript. Unreachable with NAudio's stereo
+  default.
+- **One application playing to two render endpoints enumerates twice**, and so does one holding an idle session
+  beside a playing one. `ProcessAudioCaptureCandidates.Aggregate` de-duplicates by process id and **ORs** activity
+  across that process's sessions, because activity is a property of the process, not of whichever session came back
+  first — keeping the first row seen made the answer depend on enumeration order and reported a playing application
+  as silent. The aggregation is pure and free of any WASAPI type, so it runs and is tested on Linux; only the
+  enumeration is Windows-only. Which endpoint capture then attaches to is WASAPI's choice, not this product's.
+- **A box with no active render endpoint returns an empty picker**, which is correct but indistinguishable from "no
+  application is holding a render stream" — hence the `supported` flag, which separates "this operating system cannot
+  do it" from "there is nothing to offer right now".
+- **System-sounds sessions are skipped, and so are expired ones.** `hasAudio` reports whether the session is
+  `Active` **right now**, so an application that has gone quiet stays listed with `hasAudio: false` and remains a
+  valid capture target; it leaves the picker only when its session expires, which is the process releasing its render
+  stream or exiting. The flag is a "playing right now" hint for the operator choosing a row, never a statement about
+  whether the application can produce sound at all.
+- **A process that exited between enumeration and name lookup lists as `PID n`** rather than disappearing.
+- **The chosen process id is remembered only in the browser**, in `TranscriptionCaptureStore` beside the microphone
+  device id, because the node is told which process to capture at start rather than at create. A session whose stored
+  id is gone cannot start capture and says so; creating a new session and picking again is the way out.
+
+### Every other operating system fails closed
+
+The DI branch is `OperatingSystem.IsWindows()` and nothing finer: Linux and macOS get
+`NotSupportedProcessAudioCaptureSource`, while a **Windows host below the build floor still gets the Windows source**
+and is refused by its own `IsSupported` check. The two paths are deliberately indistinguishable from outside:
+`IsSupported` is `false`, the runtime status reports `processCaptureSupported: false`, the picker answers 200 with an
+empty list, and `CaptureAsync` **throws a named `TranscriptionProcessCaptureNotSupportedException`** rather than
+returning quietly. Failing closed is the point — returning silently would open a live session that never receives a
+byte and looks to the operator like a broken microphone. There is no PipeWire or PulseAudio per-process binding behind
+the non-Windows case, and none is planned.
+
+### What is verified, and what is not
+
+Everything platform-independent runs on the Linux gate: the documented build floor
+(`ProcessAudioCaptureTests.Support_*`), the PCM downmix/resample and its drain bound (`…Converter_*`, against real
+`NAudio.Core` types — no mock), the picker's de-duplication and activity OR-ing
+(`ProcessAudioCaptureCandidates.Aggregate`, pure and WASAPI-free precisely so a Linux runner can exercise it), the
+coordinator lifecycle (`ProcessAudioCaptureCoordinatorTests`, including the
+overload and blocked-push cases) and the endpoint policy, shapes and reason codes
+(`TranscriptionCaptureEndpointTests`).
+
+**The WASAPI process-loopback path itself was not executed.** The development box is WSL2 with no Windows audio stack,
+so the three `[RunOn(OS.Windows)]` tests in `WindowsProcessLoopbackTests` report **skipped** — the honest result, and
+not evidence that the feature works. What a real Windows box still has to establish is recorded in the slice plan's
+live-validation section: that the picker lists only the process actually playing, that committed segments arrive on
+`Others`, that a **second application's audio does not appear** (the negative control, and the whole point of the
+single scope), that a multi-process application's child audio does appear, the observed OS build, the observed
+`WaveFormat`, and that closing the target mid-capture ends the session through the registry with no recorder left
+running.
+
 ## React feature
 
 `src/features/transcription/` renders the session list at `/transcription` and one session at
@@ -445,8 +776,12 @@ last two are persisted and normalized already, and are read by the live slices.
 
 ## What is not here yet
 
-- **Windows per-application capture** (S5). Browser capture cannot scope to one application; NAudio's WASAPI process
-  loopback can, on Windows only.
+- **Per-application capture anywhere but Windows.** WASAPI process loopback has no Linux or macOS equivalent — no
+  per-process binding exists in PipeWire or PulseAudio — and no PipeWire/PulseAudio/PortAudio code is planned. See
+  [Windows per-application capture](#windows-per-application-capture) for what Windows gets and how every other host
+  fails closed.
+- **Capturing an application *without* its child processes.** Not implementable through `ProcessLoopbackMode`; the
+  product captures the process tree and says so.
 - **Dictation into the agent chat** (S6). It appends in place through a toolbar callback and deliberately does not
   route through the pending-composer store.
 - **Diarization.** whisper.cpp clusters no speakers; `You`/`Others` come from transcribing two captured channels
@@ -458,5 +793,7 @@ last two are persisted and normalized already, and are read by the live slices.
 - [Data & Persistence](08-data-and-persistence.md) — the two tables, the encrypted columns and the migration timeline.
 - [API & Hubs](09-api-and-hubs.md) — the `transcription/*` route family and OpenAPI → hey-api.
 - [React Client](10-react-client.md) — the `transcription` feature folder and the client conventions it follows.
+- [Project Layout](02-project-layout.md) — why the WASAPI package sits on `Client.Application` and stays on a plain `net10.0` target.
+- [Testing & Validation](13-testing-and-validation.md) — the live-transcription E2E suites and the Windows-gated process-loopback class.
 - [Security & Privacy](12-security-and-privacy.md) — loopback-only endpoints, Operator gating, node-local privacy.
 - [ADR 0012](../adr/0012-audio-transcription-runtime-and-capture.md) — the decisions this feature implements.

@@ -63,6 +63,7 @@ export function TranscriptionPage() {
 	const { confirm } = useConfirm();
 	const unsupportedMessage = useUnsupportedMessage();
 	const rememberDevice = useTranscriptionCaptureStore((state) => state.actions.rememberDevice);
+	const rememberProcess = useTranscriptionCaptureStore((state) => state.actions.rememberProcess);
 	const [dialogOpened, setDialogOpened] = useState(false);
 	const [submitError, setSubmitError] = useState<string | undefined>(undefined);
 	const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -100,6 +101,9 @@ export function TranscriptionPage() {
 						// record of which microphone THIS session was configured for, and the session view reads it
 						// back by id when the operator presses Start.
 						rememberDevice(sessionId, values.deviceId);
+						// The pid DOES reach the node, but only once the session is live — the create request carries no
+						// process. Remembering it here is what lets the session view post capture/process on Start.
+						rememberProcess(sessionId, values.processId);
 						// A live session is only the row: capture starts from the session view, because the browser's
 						// screen-share picker must open inside the click that asks for it and this navigation is an await
 						// away from that click.

@@ -14,7 +14,15 @@ import {
 	useLiveTranscript,
 	useTranscriptionHub,
 } from "@/features/transcription/hooks/useTranscriptionHub";
-import { useStartLiveTranscriptionSession } from "@/features/transcription/queries/useTranscriptionQueries";
+import {
+	type ProcessCaptureBlockedReason,
+	processCaptureBlockedReason,
+} from "@/features/transcription/models/TranscriptionModels";
+import {
+	useCancelTranscriptionSession,
+	useStartLiveTranscriptionSession,
+	useStartProcessCapture,
+} from "@/features/transcription/queries/useTranscriptionQueries";
 
 // Orchestrates one live capture: open the session on the node, acquire the browser sources, forward their frames to
 // the hub, and tear all of it down again on stop, on a failure, or when the node says it is overloaded.
@@ -22,7 +30,10 @@ import { useStartLiveTranscriptionSession } from "@/features/transcription/queri
 export type LiveCaptureRequest =
 	| { readonly kind: "microphone"; readonly deviceId?: string }
 	| { readonly kind: "systemAudio" }
-	| { readonly kind: "both"; readonly deviceId?: string };
+	| { readonly kind: "both"; readonly deviceId?: string }
+	// Windows per-application capture: the node records the process itself, so the browser opens no source and pushes
+	// no frame. Only the node's Others lane ever carries this session's audio.
+	| { readonly kind: "process"; readonly processId: number };
 
 export type LiveCaptureState = "idle" | "starting" | "capturing" | "stopping";
 
@@ -31,7 +42,7 @@ export type LiveCaptureState = "idle" | "starting" | "capturing" | "stopping";
  * the node refusing to open the session (a File session, an unknown one, or one that already reached a terminal
  * status), which is neither a browser capability nor a device problem and must not be reported as one.
  */
-export type LiveCaptureErrorCode = CaptureErrorCode | "start-failed";
+export type LiveCaptureErrorCode = CaptureErrorCode | "start-failed" | "stop-failed" | ProcessCaptureBlockedReason;
 
 export type CaptureSourceFactory = (
 	kind: "microphone" | "systemAudio",
@@ -79,13 +90,26 @@ function systemChannel(): CaptureChannel {
 }
 
 function toErrorCode(error: unknown): LiveCaptureErrorCode {
-	return error instanceof CaptureError ? error.code : "start-failed";
+	if (error instanceof CaptureError) {
+		return error.code;
+	}
+	// The capture/process endpoint answers its refusals with a typed reason, and the three mean different things:
+	// this box cannot capture an application at all, the session is not live, or something is already capturing it.
+	// Reporting all three as "the node refused to open this live session. It may already have finished." is wrong in
+	// every direction, so the reason wins where there is one.
+	return processCaptureBlockedReason(error) ?? "start-failed";
 }
 
 export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 	const { pushFrame, endSession, replayStalled, connected, subscribeFailed } = useTranscriptionHub(sessionId);
 	const live = useLiveTranscript(sessionId ?? "");
 	const startLive = useStartLiveTranscriptionSession();
+	const startProcessCapture = useStartProcessCapture();
+	const cancelSession = useCancelTranscriptionSession();
+	// Read through a ref so `teardown` — the primitive every stop path funnels into — keeps its identity when the
+	// mutation's own state changes.
+	const cancelSessionRef = useRef(cancelSession.mutateAsync);
+	cancelSessionRef.current = cancelSession.mutateAsync;
 	const [state, setState] = useState<LiveCaptureState>("idle");
 	const [error, setError] = useState<LiveCaptureErrorCode | null>(null);
 
@@ -95,6 +119,8 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 	const sourcesRef = useRef<CaptureSource[]>([]);
 	const forwardingRef = useRef(false);
 	const sessionOpenRef = useRef(false);
+	// True between an end this browser decided on and the node acknowledging it over either transport.
+	const pendingEndRef = useRef(false);
 	// Bumped by every `teardown`. A `start` whose generation has moved is running against a capture that was already
 	// torn down — by an unmount, a stop or an abort — and `teardown` only stopped what `sourcesRef` held at that
 	// instant. Anything acquired after it is reachable from this frame alone, so this frame has to stop it.
@@ -104,6 +130,61 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 		stateRef.current = next;
 		setState(next);
 	}, []);
+
+	/**
+	 * Ends the live session, over the hub where it can and over REST where it cannot.
+	 *
+	 * `endSession` resolves false when there is no connected hub to invoke `EndSession` on, and until this fallback
+	 * existed that was silent: a Stop pressed while the transport was down ended nothing, the UI went idle, and the
+	 * reconnect re-subscribed and disarmed the node's abandonment grace. The node then kept the session — and, for an
+	 * `ApplicationProcess` session, its recorder on the operator's application — running indefinitely. The cancel
+	 * endpoint reaches the node's single `EndAsync` path, so it closes the same session the hub would have.
+	 *
+	 * Applied for every request kind, not just `process`: the same gap leaves a browser-fed session stuck in
+	 * Transcribing, which is the same bug with a quieter symptom.
+	 *
+	 * When NEITHER transport acknowledges, the end is not dropped: `pendingEndRef` holds it, the operator is told
+	 * (`stop-failed` rather than a silent return to idle), and the effect below redelivers it the moment the hub is
+	 * back. That reconnect is the same event that re-subscribes and disarms the node's abandonment grace, so a stop
+	 * left only in this browser would never reach the node at all.
+	 */
+	const endLiveSession = useCallback(async (): Promise<void> => {
+		if (sessionId === null) {
+			return;
+		}
+		pendingEndRef.current = true;
+		const acknowledged = (): void => {
+			pendingEndRef.current = false;
+			// Only this code is cleared: a teardown that ran because of an `overloaded` push must keep saying so.
+			setError((current) => (current === "stop-failed" ? null : current));
+		};
+		try {
+			if (await endSession()) {
+				acknowledged();
+				return;
+			}
+		} catch {
+			// The invoke may or may not have reached the node before it threw, so the outcome is unknown and the
+			// fallback runs. A redundant cancel is harmless: the node's `BeginEnd` keeps the first termination.
+		}
+		try {
+			await cancelSessionRef.current(sessionId);
+			acknowledged();
+		} catch {
+			// Both transports are down. The end stays pending for the reconnect, and the operator is told rather than
+			// shown an idle capture the node never heard about.
+			setError("stop-failed");
+		}
+	}, [endSession, sessionId]);
+
+	// A stop the node never acknowledged is redelivered as soon as the hub is connected again. Without this the
+	// reconnect would disarm the abandonment grace while the only record of the stop sat in this browser.
+	useEffect(() => {
+		if (!connected || !pendingEndRef.current) {
+			return;
+		}
+		endLiveSession().catch(() => undefined);
+	}, [connected, endLiveSession]);
 
 	// R34: sources and the audio graph go down FIRST, then the session is ended. `EndSession` is awaited but a pending
 	// `PushAudioFrame` never is — it may be parked behind a 30 s inference, and the microphone must not stay hot for it.
@@ -115,9 +196,9 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 		await Promise.allSettled(sources.map((source) => source.stop()));
 		if (sessionOpenRef.current) {
 			sessionOpenRef.current = false;
-			await Promise.allSettled([endSession()]);
+			await endLiveSession();
 		}
-	}, [endSession]);
+	}, [endLiveSession]);
 
 	const abort = useCallback(
 		async (code: LiveCaptureErrorCode): Promise<void> => {
@@ -161,7 +242,8 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 			// else — the endpoint, the microphone prompt, `addModule` — can outlive the transient user activation the
 			// Screen Capture specification requires at the moment `getDisplayMedia` is called.
 			let displayStarted: Promise<void> | null = null;
-			if (request.kind !== "microphone") {
+			// Named kinds, not "everything but the microphone": a process-capture session must open no picker at all.
+			if (request.kind === "systemAudio" || request.kind === "both") {
 				const display = createSource("systemAudio", systemChannel(), undefined);
 				acquired.push(display);
 				displayStarted = display.start(onFrame);
@@ -179,7 +261,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				}
 				await Promise.allSettled(acquired.map((source) => source.stop()));
 				if (endTheSession) {
-					await Promise.allSettled([endSession()]);
+					await endLiveSession();
 				}
 			};
 
@@ -194,7 +276,23 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				}
 				sessionOpenRef.current = true;
 
-				if (request.kind !== "systemAudio") {
+				// R30a: the session is live, so the node has a lane to push into — only now may capture attach. No source
+				// is acquired for this kind: the audio never enters this browser, and `teardown` ends the session over the
+				// hub, which is the same path that stops the node's recorder.
+				if (request.kind === "process") {
+					await startProcessCapture.mutateAsync({ sessionId, processId: request.processId });
+					if (startGenerationRef.current !== generation) {
+						await abandon(false);
+						return;
+					}
+					// No frame ever reaches `onFrame` for this kind; the flag is set anyway so "capturing implies
+					// forwarding" holds for every request kind.
+					forwardingRef.current = true;
+					setPhase("capturing");
+					return;
+				}
+
+				if (request.kind === "microphone" || request.kind === "both") {
 					const microphone = createSource("microphone", microphoneChannel(request), request.deviceId);
 					acquired.push(microphone);
 					await microphone.start(onFrame);
@@ -225,7 +323,7 @@ export function useLiveCapture(sessionId: string | null): LiveCaptureHandle {
 				setPhase("idle");
 			}
 		},
-		[abort, endSession, pushFrame, sessionId, setPhase, startLive, teardown],
+		[abort, endLiveSession, pushFrame, sessionId, setPhase, startLive, startProcessCapture, teardown],
 	);
 
 	const stop = useCallback(async (): Promise<void> => {

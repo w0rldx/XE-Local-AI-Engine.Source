@@ -245,6 +245,31 @@ describe("useTranscriptionHub", () => {
 		expect(pushFrameInvokes()).toHaveLength(0);
 	});
 
+	// The caller has to know whether the node was actually told. A void return let a Stop pressed while the transport
+	// was down end nothing at all, silently, and the node kept the session — and its recorder — alive.
+	it("EndSession_WhenConnected_InvokesAndReportsThatItWasDelivered", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		invokeSpy.mockClear();
+
+		const delivered = await result.current.hub.endSession();
+
+		expect(delivered).toBe(true);
+		expect(invokeSpy.mock.calls.filter((call) => call[0] === "EndSession")).toHaveLength(1);
+	});
+
+	it("EndSession_WhileDisconnected_InvokesNothingAndReportsThatItWasNot", async () => {
+		const { result } = renderHub();
+		await waitFor(() => expect(result.current.hub.connected).toBe(true));
+		invokeSpy.mockClear();
+		connectionState = "Disconnected";
+
+		const delivered = await result.current.hub.endSession();
+
+		expect(delivered).toBe(false);
+		expect(invokeSpy.mock.calls.filter((call) => call[0] === "EndSession")).toHaveLength(0);
+	});
+
 	// Resuming from 0 would replay the whole session and, worse, re-seed rows the view already holds while the node
 	// pays for the read. The watermark is what the hook already has.
 	it("OnReconnected_ResubscribesFromTheLastSeqNotZero", async () => {

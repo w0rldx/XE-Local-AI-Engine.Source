@@ -33,6 +33,10 @@
     <PackageReference Include="Microsoft.Identity.Client"/>
     <PackageReference Include="Microsoft.Identity.Client.Extensions.Msal"/>
     <PackageReference Include="ModelContextProtocol"/>
+    <!-- Windows per-application audio capture (WASAPI process loopback). `NAudio.Wasapi`, never the `NAudio`
+         meta-package: see Directory.Packages.props for why, and Services/Transcription/Capture for the
+         [SupportedOSPlatform] guards that keep CA1416 green on this plain net10.0 project. -->
+    <PackageReference Include="NAudio.Wasapi"/>
     <PackageReference Include="NSec.Cryptography"/>
     <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Quartz"/>

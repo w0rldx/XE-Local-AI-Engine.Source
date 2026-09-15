@@ -267,6 +267,7 @@ import {
 	listBenchmarkProjects,
 	listBenchmarkRuns,
 	listBenchmarkTaskItems,
+	listCaptureProcesses,
 	listComparisons,
 	listConversationFiles,
 	listCustomTools,
@@ -412,6 +413,7 @@ import {
 	startLiveTranscriptionSession,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
+	startProcessCapture,
 	startStableDiffusionCppSourceBuild,
 	startTrainingExport,
 	startTrainingRuntimeInstall,
@@ -419,6 +421,7 @@ import {
 	startWhisperCppSourceBuild,
 	startWorkSession,
 	stopExternalApp,
+	stopProcessCapture,
 	suggestComparison,
 	triggerScheduledJob,
 	unhandledExceptionProbe,
@@ -1062,6 +1065,8 @@ import type {
 	ListBenchmarkTaskItemsData,
 	ListBenchmarkTaskItemsError,
 	ListBenchmarkTaskItemsResponse,
+	ListCaptureProcessesData,
+	ListCaptureProcessesResponse,
 	ListComparisonsData,
 	ListComparisonsResponse,
 	ListConversationFilesData,
@@ -1418,6 +1423,9 @@ import type {
 	StartLlamaCppSourceBuildResponse,
 	StartNodeBindingData,
 	StartNodeBindingResponse,
+	StartProcessCaptureData,
+	StartProcessCaptureError,
+	StartProcessCaptureResponse,
 	StartStableDiffusionCppSourceBuildData,
 	StartStableDiffusionCppSourceBuildError,
 	StartStableDiffusionCppSourceBuildResponse,
@@ -1439,6 +1447,8 @@ import type {
 	StopExternalAppData,
 	StopExternalAppError,
 	StopExternalAppResponse,
+	StopProcessCaptureData,
+	StopProcessCaptureResponse,
 	SuggestComparisonData,
 	SuggestComparisonError,
 	SuggestComparisonResponse,
@@ -2349,6 +2359,28 @@ export const getWhisperCppSourceBuildStatusOptions = (options?: Options<GetWhisp
 		queryKey: getWhisperCppSourceBuildStatusQueryKey(options),
 	});
 
+export const listCaptureProcessesQueryKey = (options?: Options<ListCaptureProcessesData>) =>
+	createQueryKey("listCaptureProcesses", options);
+
+export const listCaptureProcessesOptions = (options?: Options<ListCaptureProcessesData>) =>
+	queryOptions<
+		ListCaptureProcessesResponse,
+		AxiosError<DefaultError>,
+		ListCaptureProcessesResponse,
+		ReturnType<typeof listCaptureProcessesQueryKey>
+	>({
+		queryFn: async ({ queryKey, signal }) => {
+			const { data } = await listCaptureProcesses({
+				...options,
+				...queryKey[0],
+				signal,
+				throwOnError: true,
+			});
+			return data;
+		},
+		queryKey: listCaptureProcessesQueryKey(options),
+	});
+
 export const listTranscriptionModelsQueryKey = (options?: Options<ListTranscriptionModelsData>) =>
 	createQueryKey("listTranscriptionModels", options);
 
@@ -2433,6 +2465,46 @@ export const startLiveTranscriptionSessionMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await startLiveTranscriptionSession({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const stopProcessCaptureMutation = (
+	options?: Partial<Options<StopProcessCaptureData>>,
+): UseMutationOptions<StopProcessCaptureResponse, AxiosError<DefaultError>, Options<StopProcessCaptureData>> => {
+	const mutationOptions: UseMutationOptions<
+		StopProcessCaptureResponse,
+		AxiosError<DefaultError>,
+		Options<StopProcessCaptureData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await stopProcessCapture({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startProcessCaptureMutation = (
+	options?: Partial<Options<StartProcessCaptureData>>,
+): UseMutationOptions<StartProcessCaptureResponse, AxiosError<StartProcessCaptureError>, Options<StartProcessCaptureData>> => {
+	const mutationOptions: UseMutationOptions<
+		StartProcessCaptureResponse,
+		AxiosError<StartProcessCaptureError>,
+		Options<StartProcessCaptureData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startProcessCapture({
 				...options,
 				...fnOptions,
 				throwOnError: true,

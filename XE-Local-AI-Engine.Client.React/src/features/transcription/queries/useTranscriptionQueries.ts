@@ -7,9 +7,11 @@ import {
 	ejectTranscriptionRuntimeMutation,
 	getTranscriptionRuntimeStatusOptions,
 	getTranscriptionSessionOptions,
+	listCaptureProcessesOptions,
 	listTranscriptionModelsOptions,
 	listTranscriptionSessionsOptions,
 	startLiveTranscriptionSessionMutation,
+	startProcessCaptureMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -143,6 +145,31 @@ export function useTranscriptionRuntimeStatus() {
 		...withResponseValidation(getTranscriptionRuntimeStatusOptions()),
 		select: toTranscriptionRuntimeView,
 		staleTime: 10_000,
+	});
+}
+
+// The applications the node can target for server-side capture. Windows-only and live: a process that stopped playing
+// is gone from the next read, so nothing is cached (`staleTime: 0`) and the dialog offers an explicit refresh. Enabled
+// by the caller, never unconditionally — enumerating audio sessions is work the node should not do for a dialog that
+// is closed or on a source that captures in the browser.
+export function useCaptureProcesses(enabled: boolean) {
+	return useQuery({
+		...withResponseValidation(listCaptureProcessesOptions()),
+		select: (data) => data.processes,
+		enabled,
+		staleTime: 0,
+	});
+}
+
+// Attaches server-side per-application capture to a session that is ALREADY live (R30a): `live/start` first, this
+// second, or the node answers 409 because there is no lane to push into. There is no scope argument — WASAPI captures
+// the target and its descendants, and the dialog's copy says so rather than offering a choice the platform lacks.
+export function useStartProcessCapture() {
+	return useMutation({
+		mutationFn: async ({ sessionId, processId }: { sessionId: string; processId: number }) => {
+			const options = withResponseValidation(startProcessCaptureMutation());
+			return await options.mutationFn?.({ path: { sessionId }, body: { processId } }, undefined as never);
+		},
 	});
 }
 

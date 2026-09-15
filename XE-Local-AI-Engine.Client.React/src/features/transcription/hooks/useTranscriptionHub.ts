@@ -103,7 +103,12 @@ export interface TranscriptionHubHandle {
 	readonly subscribeFailed: TranscriptionSubscribeFailed | null;
 	/** Rejects when the send fails, at the in-flight limit, or while the transport is down. Never drops a frame. */
 	pushFrame(channel: CaptureChannel, pcm: Int16Array): Promise<void>;
-	endSession(): Promise<void>;
+	/**
+	 * Ends the live session over the hub. Resolves **true** once `EndSession` was invoked, **false** when there was no
+	 * connected hub to invoke it on — the caller has to finish the job some other way, because a silent false here is
+	 * a node that goes on recording. Rejects only when the invoke itself failed.
+	 */
+	endSession(): Promise<boolean>;
 }
 
 /** Cache key for one session's live transcript. Push-fed only — it has no endpoint behind it. */
@@ -383,12 +388,15 @@ export function useTranscriptionHub(sessionId: string | null): TranscriptionHubH
 
 	// Never waits behind an outstanding frame: the caller stops its sources first, and a pending `PushAudioFrame` may
 	// still be inside a 30 s inference when the operator presses stop.
-	const endSession = useCallback(async (): Promise<void> => {
+	const endSession = useCallback(async (): Promise<boolean> => {
 		const connection = connectionRef.current;
 		if (sessionId === null || connection === null || connection.state !== HubConnectionState.Connected) {
-			return;
+			// Reported, not swallowed. Returning void here let a Stop pressed while the transport was down end nothing
+			// at all: the UI went idle, the reconnect re-subscribed, and the node kept the session alive.
+			return false;
 		}
 		await connection.invoke("EndSession", sessionId);
+		return true;
 	}, [sessionId]);
 
 	return { connected, subscriptionReady: connected, replayStalled, subscribeFailed, pushFrame, endSession };

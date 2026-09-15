@@ -780,6 +780,9 @@ import type {
 	ListBenchmarkTaskItemsData,
 	ListBenchmarkTaskItemsErrors,
 	ListBenchmarkTaskItemsResponses,
+	ListCaptureProcessesData,
+	ListCaptureProcessesErrors,
+	ListCaptureProcessesResponses,
 	ListComparisonsData,
 	ListComparisonsErrors,
 	ListComparisonsResponses,
@@ -1210,6 +1213,9 @@ import type {
 	StartNodeBindingData,
 	StartNodeBindingErrors,
 	StartNodeBindingResponses,
+	StartProcessCaptureData,
+	StartProcessCaptureErrors,
+	StartProcessCaptureResponses,
 	StartStableDiffusionCppSourceBuildData,
 	StartStableDiffusionCppSourceBuildErrors,
 	StartStableDiffusionCppSourceBuildResponses,
@@ -1231,6 +1237,9 @@ import type {
 	StopExternalAppData,
 	StopExternalAppErrors,
 	StopExternalAppResponses,
+	StopProcessCaptureData,
+	StopProcessCaptureErrors,
+	StopProcessCaptureResponses,
 	SuggestComparisonData,
 	SuggestComparisonErrors,
 	SuggestComparisonResponses,
@@ -1831,6 +1840,7 @@ import {
 	zListBenchmarkRunsResponse,
 	zListBenchmarkTaskItemsPath,
 	zListBenchmarkTaskItemsResponse,
+	zListCaptureProcessesResponse,
 	zListComparisonsResponse,
 	zListConversationFilesPath,
 	zListConversationFilesResponse,
@@ -2115,6 +2125,9 @@ import {
 	zStartLlamaCppSourceBuildBody,
 	zStartLlamaCppSourceBuildResponse,
 	zStartNodeBindingResponse,
+	zStartProcessCaptureBody,
+	zStartProcessCapturePath,
+	zStartProcessCaptureResponse,
 	zStartStableDiffusionCppSourceBuildBody,
 	zStartStableDiffusionCppSourceBuildResponse,
 	zStartTrainingExportBody,
@@ -2130,6 +2143,8 @@ import {
 	zStopExternalAppBody,
 	zStopExternalAppPath,
 	zStopExternalAppResponse,
+	zStopProcessCapturePath,
+	zStopProcessCaptureResponse,
 	zSuggestComparisonQuery,
 	zSuggestComparisonResponse,
 	zTriggerScheduledJobPath,
@@ -3274,6 +3289,36 @@ export const getWhisperCppSourceBuildStatus = <ThrowOnError extends boolean = fa
 		...options,
 	});
 
+export const listCaptureProcesses = <ThrowOnError extends boolean = false>(
+	options?: Options<ListCaptureProcessesData, ThrowOnError>,
+): RequestResult<ListCaptureProcessesResponses, ListCaptureProcessesErrors, ThrowOnError> =>
+	(options?.client ?? client).get<ListCaptureProcessesResponses, ListCaptureProcessesErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: z.never().optional(),
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zListCaptureProcessesResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/capture/processes",
+		...options,
+	});
+
 export const listTranscriptionModels = <ThrowOnError extends boolean = false>(
 	options?: Options<ListTranscriptionModelsData, ThrowOnError>,
 ): RequestResult<ListTranscriptionModelsResponses, ListTranscriptionModelsErrors, ThrowOnError> =>
@@ -3400,6 +3445,69 @@ export const startLiveTranscriptionSession = <ThrowOnError extends boolean = fal
 		],
 		url: "/api/local/v1/transcription/sessions/{sessionId}/live/start",
 		...options,
+	});
+
+export const stopProcessCapture = <ThrowOnError extends boolean = false>(
+	options: Options<StopProcessCaptureData, ThrowOnError>,
+): RequestResult<StopProcessCaptureResponses, StopProcessCaptureErrors, ThrowOnError> =>
+	(options.client ?? client).delete<StopProcessCaptureResponses, StopProcessCaptureErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zStopProcessCapturePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseValidator: async (data) => await zStopProcessCaptureResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/capture/process",
+		...options,
+	});
+
+export const startProcessCapture = <ThrowOnError extends boolean = false>(
+	options: Options<StartProcessCaptureData, ThrowOnError>,
+): RequestResult<StartProcessCaptureResponses, StartProcessCaptureErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartProcessCaptureResponses, StartProcessCaptureErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: zStartProcessCaptureBody,
+					path: zStartProcessCapturePath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartProcessCaptureResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/capture/process",
+		...options,
+		headers: {
+			"Content-Type": "application/json",
+			...options.headers,
+		},
 	});
 
 export const startTranscriptionModelDownload = <ThrowOnError extends boolean = false>(

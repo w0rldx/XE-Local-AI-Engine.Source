@@ -2,6 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
 
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Services.Capacity;
+using XE_Local_AI_Engine.Client.Services.Transcription.Capture;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
@@ -21,6 +22,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
     private readonly IWhisperRuntimeActivityGate _activityGate;
     private readonly INodeSettingsStore _settingsStore;
     private readonly IWhisperServerSupervisor _supervisor;
+    private readonly IProcessAudioCaptureSource _processCapture;
     private readonly TranscriptionOptions _options;
 
     public TranscriptionRuntimeService(IWhisperServerSupervisor supervisor,
@@ -31,6 +33,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         WhisperModelPathResolver pathResolver,
         INodeSettingsStore settingsStore,
         IRuntimeDeviceAudit runtimeDeviceAudit,
+        IProcessAudioCaptureSource processCapture,
         IOptions<TranscriptionOptions> options)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
@@ -41,6 +44,7 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
         _pathResolver = pathResolver ?? throw new ArgumentNullException(nameof(pathResolver));
         _settingsStore = settingsStore ?? throw new ArgumentNullException(nameof(settingsStore));
         _runtimeDeviceAudit = runtimeDeviceAudit ?? throw new ArgumentNullException(nameof(runtimeDeviceAudit));
+        _processCapture = processCapture ?? throw new ArgumentNullException(nameof(processCapture));
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
     }
@@ -63,7 +67,13 @@ public sealed class TranscriptionRuntimeService : ITranscriptionRuntimeService
             // so reporting the bare default here showed 15 while the reaper was firing at the configured value.
             settings.TranscriptionIdleTimeoutMinutes
             ?? (_options.IdleTimeoutMinutes > 0 ? _options.IdleTimeoutMinutes : StoredNodeSettings.DefaultTranscriptionIdleTimeoutMinutes),
-            _pathResolver.IsVadInstalled());
+            VadInstalled: _pathResolver.IsVadInstalled(),
+            // Named, because these are two adjacent booleans: swapped positionally the node would report the VAD
+            // state as the capture capability, and no test of the mapper could catch it.
+            // The capability, not the operating system: it is false on Windows below the documented process-loopback
+            // build too. Computed here rather than in each endpoint so the two routes that project this view cannot
+            // disagree about it.
+            ProcessCaptureSupported: _processCapture.IsSupported);
     }
 
     /// <inheritdoc />

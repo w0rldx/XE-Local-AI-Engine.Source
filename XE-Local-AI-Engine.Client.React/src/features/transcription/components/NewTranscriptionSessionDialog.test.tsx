@@ -1,11 +1,57 @@
 // @vitest-environment jsdom
 
 import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { http, HttpResponse } from "msw";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewTranscriptionSessionDialog } from "@/features/transcription/components/NewTranscriptionSessionDialog";
 import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
+import { jsonRoute, localApiPath } from "@/test/msw/Handlers";
+import { server } from "@/test/msw/Server";
 import { renderWithProviders } from "@/test/RenderWithProviders";
+import { setupMswServer } from "@/test/UseMswServer";
+
+setupMswServer();
+
+// The dialog reads the whisper runtime status to decide whether the Windows application source exists at all, so
+// every test in this file answers that endpoint. The body is the runtime response in full because the generated
+// client validates it: a partial one parks the query in an error state and the flag would read false for the wrong
+// reason.
+function runtimeBody(processCaptureSupported: boolean) {
+	return {
+		enabled: true,
+		state: "ready",
+		backend: "cuda",
+		binarySource: "managed",
+		binaryVersion: "1.8.0",
+		loadedModelId: "base",
+		selectedModelId: "base",
+		recommendedModelId: "base",
+		supportsTranscode: true,
+		idleTimeoutMinutes: 10,
+		vadInstalled: true,
+		processCaptureSupported,
+		managedRuntime: null,
+		activity: {
+			activeTranscriptionCount: 0,
+			spawnReadinessCount: 0,
+			residentProcessCount: 1,
+			mutationReserved: false,
+			evictionReserved: false,
+			isBusy: false,
+		},
+	};
+}
+
+function runtimeRoute(processCaptureSupported: boolean) {
+	return jsonRoute("get", "transcription/runtime", runtimeBody(processCaptureSupported));
+}
+
+function processesRoute(processes: readonly { pid: number; name: string; hasAudio: boolean }[]) {
+	return jsonRoute("get", "transcription/capture/processes", { supported: true, processes });
+}
+
+const applicationSource = "Application audio (Windows)";
 
 function renderDialog(onSubmit = vi.fn()) {
 	renderWithProviders(
@@ -24,7 +70,10 @@ describe("NewTranscriptionSessionDialog", () => {
 	// The dialog opens on whatever was picked last time, so the remembered choice is reset per test rather than
 	// carried between them by the persisted store.
 	beforeEach(() => {
-		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {} });
+		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {}, processIdBySession: {} });
+		// Unsupported by default, so the tests that predate the Windows source keep the four-option dialog they assert
+		// against; the two that need the fifth option register their own route over this one.
+		server.use(runtimeRoute(false), processesRoute([]));
 	});
 
 	afterEach(() => {
@@ -190,6 +239,7 @@ describe("NewTranscriptionSessionDialog", () => {
 			channelAttribution: false,
 			file,
 			deviceId: null,
+			processId: null,
 		});
 	});
 
@@ -233,5 +283,106 @@ describe("NewTranscriptionSessionDialog", () => {
 		renderDialog();
 
 		expect(screen.queryByTestId("new-transcription-session-progress")).toBeNull();
+	});
+
+	// Per-application capture exists only on Windows 10 build 20348 and later. An option that is present and refused
+	// teaches the operator nothing, so the node's own flag decides whether it is offered at all.
+	it("offers no application source where the node cannot capture one", async () => {
+		let runtimeReads = 0;
+		server.use(
+			http.get(localApiPath("transcription/runtime"), () => {
+				runtimeReads += 1;
+				return HttpResponse.json(runtimeBody(false));
+			}),
+		);
+		renderDialog();
+
+		// Waiting for the answer matters: asserting the option's absence before the flag has arrived would pass on
+		// every box, supported or not.
+		await waitFor(() => expect(runtimeReads).toBeGreaterThan(0));
+		await waitFor(() => expect(screen.queryByRole("radio", { name: applicationSource })).toBeNull());
+	});
+
+	it("offers the application source, reachable, once the node reports support", async () => {
+		server.use(runtimeRoute(true));
+		renderDialog();
+
+		expect(await screen.findByRole("radio", { name: applicationSource })).toHaveProperty("disabled", false);
+	});
+
+	// R21a: WASAPI captures the target process AND its descendants — there is no "only this application" mode — so the
+	// copy states the one behaviour instead of the dialog offering a scope the platform does not have.
+	it("says the application's child processes are captured too", async () => {
+		server.use(runtimeRoute(true));
+		renderDialog();
+
+		fireEvent.click(await screen.findByRole("radio", { name: applicationSource }));
+
+		expect(screen.getByText("Captures this application and its child processes.")).toBeDefined();
+	});
+
+	// M1: `lastSourceKind` is persisted but the option list is not, so a box that stopped reporting support — or a
+	// runtime read that has not answered — used to leave the SegmentedControl on a value absent from its own data:
+	// nothing highlighted, an empty picker, and Create disabled with nothing explaining why.
+	it("falls back to a visible source when the remembered one is no longer offered", async () => {
+		useTranscriptionCaptureStore.setState({ lastSourceKind: "ApplicationProcess" });
+		let runtimeReads = 0;
+		server.use(
+			http.get(localApiPath("transcription/runtime"), () => {
+				runtimeReads += 1;
+				return HttpResponse.json(runtimeBody(false));
+			}),
+		);
+		renderDialog();
+
+		await waitFor(() => expect(runtimeReads).toBeGreaterThan(0));
+		// File is the fallback, so its own controls are on screen and one segment is actually selected.
+		expect(await screen.findByTestId("new-transcription-session-file")).toBeDefined();
+		expect(screen.getByRole("radio", { name: "File" })).toHaveProperty("checked", true);
+		expect(screen.queryByTestId("new-transcription-session-process")).toBeNull();
+	});
+
+	// M3: the application the operator picked can exit while the dialog is open. A refresh then returns a list it is
+	// not in, and a stored pid would leave a blank Select over a live selection — creating the row against a process
+	// nobody can capture, which only fails much later, at Start.
+	it("drops the chosen application when a refresh no longer lists it", async () => {
+		let listed = [{ pid: 4242, name: "Zoom Meetings", hasAudio: true }];
+		server.use(
+			runtimeRoute(true),
+			http.get(localApiPath("transcription/capture/processes"), () => HttpResponse.json({ supported: true, processes: listed })),
+		);
+		renderDialog();
+
+		fireEvent.click(await screen.findByRole("radio", { name: applicationSource }));
+		fireEvent.click(await screen.findByTestId("new-transcription-session-process"));
+		fireEvent.click(await screen.findByRole("option", { name: "Zoom Meetings", hidden: true }));
+		expect(screen.getByTestId("new-transcription-session-submit")).toHaveProperty("disabled", false);
+
+		listed = [];
+		fireEvent.click(screen.getByTestId("new-transcription-session-process-refresh"));
+
+		await waitFor(() => expect(screen.getByTestId("new-transcription-session-submit")).toHaveProperty("disabled", true));
+	});
+
+	// The pid is the only thing this source cannot be started without, and the create request never carries it — it
+	// reaches the node later, as the capture/process body — so it has to ride out of the dialog on the submitted values.
+	it("lists the applications the node reports and submits the chosen one", async () => {
+		server.use(runtimeRoute(true), processesRoute([{ pid: 4242, name: "Zoom Meetings", hasAudio: true }]));
+		const onSubmit = renderDialog();
+
+		fireEvent.click(await screen.findByRole("radio", { name: applicationSource }));
+		// Nothing is picked yet, so there is nothing to start: submitting now would create a row the session view
+		// could never capture for.
+		expect(screen.getByTestId("new-transcription-session-submit")).toHaveProperty("disabled", true);
+
+		fireEvent.click(await screen.findByTestId("new-transcription-session-process"));
+		fireEvent.click(await screen.findByRole("option", { name: "Zoom Meetings", hidden: true }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		const values = onSubmit.mock.calls[0]?.[0] as { sourceKind: string; processId: number | null; file: File | null };
+		expect(values.sourceKind).toBe("ApplicationProcess");
+		expect(values.processId).toBe(4242);
+		expect(values.file).toBeNull();
 	});
 });

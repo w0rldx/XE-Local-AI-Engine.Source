@@ -310,6 +310,36 @@ public sealed class LiveTranscriptionSessionRegistryTests
     }
 
     [Test]
+    public async Task AttachingAProducer_DisarmsTheAttachmentDeadlineWithoutASingleFrame()
+    {
+        // The positive control for the test above. A native capture of an application that happens to be silent
+        // pushes nothing at all — WASAPI never yields a silent packet — so a deadline that only the first FRAME
+        // disarmed would reap a session whose recorder was running perfectly well.
+        var transcriber = new ScriptedWhisperTranscriber(OneSegment);
+        await using var fixture = new RegistryFixture(transcriber);
+        var sessionId = Guid.NewGuid();
+        var statuses = fixture.RecordStatuses();
+
+        await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(sourceKind: TranscriptionSourceKind.ApplicationProcess),
+                         CancellationToken.None)
+                     .ConfigureAwait(false);
+
+        var producer = new SilentProducer();
+        var registration = fixture.Registry.AttachProducer(sessionId, producer);
+        using (registration.Detach)
+        {
+            fixture.Time.Advance(AttachmentDeadline + TimeSpan.FromSeconds(1));
+            await AssertEx.SettleAsync().ConfigureAwait(false);
+
+            AssertEx.True(fixture.Registry.IsLive(sessionId),
+                "Attaching satisfies the deadline; a silent application must not be reaped as NeverAttached.");
+            AssertEx.Empty(Snapshot(statuses), "No end of any kind happened.");
+            AssertEx.False(producer.Stopped, "Nothing stopped the producer either.");
+            AssertEx.False(registration.ProducerToken.IsCancellationRequested, "The producer token is still live.");
+        }
+    }
+
+    [Test]
     public async Task NativeAudioArrival_DoesNotCancelTheBrowserAbandonmentGrace()
     {
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
@@ -1077,6 +1107,18 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
     private static IReadOnlyList<WhisperTranscriptSegment> OneSegment(SubmittedWindow window) =>
         [new WhisperTranscriptSegment(0.0, window.DurationMs / 1000.0, $"w{window.StartMs}-{window.EndMs}", 0.9)];
+
+    /// <summary>A producer that never pushes and records whether it was asked to stop.</summary>
+    private sealed class SilentProducer : ILiveAudioProducer
+    {
+        public bool Stopped { get; private set; }
+
+        public ValueTask StopAsync(CancellationToken cancellationToken)
+        {
+            Stopped = true;
+            return ValueTask.CompletedTask;
+        }
+    }
 
     private static LiveSessionOptions LiveOptions(bool persist = true,
         TranscriptionSourceKind sourceKind = TranscriptionSourceKind.Microphone,

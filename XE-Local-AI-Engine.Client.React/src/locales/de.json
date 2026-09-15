@@ -6753,7 +6753,8 @@
 				"File": "Datei",
 				"Microphone": "Mikrofon",
 				"SystemAudio": "Systemaudio",
-				"MicrophoneAndSystem": "Mikrofon + System"
+				"MicrophoneAndSystem": "Mikrofon + System",
+				"ApplicationProcess": "Anwendungsaudio (Windows)"
 			},
 			"channel": {
 				"You": "Du",
@@ -6794,7 +6795,12 @@
 				"deviceUnnamed": "Mikrofon {{index}}",
 				"deviceHint": "Mikrofonnamen erscheinen, sobald du den Mikrofonzugriff einmal erlaubt hast.",
 				"shareHint": "Der Browser fragt bei jedem Sitzungsstart, welcher Bildschirm oder welches Fenster geteilt wird. Wähle einen ganzen Bildschirm und aktiviere „Audio teilen“ — diese App zeichnet das Bild nie auf.",
-				"liveTitle": "Live-Sitzung {{time}}"
+				"liveTitle": "Live-Sitzung {{time}}",
+				"processLabel": "Anwendung",
+				"processPlaceholder": "Anwendung auswählen",
+				"processDescription": "Nimmt diese Anwendung und ihre untergeordneten Prozesse auf.",
+				"processEmpty": "Zurzeit gibt keine Anwendung Audio wieder.",
+				"processRefresh": "Anwendungsliste aktualisieren"
 			},
 			"runtime": {
 				"title": "Whisper-Laufzeit",
@@ -6828,7 +6834,8 @@
 				"noSegments": "Noch kein Transkript.",
 				"cancel": "Abbrechen",
 				"cancelFailed": "Die Transkription konnte nicht abgebrochen werden.",
-				"sendToChat": "An den Chat senden"
+				"sendToChat": "An den Chat senden",
+				"processMissing": "Dieser Browser weiß nicht mehr, für welche Anwendung diese Sitzung erstellt wurde; die Aufnahme kann nicht gestartet werden. Erstelle eine neue Sitzung und wähle die Anwendung erneut aus."
 			},
 			"live": {
 				"hint": "Segmente erscheinen, sobald die Laufzeit sie festschreibt. Audio wird nie gespeichert.",
@@ -6851,7 +6858,11 @@
 					"disconnected": "Die Live-Verbindung zu diesem Node ist abgerissen, die Aufnahme wurde beendet. Lade die Seite neu und starte erneut.",
 					"subscribeFailed": "Dieser Node hat das Live-Transkript für diese Sitzung nicht geöffnet. Lade die Seite neu, um es erneut zu versuchen.",
 					"subscribeSessionNotFound": "Dieser Node kennt diese Sitzung nicht mehr, es gibt also kein Live-Transkript, dem man folgen könnte.",
-					"subscribeDisabled": "Die Transkription ist auf diesem Node deaktiviert. Aktiviere sie in den Node-Einstellungen und lade die Seite neu."
+					"subscribeDisabled": "Die Transkription ist auf diesem Node deaktiviert. Aktiviere sie in den Node-Einstellungen und lade die Seite neu.",
+					"capture-not-supported": "Dieser Node kann das Audio einer einzelnen Anwendung nicht aufnehmen. Dafür ist Windows 10 Build 20348 oder neuer nötig.",
+					"session-not-live": "Diese Sitzung war auf dem Node nicht geöffnet, das Anwendungsaudio hätte also nirgendwo hingehen können. Lade die Seite neu und starte erneut.",
+					"capture-already-running": "Diese Sitzung nimmt bereits eine Anwendung auf. Beende sie, bevor du eine weitere startest.",
+					"stop-failed": "Die Aufnahme wurde hier beendet, aber dieser Node hat das nicht bestätigt. Der Stopp wird wiederholt, sobald die Verbindung wieder steht — lass diese Seite geöffnet."
 				},
 				"notConnected": "Verbindung zu diesem Node wird aufgebaut — Starten ist möglich, sobald die Live-Verbindung steht."
 			}

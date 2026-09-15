@@ -116,7 +116,19 @@ Stated honestly, including the ones that are costs.
   not. That is a UX cost accepted in exchange for one capture path on two operating systems and no new native
   dependency.
 - **Per-application capture is a Windows-only promise.** Linux users get microphone and whole-system audio and nothing
-  finer, for as long as no maintained .NET PipeWire binding exists.
+  finer, for as long as no maintained .NET PipeWire binding exists. As built (D1's native-capture slice), it costs
+  **no new project and no Windows target framework**: the leaf `NAudio.Wasapi` package sits on `Client.Application`
+  and is kept honest by `[SupportedOSPlatform]` attributes plus an `OperatingSystem.IsWindows()` branch at the single
+  DI call site, never a CA1416 suppression. A `Providers.*` project was rejected because such a project may reference
+  only `Providers.Abstractions` and so could not reach the live-session registry the capture pump exists to feed.
+- **One capture scope, and it is the process tree.** `ProcessLoopbackMode` offers `IncludeTargetProcessTree` or its
+  complement, and the complement records everything *except* the target — so "this application only" is not a mode
+  that exists. The product captures the target **and its descendants**, the user-facing copy says so, and excluding a
+  target's children is an unresolved limitation rather than an approximated feature.
+- **The Windows floor is the conservative one.** `ProcessAudioCaptureSupport.MinimumWindowsBuild` is **20348**, the
+  build Microsoft documents for `AUDIOCLIENT_PROCESS_LOOPBACK_PARAMS`, not the 19041 NAudio annotates for the
+  analyzer. Being wrong this way hides a capability on builds 19041–20347; being wrong the other way is a hard COM
+  failure. Lowering it needs a live observation on such a build, not a code review.
 - **"You / Others" is weaker than diarization, and honest.** A single microphone recording two people in one room
   stays one channel, and the product must not pretend otherwise. Turn markers remain a documented later option.
 - **Whisper's VRAM is unaccounted in the byte ledger**, exactly as the image runtime's is. Its footprint is small

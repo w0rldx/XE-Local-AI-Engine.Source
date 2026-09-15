@@ -182,6 +182,8 @@ export interface TranscriptionRuntimeView {
 	vadInstalled: boolean;
 	supportsTranscode: boolean;
 	managedRuntimeValidity: string | null;
+	/** True only where the node can capture one application's audio server-side (Windows 10 build 20348 and later). */
+	processCaptureSupported: boolean;
 }
 
 export function toTranscriptionRuntimeView(dto: TranscriptionRuntimeStatusResponse): TranscriptionRuntimeView {
@@ -196,7 +198,34 @@ export function toTranscriptionRuntimeView(dto: TranscriptionRuntimeStatusRespon
 		vadInstalled: dto.vadInstalled,
 		supportsTranscode: dto.supportsTranscode,
 		managedRuntimeValidity: dto.managedRuntime?.validity ?? null,
+		processCaptureSupported: dto.processCaptureSupported,
 	};
+}
+
+/**
+ * The reason codes the capture/process endpoint answers a refusal with (`ProcessCaptureBlockedResponse.reason`).
+ * Each names a different thing for the operator to do, so they are read off the typed body rather than collapsed
+ * into one "the node refused" sentence.
+ */
+const processCaptureBlockedReasons = ["capture-not-supported", "session-not-live", "capture-already-running"] as const;
+export type ProcessCaptureBlockedReason = (typeof processCaptureBlockedReasons)[number];
+
+/**
+ * Reads the capture/process endpoint's typed refusal off a thrown error, or null for anything else.
+ *
+ * The 400 and 409 bodies are `{ reason, message }`, not ProblemDetails, so the shared axios interceptor parks the
+ * whole body on `apiProblemDetails` — the same shape `unsupportedContainerDetail` reads. Only the three reasons this
+ * endpoint documents are recognised: an unknown one falls back to the generic refusal rather than inventing a key
+ * that no locale has.
+ */
+export function processCaptureBlockedReason(error: unknown): ProcessCaptureBlockedReason | null {
+	if (!(error instanceof ApiError)) {
+		return null;
+	}
+	const reason = (error.apiProblemDetails as unknown as Record<string, unknown> | undefined)?.["reason"];
+	return (processCaptureBlockedReasons as readonly string[]).includes(reason as string)
+		? (reason as ProcessCaptureBlockedReason)
+		: null;
 }
 
 /** The container list the node can actually read, carried on the upload endpoint's typed 415 body. */

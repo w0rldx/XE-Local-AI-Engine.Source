@@ -117,7 +117,7 @@ describe("TranscriptionSessionPage", () => {
 		navigate.mockClear();
 		liveCapture.start.mockClear();
 		usePendingComposerTextStore.setState({ pendingText: "" });
-		useTranscriptionCaptureStore.setState({ deviceIdBySession: {} });
+		useTranscriptionCaptureStore.setState({ deviceIdBySession: {}, processIdBySession: {} });
 	});
 
 	afterEach(() => {
@@ -249,6 +249,62 @@ describe("TranscriptionSessionPage", () => {
 		fireEvent.click(await screen.findByTestId("transcription-capture-start"));
 
 		expect(liveCapture.start).toHaveBeenCalledWith({ kind: "microphone", deviceId: undefined });
+	});
+
+	// S5 / the bug this file would have caught: `isLive` used to be derived from the capture REQUEST, and an
+	// application-capture session has none — the node records the application. The session rendered as if it had
+	// finished, with the persisted rows and no controls, while it was still transcribing.
+	it("renders the live panel and the capture controls for an application-capture session", async () => {
+		useTranscriptionCaptureStore.setState({ processIdBySession: { [sessionId]: 4242 } });
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${sessionId}`,
+				detail({ status: "Transcribing", sourceKind: "ApplicationProcess" }, []),
+			),
+		);
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-live-panel")).toBeDefined();
+		expect(screen.getByTestId("transcription-capture-start")).toBeDefined();
+		expect(screen.queryByTestId("transcript-segment-list")).toBeNull();
+	});
+
+	// The pid never reaches the node on the create request, so this store is the only record of which application the
+	// session belongs to — and the node needs it back to attach its recorder.
+	it("starts capture against the application this session was created for", async () => {
+		useTranscriptionCaptureStore.setState({
+			processIdBySession: { "99999999-0000-4000-8000-000000000009": 111, [sessionId]: 4242 },
+		});
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${sessionId}`,
+				detail({ status: "Created", sourceKind: "ApplicationProcess" }, []),
+			),
+		);
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		fireEvent.click(await screen.findByTestId("transcription-capture-start"));
+
+		expect(liveCapture.start).toHaveBeenCalledWith({ kind: "process", processId: 4242 });
+	});
+
+	// Clearing site data loses the pid, and there is no way to recover it: the node was never told which application
+	// this row belongs to. Saying so beats a Start button that would post a process id nobody chose.
+	it("refuses to start an application capture whose process this browser no longer remembers", async () => {
+		server.use(
+			jsonRoute(
+				"get",
+				`transcription/sessions/${sessionId}`,
+				detail({ status: "Created", sourceKind: "ApplicationProcess" }, []),
+			),
+		);
+		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
+
+		expect(await screen.findByTestId("transcription-session-process-missing")).toBeDefined();
+		expect(screen.queryByTestId("transcription-capture-start")).toBeNull();
+		expect(liveCapture.start).not.toHaveBeenCalled();
 	});
 
 	it("keeps the persisted transcript for a live session that already finished", async () => {

@@ -378,6 +378,7 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeSta
 	supportsTranscode: boolean;
 	idleTimeoutMinutes: number;
 	vadInstalled: boolean;
+	processCaptureSupported: boolean;
 	managedRuntime?: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperInstalledRuntimeResponse | null;
 	activity: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionRuntimeActivityResponse;
 };
@@ -459,6 +460,17 @@ export type FastEndpointsErrorResponse = {
 	};
 };
 
+export type XeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessListResponse = {
+	supported: boolean;
+	processes: Array<XeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessResponse>;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessResponse = {
+	pid: number;
+	name: string;
+	hasAudio: boolean;
+};
+
 export type XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse = {
 	models: Array<XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelResponse>;
 	selectedModelId?: string | null;
@@ -493,6 +505,20 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionS
 	sessionId: string;
 	status: string;
 	lastSeq: number;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureStatusResponse = {
+	sessionId: string;
+	capturing: boolean;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse = {
+	reason: string;
+	message: string;
+};
+
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartProcessCaptureRequest = {
+	processId?: number;
 };
 
 export type XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse = {
@@ -7453,6 +7479,33 @@ export type GetWhisperCppSourceBuildStatusResponses = {
 export type GetWhisperCppSourceBuildStatusResponse =
 	GetWhisperCppSourceBuildStatusResponses[keyof GetWhisperCppSourceBuildStatusResponses];
 
+export type ListCaptureProcessesData = {
+	body?: never;
+	path?: never;
+	query?: never;
+	url: "/api/local/v1/transcription/capture/processes";
+};
+
+export type ListCaptureProcessesErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+};
+
+export type ListCaptureProcessesResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1CaptureProcessListResponse;
+};
+
+export type ListCaptureProcessesResponse = ListCaptureProcessesResponses[keyof ListCaptureProcessesResponses];
+
 export type ListTranscriptionModelsData = {
 	body?: never;
 	path?: never;
@@ -7584,6 +7637,75 @@ export type StartLiveTranscriptionSessionResponses = {
 
 export type StartLiveTranscriptionSessionResponse =
 	StartLiveTranscriptionSessionResponses[keyof StartLiveTranscriptionSessionResponses];
+
+export type StopProcessCaptureData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/capture/process";
+};
+
+export type StopProcessCaptureErrors = {
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+};
+
+export type StopProcessCaptureResponses = {
+	/**
+	 * No Content
+	 */
+	204: void;
+};
+
+export type StopProcessCaptureResponse = StopProcessCaptureResponses[keyof StopProcessCaptureResponses];
+
+export type StartProcessCaptureData = {
+	body: XeLocalAiEngineClientEndpointsTranscriptionV1StartProcessCaptureRequest;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/capture/process";
+};
+
+export type StartProcessCaptureErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: XeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureBlockedResponse;
+};
+
+export type StartProcessCaptureError = StartProcessCaptureErrors[keyof StartProcessCaptureErrors];
+
+export type StartProcessCaptureResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1ProcessCaptureStatusResponse;
+};
+
+export type StartProcessCaptureResponse = StartProcessCaptureResponses[keyof StartProcessCaptureResponses];
 
 export type StartTranscriptionModelDownloadData = {
 	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;

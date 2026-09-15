@@ -37,7 +37,8 @@ public sealed class TranscriptionRuntimeEndpointTests
                 "large-v3-turbo",
                 "large-v3-turbo-q8_0",
                 IdleTimeoutMinutes: 20,
-                VadInstalled: true)
+                VadInstalled: true,
+                ProcessCaptureSupported: false)
         };
         await using var factory = FactoryWith(service);
         using var client = factory.CreateClient();
@@ -313,7 +314,8 @@ public sealed class TranscriptionRuntimeEndpointTests
             SelectedModelId: null,
             "base",
             IdleTimeoutMinutes: 15,
-            VadInstalled: true);
+            VadInstalled: true,
+            ProcessCaptureSupported: false);
 
     private sealed class StubTranscriptionRuntimeService : ITranscriptionRuntimeService
     {

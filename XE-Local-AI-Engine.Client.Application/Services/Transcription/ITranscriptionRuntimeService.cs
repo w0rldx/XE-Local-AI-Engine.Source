@@ -39,7 +39,8 @@ public sealed record TranscriptionRuntimeView(
     string? SelectedModelId,
     string RecommendedModelId,
     int IdleTimeoutMinutes,
-    bool VadInstalled);
+    bool VadInstalled,
+    bool ProcessCaptureSupported);
 
 /// <summary>
 ///     The application-layer facade the transcription endpoints call. It composes the supervisor, the catalogue, the

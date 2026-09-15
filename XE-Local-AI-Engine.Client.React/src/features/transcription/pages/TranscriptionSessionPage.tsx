@@ -37,6 +37,22 @@ interface TranscriptionSessionPageProps {
 // persisted status union.
 const liveTerminalStatuses: ReadonlySet<string> = new Set(["Completed", "Cancelled", "Abandoned", "Overloaded", "Failed"]);
 
+/**
+ * Whether this source kind runs as a live session at all — hub-fed panel plus capture controls.
+ *
+ * Deliberately an allow-list rather than "everything but File": `ApplicationProcess` is live even though the browser
+ * builds no capture request for it (the node records the application itself), and `Dictation` is not creatable from
+ * any surface yet, so it stays off this list until the slice that ships it puts it there on purpose.
+ */
+function isLiveSourceKind(sourceKind: TranscriptionSourceKind): boolean {
+	return (
+		sourceKind === "Microphone" ||
+		sourceKind === "SystemAudio" ||
+		sourceKind === "MicrophoneAndSystem" ||
+		sourceKind === "ApplicationProcess"
+	);
+}
+
 /** The capture request one source kind asks for, or null for a session that is not captured in this browser. */
 function toCaptureRequest(sourceKind: TranscriptionSourceKind, deviceId: string | null): LiveCaptureRequest | null {
 	const microphone = deviceId === null ? undefined : deviceId;
@@ -72,6 +88,9 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 	// This session's own microphone, not a global preference: a session created on a USB microphone must not capture
 	// from the default just because a later session was created on it.
 	const deviceId = useTranscriptionCaptureStore((state) => state.deviceIdBySession[sessionId] ?? null);
+	// The application this session was created against. The node needs it to attach capture, and the create dialog is
+	// the only place it was ever chosen, so a session whose entry is gone cannot be started at all.
+	const processId = useTranscriptionCaptureStore((state) => state.processIdBySession[sessionId] ?? null);
 
 	const detail = detailQuery.data;
 	const isTranscribing = detail?.session.status === "Transcribing";
@@ -80,8 +99,14 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 	const sourceKind = detail?.session.sourceKind ?? "File";
 	const captureRequest = toCaptureRequest(sourceKind, deviceId);
 	// Live only until the row reaches a terminal status; after that the persisted transcript is the whole truth and the
-	// hub has nothing left to say.
-	const isLive = captureRequest !== null && (detail?.session.status === "Created" || detail?.session.status === "Transcribing");
+	// hub has nothing left to say. Live is a property of the SOURCE KIND, not of whether the browser has a request to
+	// build: an ApplicationProcess session is captured entirely on the node, so `captureRequest` is null for it and it
+	// is live all the same — reading `captureRequest !== null` here left it rendering as a finished session.
+	const isLive =
+		isLiveSourceKind(sourceKind) && (detail?.session.status === "Created" || detail?.session.status === "Transcribing");
+	// The one live source that can be un-startable: its pid lives only in this browser's store, so a cleared store
+	// leaves nothing to capture. Reported rather than started against a process id the operator never chose.
+	const processMissing = sourceKind === "ApplicationProcess" && processId === null;
 	const capture = useLiveCapture(isLive ? sessionId : null);
 	const liveView = useLiveTranscript(sessionId);
 	const liveStatus = liveView?.status ?? "";
@@ -172,7 +197,15 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 						/>
 					)}
 
-					{isLive && captureRequest !== null ? (
+					{isLive && processMissing ? (
+						<InlineErrorAlert
+							message={t("pages.transcription.session.processMissing")}
+							variant="light"
+							data-testid="transcription-session-process-missing"
+						/>
+					) : null}
+
+					{isLive && !processMissing ? (
 						<CaptureControls
 							sourceKind={sourceKind}
 							state={capture.state}
@@ -184,7 +217,14 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 							// R39a: start is called straight out of the click, with nothing awaited in between, or the browser
 							// refuses to open the screen-share picker.
 							onStart={() => {
-								capture.start(captureRequest).catch(() => undefined);
+								// An ApplicationProcess session has no browser-side request: the node is told which process to
+								// record, and the hook posts capture/process once live/start has resolved.
+								const request: LiveCaptureRequest | null =
+									sourceKind === "ApplicationProcess" && processId !== null ? { kind: "process", processId } : captureRequest;
+								if (request === null) {
+									return;
+								}
+								capture.start(request).catch(() => undefined);
 							}}
 							onStop={() => {
 								capture.stop().catch(() => undefined);
