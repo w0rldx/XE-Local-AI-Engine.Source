@@ -6772,7 +6772,6 @@
 			"dialog": {
 				"title": "Neue Transkription",
 				"sourceLabel": "Quelle",
-				"sourceComingSoon": "Live-Aufnahme von Mikrofon und Systemaudio folgt in einer späteren Version.",
 				"fileLabel": "Aufnahme",
 				"fileDescription": "WAV, MP3 und FLAC werden direkt gelesen; OGG, M4A und WebM benötigen ffmpeg auf diesem Rechner.",
 				"filePlaceholder": "Audiodatei auswählen",
@@ -6789,7 +6788,13 @@
 				"uploadFailed": "Die Aufnahme konnte nicht hochgeladen werden.",
 				"unsupportedContainer": "Dieser Node kann diesen Audio-Container nicht lesen. Unterstützt: {{containers}}.",
 				"uploadProgress": "Upload-Fortschritt",
-				"unsupportedContainerFfmpeg": "Dieser Node benötigt ffmpeg, um diesen Audio-Container zu lesen. Installiere ffmpeg und versuche es erneut oder verwende eines von {{containers}}."
+				"unsupportedContainerFfmpeg": "Dieser Node benötigt ffmpeg, um diesen Audio-Container zu lesen. Installiere ffmpeg und versuche es erneut oder verwende eines von {{containers}}.",
+				"deviceLabel": "Mikrofon",
+				"deviceDefault": "Systemstandard",
+				"deviceUnnamed": "Mikrofon {{index}}",
+				"deviceHint": "Mikrofonnamen erscheinen, sobald du den Mikrofonzugriff einmal erlaubt hast.",
+				"shareHint": "Der Browser fragt bei jedem Sitzungsstart, welcher Bildschirm oder welches Fenster geteilt wird. Wähle einen ganzen Bildschirm und aktiviere „Audio teilen“ — diese App zeichnet das Bild nie auf.",
+				"liveTitle": "Live-Sitzung {{time}}"
 			},
 			"runtime": {
 				"title": "Whisper-Laufzeit",
@@ -6824,6 +6829,31 @@
 				"cancel": "Abbrechen",
 				"cancelFailed": "Die Transkription konnte nicht abgebrochen werden.",
 				"sendToChat": "An den Chat senden"
+			},
+			"live": {
+				"hint": "Segmente erscheinen, sobald die Laufzeit sie festschreibt. Audio wird nie gespeichert.",
+				"waiting": "Es wird zugehört — das erste Segment erscheint, sobald genug Sprache aufgenommen wurde.",
+				"showPartials": "Vorläufigen Text anzeigen",
+				"partialAttributed": "{{channel}}: {{text}}"
+			},
+			"capture": {
+				"start": "Aufnahme starten",
+				"stop": "Aufnahme beenden",
+				"replayStalled": "Der Node sendet keine verpassten Segmente mehr. Das Transkript auf dem Bildschirm ist möglicherweise unvollständig — lade die Seite neu, um es erneut abzurufen.",
+				"error": {
+					"unsupported": "Dieser Browser kann hier kein Audio aufnehmen. Nötig ist eine lokale HTTPS-Seite in einem aktuellen Chrome, Edge oder Firefox.",
+					"permission-denied": "Der Zugriff wurde abgelehnt. Erlaube Mikrofon oder Bildschirmfreigabe und starte erneut.",
+					"no-device": "Auf diesem Computer wurde kein nutzbares Mikrofon gefunden.",
+					"no-audio-track": "Der geteilte Bildschirm kam ohne Audio zurück. Teile einen ganzen Bildschirm und aktiviere „Audio teilen“.",
+					"worklet-failed": "Die Audio-Engine des Browsers konnte nicht gestartet werden, es wurde nichts aufgenommen.",
+					"overloaded": "Dieser Node konnte dem Audio nicht folgen, die Aufnahme wurde beendet. Alles bisher Festgeschriebene bleibt erhalten.",
+					"start-failed": "Der Node hat diese Live-Sitzung nicht geöffnet. Möglicherweise ist sie bereits beendet.",
+					"disconnected": "Die Live-Verbindung zu diesem Node ist abgerissen, die Aufnahme wurde beendet. Lade die Seite neu und starte erneut.",
+					"subscribeFailed": "Dieser Node hat das Live-Transkript für diese Sitzung nicht geöffnet. Lade die Seite neu, um es erneut zu versuchen.",
+					"subscribeSessionNotFound": "Dieser Node kennt diese Sitzung nicht mehr, es gibt also kein Live-Transkript, dem man folgen könnte.",
+					"subscribeDisabled": "Die Transkription ist auf diesem Node deaktiviert. Aktiviere sie in den Node-Einstellungen und lade die Seite neu."
+				},
+				"notConnected": "Verbindung zu diesem Node wird aufgebaut — Starten ist möglich, sobald die Live-Verbindung steht."
 			}
 		}
 	},

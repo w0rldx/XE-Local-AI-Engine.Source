@@ -407,6 +407,31 @@ Do not wrap the whole project validator in one outer lock: its internally locked
 
 A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
 
+### PROPOSED (awaiting operator approval): a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run
+
+**Rule:** `XE-Local-AI-Engine.Tests.E2ETests` compiles as `IsTestProject=false` / `OutputType=Library` unless
+`-p:RunE2ETests=true` is passed, so a plain `dotnet build XE-Local-AI-Engine.slnx` rebuilds it as a library and
+**overwrites** the Microsoft.Testing.Platform app the flagged build produced. In a gate chain that runs the backend
+build and then a `--no-build` E2E run, repeat the flagged build in between; `scripts/run-e2e-local.sh` already
+orders this itself. **Prevents:** a `--no-build` E2E invocation that finds no test host at all, read as a tooling
+fault rather than as build ordering — and the neighbouring trap of a zero-test run exiting **0**. **Authority:**
+`XE-Local-AI-Engine.Tests.E2ETests/…csproj`; `docs/wiki/13-testing-and-validation.md`; found while running C5's gate
+chain (`Plans/audio-transcription-2026-09-11/progress/S4-notes.md`, "Gate ordering trap found here").
+
+### PROPOSED (awaiting operator approval): TUnit.Playwright caches ONE browser per worker, so per-class launch arguments are silently ignored
+
+**Rule:** `TUnit.Playwright`'s `BrowserTest` registers its browser under a fixed service key for the whole worker
+(`WorkerAwareTest.RegisterService("Browser", …)`), so the FIRST test class to launch on a worker decides the
+Chromium command line and every later class's `BrowserTypeLaunchOptions` is discarded without a warning. A suite
+that needs its own switches must launch its own browser in a `[Before(Test)]` hook and drive its own page.
+**Prevents:** two suites that differ only by a launch switch silently sharing the first one's switch. Measured over
+three serial runs of the two fake-audio transcription suites: whichever class ran second was fed the other's audio —
+the speech fixture correlated 0.951 when it ran first and 0 when it ran second, and the 440 Hz control 0.76 when
+first and 0.99 when second, i.e. the negative control was measuring the positive case's WAV. The failure is
+invisible from the test source, which reads as if each class had its own file. **Authority:** upstream
+`TUnit.Playwright` 1.65.68 `BrowserTest.BrowserSetup`; `XE-Local-AI-Engine.Tests.E2ETests/Common/XEFakeAudioE2ETestBase.cs`
+(`LaunchFakeAudioBrowserAsync`); `Plans/audio-transcription-2026-09-11/progress/S4-notes.md` §C5b.
+
 ### A full test-suite run can poison its own worktree's generated NuGet props
 
 A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
@@ -1603,7 +1628,7 @@ The Azure bearer policy regression is pinned by a request-capturing transport th
 
 For push hubs: assign per-run monotonic `Seq`; buffer outside the live-run dictionary through a short retention window; join the group before replay; dedupe client-side with high-water mark + gaps. Publish terminal directly from cancel; a model call that never unwinds cannot be allowed to leave UI running forever.
 
-### PROPOSED (awaiting operator approval): a live-audio hub method's size cap is application-level, not the SignalR default
+### A live-audio hub method's size cap is application-level, not the SignalR default
 
 **Rule:** the node's SignalR `MaximumReceiveMessageSize` is 512 KB (`ConfigureServices.cs`), not the framework's
 32 KB default, so a per-frame bound must be asserted inside the hub method itself (`TranscriptionHub.MaxFrameBytes`),
@@ -1912,7 +1937,7 @@ Re-using a generated `*Options()` adapter for a different page inside a hand-wri
 
 SignalR hubs are listed in `config/signalr-proxy-paths.json`; add the path there rather than another inline proxy entry. A missing websocket route can wedge Vite's generic `/api` proxy and break existing hubs. Push-only terminal handlers invalidate queries explicitly. `InvocationState.Clone()` is the single deep-copy boundary used by dispatcher/resume registry; any omitted field can look correct live and persist null.
 
-### PROPOSED (awaiting operator approval): `signalr:check` only diffs hub route strings, never method signatures
+### `signalr:check` only diffs hub route strings, never method signatures
 
 **Rule:** `pnpm run signalr:check` compares `MapHub<T>(route)` path strings against
 `config/signalr-proxy-paths.json` only; it does not diff hub method signatures. **Prevents:** adding a hub path
@@ -1927,6 +1952,51 @@ Auto-advance tracks an explicit armed state: reset on step change, arm only afte
 ### A gated-off Ollama runtime is a UI state, not an empty list
 
 **Rule:** with `XE_OLLAMA_RUNTIME_ENABLED=false` the no-op runtime answers "nothing there" — available, empty list (§2) — which renders as an ordinary idle daemon, so both surfaces branch on the `ollamaConfigured` flag instead. The loaded-models page renders a dedicated dimmed `EmptyState` (`data-testid="loaded-models-runtime-disabled"`, key `pages.loadedModels.ollama.disabled`) and guards its three existing branches with `ollamaConfigured` so all four stay mutually exclusive; it reads the flag straight off the running-models snapshot it already holds. On node settings the *page* calls `useOllamaRuntimeConfigured` (in `src/core/runtime/hooks/`) and threads `ollamaRuntimeDisabled` down through `NodeSettingsFieldsCard` to `NodeSettingsRuntimeCard`, which stays presentational and replaces the Ollama endpoint input with a dimmed line (`node-settings-ollama-disabled`, key `pages.nodeSettings.fields.ollamaEndpoint.disabled`). The hook is its own query over the same running-models endpoint at infinite `staleTime`, and lives in `core/` rather than being imported from the loaded-models feature, because dependency-cruiser's `no-cross-feature` rule forbids that edge and the fingerprint baseline is no-growth. Both callers FAIL OPEN: only a definite `false` changes anything, so a loading or failed probe leaves today's UI intact. Only the input is hidden, never the form model, so the stored endpoint still round-trips on save. **Prevents:** an operator hunting for a daemon this node will never start — and, by keeping the call at the page, a card that fetches. Only `NodeSettings.test.tsx` still stubs the hook, because the probe reaches the generated SDK whose axios interceptors import the app router; the two card tests pass the boolean and mock nothing. **Authority:** `LoadedModelsPage.ollama.test.tsx`, `NodeSettingsRuntimeCard.test.tsx` and `NodeSettings.test.tsx`.
+### PROPOSED (awaiting operator approval): an AudioWorklet is ONE self-contained `.js` file imported with `?url`
+
+**Rule:** a worklet processor ships as a single plain `.js` file with **no `import` statement of any kind**, pulled in
+for its URL alone (`import workletUrl from "…/Pcm16DownsamplerWorklet.js?url"` in `PcmCapture.ts`). Vite's `?url` goes
+through the asset plugin, which emits the file's raw bytes and does **not** traverse its module graph, so a `.ts` or
+`.js` sibling would ship as an unresolved specifier with nothing emitted beside it. Keep the class **and** its
+`registerProcessor` call inside `typeof AudioWorkletProcessor !== "undefined" && typeof registerProcessor === "function"`
+— `extends AudioWorkletProcessor` is evaluated when the class declaration executes, so a class at module scope throws
+`ReferenceError` under vitest before any registration guard could run; with the guard, a test can import the shipped
+file and exercise the real arithmetic. Verify on the emitted asset, not the source: `grep -c "import" dist/assets/*Worklet*.js`
+must be **0**, which is also why the file's own prose must avoid that word. **Prevents:** `registerProcessor` never
+running, `AudioWorkletNode` construction throwing, and the whole capture path failing in a browser as a generic
+"worklet-failed" while `tsc`, biome and `vite build` are all green — nothing in the gate chain instantiates a worklet.
+**Authority:** S4 plan §2.3 (R37/R37a); `capture/Pcm16DownsamplerWorklet.js`; `capture/Downsample.test.ts`; the C2 and
+C4 dist greps in `Plans/audio-transcription-2026-09-11/progress/S4-notes.md`.
+
+### PROPOSED (awaiting operator approval): a worklet node needs a path to the destination, and a pre-gesture context starts suspended
+
+**Rule:** connect the processor through to the context's destination — `source → worklet → zero-gain → destination`
+with `gain.value = 0` — instead of constructing it with `numberOfOutputs: 0`. Then, because an `AudioContext` created
+before the page's first user gesture starts *suspended* under the autoplay policy, `await context.resume()` when
+`context.state === "suspended"` (a no-op on a running context). **Prevents:** two independent silent failures that
+look identical from the UI — a node nothing pulls, and a suspended graph — where capture reports "capturing", no frame
+is ever posted, no partial appears and no error is raised anywhere. **Authority:** `capture/PcmCapture.ts`
+(`startPcmCapture`); S4 plan §2.3 step 5; commit `ae37b424b`.
+
+### PROPOSED (awaiting operator approval): `CheckDependencyBaseline.mjs` fails on a new `warn` fingerprint, so a `no-orphans` warning is a gate failure
+
+**Rule:** `evaluateDependencyBaseline`'s `additions` fail the run for **any** new violation fingerprint, `severity: "warn"`
+included, so a file depcruise reports as an orphan reds `pnpm run validate` exactly like an error would. When a new
+`.js` under `src/features/` has no incoming edge the cruise can see, the sanctioned fix is **one targeted `pathNot`
+entry on the `no-orphans` rule** in `.dependency-cruiser.cjs` — a statement about what counts as a legitimate orphan,
+the same category as the existing `.d.ts` and generated-client entries — and **never** a new fingerprint in
+`config/dependency-baseline.json`. Note that a test file's import is not an edge: `options.exclude.path` ends in
+`\.test\.(ts|tsx)$`, so the cruise never sees it. In S4 the rule did not fire, because depcruise resolves
+`./Pcm16DownsamplerWorklet.js?url` after stripping the query and the import in `PcmCapture.ts` is a real incoming edge;
+`.dependency-cruiser.cjs` was therefore left untouched. Biome does see the file, and worklet globals need a
+`**/*Worklet.js` `javascript.globals` override in `biome.json` that must stay **last**: a later override's `globals`
+list replaces an earlier one's, and the existing `**/*.js` override sets `globals: []`. **Prevents:** a green-looking
+"only warnings" depcruise run that is actually a failed gate, a baseline widened instead of a rule exception written,
+and a worklet file that cannot pass `lint/correctness/noUndeclaredVariables` on `AudioWorkletProcessor` /
+`registerProcessor` / `sampleRate`. **Authority:** `scripts/CheckDependencyBaseline.mjs`; `.dependency-cruiser.cjs`;
+`biome.json`'s last override; S4 plan §1a.3 and the C2 gate output in
+`Plans/audio-transcription-2026-09-11/progress/S4-notes.md`.
+
 ---
 
 ## 6. Deliberately NOT built
@@ -1942,7 +2012,7 @@ Do not assume these exist or “restore” retired designs.
 - **Sandbox providers:** fake, process, and opt-in Development Docker exist. OpenSandbox is not built; consult ADR 0004 and `docs/roadmaps/development-mode-container-status.md` for current provider coverage.
 - **Playbook retrieval defaults to embeddings**, with lexical fallback. Adaptive memory is per-agent; no node-wide/cross-agent sharing.
 - **No RAG over chat attachments.** V1 uses file tools or capped inline text; no image/OCR ingestion.
-- **No STT.** TTS uses browser Web Speech; Kokoro is not shipped.
+- **STT ships; Kokoro does not.** Speech-to-text is whisper.cpp behind `IWhisperTranscriber`, with batch upload, live sessions and browser capture (`docs/wiki/24-audio-transcription.md`). TTS is still browser Web Speech, and Kokoro is not shipped.
 - Desktop-only ThemeConfigurator is outside the mobile-responsive scope. Open Canvas used to carry the same exclusion and is gone — see the stale-beliefs table.
 - **Open Canvas (Preview) is removed and is not coming back.** Graph Workflows replaced it; saved canvases were converted once at startup. Do not "restore" `PreviewWorkflow*`, `features/preview/`, the `preview/*` routes or the `canvas_workflows` table. Prevents: re-adding a retired surface while chasing a dangling reference. Authority: `docs/wiki/21-graph-workflows.md` §9.
 
@@ -1989,6 +2059,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Stale belief | Current correction |
 |---|---|
 | Bash variable `GROUPS` is available. | Bash owns it; use `TEST_GROUPS` (§1). |
+| There is no speech-to-text in this repo. | whisper.cpp ships: batch upload, live sessions over `TranscriptionHub`, and browser capture in the SPA (§6). |
 | Open Canvas / Preview is the visual workflow builder. | Removed in favour of Graph Workflows; saved canvases were imported once at startup (§4). |
 | `nodeCapabilities.preview` gates a route. | The flag, the route and the feature are gone; `graphWorkflows` is the successor and is on by default (§5). |
 | Desktop-only ThemeConfigurator/Open Canvas are outside the mobile-responsive scope. | Open Canvas is gone; only ThemeConfigurator carries that exclusion (§6). |

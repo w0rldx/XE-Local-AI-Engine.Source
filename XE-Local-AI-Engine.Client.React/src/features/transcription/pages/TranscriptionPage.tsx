@@ -25,6 +25,7 @@ import {
 	useTranscriptionSessions,
 } from "@/features/transcription/queries/useTranscriptionQueries";
 import { useTranscriptionUpload } from "@/features/transcription/queries/useTranscriptionUpload";
+import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 
 /**
  * Transcription session history and the entry point for a new one.
@@ -61,6 +62,7 @@ export function TranscriptionPage() {
 	const navigate = useNavigate();
 	const { confirm } = useConfirm();
 	const unsupportedMessage = useUnsupportedMessage();
+	const rememberDevice = useTranscriptionCaptureStore((state) => state.actions.rememberDevice);
 	const [dialogOpened, setDialogOpened] = useState(false);
 	const [submitError, setSubmitError] = useState<string | undefined>(undefined);
 	const [deletingSessionId, setDeletingSessionId] = useState<string | null>(null);
@@ -92,8 +94,21 @@ export function TranscriptionPage() {
 						setSubmitError(t("pages.transcription.dialog.createFailed"));
 						return;
 					}
+					const staged = values.file;
+					if (staged === null) {
+						// The device id is never sent to the node — capture is client-side — so this store is the only
+						// record of which microphone THIS session was configured for, and the session view reads it
+						// back by id when the operator presses Start.
+						rememberDevice(sessionId, values.deviceId);
+						// A live session is only the row: capture starts from the session view, because the browser's
+						// screen-share picker must open inside the click that asks for it and this navigation is an await
+						// away from that click.
+						setDialogOpened(false);
+						navigate({ to: nodeRoutePaths.transcriptionSession, params: { sessionId } });
+						return;
+					}
 					upload
-						.uploadAudio({ sessionId, file: values.file })
+						.uploadAudio({ sessionId, file: staged })
 						.then(() => {
 							setDialogOpened(false);
 							navigate({ to: nodeRoutePaths.transcriptionSession, params: { sessionId } });

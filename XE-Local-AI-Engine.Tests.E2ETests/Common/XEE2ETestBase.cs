@@ -38,6 +38,14 @@ public abstract class XEE2ETestBase : PageTest
     [ClassDataSource<XENodeE2EWebApplicationFactory>(Shared = SharedType.PerTestSession)]
     public required XENodeE2EWebApplicationFactory Factory { get; init; }
 
+    /// <summary>
+    ///     Whether a browser this harness launches runs headless. Shared rather than re-read, because a suite that
+    ///     launches its OWN browser (<see cref="XEFakeAudioE2ETestBase" />) must honour <c>HEADED</c> the same way
+    ///     the harness's shared browser does, and two copies of an environment-variable rule drift.
+    /// </summary>
+    private protected static bool LaunchHeadless =>
+        !string.Equals(Environment.GetEnvironmentVariable("HEADED"), "true", StringComparison.OrdinalIgnoreCase);
+
     /// <summary>The host origin (API base). Same as the frontend origin — the host serves both.</summary>
     protected Uri ApiBaseUrl => new(Factory.ServerAddress, UriKind.Absolute);
 
@@ -135,19 +143,17 @@ public abstract class XEE2ETestBase : PageTest
 
     private static BrowserTypeLaunchOptions BuildLaunchOptions(string browserName)
     {
-        var headless = !string.Equals(Environment.GetEnvironmentVariable("HEADED"), "true", StringComparison.OrdinalIgnoreCase);
-
         // --ignore-certificate-errors is chromium-only; other browsers reject unknown launch args
         // and instead trust the dev cert via ContextOptions().IgnoreHTTPSErrors.
         return string.Equals(browserName, "chromium", StringComparison.Ordinal)
             ? new BrowserTypeLaunchOptions
             {
-                Headless = headless,
+                Headless = LaunchHeadless,
                 Args = ["--ignore-certificate-errors"]
             }
             : new BrowserTypeLaunchOptions
             {
-                Headless = headless
+                Headless = LaunchHeadless
             };
     }
 }

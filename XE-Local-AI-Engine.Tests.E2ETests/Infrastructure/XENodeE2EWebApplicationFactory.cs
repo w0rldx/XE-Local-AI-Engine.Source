@@ -41,6 +41,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Providers.WhisperCpp.Contracts;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 
 /// <summary>
@@ -592,6 +593,13 @@ public sealed class XENodeE2EWebApplicationFactory : WebApplicationFactory<Progr
             var fakeOllamaBase = _fakeOllamaServer.BaseAddress;
             services.AddSingleton<IChatClient>(_ => new OllamaApiClient(fakeOllamaBase, "qwen3.5:0.8b"));
             services.DecorateChatClientPipeline();
+
+            // The live transcription chain is under test end to end: the registry, the segmenter, the hub and the
+            // persistence stay REAL, and only the model is replaced. Registered concretely as well as behind the
+            // interface so a test can resolve the same instance and await its provenance signal.
+            services.RemoveAll<IWhisperTranscriber>();
+            services.AddSingleton<FakeJfkWhisperTranscriber>();
+            services.AddSingleton<IWhisperTranscriber>(provider => provider.GetRequiredService<FakeJfkWhisperTranscriber>());
 
             services.RemoveAll<IHttpClientFactory>();
             services.AddSingleton<IHttpClientFactory>(_ =>

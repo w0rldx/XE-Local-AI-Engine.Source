@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ConfirmProvider } from "@/core/ui/components/ConfirmProvider/ConfirmProvider";
 import { TranscriptionPage } from "@/features/transcription/pages/TranscriptionPage";
+import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 import { http, HttpResponse } from "msw";
 
 import { domainErrorRoute, jsonRoute, localApiPath } from "@/test/msw/Handlers";
@@ -94,8 +95,11 @@ function renderPage() {
 }
 
 describe("TranscriptionPage", () => {
+	// The dialog opens on whatever was picked last time and the store is persisted, so the remembered source and the
+	// per-session devices are reset per test rather than carried from the one before.
 	beforeEach(() => {
 		navigate.mockClear();
+		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {} });
 	});
 
 	afterEach(() => {
@@ -155,6 +159,28 @@ describe("TranscriptionPage", () => {
 		await waitFor(() => {
 			expect(navigate).toHaveBeenCalledWith({ to: "/transcription/$sessionId", params: { sessionId } });
 		});
+	});
+
+	// M3: the device is never sent to the node, so this store is the only record of which microphone a session was
+	// configured for — and it has to be keyed by the session, not by the operator. A single global slot let the
+	// session created second decide what the session created first captured from.
+	it("remembers the microphone against the session it created, not globally", async () => {
+		server.use(
+			jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }),
+			jsonRoute("post", "transcription/sessions", detail()),
+			...runtimeRoutes(),
+		);
+		renderPage();
+
+		fireEvent.click(await screen.findByTestId("transcription-create"));
+		// Mantine's Modal mounts through a transition, so the source control is awaited rather than assumed.
+		fireEvent.click(await screen.findByRole("radio", { name: "Microphone" }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		await waitFor(() => {
+			expect(navigate).toHaveBeenCalledWith({ to: "/transcription/$sessionId", params: { sessionId } });
+		});
+		expect(useTranscriptionCaptureStore.getState().deviceIdBySession).toEqual({ [sessionId]: null });
 	});
 
 	// The 415 carries the readable-container list; showing only "unsupported" would leave the operator guessing which

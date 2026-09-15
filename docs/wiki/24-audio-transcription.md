@@ -11,9 +11,10 @@ that minted it.
 This page covers what exists today: the runtime and its model catalogue (delivered first, summarized here and
 documented in full on [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime)),
 the session/segment data model, the **batch file-upload** transcription path with its endpoints and React feature,
-and the **live** transcription pipeline (live-start endpoint, `TranscriptionHub` and the segmenter — see
-[Live sessions](#live-sessions)). The browser and Windows capture UI that drives a live session is **not built
-yet** — see [What is not here yet](#what-is-not-here-yet).
+the **live** transcription pipeline (live-start endpoint, `TranscriptionHub` and the segmenter — see
+[Live sessions](#live-sessions)), and the **browser capture** that feeds it (see
+[Browser capture and the live UI](#browser-capture-and-the-live-ui)). Windows per-application capture and dictation
+are **not built yet** — see [What is not here yet](#what-is-not-here-yet).
 
 The decisions behind the feature — browser-first capture, channel attribution instead of diarization, the managed
 Linux CUDA source build, the slice order, and the never-persist-audio rule — are recorded in
@@ -125,7 +126,9 @@ This is the feature's load-bearing privacy rule, and it is enforced in four plac
 4. **The streaming upload keeps the framework out of it** (step 1 above); the endpoint test asserts an isolated
    ASP.NET Core temp directory stays empty on success, rejection, cancellation and handler failure.
 
-Live PCM, when the live slices land, lives only in the segmenter's in-memory ring buffer — the same rule, one layer up.
+Live PCM lives only in the segmenter's in-memory ring buffer — the same rule, one layer up. In the browser it lives
+only in the worklet's current frame and the at most two frames in flight to the hub; nothing is written to disk or to
+any storage on either side.
 
 ## Endpoints
 
@@ -148,9 +151,10 @@ three source-build routes — are listed in [API & Hubs](09-api-and-hubs.md). Th
 
 ## Live sessions
 
-S3 adds the rolling-buffer commit pipeline behind a live-start endpoint and one hub; the browser capture UI that
-drives them is S4. A live session and a file session are the same `TranscriptionSession` row taking a different
-path through `ITranscriptionService` — the batch path above is unaffected.
+The rolling-buffer commit pipeline sits behind a live-start endpoint and one hub; the browser capture that drives
+them is [below](#browser-capture-and-the-live-ui). A live session and a file session are the same
+`TranscriptionSession` row taking a different path through `ITranscriptionService` — the batch path above is
+unaffected.
 
 ### Starting a session live
 
@@ -168,8 +172,8 @@ The status move to `Transcribing` is a compare-and-set (`ITranscriptionSessionSt
 start that raced a graceful end refuses with 409 rather than writing `Transcribing` over the terminal status that end
 had already recorded — a finished session is never resurrected by a start that arrived a moment too late.
 
-S4 must await a 200 from this endpoint before it starts pushing frames — a frame that arrives before the session is
-armed has nowhere to land.
+The browser awaits a 200 from this endpoint before it forwards a single frame — a frame that arrives before the
+session is armed has nowhere to land.
 
 ### `TranscriptionHub`
 
@@ -265,6 +269,152 @@ against the real runtime on the CPU backend:
 Re-record with the opt-in `WhisperGoldenFixtureRecorder`, which needs a running server named by
 `XE_WHISPER_GOLDEN_SERVER_URL`.
 
+## Browser capture and the live UI
+
+The browser is the only capture device this feature has today. Everything below lives in
+`src/features/transcription/capture/`, `hooks/` and `components/` — see
+[React Client](10-react-client.md) for where each file sits.
+
+### The chain
+
+`getUserMedia` (microphone) or `getDisplayMedia` (system audio) yields a `MediaStream`. `startPcmCapture` builds one
+`AudioContext` per stream, asking for 16 kHz and falling back to a bare constructor on the `NotSupportedError` MDN
+documents for an unsupported rate, then loads `Pcm16DownsamplerWorklet.js` onto it and wires
+`source → worklet → zero-gain → destination`. The gain node is load-bearing twice: a Web Audio node is only pulled
+when it reaches the destination, and a gain of 0 is what stops the microphone being played back through the
+speakers. A context created before the page's first user gesture starts *suspended* under the autoplay policy and
+pulls nothing at all, so `startPcmCapture` resumes it — a no-op on a context that is already running.
+
+The worklet reads its own `sampleRate` global, which is the context's **real** rate whether or not the 16 kHz request
+was honoured, and resamples to 16 000 unconditionally (a ratio of 1 is a copy). It fills a `250 ms` int16 frame —
+4 000 samples, 8 000 bytes, comfortably inside the hub's 32 KiB cap — and `postMessage`s the buffer as a transfer, so
+nothing is copied across the thread boundary. `useLiveCapture` hands each frame to `useTranscriptionHub.pushFrame`,
+which base64-encodes the little-endian bytes and invokes
+`PushAudioFrame(sessionId, channelOrdinal, base64)`. The JSON protocol is the reason for both conversions:
+System.Text.Json reads a JSON **string** into the hub's `byte[]` as base64, while a `Uint8Array` would stringify as
+`{"0":…,"1":…}`. The channel travels as the `TranscriptChannel` **ordinal** (`Mono` 0, `You` 1, `Others` 2), not as
+the PascalCase spelling the server→client events use.
+
+The worklet is one self-contained `.js` file with **no imports of any kind**, imported by `PcmCapture.ts` for its URL
+alone through Vite's `?url`. Vite's asset plugin emits the file's raw bytes and does not traverse its module graph, so
+a sibling module would ship as an unresolved specifier and `registerProcessor` would never run — with every build gate
+still green. Its class and its `registerProcessor` call both sit inside a `typeof AudioWorkletProcessor !== "undefined"`
+guard, which is what lets a vitest test import the file and exercise the real `downsampleToInt16` the browser runs.
+
+### Starting a session: two steps, and the ordering they buy
+
+Creating the session and starting capture are **separate user actions**. The new-session dialog creates the row and
+navigates to `/transcription/{sessionId}`; the operator then presses **Start capture** there. That split exists so
+`getDisplayMedia` runs inside the activation window of a real click rather than after a create request and a
+navigation.
+
+Within `useLiveCapture.start` the order depends on whether a display picker is involved:
+
+| Path | Order |
+|---|---|
+| Microphone only | `await live/start` → `getUserMedia` + worklet → forward PCM |
+| System audio | `getDisplayMedia` **synchronously, before the first `await`** → `await live/start` → worklet → forward PCM |
+| Both | `getDisplayMedia` **synchronously, before the first `await`** → `await live/start` → `getUserMedia` + worklet → await the display promise → forward PCM |
+
+`getDisplayMedia` requires transient user activation *at the moment it is invoked*, and the Screen Capture
+specification requires rejection when that activation is absent — so awaiting anything first (the endpoint, a
+permission prompt, `addModule`) can spend the gesture and the picker never appears. Invoking the picker is not
+producing audio: the stream is acquired but **no frame is forwarded until `live/start` has returned 200**, on every
+path. The constraint reaches the call site too, and `useLiveCapture`'s doc comment says so: `start` must be called
+straight out of the click handler, with nothing awaited in between. A future refactor that routes the click through a
+confirmation dialog or an async guard breaks system audio silently, and the call-order tests in
+`useLiveCapture.test.ts` are the only thing that catches it.
+
+Any failure on that path disposes everything: the display promise is settled first so its stream is registered, then
+every acquired source is stopped and `EndSession` is invoked if the session had already been opened. A cancelled
+picker never leaves a hot microphone, and a refused start never leaves a screen share running.
+
+Leaving the page during a start disposes everything too, and by a different route. The unmount teardown stops what the
+hook's source ref holds *at that instant*, which on a `both` session with the picker still open is not what the start
+ends up acquiring. `start` therefore carries a generation token, bumped by every teardown: after each of its awaits a
+moved generation stops everything acquired so far and returns without touching state. Without it the microphone
+acquired after the teardown belonged to no one and stayed hot for the life of the tab.
+
+**Start capture** is disabled until the hub subscription is up, with the reason rendered beside it. A capture begun
+before then acquires the devices and fails on its first frame a quarter of a second later, which is a worse way to
+learn the node is not there.
+
+### Channels
+
+D2, and no mixing anywhere. The lanes are the node's (`TranscriptionService.LiveChannelsFor`), and the browser sends
+on exactly those: microphone alone is `Mono`; system audio alone is `Others` (the lane a Windows per-process capture
+feeds too); **both** makes the microphone `You` and the system `Others`. A frame on a lane the session did not
+register is refused as `transcription-unknown-channel`. Two sources are two lanes transcribed separately; there is no
+diarization behind the labels. A stereo source is downmixed to mono by the audio graph before the worklet
+(`channelCount: 1, channelCountMode: "explicit"`), never by dropping a channel.
+
+### Backpressure: refused, never dropped
+
+`pushFrame` allows at most **two** frames in flight and rejects with `CaptureError("overloaded", …)` beyond that;
+a transport that is not `Connected` rejects with `CaptureError("disconnected", …)`. Both stop capture identically, but
+they are different diagnoses and the string the operator reads is the whole of what they act on — "this node could not
+keep up" sends them after a performance problem the node does not have. A rejected frame is speech the node did not
+receive, and a hole nobody is told about is worse than a stopped capture — so `useLiveCapture` stops every source, ends the session and shows the
+named error. The node's own `Overloaded` status push (the pending-audio budget exceeded) takes the same route. Frames
+are never silently discarded.
+
+### Reconnect and the replay drain
+
+`useTranscriptionHub.connected` is true only once the transport is connected, the `SubscribeSession` snapshot has
+resolved **and** every truncated replay page has drained. Pushes that arrive while the snapshot is in flight are
+buffered and then merged through the same code path as live ones, sorted by sequence. The merge is identity on `Seq`:
+an existing sequence is a no-op, so the first text for a sequence wins and an out-of-order lower sequence is still
+rendered. A status that arrived live is never overwritten by a snapshot resolving afterwards.
+
+A drain walks its own cursor page by page; the **published** watermark only moves after the last page, or when a live
+push carries a higher sequence. If a page fails to advance the cursor, the hook stops draining, leaves the published
+watermark where it was and surfaces `transcription-replay-stalled` — rendered as a warning telling the operator the
+transcript on screen may be incomplete and a reload will fetch it again. Pushes arriving behind that frozen cursor are
+dropped rather than buffered: nothing would ever release them, and the only thing that can complete this transcript is
+the reload the warning asks for. A reconnect resubscribes from the watermark, never from zero. Unsubscribing on
+cleanup is what arms the node's abandonment grace.
+
+A refused subscription is named, not swallowed. `withAutomaticReconnect` does not retry an initial start, so a node
+with transcription switched off, or a failed first negotiate, would otherwise leave the view empty and permanently
+disconnected with no signal at all. The hook surfaces `subscribeFailed` carrying the hub's own refusal code
+(`transcription-disabled`, `transcription-session-not-found`, … or `transcription-subscribe-failed` for anything it
+did not name), and `CaptureControls` renders it as an alert. Nothing retries it; the operator reloads.
+
+### What the session page renders
+
+A session whose source kind is not `File` and whose status is `Created` or `Transcribing` renders the hub-fed
+`LiveTranscriptPanel` plus `CaptureControls`; every other session — every `File` session, and every finished one —
+renders the persisted rows from the detail endpoint. The panel shows the committed list plus one provisional line per
+channel, dimmed and italic and never in the committed list, behind a persisted "show provisional text" toggle. The
+microphone a live session captures from is the one it was created with: `TranscriptionCaptureStore` keeps
+`deviceIdBySession`, written by the create path against the id the node just returned and read back here. The device
+is never sent to the node — capture is client-side — so that store is the only record, and a single global slot let
+the session created second decide what the session created first captured from. The
+elapsed counter reads the last committed `endMs`, which is audio time, not wall time: the transcript's own clock is
+the honest one. When a terminal status arrives on the hub the page invalidates the session queries, so the REST rows
+take over from the panel with the node's final flush included.
+
+### Sharing is re-prompted, every time
+
+For the two system-audio sources the dialog carries a permanent hint: the browser asks which screen or window to
+share **every time a session starts**, the operator should pick a whole screen and tick "share audio", and this app
+never records the picture (the video tracks are stopped the moment the stream arrives). That is accepted browser
+behaviour, not something engineered around — there is no persistent screen-capture grant to reuse.
+
+### There is no resume after a reload
+
+Reloading the page tears capture down: the unmount stops every source and closes the graph. The session then hits the
+abandonment grace described under [The registry](#the-registry) and is cancelled, keeping everything already
+committed. This is the intended behaviour, and it is the reason the replay-stalled warning says "reload" only as a way
+to re-read a transcript, never as a way to continue recording.
+
+### The system-audio coverage boundary
+
+The Playwright suite drives Chromium's fake audio device, which replaces the **microphone only**; headless Chromium has
+no equivalent fake for `getDisplayMedia`. The system-audio path is therefore covered by frontend unit tests and by a
+manual live check, never by the E2E — a real boundary, not an oversight. See
+[Testing & Validation](13-testing-and-validation.md#xe-local-ai-enginetestse2etests--playwright).
+
 ## React feature
 
 `src/features/transcription/` renders the session list at `/transcription` and one session at
@@ -272,8 +422,9 @@ Re-record with the opt-in `WhisperGoldenFixtureRecorder`, which needs a running 
 generated hey-api client; the upload is the one hand-written multipart call, following `useKnowledgeUpload`'s axios
 precedent because the generated client does not express upload progress. The segment list renders the committed
 transcript with a channel badge for any non-`Mono` channel, and "Send to chat" hands the transcript to the composer
-through `core/ui/stores/PendingComposerTextStore.ts`, which exists to carry text across a navigation. See
-[React Client](10-react-client.md).
+through `core/ui/stores/PendingComposerTextStore.ts`, which exists to carry text across a navigation. The live half of
+the feature — the capture sources, the worklet, the hub hook and the live panel — is described in
+[Browser capture and the live UI](#browser-capture-and-the-live-ui). See [React Client](10-react-client.md).
 
 ## Options and settings
 
@@ -291,10 +442,6 @@ last two are persisted and normalized already, and are read by the live slices.
 
 ## What is not here yet
 
-- **Browser capture UI** (S4). The rolling-buffer commit pipeline, `TranscriptionHub` and the live-start route exist
-  (see [Live sessions](#live-sessions)); the browser capture that pushes frames into them does not yet. A
-  fixed-window loop against the stateless inference route hallucinates on a mid-word cut, which is why the window is
-  a *maximum* and the commit layer got its own slice.
 - **Windows per-application capture** (S5). Browser capture cannot scope to one application; NAudio's WASAPI process
   loopback can, on Windows only.
 - **Dictation into the agent chat** (S6). It appends in place through a toolbar callback and deliberately does not

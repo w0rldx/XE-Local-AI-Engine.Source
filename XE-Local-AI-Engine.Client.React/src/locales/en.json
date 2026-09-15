@@ -6772,7 +6772,6 @@
 			"dialog": {
 				"title": "New transcription",
 				"sourceLabel": "Source",
-				"sourceComingSoon": "Live microphone and system-audio capture arrive in a later release.",
 				"fileLabel": "Recording",
 				"fileDescription": "WAV, MP3 and FLAC are read directly; OGG, M4A and WebM need ffmpeg on this computer.",
 				"filePlaceholder": "Choose an audio file",
@@ -6789,7 +6788,13 @@
 				"uploadFailed": "Could not upload the recording.",
 				"unsupportedContainer": "This node cannot read that audio container. Supported: {{containers}}.",
 				"uploadProgress": "Upload progress",
-				"unsupportedContainerFfmpeg": "This node needs ffmpeg to read that audio container. Install ffmpeg and try again, or use one of {{containers}}."
+				"unsupportedContainerFfmpeg": "This node needs ffmpeg to read that audio container. Install ffmpeg and try again, or use one of {{containers}}.",
+				"deviceLabel": "Microphone",
+				"deviceDefault": "System default",
+				"deviceUnnamed": "Microphone {{index}}",
+				"deviceHint": "Microphone names appear once you have allowed microphone access at least once.",
+				"shareHint": "Your browser asks which screen or window to share every time a session starts. Choose a whole screen and tick 'share audio' — this app never records the picture.",
+				"liveTitle": "Live session {{time}}"
 			},
 			"runtime": {
 				"title": "Whisper runtime",
@@ -6824,6 +6829,31 @@
 				"cancel": "Cancel",
 				"cancelFailed": "Could not cancel the transcription.",
 				"sendToChat": "Send to chat"
+			},
+			"live": {
+				"hint": "Segments appear as the runtime commits them. Audio is never stored.",
+				"waiting": "Listening — the first segment appears once enough speech has been captured.",
+				"showPartials": "Show provisional text",
+				"partialAttributed": "{{channel}}: {{text}}"
+			},
+			"capture": {
+				"start": "Start capture",
+				"stop": "Stop capture",
+				"replayStalled": "The node stopped sending missed segments. The transcript on screen may be incomplete — reload the page to fetch it again.",
+				"error": {
+					"unsupported": "This browser cannot capture audio here. A local HTTPS page in a recent Chrome, Edge or Firefox is required.",
+					"permission-denied": "Access was refused. Allow the microphone or screen share and start again.",
+					"no-device": "No usable microphone was found on this computer.",
+					"no-audio-track": "The shared screen came back without audio. Share a whole screen and tick 'share audio'.",
+					"worklet-failed": "The browser's audio engine could not be started, so nothing was captured.",
+					"overloaded": "This node could not keep up with the audio, so capture was stopped. Everything committed so far is kept.",
+					"start-failed": "The node refused to open this live session. It may already have finished.",
+					"disconnected": "The live connection to this node was lost, so capture was stopped. Reload the page and start again.",
+					"subscribeFailed": "This node did not open the live transcript for this session. Reload the page to try again.",
+					"subscribeSessionNotFound": "This node no longer knows this session, so there is no live transcript to follow.",
+					"subscribeDisabled": "Transcription is switched off on this node. Enable it in the node's settings and reload the page."
+				},
+				"notConnected": "Connecting to this node — start becomes available once the live connection is ready."
 			}
 		}
 	},

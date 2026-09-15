@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, screen } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { NewTranscriptionSessionDialog } from "@/features/transcription/components/NewTranscriptionSessionDialog";
+import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
 function renderDialog(onSubmit = vi.fn()) {
@@ -20,22 +21,131 @@ function renderDialog(onSubmit = vi.fn()) {
 }
 
 describe("NewTranscriptionSessionDialog", () => {
+	// The dialog opens on whatever was picked last time, so the remembered choice is reset per test rather than
+	// carried between them by the persisted store.
+	beforeEach(() => {
+		useTranscriptionCaptureStore.setState({ lastSourceKind: "File", deviceIdBySession: {} });
+	});
+
 	afterEach(() => {
 		cleanup();
 	});
 
-	// All four sources are rendered so the capture slice is a data change (drop `disabled`, add the branch) rather
-	// than a layout change — but only File may be reachable here.
-	it("offers all four sources with the three live ones disabled", () => {
+	it("offers all four sources, every one of them reachable", () => {
 		renderDialog();
 
-		expect(screen.getByRole("radio", { name: "File" })).toHaveProperty("disabled", false);
-		for (const label of ["Microphone", "System audio", "Microphone + system"]) {
-			expect(screen.getByRole("radio", { name: label })).toHaveProperty("disabled", true);
+		for (const label of ["File", "Microphone", "System audio", "Microphone + system"]) {
+			expect(screen.getByRole("radio", { name: label })).toHaveProperty("disabled", false);
 		}
-		expect(screen.getByTestId("new-transcription-session-dialog").textContent).toContain(
-			"Live microphone and system-audio capture arrive in a later release.",
-		);
+	});
+
+	// The device list and the screen-share warning belong to different sources, so each is shown only where it means
+	// something: a file upload has neither, and a screen share has no microphone to pick.
+	// Chrome reports the OS default input under the literal id "default"; a sentinel with the same spelling made Mantine's
+	// Select throw on a duplicate option and unmounted the whole dialog (found by the fake-device E2E).
+	it('lists a browser device whose id is literally "default" beside the system-default option', async () => {
+		const enumerateDevices = vi.fn().mockResolvedValue([
+			{ kind: "audioinput", deviceId: "default", label: "Default - Built-in Microphone" },
+			{ kind: "audioinput", deviceId: "default", label: "Default - Built-in Microphone" },
+			{ kind: "videoinput", deviceId: "cam", label: "Camera" },
+		]);
+		vi.stubGlobal("navigator", { ...navigator, mediaDevices: { enumerateDevices } });
+		try {
+			renderDialog();
+			fireEvent.click(screen.getByRole("radio", { name: "Microphone" }));
+
+			await waitFor(() => expect(enumerateDevices).toHaveBeenCalledTimes(1));
+			// Still mounted: the old sentinel made the Select throw on a duplicate value and unmounted the dialog.
+			const picker = screen.getByTestId("new-transcription-session-device");
+			expect(picker).toBeDefined();
+			fireEvent.click(picker);
+			expect(await screen.findByRole("option", { name: "Default - Built-in Microphone", hidden: true })).toBeDefined();
+			// Deduped: the browser listed the same id twice, the picker shows it once.
+			expect(screen.getAllByRole("option", { name: "Default - Built-in Microphone", hidden: true })).toHaveLength(1);
+			expect(screen.getByRole("option", { name: "System default", hidden: true })).toBeDefined();
+		} finally {
+			vi.unstubAllGlobals();
+		}
+	});
+
+	it("offers a microphone picker only for the microphone sources", () => {
+		renderDialog();
+
+		expect(screen.queryByTestId("new-transcription-session-device")).toBeNull();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Microphone" }));
+		expect(screen.getByTestId("new-transcription-session-device")).toBeDefined();
+		expect(screen.queryByTestId("new-transcription-session-share-hint")).toBeNull();
+	});
+
+	// R19: the browser re-prompts for a surface on every session and the app cannot engineer that away, so the dialog
+	// says so up front — including that the picture is never recorded, which the picker itself does not say.
+	it("warns that the browser asks for a surface on every system-audio session", () => {
+		renderDialog();
+
+		fireEvent.click(screen.getByRole("radio", { name: "System audio" }));
+
+		const hint = screen.getByTestId("new-transcription-session-share-hint");
+		expect(hint.textContent).toContain("asks which screen or window to share every time a session starts");
+		expect(hint.textContent).toContain("never records the picture");
+	});
+
+	it("offers both the microphone picker and the share warning for a both-sources session", () => {
+		renderDialog();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Microphone + system" }));
+
+		expect(screen.getByTestId("new-transcription-session-device")).toBeDefined();
+		expect(screen.getByTestId("new-transcription-session-share-hint")).toBeDefined();
+	});
+
+	// A live session has no file to stage and no name to borrow from one, so it submits with a time-stamped title and
+	// no file at all — the audio arrives over the hub once the session view starts capture.
+	it("submits a live session with no file and a time-stamped title", () => {
+		const onSubmit = renderDialog();
+
+		fireEvent.click(screen.getByRole("radio", { name: "Microphone" }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		const values = onSubmit.mock.calls[0]?.[0] as {
+			sourceKind: string;
+			file: File | null;
+			title: string;
+			deviceId: string | null;
+		};
+		expect(values.sourceKind).toBe("Microphone");
+		expect(values.file).toBeNull();
+		expect(values.deviceId).toBeNull();
+		expect(values.title).toContain("Live session");
+	});
+
+	// The file input is hidden, not cleared, when the source changes; the page routes on `file`, so a recording staged
+	// before the switch would otherwise be uploaded instead of opening a live session.
+	it("drops a file staged before the source was switched to a live one", () => {
+		const onSubmit = renderDialog();
+		const recording = new File([new Uint8Array(16)], "meeting.wav", { type: "audio/wav" });
+
+		fireEvent.change(screen.getByTestId("new-transcription-session-file"), { target: { files: [recording] } });
+		fireEvent.click(screen.getByRole("radio", { name: "Microphone" }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		expect(onSubmit).toHaveBeenCalledTimes(1);
+		const values = onSubmit.mock.calls[0]?.[0] as { sourceKind: string; file: File | null; title: string };
+		expect(values.sourceKind).toBe("Microphone");
+		expect(values.file).toBeNull();
+		expect(values.title).not.toBe("meeting.wav");
+	});
+
+	// Re-picking the source and the microphone on every session is the kind of repeated ceremony the operator should
+	// only pay once.
+	it("remembers the source it was last submitted with", () => {
+		renderDialog();
+
+		fireEvent.click(screen.getByRole("radio", { name: "System audio" }));
+		fireEvent.click(screen.getByTestId("new-transcription-session-submit"));
+
+		expect(useTranscriptionCaptureStore.getState().lastSourceKind).toBe("SystemAudio");
 	});
 
 	// R15: the switch translates INTO English specifically — whisper has no other translation target — so the label
@@ -79,6 +189,7 @@ describe("NewTranscriptionSessionDialog", () => {
 			maxWindowSeconds: 5,
 			channelAttribution: false,
 			file,
+			deviceId: null,
 		});
 	});
 

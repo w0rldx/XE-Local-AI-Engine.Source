@@ -24,12 +24,26 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 [ParallelGroup("BrowserSerial", Order = 0)]
 public abstract class XESerialE2ETestBase : XEE2ETestBase
 {
-    protected override async Task SignInAsync()
+    protected override Task SignInAsync() => SignInWithFormAsync(Page, NodeAppUrl);
+
+    /// <summary>
+    ///     The real password login, driven against an arbitrary page rather than the harness's shared one.
+    /// </summary>
+    /// <remarks>
+    ///     Extracted so a suite that launches its own browser (<see cref="XEFakeAudioE2ETestBase" />) signs in through
+    ///     these exact steps instead of a second copy of them: the login form is the only place these tests touch the
+    ///     shipped password path, and two copies of it drift the moment the form changes.
+    /// </remarks>
+    /// <param name="page">The page to drive. It must start on a context that has never signed in.</param>
+    /// <param name="nodeAppUrl">The node origin to navigate to.</param>
+    protected static async Task SignInWithFormAsync(IPage page, string nodeAppUrl)
     {
+        ArgumentNullException.ThrowIfNull(page);
+
         // The harness seeds a single admin (XENodeE2EWebApplicationFactory.AdminEmail / AdminPassword),
         // so a fresh browser context lands on /login (not the one-time /setup screen). Drive the real
         // password login — that UI form is the shipped path and only these tests still exercise it.
-        await Page.GotoAsync(NodeAppUrl, new PageGotoOptions
+        await page.GotoAsync(nodeAppUrl, new PageGotoOptions
         {
             WaitUntil = WaitUntilState.NetworkIdle
         }).ConfigureAwait(false);
@@ -38,15 +52,15 @@ public abstract class XESerialE2ETestBase : XEE2ETestBase
         // PasswordInput also renders a "Toggle password visibility" button plus a required-asterisk
         // label, so GetByLabel("Password") is either ambiguous (matches the toggle) or empty (exact
         // misses the asterisk). The type='password' input is unique on this page.
-        await Page.Locator("input[type='password']")
+        await page.Locator("input[type='password']")
                   .FillAsync(XENodeE2EWebApplicationFactory.AdminPassword).ConfigureAwait(false);
-        await Page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+        await page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
         {
             Name = "Sign in"
         }).ClickAsync().ConfigureAwait(false);
 
         // On success the SPA navigates away from /login.
-        await Page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
+        await page.WaitForURLAsync(url => !url.Contains("/login", StringComparison.OrdinalIgnoreCase)).ConfigureAwait(false);
     }
 }
 #pragma warning restore S101

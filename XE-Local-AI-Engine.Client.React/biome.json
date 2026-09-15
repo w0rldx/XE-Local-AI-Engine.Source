@@ -978,6 +978,12 @@
 					}
 				}
 			}
+		},
+		{
+			"includes": ["**/*Worklet.js"],
+			"javascript": {
+				"globals": ["AudioWorkletProcessor", "registerProcessor", "sampleRate", "currentTime", "currentFrame"]
+			}
 		}
 	],
 	"assist": {

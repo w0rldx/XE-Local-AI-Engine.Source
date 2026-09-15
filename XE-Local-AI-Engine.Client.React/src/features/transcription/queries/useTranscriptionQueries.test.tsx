@@ -13,15 +13,17 @@ import { setupMswServer } from "@/test/UseMswServer";
 setupMswServer();
 
 const sessionId = "11111111-0000-4000-8000-000000000001";
-const sessionPollMs = 2_000;
+// The interval this query used to run on, before the transcription hub existed (K-16). Kept as the window the
+// negative assertions below wait out: if a poll ever comes back, this is the length it would have.
+const formerPollMs = 2_000;
 
-function transcribingDetail() {
+function transcribingDetail(sourceKind = "File") {
 	return {
 		session: {
 			id: sessionId,
 			title: "Standup recording",
 			status: "Transcribing",
-			sourceKind: "File",
+			sourceKind,
 			modelId: "base",
 			segmentCount: 0,
 			createdAtUtc: 1_700_000_000_000,
@@ -32,52 +34,44 @@ function transcribingDetail() {
 	};
 }
 
-describe("useTranscriptionSession polling", () => {
-	// A refetch that fails leaves the last successful data in place, so the session still reads as Transcribing. An
-	// interval derived from that data alone would keep a deleted session (removed in another tab) on a 404 every two
-	// seconds for as long as the page stayed open.
-	it("stops polling once a refetch fails and does not resume", async () => {
+describe("useTranscriptionSession", () => {
+	// The hub delivers every committed segment and the terminal status of a LIVE session, and the session view
+	// invalidates this query when one arrives. A poll beside that socket re-reads and re-decrypts the whole transcript
+	// every two seconds for the life of every live session, so its absence is the invariant worth asserting.
+	it("does not poll a live session that is still transcribing", async () => {
 		let reads = 0;
 		server.use(
 			http.get(localApiPath(`transcription/sessions/${sessionId}`), () => {
 				reads += 1;
-				// The first read succeeds and arms the poll; the session is deleted elsewhere before the second.
-				return reads === 1 ? HttpResponse.json(transcribingDetail()) : new HttpResponse(null, { status: 404 });
+				return HttpResponse.json(transcribingDetail("Microphone"));
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
 
-		// The timers must be installed before the hook mounts, or TanStack arms its interval on the real clock and the
-		// negative assertion below passes for the wrong reason. `vi.waitFor` (not RTL's) is the one that advances fake
-		// timers.
+		// The timers must be installed before the hook mounts, or an interval would be armed on the real clock and the
+		// negative assertion below would pass for the wrong reason. `vi.waitFor` is the one that advances fake timers.
 		vi.useFakeTimers();
 		try {
 			const { result } = renderHook(() => useTranscriptionSession(sessionId), { wrapper });
 
 			await vi.waitFor(() => expect(result.current.isSuccess).toBe(true), { interval: 1 });
+			expect(result.current.data?.session.status).toBe("Transcribing");
+
+			await vi.advanceTimersByTimeAsync(formerPollMs * 5);
 			expect(reads).toBe(1);
-			expect(result.current.data?.session.status).toBe("Transcribing");
-
-			// One poll on: the session is gone and the query goes to error while keeping its last good data.
-			await vi.advanceTimersByTimeAsync(sessionPollMs);
-			await vi.waitFor(() => expect(result.current.isError).toBe(true), { interval: 1 });
-			expect(reads).toBe(2);
-			expect(result.current.data?.session.status).toBe("Transcribing");
-
-			// Several intervals further on, nothing has been requested again.
-			await vi.advanceTimersByTimeAsync(sessionPollMs * 5);
-			expect(reads).toBe(2);
 		} finally {
 			vi.useRealTimers();
 		}
 	});
 
-	it("keeps polling while the session is still transcribing", async () => {
+	// A FILE session is never subscribed on the hub and the batch writer publishes nothing, so a row another tab is
+	// transcribing can only be observed by re-reading it. That one case keeps the poll.
+	it("polls a file session that another client is still transcribing", async () => {
 		let reads = 0;
 		server.use(
 			http.get(localApiPath(`transcription/sessions/${sessionId}`), () => {
 				reads += 1;
-				return HttpResponse.json(transcribingDetail());
+				return HttpResponse.json(transcribingDetail("File"));
 			}),
 		);
 		const { wrapper } = createProvidersWrapper();
@@ -87,14 +81,16 @@ describe("useTranscriptionSession polling", () => {
 			const { result } = renderHook(() => useTranscriptionSession(sessionId), { wrapper });
 
 			await vi.waitFor(() => expect(result.current.isSuccess).toBe(true), { interval: 1 });
-			await vi.advanceTimersByTimeAsync(sessionPollMs);
-			await vi.waitFor(() => expect(reads).toBe(2), { interval: 1 });
+			expect(result.current.data?.session.sourceKind).toBe("File");
+
+			await vi.advanceTimersByTimeAsync(formerPollMs * 2 + 50);
+			expect(reads).toBeGreaterThanOrEqual(2);
 		} finally {
 			vi.useRealTimers();
 		}
 	});
 
-	it("stops polling once the session reaches a terminal status", async () => {
+	it("does not poll a terminal session either", async () => {
 		let reads = 0;
 		server.use(
 			http.get(localApiPath(`transcription/sessions/${sessionId}`), () => {
@@ -110,7 +106,7 @@ describe("useTranscriptionSession polling", () => {
 			const { result } = renderHook(() => useTranscriptionSession(sessionId), { wrapper });
 
 			await vi.waitFor(() => expect(result.current.isSuccess).toBe(true), { interval: 1 });
-			await vi.advanceTimersByTimeAsync(sessionPollMs * 5);
+			await vi.advanceTimersByTimeAsync(formerPollMs * 5);
 			expect(reads).toBe(1);
 		} finally {
 			vi.useRealTimers();

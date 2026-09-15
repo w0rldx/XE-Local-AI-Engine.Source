@@ -1,6 +1,8 @@
 import { Badge, Button, Group, Skeleton, Stack, Text } from "@mantine/core";
 import { IconMessage, IconMicrophone } from "@tabler/icons-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { useTranslation } from "react-i18next";
 
 import { nodeRoutePaths } from "@/capabilities/NodeCapabilities";
@@ -12,15 +14,50 @@ import { PageShell } from "@/core/ui/components/PageShell/PageShell";
 import { SectionCard } from "@/core/ui/components/SectionCard/SectionCard";
 import { toast } from "@/core/ui/notifications/Toast";
 import { usePendingComposerTextStore } from "@/core/ui/stores/PendingComposerTextStore";
+import { type LiveCaptureRequest, useLiveCapture } from "@/features/transcription/capture/useLiveCapture";
+import { CaptureControls } from "@/features/transcription/components/CaptureControls";
+import { LiveTranscriptPanel } from "@/features/transcription/components/LiveTranscriptPanel";
 import { TranscriptSegmentList } from "@/features/transcription/components/TranscriptSegmentList";
-import { useCancelTranscriptionSession, useTranscriptionSession } from "@/features/transcription/queries/useTranscriptionQueries";
+import { useLiveTranscript } from "@/features/transcription/hooks/useTranscriptionHub";
+import type { TranscriptionSourceKind } from "@/features/transcription/models/TranscriptionModels";
+import {
+	invalidate,
+	transcriptionQueryIds,
+	useCancelTranscriptionSession,
+	useTranscriptionSession,
+} from "@/features/transcription/queries/useTranscriptionQueries";
+import { useTranscriptionCaptureStore } from "@/features/transcription/stores/TranscriptionCaptureStore";
 
 interface TranscriptionSessionPageProps {
 	readonly sessionId: string;
 }
 
+// The statuses the hub pushes when a live session is over. `Abandoned` and `Overloaded` exist only on the wire — the
+// row itself is persisted as Cancelled, Completed or Failed — which is why this is a set of strings rather than the
+// persisted status union.
+const liveTerminalStatuses: ReadonlySet<string> = new Set(["Completed", "Cancelled", "Abandoned", "Overloaded", "Failed"]);
+
+/** The capture request one source kind asks for, or null for a session that is not captured in this browser. */
+function toCaptureRequest(sourceKind: TranscriptionSourceKind, deviceId: string | null): LiveCaptureRequest | null {
+	const microphone = deviceId === null ? undefined : deviceId;
+	switch (sourceKind) {
+		case "Microphone":
+			return { kind: "microphone", deviceId: microphone };
+		case "SystemAudio":
+			return { kind: "systemAudio" };
+		case "MicrophoneAndSystem":
+			return { kind: "both", deviceId: microphone };
+		default:
+			return null;
+	}
+}
+
 /**
- * One transcription session: its status, its configuration and the committed transcript.
+ * One transcription session: its status, its configuration and the transcript.
+ *
+ * A live session that has not finished renders the hub-fed panel and the capture controls; every finished session —
+ * and every file session — renders the persisted rows the detail endpoint returns. The switch is the session's own
+ * status, so a session that ends while it is on screen changes over by itself.
  *
  * A failed run is still a 200 on the upload, so the failure lives on the row — `errorCode` / `errorMessage` are
  * rendered here rather than inferred from an HTTP status anywhere.
@@ -28,13 +65,36 @@ interface TranscriptionSessionPageProps {
 export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPageProps) {
 	const { t } = useTranslation();
 	const navigate = useNavigate();
+	const queryClient = useQueryClient();
 	const detailQuery = useTranscriptionSession(sessionId);
 	const cancelMutation = useCancelTranscriptionSession();
 	const setPendingComposerText = usePendingComposerTextStore((state) => state.actions.setPendingText);
+	// This session's own microphone, not a global preference: a session created on a USB microphone must not capture
+	// from the default just because a later session was created on it.
+	const deviceId = useTranscriptionCaptureStore((state) => state.deviceIdBySession[sessionId] ?? null);
 
 	const detail = detailQuery.data;
 	const isTranscribing = detail?.session.status === "Transcribing";
 	const transcript = (detail?.segments ?? []).map((segment) => segment.text.trim()).join(" ");
+
+	const sourceKind = detail?.session.sourceKind ?? "File";
+	const captureRequest = toCaptureRequest(sourceKind, deviceId);
+	// Live only until the row reaches a terminal status; after that the persisted transcript is the whole truth and the
+	// hub has nothing left to say.
+	const isLive = captureRequest !== null && (detail?.session.status === "Created" || detail?.session.status === "Transcribing");
+	const capture = useLiveCapture(isLive ? sessionId : null);
+	const liveView = useLiveTranscript(sessionId);
+	const liveStatus = liveView?.status ?? "";
+
+	// The node persisted the last rows as it ended the session, so the REST view has to be re-read before it takes over
+	// from the panel — otherwise the finished session renders the transcript as it was when the page first loaded.
+	useEffect(() => {
+		if (!liveTerminalStatuses.has(liveStatus)) {
+			return;
+		}
+		invalidate(queryClient, transcriptionQueryIds.session).catch(() => undefined);
+		invalidate(queryClient, transcriptionQueryIds.sessions).catch(() => undefined);
+	}, [liveStatus, queryClient]);
 
 	return (
 		<PageShell data-testid="transcription-session-page">
@@ -112,8 +172,30 @@ export function TranscriptionSessionPage({ sessionId }: TranscriptionSessionPage
 						/>
 					)}
 
+					{isLive && captureRequest !== null ? (
+						<CaptureControls
+							sourceKind={sourceKind}
+							state={capture.state}
+							error={capture.error}
+							replayStalled={capture.replayStalled}
+							connected={capture.connected}
+							subscribeFailed={capture.subscribeFailed}
+							elapsedMs={(liveView?.committed ?? []).reduce((latest, segment) => Math.max(latest, segment.endMs), 0)}
+							// R39a: start is called straight out of the click, with nothing awaited in between, or the browser
+							// refuses to open the screen-share picker.
+							onStart={() => {
+								capture.start(captureRequest).catch(() => undefined);
+							}}
+							onStop={() => {
+								capture.stop().catch(() => undefined);
+							}}
+						/>
+					) : null}
+
 					<SectionCard title={t("pages.transcription.session.transcript")} gap="sm">
-						{detail.segments.length === 0 ? (
+						{isLive ? (
+							<LiveTranscriptPanel view={liveView} />
+						) : detail.segments.length === 0 ? (
 							<EmptyState message={t("pages.transcription.session.noSegments")} data-testid="transcription-session-empty" />
 						) : (
 							<TranscriptSegmentList segments={detail.segments} />

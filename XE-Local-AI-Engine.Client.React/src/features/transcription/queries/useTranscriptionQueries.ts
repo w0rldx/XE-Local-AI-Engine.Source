@@ -9,6 +9,7 @@ import {
 	getTranscriptionSessionOptions,
 	listTranscriptionModelsOptions,
 	listTranscriptionSessionsOptions,
+	startLiveTranscriptionSessionMutation,
 } from "@/core/api/generated/@tanstack/react-query.gen";
 import type { XeLocalAiEngineClientEndpointsTranscriptionV1CreateTranscriptionSessionRequest as CreateTranscriptionSessionRequest } from "@/core/api/generated";
 import { withResponseValidation } from "@/core/api/ResponseValidation";
@@ -55,23 +56,40 @@ export function useTranscriptionSessions(limit = 50, offset = 0) {
 	});
 }
 
-// One session with its committed segments. A session that is still Transcribing polls, because there is no
-// transcription hub until S3 — delete the refetchInterval when the hub lands (K-16).
+// One session with its committed segments. A LIVE session never polls: the transcription hub pushes every committed
+// segment and the terminal status, and the session view invalidates this query when a terminal status arrives, so a
+// poll would re-read and re-decrypt a whole transcript every two seconds beside a socket that already delivered each
+// row once. A FILE session has no hub subscription and the batch writer publishes nothing, so a row another tab is
+// transcribing is only observable by re-reading it; that one case keeps the two-second poll.
 export function useTranscriptionSession(sessionId: string) {
 	return useQuery({
 		...withResponseValidation(getTranscriptionSessionOptions({ path: { sessionId } })),
 		select: toTranscriptionSessionDetailView,
 		enabled: sessionId.length > 0,
 		staleTime: 0,
+		// `query.state.data` is the RAW response (select runs per observer), so the condition reads the wire shape.
 		refetchInterval: (query) => {
-			// A failed refetch leaves the LAST SUCCESSFUL data in place, so a session deleted from another tab keeps
-			// reporting Transcribing and the poll would hammer a 404 for as long as the page stayed open. The query's
-			// own status is the only thing that knows the last attempt failed.
-			if (query.state.status === "error") {
-				return false;
-			}
-			// `query.state.data` is the RAW wire shape, not the selected view — `select` runs per observer.
-			return query.state.data?.session.status === "Transcribing" ? 2_000 : false;
+			const session = query.state.data?.session;
+			return session?.status === "Transcribing" && session.sourceKind === "File" ? 2_000 : false;
+		},
+	});
+}
+
+// Opens the live session on the node: after this returns the hub accepts `PushAudioFrame` for this row. Idempotent, so
+// a retried start is safe; it answers 400 for a File session, 404 for an unknown one and 409 once the session is
+// terminal. The row moved Created → Transcribing, so the detail and the list are refetched once for the badge; the hub,
+// not a poll, reports everything after that.
+export function useStartLiveTranscriptionSession() {
+	const queryClient = useQueryClient();
+
+	return useMutation({
+		mutationFn: async (sessionId: string) => {
+			const options = withResponseValidation(startLiveTranscriptionSessionMutation());
+			return await options.mutationFn?.({ path: { sessionId } }, undefined as never);
+		},
+		onSuccess: async () => {
+			await invalidate(queryClient, transcriptionQueryIds.session);
+			await invalidate(queryClient, transcriptionQueryIds.sessions);
 		},
 	});
 }

@@ -1,10 +1,18 @@
 import { Badge, Group, Stack, Text } from "@mantine/core";
 import { useTranslation } from "react-i18next";
 
-import type { TranscriptSegmentView } from "@/features/transcription/models/TranscriptionModels";
+import type { TranscriptChannel, TranscriptSegmentView } from "@/features/transcription/models/TranscriptionModels";
 
 interface TranscriptSegmentListProps {
 	readonly segments: readonly TranscriptSegmentView[];
+}
+
+interface TranscriptSegmentRowProps {
+	readonly seq: number;
+	readonly startMs: number;
+	readonly endMs: number;
+	readonly text: string;
+	readonly channel: TranscriptChannel;
 }
 
 /**
@@ -28,25 +36,42 @@ function formatClipOffset(milliseconds: number): string {
  * "Mono" badge on every row would be noise.
  */
 export function TranscriptSegmentList({ segments }: TranscriptSegmentListProps) {
-	const { t } = useTranslation();
-
 	return (
 		<Stack gap="xs" data-testid="transcript-segment-list">
 			{segments.map((segment) => (
-				<Group key={segment.id} gap="sm" align="flex-start" wrap="nowrap" data-testid={`transcript-segment-${segment.seq}`}>
-					<Text size="xs" c="dimmed" ff="monospace" style={{ flex: "0 0 auto" }}>
-						{`${formatClipOffset(segment.startMs)} – ${formatClipOffset(segment.endMs)}`}
-					</Text>
-					{segment.channel === "Mono" ? null : (
-						<Badge size="sm" variant="light" data-testid={`transcript-segment-channel-${segment.seq}`}>
-							{t(`pages.transcription.channel.${segment.channel}`)}
-						</Badge>
-					)}
-					<Text size="sm" style={{ minWidth: 0 }}>
-						{segment.text}
-					</Text>
-				</Group>
+				<TranscriptSegmentRow
+					key={segment.id}
+					seq={segment.seq}
+					startMs={segment.startMs}
+					endMs={segment.endMs}
+					text={segment.text}
+					channel={segment.channel}
+				/>
 			))}
 		</Stack>
+	);
+}
+
+/**
+ * One committed row. Shared with the live panel, which has no row `id` to key by (a live row is identified by its
+ * sequence) and no persisted channel spelling — so the row takes the fields it renders rather than a REST view-model.
+ */
+export function TranscriptSegmentRow({ seq, startMs, endMs, text, channel }: TranscriptSegmentRowProps) {
+	const { t } = useTranslation();
+
+	return (
+		<Group gap="sm" align="flex-start" wrap="nowrap" data-testid={`transcript-segment-${seq}`}>
+			<Text size="xs" c="dimmed" ff="monospace" style={{ flex: "0 0 auto" }}>
+				{`${formatClipOffset(startMs)} – ${formatClipOffset(endMs)}`}
+			</Text>
+			{channel === "Mono" ? null : (
+				<Badge size="sm" variant="light" data-testid={`transcript-segment-channel-${seq}`}>
+					{t(`pages.transcription.channel.${channel}`)}
+				</Badge>
+			)}
+			<Text size="sm" style={{ minWidth: 0 }}>
+				{text}
+			</Text>
+		</Group>
 	);
 }

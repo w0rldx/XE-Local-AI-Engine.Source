@@ -53,6 +53,12 @@
     <Compile Include="..\XE-Local-AI-Engine.Tests\Testing\LoopbackPort.cs" Link="Testing\LoopbackPort.cs"/>
   </ItemGroup>
 
+  <!-- The live-capture E2E points Chromium's fake microphone at the repository's own speech fixture. A LINK,
+       matching the LoopbackPort.cs precedent above: one copy of the WAV in the repository. -->
+  <ItemGroup>
+    <Content Include="..\XE-Local-AI-Engine.Tests\Fixtures\Transcription\jfk.wav" Link="Fixtures\jfk.wav" CopyToOutputDirectory="PreserveNewest"/>
+  </ItemGroup>
+
   <ItemGroup>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Enums"/>
     <Using Include="XE_Local_AI_Engine.AI.Contracts.Events"/>
