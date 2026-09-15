@@ -1,8 +1,8 @@
 # Data Model & Persistence
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
-The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration timeline.
+The node persists chat, agent, scheduler, model-fit and identity state in local **SQLite** through Entity Framework Core, living in the `XE-Local-AI-Engine.Client.Persistence` project. There are **two** DbContexts (`NodeChatDbContext` and `NodeIdentityDbContext`), a forward-only migration history, and a **per-column AES-256-GCM AEAD** scheme that encrypts privacy-sensitive payloads (conversation titles, message content, agent instructions, golden conversations, …) before they hit disk. This page is the maintainer reference for the schema, the encryption seams, and the migration history.
 
 > **Important correction to common assumptions:** there is **no SQLCipher / no full-database `PRAGMA key` encryption** in this codebase. At-rest secrecy is achieved by encrypting **individual columns** (stored as `BLOB`) via the `NodeEncryptionSaveChangesInterceptor` + `NodePayloadProtector`. Likewise, **cloud-provider credentials are NOT stored in SQLite** — they live in a separate ASP.NET Core DataProtection-encrypted file (`cloud-credentials.enc`) owned by `CloudCredentialStore` (see [Security & Privacy](12-security-and-privacy.md)).
 
@@ -23,7 +23,7 @@ XE-Local-AI-Engine.Client.Persistence/
 ├── Configurations/                    # IEntityTypeConfiguration per entity (table/column/index mapping)
 ├── Implementation/                    # store classes (the persistence boundary the app calls)
 ├── Stores/                            # store interfaces
-└── Migrations/                        # 53 implementations + 2 model snapshots (+ per-migration .Designer.cs)
+└── Migrations/                        # both contexts' migrations + 2 model snapshots (+ per-migration .Designer.cs)
 ```
 
 The key-holder **implementation** that actually derives the key (`NodeSqliteKeyHolder`) lives one project up in `XE-Local-AI-Engine.Client.Application/Services/Persistence/Implementation/NodeSqliteKeyHolder.cs`; the Persistence project only owns the `INodeSqliteKeyHolder` contract and a zero-key null object. This keeps the operator-secret dependency out of the schema project.
@@ -151,90 +151,34 @@ Adaptive agent memory was added by migration `20260622215652_AddAdaptiveAgentMem
 
 Application code never touches `DbSet`s directly — it calls **store** classes in `Implementation/` behind interfaces in `Stores/` (e.g. `AgentDefinitionStore`, `GoldenConversationStore`, `ModelProviderMapStore`, `ScheduledJobRunStore`, and the newer `InferenceProfileStore`/`IInferenceProfileStore` for launch profiles). The chat upload store is the one exception that lives **above** the schema project: `ConversationUploadedFileStore` (`Client.Application/Services/DocumentIngestion/`) owns both the DB row and the encrypted on-disk blobs, so it sits in the application layer rather than `Persistence/Implementation/`. Read queries use `AsNoTracking()` (e.g. `ModelProviderMapStore.GetProviderForModelAsync`) and flow `CancellationToken` to every EF async call. This is the one-way dependency the schema project enforces: callers depend on store contracts, not on EF or on entity internals (most `DbSet`s are `internal`).
 
-## Migration timeline (forward-only)
+## Migrations and schema milestones (forward-only)
 
-Migrations live in `Migrations/` and upgrade the existing SQLite schemas in place. New schema should prefer additive tables/columns with safe defaults, but the history also contains data-repair SQL and removal of obsolete schema (`DropApprovedUtilityImages`). Migrations are not automatically reversed when an older binary starts, so rollback depends on a separately captured compatible data-directory backup or continued use of the newer binary. The repository does not define a backup schedule, retention period, restore guarantee, RTO, or RPO. Each timestamped migration has a `.Designer.cs`; the two contexts keep separate snapshots (`NodeChatDbContextModelSnapshot.cs`, `NodeIdentityDbContextModelSnapshot.cs`, EF product version `10.0.9`).
+Migrations live in `Migrations/` and upgrade the existing SQLite schemas in place. New schema should prefer additive tables/columns with safe defaults, but the history also contains data-repair SQL and removal of obsolete schema (`DropApprovedUtilityImages`). Migrations are not automatically reversed when an older binary starts, so rollback depends on a separately captured compatible data-directory backup or continued use of the newer binary. The repository does not define a backup schedule, retention period, restore guarantee, RTO, or RPO. Each timestamped migration has a `.Designer.cs`; the two contexts keep separate snapshots (`NodeChatDbContextModelSnapshot.cs`, `NodeIdentityDbContextModelSnapshot.cs`, EF product version `10.0.11`).
 
-> A few early migrations carry **no timestamp prefix** (`InitialNodeChatSchema`, `AddNodeMessageLifecycleColumns`) — these are the original chat-schema migrations that predate the timestamped naming; they coexist with the timestamped set in the same folder.
+> Two early migrations carry **no timestamp prefix** (`InitialNodeChatSchema`, `AddNodeMessageLifecycleColumns`) — the original chat-schema migrations that predate the timestamped naming; they coexist with the timestamped set in the same folder. Every other file is timestamped.
 
-| Migration | What it added |
+**The ordered, complete list is the folder itself** — `ls XE-Local-AI-Engine.Client.Persistence/Migrations/*.cs`, excluding `.Designer.cs` and `*ModelSnapshot.cs`. This page lists only the structurally important ones, the migrations a maintainer needs to recognise when reading the schema:
+
+| Milestone | Why it matters |
 |---|---|
-| `InitialNodeChatSchema` | Initial chat tables (conversations, messages, tool events, tombstones) |
-| `AddNodeMessageLifecycleColumns` | Message lifecycle/status columns |
-| `20260525075351_InitialNodeIdentitySchema` | **NodeIdentity** context: users + refresh tokens (own history table) |
-| `20260526115619_AddNodeChatOrigin` | `NodeChatOrigin` on conversations/messages |
-| `20260526122101_AddNodeConversationPinArchive` | Conversation pin + archive flags |
-| `20260527010918_AddNodeChatBranchVariantFeedback` | Message branch/variant tree + feedback |
-| `20260528101854_AddNodeConversationSelectedPath` | Selected-branch path on conversation |
-| `20260529173005_AddNodeSelectedFolders` | `NodeSelectedFolder` (encrypted host path) |
-| `20260530050246_AddAgentDefinitions` | `AgentDefinition` (encrypted instructions/description) |
-| `20260530080425_AddMcpServers` | `McpServerRegistration` |
-| `20260531061240_AddPlaybookActions` | `PlaybookAction` |
-| `20260531082914_AddPlaybookActionAnalysisColumns` | Analysis-staging columns on playbook actions |
-| `20260531105623_AddPlaybookEvalAndGoldenConversations` | Eval gate + `GoldenConversation` (encrypted) |
-| `20260531133736_AddPlaybookActionEnabledAtUtc` | `enabled_at_utc` (eval-passed → enabled) |
-| `20260601085538_AddGoldenConversationHarvestProvenance` | Harvest provenance/source on golden conversations |
-| `20260601195214_AddSchedulerTables` | Scheduler definition/run/run-event tables |
-| `20260602002831_AddModelClassifications` | `ModelClassification` (persisted `ModelKind`) |
-| `20260602105529_AddModelFitTables` | Model-fit snapshot/recommendation/benchmark plus the legacy utility-image allow-list later removed by `DropApprovedUtilityImages` |
-| `20260602195614_AddAgentDefinitionSeedProvenance` | `seed_slug` + source for the agency seed pack |
-| `20260606045854_AddAgentSkills` | `AgentSkill` (encrypted description + body) |
-| `20260606151544_AddCanvasWorkflows` | `CanvasWorkflow` (encrypted graph JSON) — the Open Canvas table, later removed by `DropCanvasWorkflows` |
-| `20260608093959_AddMessageAgentDefinitionId` | Per-message agent attribution |
-| `20260610165152_EncryptConversationTitle` | Migrate conversation `title` → encrypted BLOB (backfill from first message) |
-| `20260617222625_AddModelProviderMap` | `model_provider_map` (NOCASE PK; unencrypted) — runtime re-arch routing |
-| `20260622215652_AddAdaptiveAgentMemory` | Memory flags/scope, retention/extraction metadata, and `agent_execution_logs` |
-| `20260624184036_AddTutorialState` | **NodeIdentity** context: `tutorial_state` column on `AspNetUsers` (onboarding-tour progress) |
-| `20260626104651_AddConversationUploadedFiles` | `conversation_uploaded_files` (chat upload attachments; encrypted display name, cascade FK) |
-| `20260626234754_AddInferenceProfilesAndBenchmarkMetrics` | `inference_profiles` table (per-machine launch profiles) + benchmark metric columns on the model-fit snapshot (`pp_tokens_per_second`, `tool_loop_ms`, `cache_hit_rate`, `vram_load_bytes`, `vram_after_bytes`, …) |
-| `20260701175538_AddKnowledgeBaseTables` | Knowledge-base / RAG tables: `knowledge_documents`, `knowledge_document_sections`, `knowledge_document_chunks`, `knowledge_chunk_vectors` (encrypted document store + chunk embedding vectors) |
-| `20260701191341_AddImageRuntimeTables` | Local image-runtime tables: `image_jobs`, `image_model_profiles`, `generated_images` |
-| `20260710163634_AddAgentDefinitionBaseScaffoldOptOut` | `disable_base_scaffold` flag on `agent_definitions` (per-agent opt-out of the base scaffold prompt) |
-| `20260711002326_AddBenchmarkProfileRevisionBinding` | Bind `model_fit_benchmarks` to an inference-profile revision: `profile_id` (+ index) plus captured launch flags (`flash_attn`, `kv_type_v`) |
-| `20260713170221_RepairAndUniqueMessageSequence` | Repair duplicate/gapped message sequences (data SQL) + a **unique** index on `messages (conversation_id, sequence)` enforcing one message per ordinal per conversation |
-| `20260713204544_AddChatMaintenanceState` | `chat_maintenance_state` (unencrypted key/value durable flags for one-shot DB maintenance; see the content-encryption reclamation marker below) |
-| `20260714144229_AddAgentRunEnvelopeColumns` | Run-envelope columns on `agent_execution_logs` (`record_kind`, `schema_version`, `invocation_id`, `request_id`, `terminal_status`, `trace_id`, `content_chunk_count`, `reasoning_chunk_count`) — the durable per-invocation run envelope shares the table with adaptive-memory diagnostics, discriminated by `record_kind` |
-| `20260714161306_AddRunEnvelopeDurabilityColumns` | Envelope durability columns (`reasoning_tokens`, `started_at_utc`, `total_tokens`) + a **unique filtered** index `ix_agent_execution_logs_envelope_message_id` on `message_id` (`WHERE record_kind = 1`), so there is at most one envelope row per assistant message |
-| `20260718023348_DropApprovedUtilityImages` | Removes the obsolete container utility-image allow-list table after model recommendation moved fully in-process |
-| `20260718143054_AddAgentExecutionLogProvider` | Adds provider attribution to agent execution logs |
-| `20260721191435_AddDevelopmentModeFoundation` | Adds development-mode project/run/review persistence |
-| `20260722192133_BindDevelopmentProjectsToSelectedFolders` | Binds development projects to trusted selected-folder records |
-| `20260726192021_AddLaunchPolicyFingerprintAndBenchmarkResources` | Adds launch-policy fingerprinting and measured benchmark resource fields used to detect stale inference evidence |
-| `20260726203016_AddKnowledgeVectorIdentity` | Canonical knowledge vector identity (`resolved model + transform/version + width`) on documents/vectors; all pre-existing projections are explicitly tagged `legacy:unversioned` so they remain source-preserved but stale until reindexed |
-| `20260728184839_AddDevelopmentCommandProfile` | Snapshots the code-owned Development command profile on each project and binds artifacts to its digest |
-| `20260728200837_AddDevelopmentAttemptCommandProfile` | Captures the effective command-profile snapshot/digest on each Development attempt |
-| `20260728202003_AddDevelopmentTemplates` | Adds reusable Development templates and their materialization records |
-| `20260803153806_AddMcpServerApiKey` | Adds the singleton inbound-MCP bearer credential record |
-| `20260803163513_HashMcpServerApiKey` | Replaces stored inbound-MCP key material with hash/fingerprint fields |
-| `20260804215531_AddConversationCompactionSummary` | Adds encrypted conversation compaction summary + covered-sequence/update metadata |
-| `20260804220941_AddAgentSkillImportProvenance` | Adds skill import provenance/frontmatter and encrypted `agent_skill_resources` |
-| `20260806181000_AddMcpAgentRunLedger` | Adds durable inbound-MCP agent runs plus singleton accounting/quota ledger |
-| `20260806201500_AddSelectedFolderRevocation` | Adds selected-folder revocation and makes alias uniqueness apply only to live registrations |
-| `20260807130219_AddSlashCommands` | Adds operator-authored slash commands with encrypted description/configuration |
-| `20260807193324_AddCustomTools` | Adds the Custom Tools library with encrypted description/configuration and case-insensitive unique names |
-| `20260811160811_AddLocalModelProxyApiKey` | Adds the singleton inbound model-proxy bearer credential (`local_model_proxy_api_keys`) |
-| `20260811161453_AddModelLaunchArguments` | Adds per-model custom llama.cpp launch arguments |
-| `20260813121930_AddKnowledgeCollectionsAndProvenance` | Adds knowledge collection namespaces plus source/page/offset/content-kind/language/symbol provenance; rebuilds `chunk_fts` with weighted source-path, heading, symbol, and content fields |
-| `20260814090000_AddModelProviderMapRevision` | Adds `model_provider_map.revision`, the token the installed-model deletion compare-and-swap reads |
-| `20260814091525_AddBenchmarks` | Adds benchmark projects, runs and the single-consumer benchmark work queue |
-| `20260815002954_AddGenerationMetadata` | Adds `generation_metadata_json` to `agent_definitions` and `agent_skills` (AI-assisted drafting provenance) |
-| `20260815005024_AddTraining` | Adds training dataset definitions, datasets, samples, tool mocks and the dataset-generation work queue |
-| `20260815031430_AddTrainingRuns` | Adds base artifacts, training runs, training artifacts and the training work queue |
-| `20260815034444_AddTrainedModelOrigin` | Widens the `benchmark_runs` model-origin CHECK constraint to admit a trained model |
-| `20260815052532_AddTrainingEvaluation` | Adds evaluation runs and comparison reports |
-| `20260815171537_AddTrainingDatasetDefinitionSnapshot` | Adds `training_datasets.definition_json`, the pinned copy of the definition body a dataset was generated from |
-| `20260816174029_AddBenchmarkRunLaunchReceipts` | Adds the benchmark run's launch/environment receipt columns |
-| `AddIntegrationFoundation` | Adds the five external-integration tables (`integration_triggers`, `integration_api_keys`, `integration_sessions`, `integration_executions`, `integration_execution_events`) plus `conversations.kind`, whose backfill stamps `work-session` on every conversation an `agent_work_sessions` row owns |
-| `20260904145855_AddGraphWorkflows` | The four [Graph Workflows](21-graph-workflows.md) tables: `graph_workflow_definitions`, `graph_workflow_runs`, `graph_workflow_node_runs`, `graph_workflow_run_events` |
-| `20260904190259_AddModelReadinessTelemetry` | Adds `model_readiness_ms` to `agent_execution_logs` and `dev_workflow_node_runs` — how much of a turn was a local runtime warming |
-| `20260904234758_AddVramAtLoadTelemetry` | Adds `vram_free_at_load_bytes` and `vram_admitted_bytes` to `dev_workflow_node_runs` — what the box had free, and what admission reserved, at the serving model's last load |
-| `DropCanvasWorkflows` | Removes `canvas_workflows` with the Open Canvas feature. **Ordering is load-bearing**: the node reads and decrypts every canvas *before* migrations run and writes the converted Graph Workflow definitions *after*, because a migration has no node key and cannot decrypt the blob — see [Graph Workflows §9](21-graph-workflows.md#9-the-open-canvas-import) |
-| `20260913005440_AddTranscriptionSessions` | The two [Audio Transcription](24-audio-transcription.md) tables: `transcription_sessions` and `transcript_segments`, with the unique `ux_transcript_segments_session_seq` index and a cascade FK between them |
-
-The table above is a timeline, not an inventory — `ls Migrations/*.cs` (excluding `.Designer.cs` and
-`*ModelSnapshot.cs`) is the count that is true today, and the two contexts share the folder while
-keeping **2 model snapshots**. All but two files are timestamped; `InitialNodeChatSchema` and
-`AddNodeMessageLifecycleColumns` are the untimestamped originals noted above.
+| `InitialNodeChatSchema`, `AddNodeMessageLifecycleColumns` | The chat core: conversations, messages, tool events, tombstones, plus the message lifecycle/status columns |
+| `20260525075351_InitialNodeIdentitySchema` | The **second** context — users and refresh tokens, with its own history table (`__EFMigrationsHistory_Identity`, `NodeIdentityDbContext.IdentityMigrationsHistoryTable`) |
+| `20260530050246_AddAgentDefinitions` | The agent stack's foundation (encrypted instructions/description); `AddPlaybookActions`, `AddPlaybookEvalAndGoldenConversations`, `AddAgentSkills`, `AddAdaptiveAgentMemory` and `20260824151335_AddAgentWorkSessions` build on it |
+| `20260601195214_AddSchedulerTables` | Scheduler definitions, runs and run events |
+| `20260610165152_EncryptConversationTitle` | The one migration that turns a plaintext column into ciphertext, with the AAD quirk described below |
+| `20260617222625_AddModelProviderMap` | The unencrypted `NOCASE` routing table the runtime re-architecture introduced; `AddModelProviderMapRevision` later adds the compare-and-swap token that installed-model deletion reads |
+| `20260701175538_AddKnowledgeBaseTables` | [Knowledge Base / RAG](15-knowledge-base.md): documents, sections, chunks and chunk vectors. `AddKnowledgeVectorIdentity` then makes the embedding projection versioned (pre-existing rows are tagged `legacy:unversioned`), and `AddKnowledgeCollectionsAndProvenance` adds collections and rebuilds `chunk_fts` |
+| `20260701191341_AddImageRuntimeTables` | [Image Generation](14-image-generation.md): `image_jobs`, `image_model_profiles`, `generated_images` |
+| `20260714144229_AddAgentRunEnvelopeColumns` | The durable per-invocation run envelope, which **shares** `agent_execution_logs` behind a `record_kind` discriminator — see the mechanics note below before writing any query against that table |
+| `20260721191435_AddDevelopmentModeFoundation` | Development Mode project/attempt/review persistence; five more follow it (`BindDevelopmentProjectsToSelectedFolders`, `AddDevelopmentCommandProfile`, `AddDevelopmentAttemptCommandProfile`, `AddDevelopmentTemplates`, `20260830160604_WidenDevelopmentTasksPerProject`) |
+| `20260803153806_AddMcpServerApiKey` | The singleton inbound-MCP credential. Its security shape arrives over three more migrations: `HashMcpServerApiKey` (hash + fingerprint instead of key material), `20260822013858_AddMcpServerApiKeyScope` and `20260825150223_AddMcpServerTrustTier` |
+| `20260814091525_AddBenchmarks` | [Benchmarks](20-benchmarks.md): projects, runs and the single-consumer work queue; `AddBenchmarkRunLaunchReceipts` adds the launch/environment receipt that makes a run's evidence checkable |
+| `20260815005024_AddTraining` | [Training](18-training.md): dataset definitions, datasets, samples, tool mocks and the generation queue; `AddTrainingRuns` and `AddTrainingEvaluation` add runs, artifacts and evaluation |
+| `20260828102539_AddDevWorkflowFoundation` | Dev Workflows (see [the divergence register](22-workflow-engines-divergence-register.md)); `AddDevWorkflowRuleSets` adds the encrypted rule-set documents |
+| `20260903104044_AddIntegrationFoundation` | The five external-integration tables plus `conversations.kind`, whose backfill stamps `work-session` on every conversation an `agent_work_sessions` row owns |
+| `20260904145855_AddGraphWorkflows` + `20260907085114_DropCanvasWorkflows` | The four [Graph Workflows](21-graph-workflows.md) tables, then the removal of `canvas_workflows`. **Ordering is load-bearing**: the node reads and decrypts every canvas *before* migrations run and writes the converted definitions *after*, because a migration has no node key and cannot decrypt the blob — see [Graph Workflows §9](21-graph-workflows.md#9-the-open-canvas-import) |
+| `20260910230421_AddExternalApps` | [External Apps](23-external-apps.md) instances and events; `AddExternalAppBridgeToken` adds the per-instance bridge credential |
+| `20260913005440_AddTranscriptionSessions` | The two [Audio Transcription](24-audio-transcription.md) tables — `transcription_sessions` and `transcript_segments` — with the unique `ux_transcript_segments_session_seq` index and a cascade FK between them |
 
 ### Notable migration mechanics
 

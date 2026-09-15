@@ -22,4 +22,6 @@ effectiveness, compliance, certification, formal risk acceptance, or continued p
 | [0012 — Local audio transcription runs on a supervised whisper.cpp daemon, captures in the browser, and never persists audio](0012-audio-transcription-runtime-and-capture.md) | **Accepted** | whisper.cpp is a third independent supervised runtime; capture is browser-first with Windows per-application capture as a later slice; speakers are attributed by channel (You/Others), never clustered; the Linux CUDA lane is a managed source build; and audio is never written to the database, enforced by an architecture test, a single-owner temp slot and a streaming upload. |
 
 For the baseline technical/security narrative and its explicit evidence limitations, see the
-[Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md).
+[Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md). For
+what the execution substrate behind ADR 0004 and ADR 0007 actually enforces today, and what it still
+does not, see the [sandbox threat model](../security/sandbox-threat-model.md).

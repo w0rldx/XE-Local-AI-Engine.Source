@@ -53,23 +53,171 @@ release model and the gates that replaced it. No local release tag lacks a teste
 
 From `1.0.0-rc.1` onward, releases are cut by the CI release workflow and published on
 `w0rldx/XE-Local-AI-Engine.Source` itself. The tester repository plays no part in this line, so the table above stops
-at `0.1.0-rc.5.1` and does not grow. Verified 2026-08-23 against
+at `0.1.0-rc.5.1` and does not grow. Verified 2026-09-15 against
 `gh release view --repo w0rldx/XE-Local-AI-Engine.Source`:
 
 | Version | Source tag | Source commit | Published (UTC) |
 |---|---|---|---|
 | 1.0.0-rc.1 | `v1.0.0-rc.1` | `ecc18fae` | 2026-08-09 20:06 |
+| 1.0.0-rc.2 | `v1.0.0-rc.2` | `66ade544` | 2026-08-24 07:30 |
 
-Published as a GitHub **pre-release** carrying `XE-Local-AI-Engine-win-Portable.zip`, `XE-Local-AI-Engine.AppImage`,
-both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`, `RELEASE-MANIFEST.json` and `RELEASE.spdx.json`
-evidence.
+Both were published as GitHub **pre-releases** carrying `XE-Local-AI-Engine-win-Portable.zip`,
+`XE-Local-AI-Engine.AppImage`, both Velopack `.nupkg` feeds, and the detached `CHECKSUMS.sha256`,
+`RELEASE-MANIFEST.json` and `RELEASE.spdx.json` evidence.
 
 ## [Unreleased]
 
-**Pending release: `1.0.0-rc.2`.** The source release identity is already `1.0.0-rc.2`, composed in
-`eng/ReleaseVersion.props`; everything in this section is what that candidate will carry. Nothing is tagged or
-published yet, so this section is still a draft — it becomes `## [1.0.0-rc.2] — <publish date>` when the release is
-cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is not reused.
+Work on `develop` since `v1.0.0-rc.2`: 1,283 commits through 2026-09-15. Nothing in this section is tagged or
+published.
+
+> The source version identity in `eng/ReleaseVersion.props` still reads `1.0.0-rc.2` — the version that has already
+> shipped. It is bumped when the next release is cut, at which point this section takes that version's heading.
+
+### Added
+
+- **Dev Workflows** — a development task is described as a graph and executed by the node. Agent, tool, dev-task,
+  validation and apply nodes; a decomposition that grows a run into the work it finds; an operator gate in front of
+  anything that writes; and scoped rule sets whose text reaches the coder and the reviewer. Runs are durable and
+  encrypted, survive the engine dying under them, stream over a SignalR hub, and record per-node cost, the route
+  taken and a failure class from a closed vocabulary. An agentic MCP client can observe a run without moving it. The
+  module ships **off by default** (`DevWorkflows:Enabled`).
+- **Graph Workflows** — draw a workflow as a diagram and run it. Nodes are agent turns, built-in read-only tool
+  calls, conditions, fan-out and fan-in, an approval step that waits for a person, and a start and an end; edges
+  carry a single declarative comparison against the previous node's output. A run pins its own copy of the graph, so
+  editing a workflow never rewrites history, and it is executed from the database — a run survives closing the
+  browser and survives restarting the app. The run view draws the pinned graph, live progress arrives over a SignalR
+  hub, and every run keeps an append-only event log you can read after the fact. A tool step may only call a
+  built-in, read-only tool that needs no approval; the check runs both when the workflow is saved and again when a
+  run starts, so a tool that stopped being read-only stops running. The editor shows the server's validation
+  warnings — a node reachable only through a Pause, a response schema carrying constraints the runtime drops —
+  without blocking Save. Graph Workflows ship **on by default**.
+- **Agent Work Sessions** — a long-running agent task is a durable session rather than a chat turn: a step loop over
+  a persisted work plan, checkpoint summaries, encrypted artifacts, two seeded personas, park-and-resume bounds
+  validated at startup, and its own pages and notification hub. Every step records what it consumed. A workflow run
+  can own a session, and only the owning run may drive it.
+- **External integrations** — an outside caller can trigger a saved agent over an API-key-authenticated surface,
+  follow the execution as Server-Sent Events, replay persisted events, and continue caller-managed sessions across
+  turns with an `emit_output` built-in tool and a compaction bound. Invocations are deduplicated and hard-bounded at
+  admission; executions, sessions and keys are listed, paged and cancellable from the UI. ADR 0008.
+- **External Apps** — install and run curated containerised applications on an engine-owned Docker runtime. A
+  fail-closed manifest catalog with remote refresh and a persisted last-good cache; digest-pinned, loopback-only
+  containers with no GPU and no user override; the full install / start / stop / restart / reset / uninstall /
+  update lifecycle with held ports, a boot reconciler and content-free failure translation; permission diffs and
+  secret-masked variables in the install dialog; and a live hub. A separate engine-owned **container bridge** lets
+  an application container reach this node's local model server without exposing it, and an app whose installed
+  manifest needs a bridge this node did not open is refused at admission. ADR 0010 and ADR 0011.
+- **Audio transcription** — a whisper.cpp runtime with its own model catalogue and a managed CUDA build lane;
+  encrypted transcription sessions and batch file transcription with their own SPA feature area; a live segmenter,
+  session registry and transcription hub; and browser microphone capture driving a live session UI. ADR 0012.
+- **A sandboxed `run_python` compute tool**, off by default, running inside a new **bubblewrap-isolated launch
+  mode**: fd-bound mounts, a per-sandbox jail disk cap, a scope kill authority, and isolation helper binaries
+  resolved through a root-owned trust rule. Roles now declare requirements and a backend is *selected* rather than
+  named, each role's served isolation posture is reported to the operator, egress denial is a per-node requirement,
+  and Development Mode containers gain a pinned and verified seccomp profile plus a sweeper for containers a
+  previous run leaked. ADR 0007.
+- **External OpenAI-compatible providers** — register an arbitrary OpenAI-compatible endpoint as a model source.
+  Models carry a namespaced id, are gated everywhere by their declared trust, are kept out of the local lists with
+  their own picker sections, and report whether they honour a graded reasoning effort (a model that ignores it is
+  offered binary reasoning instead). Connections have a probe endpoint and a settings page, and training never runs
+  against an external model.
+- **Reasoning control** — a per-request thinking budget, sized against the room the prompt leaves, clamped to the
+  launched context window, and skipped where llama.cpp cannot enforce it. Alongside it an **`auto` reasoning
+  effort** that dispatches per turn through a deterministic tier selector, with a designated fast model behind
+  locality, capacity and liveness gates and a visible notice on the turn it changed.
+- **Tool-relevance filtering** — the tools offered to a turn are ranked node-side by embeddings, degrading to a
+  lexical selector on its own timeout, with `list_tools` kept above the threshold as the escape hatch and a
+  `ToolsFiltered` notice on the turn. Exposed as a live node setting with a per-agent opt-out.
+- **Benchmark suites and statistics** — quant fidelity measured with `llama-perplexity` against a shipped corpus and
+  an operator-chosen KLD base; pairwise cohort judging ranked through one fit with intervals and the verdicts behind
+  them; task-item suites that freeze one run per item, stamp the cell it belongs to, and compare two to six cells
+  with a paired-difference bootstrap over the items they share; rubric criteria that say how they are decided, so a
+  verifiable one is judged without spawning a model; a code-execution preset scored on a two-process harness; a
+  seeded single-needle long-context generator; charts beside the runs table; and a benchmark matrix that can run on
+  a schedule.
+- **External access profiles** — a node decides its outbound posture before anything reaches the network, and that
+  decision parks the application-update, runtime-update and first-run model-provisioning services until it is made.
+  The chat streaming indicator now ticks model-load elapsed time from the server's own timestamp and survives a
+  reload.
+- **MCP server trust tiers** — every configured MCP server is classified by how much of this node it is trusted
+  with, and a sandboxed stdio server runs inside the isolation substrate under host-toolchain ceilings rather than
+  on the host. The tool catalog also reports each tool's unattended behaviour, so `ask_user` is no longer counted as
+  failing an unattended run.
+- **Development Mode projects carry more than one task.** An attempt says why it was sent back, validation fails
+  when an attempt changes a dependency manifest, the package cache is warmed from the base commit before the attempt
+  runs, committed credentials found in a repository are shadowed read-only, and the coder and reviewer prompts are
+  persisted as attempt artifacts with the gate verdict logged.
+- Local runtime: a node-settings **KV-cache type** knob folded into the launch-policy fingerprint with per-type
+  fallback keying; expert-offload placement emitted as `--cpu-moe` under a versioned launch identity and carried
+  into the frozen replay; the `draft-dflash` and `draft-dspark` speculative modes; and multi-head latent attention
+  KV lengths clamping the model-fit KV estimate.
+
+### Changed
+
+- Chat corrects its context window from the token usage a provider actually reports, and conversation compaction
+  bounds its summarizer folds with an output cap and a gated thinking switch, with synopsis fidelity and language
+  pinned in the prompt.
+- Endpoint error handling is centralized: 37 duplicated per-endpoint catch sites removed and the global handler
+  chain extended with typed handlers; Development gains typed exceptions and its own not-found and conflict handlers.
+  ADR 0009 records the three conflict-envelope body shapes now in force.
+- The Development Mode workspace guard is a rule rather than a list: a path is protected when its first segment
+  starts with a dot, unless it is one this repository tracks and expects contributors to change. Nothing in the
+  product, its gates or its instructions now behaves differently depending on which optional developer tooling a
+  contributor happens to have installed.
+- Documentation, scripts and test fixtures describe the maintainer's environment generically — what was measured,
+  never the machine it was measured on.
+- A UI unification and responsive pass across the app, followed by a React cleanup: dead dependencies dropped, the
+  largest pages decomposed behind unchanged export and prop contracts, and shared primitives — an inline error
+  alert, a label/value row, shared form fields — adopted across the tree.
+
+### Removed
+
+- **Open Canvas (the experimental "Preview → Open Canvas" workflow builder) has been removed**, and Graph Workflows
+  replaces it. The backend, the client and the `canvas_workflows` table are all gone.
+- **Your saved Open Canvas workflows are converted into Graph Workflows automatically, on the first start of this
+  build.** There is no button and no prompt: the app reads them, converts them, and then drops the old table in the
+  same start-up. **The conversion is one-shot and cannot be undone.**
+  - **Back up the application's data directory before you upgrade** if those workflows matter to you. The app takes
+    its own best-effort database snapshot immediately before migrating, but best-effort is exactly what it says, and
+    a copy you made yourself is the only guarantee.
+  - A workflow the new validator cannot accept is **still imported**, with `IMPORT NEEDS ATTENTION:` and the reason at
+    the front of its description. Nothing is thrown away for being invalid — but such a workflow **cannot be run until
+    you open it and fix what the editor points at**.
+  - Converted workflows arrive without saved node positions, so one opens neatly laid out and with unsaved changes.
+    That is expected; save it once and the layout sticks.
+  - Two changes are worth knowing about: a Debug node is removed and its two edges joined, since it only forwarded
+    what it was given; and an Open Canvas "Continue" step becomes an **Approve** step, because that is the faithful
+    translation of what it did.
+
+### Fixed
+
+- The welcome tour opened on top of the still-unanswered external-access chooser, because the onboarding provider
+  wrapped the whole router. It now mounts inside the app layout, whose guard admits only a node whose profile is
+  decided.
+- The KV-cache-type setting was inert: legacy un-keyed launch-fallback entries matched first and dropped the chosen
+  type before it reached `llama-server`.
+- A managed llama.cpp source build could be deleted although the installed-runtime record did not name it, and a
+  recorded source build that a mismatched request would have discarded is now served.
+- 206 frontend bundle strings had drifted or never existed, and hand-rolled test wrappers left i18n dead so no test
+  could see it. Initialization is now suite-wide and a lint gate checks the defaults; pane layout also breaks on the
+  container's width rather than the viewport's.
+- `fast-uri` is overridden to `>=3.1.6` (GHSA-5jgf-p345-68v8 and siblings), and a path-traversing `chat_template`
+  name is rejected before `save_pretrained` (CVE-2026-9856).
+
+### Internal
+
+- `scripts/run-backend-tests.sh` is now the one backend gate: one Release build, then the batched module and every
+  sibling project enrolled from the solution concurrently, each assembly-guarded at a pinned width, with a hollow-gate
+  guard and process-group cancellation. Persistence tests copy pre-migrated SQLite templates instead of replaying the
+  migration chain per test, unjustified serialization guards were dropped or narrowed, and the CI shard packer's
+  weights are re-measured from real runs.
+- Dependency waves across NuGet, the frontend runtime and development tooling, and the Python training extras, with
+  the reason for each pin-locked alert recorded.
+- ADRs 0007 through 0012 and new architecture pages for the modules above.
+
+## [1.0.0-rc.2] — 2026-08-24
+
+Tagged `v1.0.0-rc.2` at commit `66ade544637105041572c984e6f4acaf0ae93a3f` and published as a prerelease on
+`w0rldx/XE-Local-AI-Engine.Source` on 2026-08-24, carrying the same artifact and evidence set as `1.0.0-rc.1`.
 
 ### Added
 
@@ -103,14 +251,6 @@ cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is n
 - **Monaco-based code viewer** for code shown in the UI, replacing the previous plain rendering.
 - A configurable **local chat invocation timeout**, so a slow local model on a large prompt is no longer cut off by a
   fixed limit.
-- **Graph Workflows** — draw a workflow as a diagram and run it. Nodes are agent turns, built-in read-only tool calls,
-  conditions, fan-out and fan-in, an approval step that waits for a person, and a start and an end; edges carry a
-  single declarative comparison against the previous node's output. A run pins its own copy of the graph, so editing a
-  workflow never rewrites history, and it is executed from the database — a run survives closing the browser and
-  survives restarting the app. Live progress arrives over a SignalR hub, and every run keeps an append-only event log
-  you can read after the fact. A tool step may only call a built-in, read-only tool that needs no approval; the check
-  runs both when the workflow is saved and again when a run starts, so a tool that stopped being read-only stops
-  running.
 
 ### Changed
 
@@ -127,25 +267,6 @@ cut. The prior `v1.0.0-rc.1` tag remains bound to its own source commit and is n
   lifecycle, and a hand-written launch flag would silently bypass it.
 - The launch-policy fingerprint moved from 4 to 5, so every already-fitted model is re-fitted once on the first start
   after the update. No action is required; the re-fit is automatic and happens only once.
-
-### Removed
-
-- **Open Canvas (the experimental "Preview → Open Canvas" workflow builder) has been removed**, and Graph Workflows
-  replaces it.
-- **Your saved Open Canvas workflows are converted into Graph Workflows automatically, on the first start of this
-  build.** There is no button and no prompt: the app reads them, converts them, and then drops the old table in the
-  same start-up. **The conversion is one-shot and cannot be undone.**
-  - **Back up the application's data directory before you upgrade** if those workflows matter to you. The app takes
-    its own best-effort database snapshot immediately before migrating, but best-effort is exactly what it says, and
-    a copy you made yourself is the only guarantee.
-  - A workflow the new validator cannot accept is **still imported**, with `IMPORT NEEDS ATTENTION:` and the reason at
-    the front of its description. Nothing is thrown away for being invalid — but such a workflow **cannot be run until
-    you open it and fix what the editor points at**.
-  - Converted workflows arrive without saved node positions, so one opens neatly laid out and with unsaved changes.
-    That is expected; save it once and the layout sticks.
-  - Two changes are worth knowing about: a Debug node is removed and its two edges joined, since it only forwarded
-    what it was given; and an Open Canvas "Continue" step becomes an **Approve** step, because that is the faithful
-    translation of what it did.
 
 ### Fixed
 

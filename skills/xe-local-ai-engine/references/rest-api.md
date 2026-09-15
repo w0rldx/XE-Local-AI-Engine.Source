@@ -17,7 +17,7 @@ The POST body is optional for backward compatibility; no body mints `delegate`, 
 key row, so every mint rotates the credential and immediately invalidates the previous key.
 
 An MCP key is not an Operator JWT. An `agentic` credential is operator-equivalent only for its
-explicitly enumerated 23-tool inbound MCP surface; it does not authorize arbitrary REST calls.
+explicitly enumerated inbound MCP tool surface; it does not authorize arbitrary REST calls.
 
 The local API middleware enforces loopback peers and strict `Host`/`Origin` handling. Do not work
 around those controls, expose the listener on a routable address, log credentials, or place them in

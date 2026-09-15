@@ -16,9 +16,9 @@ skill directory.
 ## Choose the credential scope
 
 | scope | visible tools | trust |
-|---|---:|---|
-| `delegate` | 8 | Shared discovery and agent-run tools. Ordinary saved agents are tool-less; the seeded Coder keeps only its three read-only workspace tools. |
-| `agentic` | 23 | The same 8 tools plus 15 node-administration tools. Trusted operator-equivalent only for this enumerated MCP surface; not an Operator JWT or REST credential. |
+|---|---|---|
+| `delegate` | 8 shared tools | Shared discovery and agent-run tools. Ordinary saved agents are tool-less; the seeded Coder keeps only its three read-only workspace tools. |
+| `agentic` | the same 8 shared tools plus the node-administration tools listed in [MCP tools](mcp-tools.md) | Trusted operator-equivalent only for this enumerated MCP surface; not an Operator JWT or REST credential. |
 
 Mint from the stopped engine with `--mcp-key delegate` or `--mcp-key agentic`. Minting replaces the
 single existing key immediately. Capture the one `XE_MCP_KEY=` line; the plaintext cannot be read
@@ -174,7 +174,8 @@ the engine key is agentic; client-side confirmation policy remains an independen
 ## Trust and tunnels
 
 The `delegate` key exposes the eight shared tools in [MCP tools](mcp-tools.md). An `agentic` key
-exposes all 23 tools and is operator-equivalent only for that enumerated MCP surface; it is not an
+additionally exposes the administration tools enumerated there, and is operator-equivalent only for
+that enumerated MCP surface; it is not an
 Operator JWT and does not authorize the REST API. Approval-required root tools are auto-approved
 only after a strict metadata-only audit write. Arguments, prompts, tokens, passwords, full keys, and
 host paths are never audit payloads. Child agents remain curated and do not inherit agentic access.

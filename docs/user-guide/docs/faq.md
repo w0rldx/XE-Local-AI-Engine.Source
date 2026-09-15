@@ -280,7 +280,10 @@ runtimes and updates.
 - Try more specific wording; search combines keyword and meaning-based matching.
 
 ### Can it hear me / is there voice input?
-**No speech-to-text yet.** The app can read replies aloud, but it cannot listen. Not two-way voice chat.
+**Yes, as a separate feature.** **Preview → Transcription** turns speech into text locally with
+whisper.cpp — an uploaded recording, or a live microphone or shared-screen session. The audio itself is
+never stored. It is not two-way voice chat, though: reading replies aloud and transcribing speech are
+two features, not a spoken conversation. → [Audio transcription](features.md#audio-transcription)
 
 ### Is Development Mode safe to try?
 It runs commands (builds, tests, scripts) **as you, with your permissions**. The protections are

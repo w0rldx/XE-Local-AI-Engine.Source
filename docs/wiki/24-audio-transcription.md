@@ -61,7 +61,10 @@ Two entities, both `internal sealed record class`, both mapped in `Configuration
 
 `TranscriptionSourceKind` carries `File`, `Microphone`, `SystemAudio`, `MicrophoneAndSystem`, `Dictation` and
 `ApplicationProcess` from day one, and `TranscriptChannel` carries `Mono`, `You` and `Others`, because both are
-persisted as ints and adding a member later would be a schema change. Only `File` and `Mono` are reachable today.
+persisted as ints and adding a member later would be a schema change. `File` (batch upload) and the live capture kinds
+`Microphone`, `SystemAudio` and `MicrophoneAndSystem` are creatable from the SPA (`CaptureControls.tsx`); `Dictation` and
+`ApplicationProcess` are not creatable from any surface yet. `You` and `Others` label the two channels of a mixed
+session; single-source sessions carry `Mono`.
 
 **Encryption** goes through the same column path as chat: `NodeEncryptionSaveChangesInterceptor` encrypts on write and
 `NodeEncryptionMaterializationInterceptor` decrypts on materialization, with AAD bound to the column names

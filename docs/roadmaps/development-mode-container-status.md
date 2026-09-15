@@ -2,7 +2,7 @@
 
 - **Decision:** [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)
 - **Status authority:** this living page
-- **Last verified against the tree:** 2026-08-08
+- **Last verified against the tree:** 2026-09-15
 - **Overall state:** Implemented as an opt-in Development Mode provider; Docker is not the default.
 
 This is the living implementation-status companion to ADR 0004. The ADR records the accepted boundary and must not be updated as a progress log. Update this page when the shipped implementation state changes.

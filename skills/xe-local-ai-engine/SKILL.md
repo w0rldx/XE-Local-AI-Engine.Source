@@ -110,11 +110,12 @@ Authenticate the Streamable HTTP endpoint with `Authorization: Bearer <xemcp_...
 real key. Client-specific examples for Claude Code, Codex CLI, Cursor, VS Code/GitHub Copilot,
 OpenCode, and Gemini CLI are in [setup and connection reference](references/setup-and-connect.md).
 
-Mint `delegate` for the eight shared delegation tools, or `agentic` for all 23 tools (the eight
-shared tools plus 15 administration tools). The agentic credential is trusted operator-equivalent
-only for that enumerated inbound MCP surface: it is not an Operator JWT, grants no arbitrary REST
-access, and does not relax the loopback listener. It auto-approves approval-required tools for the
-root saved-agent run only after a strict metadata-only audit write; audit failure blocks invocation.
+Mint `delegate` for the eight shared delegation tools, or `agentic` for those eight plus the
+administration tools enumerated in [MCP tools](references/mcp-tools.md). The agentic credential is
+trusted operator-equivalent only for that enumerated inbound MCP surface: it is not an Operator JWT,
+grants no arbitrary REST access, and does not relax the loopback listener. It auto-approves
+approval-required tools for the root saved-agent run only after a strict metadata-only audit write;
+audit failure blocks invocation.
 Spawned children retain the ordinary curated tool surface and do not inherit this elevation.
 
 ## Delegate work well

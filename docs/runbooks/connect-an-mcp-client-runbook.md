@@ -16,9 +16,9 @@ The node persists one inbound key. Minting a new key rotates it immediately; the
 window and the plaintext is returned exactly once.
 
 | scope | tools visible | execution boundary |
-|---|---:|---|
-| `delegate` | 8 | Shared discovery and agent-run tools. Ordinary saved agents/bare models remain tool-less; the seeded Coder receives exactly three read-only workspace tools. |
-| `agentic` | 23 | The same 8 tools plus 15 administration tools. Trusted operator-equivalent only for this enumerated MCP surface, not an Operator JWT or arbitrary REST credential. |
+|---|---|---|
+| `delegate` | 8 shared tools | Shared discovery and agent-run tools. Ordinary saved agents/bare models remain tool-less; the seeded Coder receives exactly three read-only workspace tools. |
+| `agentic` | the same 8 shared tools plus the administration tools listed in the [tool reference](../../skills/xe-local-ai-engine/references/mcp-tools.md) | Trusted operator-equivalent only for this enumerated MCP surface, not an Operator JWT or arbitrary REST credential. |
 
 An agentic root run may resolve its saved agent's complete allowed-tool set. Approval-required calls
 are auto-approved only after a strict metadata-only audit write; failure to persist that audit blocks
@@ -227,7 +227,9 @@ Source: [official Gemini CLI MCP documentation](https://geminicli.com/docs/tools
 
 1. Reconnect or refresh the client's MCP catalog after rotation.
 2. With `delegate`, confirm exactly 8 tools and call `list_models` plus `list_agents`.
-3. With `agentic`, confirm exactly 23 tools and call `get_status`.
+3. With `agentic`, confirm the tool list matches
+   [`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md) (the 8 shared
+   tools plus the admin tools) and call `get_status`.
 4. Walk the core administration path: `get_runtime_status`; if needed
    `start_runtime_acquisition`/`get_runtime_acquisition`; then
    `start_model_pull`/`get_model_pull`; `set_default_model`; and finally `run_agent` or the durable

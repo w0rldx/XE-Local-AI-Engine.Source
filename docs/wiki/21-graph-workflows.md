@@ -1,6 +1,6 @@
 # Graph Workflows — Operator-Authored DAGs
 
-> Reviewed: 2026-09-07 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 **Graph Workflows** let an operator draw a directed acyclic graph of agent turns, tool calls, conditions and human
 pauses, save it, and start runs of it. The engine executes the run from the database: every node run is a row, every

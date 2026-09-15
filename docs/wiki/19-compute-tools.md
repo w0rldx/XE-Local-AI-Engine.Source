@@ -1,6 +1,6 @@
 # Compute Tools — Sandboxed Code Execution for Agents
 
-> Reviewed: 2026-08-25 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The **compute tools** subsystem allows governed agents to execute short scripts in a **sandboxed, offline interpreter** for numeric and symbolic computation. The first and only v1 tool is `run_python`, which runs arbitrary Python 3 code with numpy, scipy, and sympy available — no network, no host filesystem, no filesystem persistence, no conversation access.
 
@@ -353,11 +353,3 @@ curl -X POST http://localhost:5000/api/local/v1/agents/invoke \
 - **[Training](18-training.md)** — sibling `uv`-provisioned Python runtime; shared binary-acquisition helper.
 - **[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)** — Development Mode sandbox boundary; explains why Docker is not on the inference path.
 - **[ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md)** — Rationale for pinned-venv Python over system detection.
-
----
-
-## Boundary history
-
-The `run_python` compute tool is a first-class agent tool for numeric and symbolic computation. It is distinct from Custom Tools, gated as profile-opt-in, and routed through the process-role sandbox.
-
-**2026-08-25:** `run_python` was wired onto the sandbox provider's filesystem-isolated launch mode. The tool now refuses on a node that cannot isolate, runs with the host filesystem absent from its mount namespace, and binds only the venv and the managed-CPython root read-only. §2.4 is the new section; §2.2, §2.3 and §3.4 lost claims that were true before the boundary existed ("a script still sees the host filesystem as the worker user", "a deliberate script can `os.chmod` the tree back", the egress-capability gate). The disk watchdog is unchanged and remains best-effort.

@@ -346,8 +346,8 @@ never retry the suite until it comes up green, which destroys the evidence value
 criterion around it. The pre-fix observation is in
 [agent-knowledge-evidence.md](agent-knowledge-evidence.md) §1.
 **Authority:** TUnit `NotInParallelAttribute` is enforced by the in-process scheduler;
-`scripts/run-tests-memory-safe.sh` batching; trace and hypotheses in
-`Plans/test-perf-2026-09-13/research/08-transcription-flake-trace.md`; fixed and controlled 2026-09-14.
+`scripts/run-tests-memory-safe.sh` batching; trace and hypotheses in the maintainer's local test-perf research notes
+(untracked); fixed and controlled 2026-09-14.
 
 ### A silent `return` on the wrong OS reports a green pass, not a skip
 
@@ -416,7 +416,7 @@ build and then a `--no-build` E2E run, repeat the flagged build in between; `scr
 orders this itself. **Prevents:** a `--no-build` E2E invocation that finds no test host at all, read as a tooling
 fault rather than as build ordering — and the neighbouring trap of a zero-test run exiting **0**. **Authority:**
 `XE-Local-AI-Engine.Tests.E2ETests/…csproj`; `docs/wiki/13-testing-and-validation.md`; found while running C5's gate
-chain (`Plans/audio-transcription-2026-09-11/progress/S4-notes.md`, "Gate ordering trap found here").
+chain (local S4 progress notes, untracked: "Gate ordering trap found here").
 
 ### PROPOSED (awaiting operator approval): TUnit.Playwright caches ONE browser per worker, so per-class launch arguments are silently ignored
 
@@ -430,7 +430,7 @@ the speech fixture correlated 0.951 when it ran first and 0 when it ran second, 
 first and 0.99 when second, i.e. the negative control was measuring the positive case's WAV. The failure is
 invisible from the test source, which reads as if each class had its own file. **Authority:** upstream
 `TUnit.Playwright` 1.65.68 `BrowserTest.BrowserSetup`; `XE-Local-AI-Engine.Tests.E2ETests/Common/XEFakeAudioE2ETestBase.cs`
-(`LaunchFakeAudioBrowserAsync`); `Plans/audio-transcription-2026-09-11/progress/S4-notes.md` §C5b.
+(`LaunchFakeAudioBrowserAsync`); local S4 progress notes §C5b (untracked).
 
 ### A full test-suite run can poison its own worktree's generated NuGet props
 
@@ -1322,7 +1322,7 @@ registration in `AddNodeModelRuntimeExtensions`.
 
 ### Benchmark export (2026-08-26)
 
-- **CSV columns are APPENDED, never inserted.** The export is flat *because* consumers read it by column index; inserting a column silently turns a sampling seed into a token count and nothing errors. `BenchmarkExportProjection.SchemaVersion` is bumped with every column change (now 3), and the snapshot test pins the whole header line plus one whole row — including the trailing empty cells, because a SHORT row is what actually breaks an index reader.
+- **CSV columns are APPENDED, never inserted.** The export is flat *because* consumers read it by column index; inserting a column silently turns a sampling seed into a token count and nothing errors. `BenchmarkExportProjection.SchemaVersion` is bumped with every column change (now 4), and the snapshot test pins the whole header line plus one whole row — including the trailing empty cells, because a SHORT row is what actually breaks an index reader.
 - **The export must apply the SAME comparability gate as the live read, and it did not.** `ToDetail` takes the expected KLD digest as an optional argument, so the export called it without one, a null expected digest matched nothing, and every exported KLD figure came out `kldState=stale` with its numbers nulled — a download that silently disagreed with the page it was downloaded from. Any new caller of `ToDetail`/`ToSummary`/`ToFidelity` has to pass `BenchmarkEndpointSupport.ExpectedKldDigest(project)`.
 - **Fidelity numbers need more decimals than throughput does.** The CSV's `Rate` helper formats `0.###`, which rounds a perplexity of 6.7977 to 6.798 — and the measured Q4_K_M/UD-Q3_K_XL gap is 6.7977 vs 6.9497 at standard errors near 0.074, so three decimals discards exactly the digits that decide whether two quants separate. Fidelity uses a six-decimal formatter.
 - **A withheld figure still exports its digest.** The three KLD cells go empty on a stale row, but `kldBaseLogitsDigest` is written anyway: it is the evidence for the withholding, and a reader comparing it against the project's current digest can see what moved.
@@ -1966,7 +1966,7 @@ must be **0**, which is also why the file's own prose must avoid that word. **Pr
 running, `AudioWorkletNode` construction throwing, and the whole capture path failing in a browser as a generic
 "worklet-failed" while `tsc`, biome and `vite build` are all green — nothing in the gate chain instantiates a worklet.
 **Authority:** S4 plan §2.3 (R37/R37a); `capture/Pcm16DownsamplerWorklet.js`; `capture/Downsample.test.ts`; the C2 and
-C4 dist greps in `Plans/audio-transcription-2026-09-11/progress/S4-notes.md`.
+C4 dist greps in the local S4 progress notes (untracked).
 
 ### PROPOSED (awaiting operator approval): a worklet node needs a path to the destination, and a pre-gesture context starts suspended
 
@@ -1994,8 +1994,7 @@ list replaces an earlier one's, and the existing `**/*.js` override sets `global
 "only warnings" depcruise run that is actually a failed gate, a baseline widened instead of a rule exception written,
 and a worklet file that cannot pass `lint/correctness/noUndeclaredVariables` on `AudioWorkletProcessor` /
 `registerProcessor` / `sampleRate`. **Authority:** `scripts/CheckDependencyBaseline.mjs`; `.dependency-cruiser.cjs`;
-`biome.json`'s last override; S4 plan §1a.3 and the C2 gate output in
-`Plans/audio-transcription-2026-09-11/progress/S4-notes.md`.
+`biome.json`'s last override; S4 plan §1a.3 and the C2 gate output in the local S4 progress notes (untracked).
 
 ---
 
@@ -2040,7 +2039,7 @@ Agent Skills resources/assets are live and encrypted with AAD bound to both skil
 - **Ready output is a stable raw contract.** `DesktopLifecycle` emits one `XE_READY=1` line in exact key order and canonical `ready.json`; do not wrap/reformat it.
 - **`delegate` and `agentic` share one key row but differ in authority.** Mint atomically replaces key/scope; there is no dual-valid window or per-call scope negotiation. Durable runs retain captured authority across restart/key rotation.
 - **Agentic authority is explicit.** It travels through `McpInboundExecutionContext`, fingerprints, admission, and durable execution—never `AsyncLocal`. It grants only enumerated inbound MCP authority, not Operator JWT/REST. Root approval-required calls need a successful metadata-only audit write before invocation; child curation is unchanged. See ADR 0006.
-- **One skill source:** `skills/xe-local-ai-engine/`. Do not duplicate/symlink into `.claude` or `.agents`; installers copy the versioned tree.
+- **One skill source:** `skills/xe-local-ai-engine/`. Do not duplicate or symlink it into any per-user agent skill directory; installers copy the versioned tree.
 - **MCP reference is executable documentation.** `McpToolsReferenceDriftTests` reflects tool sets/counts/scopes and compares the first columns of `skills/xe-local-ai-engine/references/mcp-tools.md`. Update code and table together.
 
 

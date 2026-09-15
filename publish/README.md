@@ -20,8 +20,11 @@ Windows packing passes `--noInst` to Velopack 1.2.0, so the release must contain
 The Windows payload is framework-dependent. `XE-Local-AI-Engine.Client` publishes as DLL/deps/runtimeconfig files with
 no apphost or runtime; `XE-Local-AI-Engine.WindowsLauncher` publishes a small C# apphost into the same directory. The
 launcher validates the payload and installed ASP.NET Core runtime before starting the managed app through `dotnet.exe`.
+If the base .NET runtime is absent, Microsoft's apphost reports the missing framework; if ASP.NET Core is absent or too
+old, the launcher prints the exact requirement and opens the official .NET 10 download page.
 The archive must not contain `coreclr.dll`, `hostfxr.dll`, `hostpolicy.dll`, `System.Private.CoreLib.dll`, or the .NET
-Library License. The Linux AppImage remains self-contained.
+Library License. The Linux AppImage remains self-contained. Trimming stays **off** for both profiles
+(`PublishTrimmed=false`, reasoning in the `.pubxml` comments): the application is reflection-heavy.
 
 Each release also contains the Velopack feed and full/delta package assets used by the updater, plus:
 
@@ -140,7 +143,9 @@ historical analysis and static validation. They target superseded distribution f
 alternatives. `scripts/lint-release-scripts.sh` still analyzes them to prevent silent script decay.
 
 Do not use their private tester-repository, GitHub App, manual-draft, or Linux-ZIP instructions as the current release
-contract.
+contract. A `win-x64` zip produced by `package-rc.sh` is cross-built on Linux: native-library self-extraction,
+console-close child cleanup and browser auto-open cannot be verified off-Windows, so smoke-test it on real Windows before
+handing it to anyone.
 
 ## Legacy launcher sources
 

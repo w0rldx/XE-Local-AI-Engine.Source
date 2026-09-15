@@ -2,7 +2,7 @@
 
 - **Decision:** none filed — recorded here in place of a standalone issue (operator ruling, External Integrations, 2026-09-03)
 - **Status authority:** this living page
-- **Last verified against the tree:** 2026-09-04
+- **Last verified against the tree:** 2026-09-15
 - **Overall state:** Chat-list leak closed by the S0 `NodeConversation.Kind` discriminator. No other leak surface found; two open questions remain below.
 
 This page carries the External Integrations S0 "R2 — live check and ticket" item (2026-09-03), which was written to

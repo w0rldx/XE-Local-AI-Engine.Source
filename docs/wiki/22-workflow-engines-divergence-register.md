@@ -1,6 +1,6 @@
 # Workflow Engines Divergence Register
 
-> Baseline: `feature/maf-fu-1` off `develop @3ce9b3c80` (2026-09-09) · Reviewed: 2026-09-09 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 Two workflow engines live in this codebase: [Dev Workflows](../../XE-Local-AI-Engine.Client.Application/Services/DevWorkflows)
 (`Services/DevWorkflows/`, Dev Mode's graph runtime) and [Graph Workflows](21-graph-workflows.md)

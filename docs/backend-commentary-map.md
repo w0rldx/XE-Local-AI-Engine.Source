@@ -41,6 +41,13 @@ Before changing comments that describe library behavior, check the current upstr
 - **Docker was on this list until 2026-07-29 and no longer is — the rule is now directional.** [ADR 0004](adr/0004-development-mode-container-execution-docker-stopgap.md) permits Docker for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC. A comment describing Docker on the **inference path**, in the model runtime, or as part of HostAgent or the deleted `LocalContainerSandboxProvider` is still a defect; a comment describing the **Development Mode container sandbox** is correct and must not be deleted by a cleanup pass. If Docker.DotNet vocabulary appears in a comment, verify which of the two it describes before touching it. Sandbox comments are likewise **feature-specific**: `ProcessSandboxRuntimeProvider` is AgentHome's and Coder's provider and stays so, while Development Mode moves to the container provider behind the same `ISandboxRuntimeProvider` seam — a comment saying "supervised native process, not a container" is correct for the former and wrong for the latter.
 - **Ollama was not removed** — it is a gated, opt-in secondary provider, with llama.cpp as the default local runtime; keep its provider-boundary comments.
 
+## Related guides
+
+- [Comment cleanup grounding](comment-cleanup-grounding.md) — the official documentation checked before the
+  comment-tightening pass, and which subsystems a comment may no longer describe as live.
+- [Running ReSharper code cleanup safely](resharper-cleanup-guide.md) — the exact `jb cleanupcode` invocation to
+  use, and the two default transforms that silently break the build.
+
 ## Verification checklist for commentary edits
 
 1. Run the PRD stale-term search over `.cs` files and document any allowlisted false positives.

@@ -1,6 +1,6 @@
 # Benchmarks — Task Suites, Frozen Runs, Discriminating Scores
 
-> Reviewed: 2026-08-26 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The **benchmark** module measures a frozen suite of questions against many local models and ranks the results. Quant fidelity, server-side verifiers and pairwise judging make the scores discriminating; task suites make the module a real harness: a project asks **N questions**, a launch fans out over them, the unit that ranks is a **combination of model settings** rather than a single run, and the difference between two combinations comes with an interval.
 

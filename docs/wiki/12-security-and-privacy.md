@@ -1,6 +1,6 @@
 # Security & Privacy Model
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 This page documents the cross-cutting security and privacy controls implemented in the XE Local AI
 Engine node and the invariants contributors are expected to preserve. It is code-and-test evidence
@@ -175,10 +175,12 @@ implementations, so this node implements no OAuth profile and advertises no Prot
 Metadata — see the [connect runbook](../runbooks/connect-an-mcp-client-runbook.md).
 
 The singleton row also carries exactly one scope. `delegate` is the default and exposes the eight
-shared `NodeAgentMcpTools`; `agentic` exposes those eight plus the 15 `NodeAdminMcpTools`. Minting
+shared `NodeAgentMcpTools`; `agentic` exposes those eight plus the admin tools of `NodeAdminMcpTools`,
+enumerated in the drift-tested
+[`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md). Minting
 either scope rotates the row atomically. Authentication places `xe:mcp_scope` and a bounded key
 prefix in claims; SDK authorization filters remove unauthorized tools from discovery and reject
-direct calls. Agentic is operator-equivalent only for this enumerated 23-tool MCP surface: it grants
+direct calls. Agentic is operator-equivalent only for that enumerated MCP tool surface: it grants
 no Operator role/JWT, REST access, routable listener, or general policy bypass.
 
 For saved-agent execution, authority is explicit rather than ambient and is fingerprinted/persisted

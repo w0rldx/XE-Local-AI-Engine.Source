@@ -1,6 +1,6 @@
 # Agent Mode & the AI Agent Runtime
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 Agent Mode is XE Local AI Engine's governed agentic layer. It is split across two assemblies:
 `XE-Local-AI-Engine.AI.Agent` owns the Microsoft Agent Framework (MAF) / `Microsoft.Extensions.AI`

@@ -21,7 +21,7 @@ guessing.
 | **Import existing GGUFs** | **Supported** — one file at a time, copied into the managed directory. Packaged desktop app only. [Details](#using-ggufs-you-already-have) |
 | **Local API** | `/api/local/v1`, loopback-only, OpenAPI at `/openapi/local/v1/…` |
 | **OpenAI-compatible surface** | Opt-in inbound proxy at `/api/local/v1/proxy/v1`, bearer-key gated, loopback-only |
-| **MCP** | Both directions — outbound servers plus loopback Streamable HTTP inbound MCP; `delegate` exposes 8 tools, `agentic` exposes 23 |
+| **MCP** | Both directions — outbound servers plus loopback Streamable HTTP inbound MCP; `delegate` exposes 8 shared tools, `agentic` additionally exposes the administration tools listed in the [skill reference](../../../skills/xe-local-ai-engine/references/mcp-tools.md) |
 | **Fine-tuning** | QLoRA, **Linux + NVIDIA only**, in a pinned uv-managed Python runtime. [Details](#fine-tuning-training) |
 | **Benchmarks** | One frozen task, many models; KV-cache type per run, launch receipts, optional 1–5 judge. [Details](#benchmarks) |
 | **Multi-GPU / tensor split** | Unverified — ask me |
@@ -58,8 +58,9 @@ can't enumerate devices for the selected backend.
 | App UI | `127.0.0.1`, **OS-assigned port** (binds `:0`, so it differs every machine and every fresh install) |
 | llama-server | `18100`–`18199` |
 | stable-diffusion.cpp | `18200`–`18299` |
+| whisper-server | `18300`–`18399` |
 
-The two runtime ranges are deliberately offset so they never contend. All loopback.
+The runtime ranges are deliberately offset so they never contend. All loopback.
 
 ---
 
@@ -198,8 +199,9 @@ Everything lives in one directory (`%LOCALAPPDATA%\XE-Local-AI-Engine`), separat
   model-selected argument set. The API persists an acknowledged caller's requested enablement.
 - **MCP runs both directions.** Outbound servers execute within the app's tool policy. The inbound
   Streamable HTTP endpoint is loopback-only and uses a one-time-display, digest-stored bearer key.
-  `delegate` exposes 8 shared tools. `agentic` exposes all 23 and is operator-equivalent only for
-  that enumerated surface — not a JWT or arbitrary REST access. Approval-required root tools are
+  `delegate` exposes 8 shared tools; the `agentic` key additionally exposes the administration tools
+  listed in the shipped [skill reference](../../../skills/xe-local-ai-engine/references/mcp-tools.md),
+  and is operator-equivalent only for that enumerated surface — not a JWT or arbitrary REST access. Approval-required root tools are
   auto-approved only after a strict metadata-only audit write; children do not inherit elevation.
   See the [Agentic Support guide](../../agentic-support/agent-install.md).
 

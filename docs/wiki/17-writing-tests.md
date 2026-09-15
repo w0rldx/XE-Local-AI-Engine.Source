@@ -1,6 +1,6 @@
 # Writing Tests
 
-> Reviewed: 2026-09-05 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 [Testing & Validation](13-testing-and-validation.md) is the map of what exists and what counts as validated.
 This page is the **authoring guide**: where a new test goes, which harness seam to use, and the traps that
@@ -231,7 +231,7 @@ foreign origin must be asserted to 403. Pattern: `Chat/NodeChatHubTests.cs`, `En
 Do not start the whole host and hope the loop ran. Resolve the service, drive one iteration through
 `Testing/BackgroundServiceTestHelper.RunExecuteAsync(service, ct)`, and cancel the token to end it. Give the class
 a keyed `[NotInParallel(nameof(YourBackgroundServiceTests))]` when it touches a shared timer or connection —
-`Connection/AutoConnectBackgroundServiceTests.cs` and `Connection/HeartbeatBackgroundServiceTests.cs` do.
+`BackgroundServices/AutoConnectBackgroundServiceTests.cs` and `BackgroundServices/HeartbeatBackgroundServiceTests.cs` do.
 
 ### An EF migration
 

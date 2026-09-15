@@ -188,7 +188,7 @@ The external GitHub settings/API output supporting this observation is not bundl
 Internal traceability:
 
 - `docs/agent-knowledge.md`
-- `.opencode/context/project-intelligence/validation-matrix.md`
+- an internal, untracked validation matrix (not part of this repository)
 - `.github/workflows/build-and-test.yml`
 - `.github/workflows/e2e.yml`
 - `.github/workflows/release.yml`

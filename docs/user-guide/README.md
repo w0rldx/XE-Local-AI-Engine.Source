@@ -184,7 +184,8 @@ Everything below runs **on your own machine** unless you deliberately connect an
 - **MCP servers** — connect external tool servers to your agents
 - **Agentic Support** — let a trusted same-machine external agent install and operate the node over
   its loopback-only inbound MCP server. The restricted `delegate` key exposes 8 shared tools; the
-  explicitly trusted `agentic` key exposes all 23 delegation and core administration tools. See the
+  `agentic` key additionally exposes the administration tools listed in the shipped
+  [skill reference](../../skills/xe-local-ai-engine/references/mcp-tools.md). See the
   [Agentic Support guide](../agentic-support/agent-install.md) before minting the higher-trust key
 - **Custom tools** — author an HTTP request or direct host-program launch for an agent. The node feature starts off and the built-in form initializes new tools as disabled. Every tool stays approval-wrapped: fixed tools may reuse an explicit session approval until edited, while parameterized tools ask on every call
 - **Skills** — a local library of capabilities agents can load on demand
@@ -207,7 +208,10 @@ Everything below runs **on your own machine** unless you deliberately connect an
 - **Fine-tuning (Training)** — build a training set with a local model, fine-tune a model on it, then
   score the result against the original on held-back samples. **Linux with an NVIDIA graphics card
   only**, and a run takes the whole GPU while it works.
-- **Canvas** — a visual workspace for wiring up multi-step workflows
+- **Graph Workflows** — draw a workflow as a diagram (agent steps, tool calls, conditions, and a step
+  that waits for your approval), then start runs of it and follow each one
+- **Audio transcription** — local speech-to-text with whisper.cpp: upload a recording, or transcribe
+  a microphone or shared-screen audio live in the browser. The audio is never stored
 - **Read answers aloud** — text-to-speech through voices exposed by your browser and operating system.
   Availability, quality, and whether a system voice uses the network depend on that platform's speech
   implementation, which the app does not control.
@@ -219,7 +223,8 @@ Everything below runs **on your own machine** unless you deliberately connect an
 
 ### Not included yet
 
-- **No speech-to-text** — the app can talk, but it cannot listen. This is not two-way voice chat.
+- **No two-way voice chat** — reading replies aloud and transcribing speech are separate features;
+  the app does not hold a spoken conversation with you.
 - **No macOS build**, no ARM build.
 - **Unsigned binaries** — Windows and Linux releases can trigger trust warnings until certificate signing is added.
   Verify `CHECKSUMS.sha256` before running a download.

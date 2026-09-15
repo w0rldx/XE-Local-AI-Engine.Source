@@ -53,9 +53,15 @@ deleting the app folder alone doesn't remove it.
 - Chat messages, conversation titles, message metadata
 - Agent instructions and skills
 - Tool arguments and results
-- Canvas graphs
+- Workflow diagrams, and the inputs, outputs and errors of every workflow run
+- Transcription session titles and settings, and every line of a transcript
 - Uploaded file contents
 - Locally generated images
+
+> **Audio is never stored at all.** A recording you upload for transcription lives in one temporary
+> file for the length of the transcription and is deleted afterwards; live microphone or shared-screen
+> audio is never written to disk on either side. Nothing is sent anywhere — the model runs here. The
+> transcript is the only thing kept, so deleting a transcription session deletes the only copy.
 
 ### Not encrypted — everything the knowledge base derives from your documents
 

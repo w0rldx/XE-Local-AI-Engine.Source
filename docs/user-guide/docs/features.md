@@ -8,7 +8,8 @@ Everything here runs **on your own computer** unless you deliberately connect an
 
 **Jump to:** [Chat](#chat) · [Finding & choosing models](#finding-and-choosing-models) ·
 [Managing models](#managing-models) · [Your documents](#your-own-documents) ·
-[Agents](#agents) · [Custom tools](#custom-tools) · [Automation](#automation) · [Voice](#voice) · [Images](#image-generation) ·
+[Agents](#agents) · [Custom tools](#custom-tools) · [Automation](#automation) · [Workflows](#workflows) ·
+[Voice](#voice) · [Audio transcription](#audio-transcription) · [Images](#image-generation) ·
 [Development Mode](#development-mode) · [Benchmarks](#benchmarks) · [Fine-tuning](#fine-tuning-training) ·
 [Advanced](#advanced)
 
@@ -223,6 +224,23 @@ and an automatic timeout so a stuck run can't hang forever.
 
 ---
 
+## Workflows
+
+### Draw a workflow and run it
+
+**Graph Workflows** turns a multi-step job into a diagram you draw: agent steps, tool calls,
+conditions that branch on a result, and a pause step that waits for your approval before the run
+continues. Start a run and you watch it move through the diagram node by node, with each step's input
+and output kept for you to read afterwards. *(No screenshots yet — this part of the app is newer than
+the tour.)*
+
+Both the diagram and everything a run produces are **encrypted at rest**, like your chats.
+
+> **Workflow Runs** is a separate, developer-facing module for driving work items through review
+> stages. It is **off in the shipped configuration** and only appears if an operator turns it on.
+
+---
+
 ## Voice
 
 The app can **read replies aloud** through voices exposed by your browser and operating system. There
@@ -233,7 +251,53 @@ The available voices, languages, quality, offline support, and network behavior 
 and operating-system speech implementation. Those platform services are outside this repository's
 control, so the app cannot guarantee that a particular system voice works offline.
 
-> ⚠️ **No speech-to-text.** The app can talk, but it cannot listen — this is not two-way voice chat.
+Listening is covered separately by [Audio transcription](#audio-transcription), which turns speech
+into text locally.
+
+> ⚠️ **This is not two-way voice chat.** Reading aloud and transcribing are two separate features —
+> the app does not hold a spoken conversation with you. The closest thing available is the **Send to
+> chat** button on a finished transcript, which drops the text into the chat composer for you to send.
+
+---
+
+## Audio transcription
+
+Turn speech into text **on your own machine**, using whisper.cpp as the engine — the same pattern as
+chat and image generation: a local engine the app downloads, pins and supervises for you. *(No screenshots yet — this part of the app is newer than the tour.)*
+
+Find it under **Preview → Transcription** in the navigation.
+
+### Two ways to transcribe
+
+**Upload a recording.** Pick an audio file and get back a transcript with a timestamp on every
+segment. WAV, MP3 and FLAC are read directly; OGG, M4A and WebM need `ffmpeg` installed on this
+computer, and the app tells you plainly when it is missing rather than failing obscurely.
+
+**Or transcribe live.** Start a session and the text appears as you speak, a segment at a time. You
+can capture your **microphone**, the **audio of a screen or window you share**, or both at once — and
+with both, the app can label each segment as *you* or *the others*, which is what makes a recorded
+conversation readable afterwards.
+
+Your browser asks for microphone or screen-share permission every time a session starts. When you
+share a screen, tick **share audio** in the browser's picker; the app only ever takes the sound, never
+the picture.
+
+### The models
+
+The Whisper weights are **not bundled** — the app offers a small catalogue of them (from tiny up to a
+large turbo model) and downloads the one you choose on demand, verifying it before use. A small
+voice-activity model is fetched alongside it. Picking a bigger model buys accuracy and costs speed and
+memory, exactly as with chat models.
+
+### What is kept, and what is not
+
+> **The audio is never stored.** An uploaded file lives in one temporary file for the length of the
+> transcription and is deleted afterwards; live audio is never written to disk at all, on either side.
+> The transcript is the only thing that is kept — which also means **deleting a session deletes the
+> only copy**.
+
+Session titles and every line of the transcript are **encrypted at rest**, like your chats. Nothing is
+sent anywhere: the audio, the model and the transcription all stay on this computer.
 
 ---
 
@@ -346,10 +410,6 @@ app — can point its `base_url` at it and use your models as if they were a clo
 It is **off until you generate a key**. The key is shown once, can be revoked or regenerated at any
 time, and the proxy is only reachable from this machine. What comes back is the plain model — no
 agent persona, tools, memory or knowledge-base grounding.
-
-### Canvas
-
-An experimental visual workspace for wiring up multi-step workflows.
 
 ### Optional cloud providers
 

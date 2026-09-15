@@ -1,10 +1,10 @@
 # React Client (Frontend)
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The React management UI lives in `XE-Local-AI-Engine.Client.React` and is the operator console for a single node: chat, agent mode, model management/advisor, scheduler, MCP, skills, settings, and dashboards. It is a Vite + React 19 + Mantine SPA, served same-origin from the Node Web Server's `wwwroot`. All server state flows through TanStack Query over a **generated hey-api SDK** that is the single source of truth for REST; SignalR drives the streaming/live surfaces. This page maps the directory layout, the state strategy, the transport plumbing, the shared UI primitives, i18n, and how the bundle is hosted.
 
-> Discrepancy note vs. ground truth: `useShallow` is **not** used anywhere in the current source (a `grep -rn "useShallow"` returns nothing). Forms are **not** built on a schema-bound form library; they are controlled Mantine inputs validated by hand-authored Zod schemas via `safeParse`. `@tanstack/react-form` is a dependency but only its **devtools panel** is wired (`core/dev-tools/components/DevelopmentUi/DevelopmentUi.tsx`). The code is documented as-is below.
+> Two things contributors expect to find and will not: `useShallow` is used nowhere in the source, and there is **no schema-bound form library**. Forms are controlled Mantine inputs validated by hand-authored Zod schemas through `safeParse`.
 
 ---
 

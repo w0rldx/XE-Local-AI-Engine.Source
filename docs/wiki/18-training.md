@@ -1,6 +1,6 @@
 # Training (QLoRA fine-tuning)
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The Training group lets an operator turn the node's own tool-calling behaviour into a **fine-tuned local model**, entirely on the box: a teacher model generates a supervised dataset, a QLoRA run trains an adapter against a downloaded Hugging Face base checkpoint, and the result is exported to GGUF, smoke-loaded, evaluated from staging, compared against its installed base, quality-decided, and only then explicitly promoted into the local model registry. Nothing leaves the node except the two explicit downloads (the Python wheel closure and the base checkpoint).
 

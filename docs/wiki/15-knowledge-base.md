@@ -1,6 +1,6 @@
 # Knowledge Base / RAG
 
-> Last reviewed: 2026-08-13 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The Knowledge Base is a **fully offline** document store with hybrid retrieval. An operator uploads documents; the node extracts their text, chunks them on header boundaries, embeds each chunk with a local embedding model, and indexes everything into local SQLite with **selective encryption** — source document blobs and display names are encrypted at rest, while the extracted chunk text and its FTS search index are stored unencrypted locally. Retrieval fuses a **lexical** arm (SQLite FTS5 / BM25) and a **semantic** arm (vector cosine similarity) with Reciprocal Rank Fusion, optionally rescoring with a **local cross-encoder reranker**, and exposes the result to agents as a tool.
 

@@ -187,15 +187,16 @@ CLI; use the linked runbook rather than translating syntax between clients.
    UUID followed by `get_agent_run` for durable work.
 5. Use `list_workspaces` only when the seeded read-only Coder needs an operator-authorized workspace.
 
-A `delegate` key sees exactly 8 shared tools. An `agentic` key sees all 23: those 8 plus 15
-administration tools. The exact names, inputs, lifecycle values, and 18-field settings whitelist are
-in the [MCP tools reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
+A `delegate` key sees exactly 8 shared tools; the `agentic` key additionally exposes the
+administration tools listed in the shipped skill reference. The exact names, scopes, inputs,
+lifecycle values, and 18-field settings whitelist are in the
+[MCP tools reference](../../skills/xe-local-ai-engine/references/mcp-tools.md).
 
 ## 7. Security model
 
 - The listener and local API remain loopback-only. Agentic does not grant an Operator role, JWT,
   arbitrary REST access, a routable listener, or a general policy bypass.
-- Agentic is trusted operator-equivalent only for the enumerated 23-tool inbound MCP surface.
+- Agentic is trusted operator-equivalent only for the enumerated inbound MCP tool surface.
 - An agentic root run may receive its saved agent's complete allowed-tool set. Approval-required
   calls are auto-approved only after a strict metadata-only audit write. Audit failure blocks the
   call. Arguments, prompts, messages, tokens, passwords, full keys, and host paths are not audited or

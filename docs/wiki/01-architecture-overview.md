@@ -1,12 +1,12 @@
 # Architecture Overview
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform: a single ASP.NET Core process
 (`XE-Local-AI-Engine.Client`) that hosts the React management UI, owns the one outbound platform
 `WorkerHub` connection, serves local APIs and SignalR hubs, persists selected sensitive fields in SQLite
 with per-column AEAD encryption,
-and supervises node-owned `llama-server` and `sd-server` host child processes. This page is the map:
+and supervises node-owned `llama-server`, `sd-server` and `whisper-server` host child processes. This page is the map:
 it shows the node↔platform boundary, the in-process layering and one-way dependency flow, and the
 post-re-architecture runtime model (host llama.cpp, **no Docker on the inference path, no HostAgent**;
 Development Mode execution is the one scoped exception — see [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md)). Subsystem detail lives
@@ -85,15 +85,11 @@ Distinct from the platform link, the React SPA talks to the host over a **loopba
   global operationId name generator feeding the OpenAPI doc that generates the hey-api React SDK
   (`Program.cs`, `config.Endpoints.NameGenerator`).
 - Local SignalR hubs, each `RequireAuthorization(NodeAuthorizationPolicies.Operator)`. **The `MapHub`
-  block in `Client/Program.cs` is the inventory** — count it there rather than trusting a number here.
-  In registration order it maps `LocalChatHub`, `SchedulerHub`, `BenchmarkRunHub`,
-  `DatasetGenerationHub`, `TrainingRuntimeHub`, `TrainingRunHub`, `GgufDownloadHub`, `CudaBuildHub`,
-  `LlamaCppSourceBuildHub`, `RuntimeAcquisitionHub`, `KnowledgeBaseHub`, `ImageJobHub`,
-  `StableDiffusionCppSourceBuildHub`, `WorkSessionHub`, `DevWorkflowRunHub` and `GraphWorkflowRunHub`
-  unconditionally, then `DevelopmentAttemptHub` only when `Development:Enabled` (default `true`) — so every
-  hub but the Development one is always present. The work-session and the two workflow hubs are mapped
-  unconditionally on purpose: their feature flags are enforced by request-path middleware that answers 404 for
-  the whole prefix, hub path included, rather than by leaving a route unmapped.
+  block in `Client/Program.cs` is the inventory**, and [API & Hubs §2](09-api-and-hubs.md) is the one page that
+  enumerates it — this page does not repeat the list. All of them are mapped unconditionally except
+  `DevelopmentAttemptHub`, which is mapped only when `Development:Enabled` (default `true`). The work-session
+  and workflow hubs are mapped unconditionally on purpose: their feature flags are enforced by request-path
+  middleware that answers 404 for the whole prefix, hub path included, rather than by leaving a route unmapped.
 - JWT-bearer auth (operator role), antiforgery, per-IP rate limiting, and a
   `LocalApiSecurityMiddleware` that enforces the loopback/`Host`/`Origin` posture
   (`ConfigureServices.cs`, `Program.cs`).
@@ -140,11 +136,13 @@ choice, not the default**: `Development:Sandbox:Provider=docker` selects it, and
 [Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for the
 maintained provider coverage and limitations — this page does not duplicate them.
 
-**Where the code and the decisions live.** Backend: 21 endpoints in `Client/Endpoints/Development/V1/DevelopmentEndpoints.cs`
-(routes on `LocalApiRoutes.Development`), services under `Client.Application/Services/Development/`, live attempt output over
-`DevelopmentAttemptHub` — all in [API & Hubs](09-api-and-hubs.md). Schema: five migrations — `AddDevelopmentModeFoundation`,
-`BindDevelopmentProjectsToSelectedFolders`, `AddDevelopmentCommandProfile`, `AddDevelopmentAttemptCommandProfile` and
-`AddDevelopmentTemplates` ([Data & Persistence](08-data-and-persistence.md)). Frontend:
+**Where the code and the decisions live.** Backend: 21 endpoint classes split across eight files under
+`Client/Endpoints/Development/V1/` (`Artifact`, `Capability`, `Event`, `Patch`, `Project`, `Repository`, `Task` and
+`Template` `*DevelopmentEndpoints.cs`, routes on `LocalApiRoutes.Development`), services under
+`Client.Application/Services/Development/`, live attempt output over `DevelopmentAttemptHub` — all in
+[API & Hubs](09-api-and-hubs.md). Schema: six migrations — `AddDevelopmentModeFoundation`,
+`BindDevelopmentProjectsToSelectedFolders`, `AddDevelopmentCommandProfile`, `AddDevelopmentAttemptCommandProfile`,
+`AddDevelopmentTemplates` and `WidenDevelopmentTasksPerProject` ([Data & Persistence](08-data-and-persistence.md)). Frontend:
 `Client.React/src/features/development/` at route `/development` ([React Client](10-react-client.md)); an attempt that ends
 without a verdict renders its `terminalReason`, so a failed attempt names *why* it stopped rather than showing an empty
 result. Three accepted ADRs record the non-obvious decisions:

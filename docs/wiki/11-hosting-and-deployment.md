@@ -1,6 +1,6 @@
 # Hosting, AppHost & Deployment
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 This page covers how the XE Local AI Engine node process is **hosted and shipped**: the Aspire AppHost used for local dev/integration, the shared `ServiceDefaults`, the configuration layers (`appsettings` + the user-editable `node-settings.json` + the encrypted `hf-token.enc`), the background hosted services that run inside the node, packaged **desktop mode** (`XE_LAUNCH_MODE=desktop`), the asymmetric Windows/Linux publish profiles, the Windows C# launcher, and the legacy/manual cleanup scripts.
 
@@ -130,7 +130,7 @@ Module-owned workers worth knowing about, registered alongside their feature rat
 Configuration resolves through several layers (later wins where noted):
 
 1. **`appsettings.json` + `appsettings.Development.json`** (in `XE-Local-AI-Engine.Client/`) — static defaults shipped with the binary.
-2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`; the operator-secret parameter has the tracked shared development default described in §1 unless a developer supplies a confidential override.
+2. **Environment / Aspire parameters** — e.g. `XE_NODE_SQLITE_KEY`, `NodeAuth__Jwt__*`, the node-sqlite connection string. In Aspire these come from `AppHost.cs`; the operator-secret parameter has **no tracked value at all** — the dev scripts mint a per-checkout one, as §1 describes.
 3. **Local-mode in-memory overrides** (`DesktopBootstrap`, Desktop/McpOnly only — added last so they
    intentionally win over `appsettings`, but only reached behind a local launch mode). See §5.
 4. **`node-settings.json`** — a **user-editable, cached** settings file (not env/appsettings). `NodeSettingsStore` (`Client.Application/Services/NodeSettings/Implementation/NodeSettingsStore.cs`) reads/writes `node-settings.json` under the node data directory, with both an async and a sync (startup/DI factory) load path, tolerant JSON deserialize, and a `SemaphoreSlim` write lock. The shape is `StoredNodeSettings`. This is the runtime-editable settings store that supersedes baking values only into `appsettings`.
@@ -314,23 +314,17 @@ Both refuse to run elevated/as-root (a per-user data dir would resolve to the wr
 
 ---
 
-## 8. Release channels, consolidation, and CI status
+## 8. Release channels and CI status
 
-### Distribution was split across two GitHub repositories — now consolidated
+### One repository, one tag form
 
-| Role | Repository | What lives there |
-|---|---|---|
-| **Source** | `w0rldx/XE-Local-AI-Engine.Source` | the code, and the `v<version>` release tags |
-| **Tester artifacts (retired)** | `w0rldx/XE-Local-AI-Engine.Tester-App` | tester releases published under the historical manual flow, through `0.1.0-rc.5.1` |
+Source, `v<version>` tags, official binaries and the public update feeds all live in this repository, and the
+tag-triggered `.github/workflows/release.yml` publishes the `win-x64` and `linux-x64` Velopack packages to its
+GitHub Releases. Source tags are always `v`-prefixed; there are no bare release tags here.
 
-Historically these shared a version *string* but nothing else: the `v<version>` git tag was created on **HEAD of the
-source repo**, and `vpk upload github --tag` then created a same-named release on the **tester repo**, whose commits
-were unrelated. So a tester release's tag never appeared in this repo's `git tag -l`, and the source tag never
-appeared on the tester repo. That two-repo split is now retired — the tag-triggered `.github/workflows/release.yml`
-publishes both `win-x64` and `linux-x64` Velopack packages to **this repo's** GitHub Releases using the built-in
-`GITHUB_TOKEN`, so a CI-cut release has no separate tester-repo counterpart.
-
-**Tag-form convention changed mid-flight (historical).** The seven tester releases published 2026-06-26 → 2026-07-07 carry **bare** tags (`0.1.0-rc.4.1`) with `v`-prefixed release *names*. The later tester releases, `0.1.0-rc.5.0` and `0.1.0-rc.5.1`, were v-prefixed on both sides after the packaging script started passing `--tag v<version>`. Source-repo release/version tags were always v-prefixed; there are no bare release/version tags here.
+Releases through `0.1.0-rc.5.1` came out of a separate tester repository under a hand-run packaging flow with a
+different tag form. That provenance, including the tag-form change mid-flight, is recorded once in the
+[CHANGELOG](../../CHANGELOG.md) header — this page describes only the current path.
 
 ### GitHub Actions and the release workflow
 

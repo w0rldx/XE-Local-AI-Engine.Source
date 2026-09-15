@@ -1,6 +1,6 @@
 # Code Organization Conventions
 
-> Baseline: `9405df91e426c26b1942843dbd16a5edce1f466e` · Reviewed: 2026-08-08 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 > Updated 2026-08-07: endpoint areas now fold DTOs/mappers/validators into `V1/{Dtos,Mappers,Validators}/`
 > subfolders (only endpoints stay at the top level); `Dtos/` keeps a flat namespace by design.
 
@@ -239,7 +239,7 @@ so a Zod response-shape mismatch surfaces as an `ApiError`, never a raw `ZodErro
 
 ### Forms are manual — no form library
 
-There is **no `@tanstack/react-form` or `react-hook-form`** at runtime. Forms are controlled Mantine
+There is **no schema-bound form library** in the dependency set. Forms are controlled Mantine
 inputs in local `useState`, validated by a **shared Zod schema on submit**, with `fieldErrors` state; a
 dialog-hosted form exposes `submit()` via `useImperativeHandle` so the dialog footer button drives
 validate-then-submit. Reference: `features/agents/components/AgentDefinitionForm.tsx`.

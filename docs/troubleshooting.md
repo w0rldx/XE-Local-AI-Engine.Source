@@ -31,9 +31,11 @@ If responses are very slow, the app may be running on CPU. The app uses your GPU
 - **AMD / Intel GPUs on Windows:** these now run GPU-accelerated inference via Vulkan (fixed in rc.5.0 — older builds silently fell back to CPU and said nothing). VRAM still can't be measured reliably on these cards, so **Models → Recommendations** sizing falls back to your system RAM instead, which is less precise. The CPU-fallback alert also isn't reachable on these cards yet, so the app can't reliably warn you if inference does end up on CPU — watch response speed as your signal instead.
 - **Non-NVIDIA GPUs on Linux:** VRAM still can't be measured reliably, so the app **falls back to CPU** even though the GPU exists. This is expected in this release. CPU mode works — it's just slower — so pick a smaller model (see above).
 
+On Linux with an NVIDIA card, upstream publishes no prebuilt CUDA `llama-server`, so an operator who wants the CUDA path instead of the Vulkan default can supply their own binary — see the [Linux CUDA bring-your-own llama-server runbook](runbooks/linux-cuda-override-operator-runbook.md).
+
 ## Port conflicts
 
-In desktop mode the app binds an automatically chosen free loopback port (`127.0.0.1`) and opens your browser at it. The model runtimes use their own private loopback ranges (llama.cpp `18100–18199`, image `sd-server` `18200–18299`).
+In desktop mode the app binds an automatically chosen free loopback port (`127.0.0.1`) and opens your browser at it. The model runtimes use their own private loopback ranges (llama.cpp `18100–18199`, image `sd-server` `18200–18299`, transcription `whisper-server` `18300–18399`).
 
 - If the browser doesn't open or the page won't connect, check the console/terminal — it prints the exact URL. Open it manually.
 - **Run only ONE instance at a time** against the same data directory. A second instance races on the database and can corrupt it.

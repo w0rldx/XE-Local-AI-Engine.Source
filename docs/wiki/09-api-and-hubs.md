@@ -1,6 +1,6 @@
 # API Surface & Realtime Hubs
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 This page documents the **Node Web Server transport layer**: the HTTP API exposed under `/api/local/v1` (FastEndpoints), the unconditional SignalR push/stream hubs plus the conditional Development hub, the single outbound **WorkerHub** connection to the C0re platform, the cross-cutting transport concerns (security middleware, exception handling, health checks, auth), and how the backend's OpenAPI document becomes the single source of truth for every React REST client via hey-api.
 
@@ -105,8 +105,11 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 historical body-less form remains `delegate`. One singleton row is replaced atomically, so rotation
 has no dual-valid window. Authentication emits the bounded `xe:mcp_scope` and
 `xe:mcp_key_prefix` claims. SDK authorization filters apply `McpServer` to the eight shared
-`NodeAgentMcpTools` and `McpAgentic` to the 15 `NodeAdminMcpTools`, so `tools/list` returns exactly 8
-tools for delegate and all 23 for agentic. Direct calls to unauthorized admin tools are rejected too.
+`NodeAgentMcpTools` and `McpAgentic` to the admin tools declared across the `NodeAdminMcpTools`
+partials, so `tools/list` returns the eight shared tools for a `delegate` key and those eight plus
+every admin tool for an `agentic` key. The admin set is enumerated — and drift-tested — in
+[`references/mcp-tools.md`](../../skills/xe-local-ai-engine/references/mcp-tools.md); no other page
+restates it. Direct calls to unauthorized admin tools are rejected too.
 
 The admin class calls application services directly — no internal HTTP hop — for node/runtime
 status, runtime acquisition, GGUF pull lifecycle, model delete/default selection, the exact 18-field
@@ -174,7 +177,7 @@ Everything except `authClient` goes through the shared axios instance via `build
 
 Hub classes live in `Client/Hubs/` and every one of them is mapped by a `MapHub<>` call in `Program.cs` — that call site, not a number here, is the inventory. All are `[Authorize(AuthenticationSchemes = JwtBearer, Policy = NodeAuthorizationPolicies.Operator)]` and mapped with `.RequireAuthorization(Operator)`. Their full paths are constants (`...Hub` in `LocalApiRoutes.cs`), mapped via `MapHub` *outside* the FastEndpoints prefix.
 
-The table below lists all of them. Every hub except one is mapped unconditionally; that one, `DevelopmentAttemptHub`, is mapped **only when Development Mode is enabled** — `isDevelopmentModeEnabled` in `Program.cs` reads `Development:Enabled` and defaults to `true` (the same default as `DevelopmentOptions.Enabled`). When it is `false` the hub is not mapped, its services are not registered, and the disabled-capability middleware in `Program.cs` answers **404** for every `/api/local/v1/development/*` path except `development/capability` — deliberately *before* local-API security or authentication can challenge the caller, so a disabled capability stays opaque.
+The table below is this wiki's single enumeration of the hubs — every other page links here instead of repeating it. Every hub except one is mapped unconditionally; that one, `DevelopmentAttemptHub`, is mapped **only when Development Mode is enabled** — `isDevelopmentModeEnabled` in `Program.cs` reads `Development:Enabled` and defaults to `true` (the same default as `DevelopmentOptions.Enabled`). When it is `false` the hub is not mapped, its services are not registered, and the disabled-capability middleware in `Program.cs` answers **404** for every `/api/local/v1/development/*` path except `development/capability` — deliberately *before* local-API security or authentication can challenge the caller, so a disabled capability stays opaque.
 
 Work sessions take the **other half** of that pattern deliberately: `WorkSessionHub` and the sixteen `work-sessions/*` routes are mapped and discovered unconditionally, and only their behaviour is gated. Dropping them from discovery would drop all sixteen paths out of the OpenAPI document and therefore out of the generated React SDK, which would make the client's surface depend on the node that produced the spec. `WorkSessions:Enabled=false` (the option default; `appsettings.json` ships `true`) instead gets the same 404 middleware ahead of authentication, and `SubscribeSession` throws a `HubException`.
 

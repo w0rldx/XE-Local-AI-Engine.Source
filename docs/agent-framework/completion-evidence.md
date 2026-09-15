@@ -1,5 +1,8 @@
 # Agent Framework 1.15 completion evidence
 
+> **Historical record of the Microsoft Agent Framework 1.15 upgrade.** The current pin is not here — it lives in
+> `Directory.Packages.props`. The validation scripts this document names are still maintained and still run.
+
 This document closes the reproducibility and hardware-lane gaps identified in the
 Agent Framework 1.15 upgrade and harness assessment.
 Only the manifests, central-pin tables, the rollback patch and the three contract logs are tracked; the raw

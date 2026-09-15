@@ -1,6 +1,6 @@
 # External Apps — Curated Containerised Applications
 
-> Reviewed: 2026-09-11 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 **External Apps** installs and runs a small set of curated, containerised applications on the node, so a user gets a
 working application on their own machine without assembling a Compose file, a registry login and a reverse proxy by

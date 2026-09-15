@@ -1,16 +1,17 @@
 # XE Local AI Engine — Developer Wiki
 
-> Baseline: `65de769ded3eb6e7b59eabb5daf6a8d0b89531ba` · Reviewed: 2026-08-17 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 XE Local AI Engine (product name **XE AI-Engine**) is the **node-side runtime** of the C0re platform. A single
 **Node Web Server process** (`XE-Local-AI-Engine.Client`) serves the React management UI, owns the one
 outbound platform link (`WorkerHub`), exposes loopback-only local APIs (`/api/local/v1`) plus
 SignalR hubs, persists selected sensitive payloads in SQLite with **per-column AEAD encryption**, and runs the local model runtimes
-as node-owned, supervised host child processes — **llama.cpp** (`llama-server`) for text, and
-**stable-diffusion.cpp** (`sd-server`) for images.
+as node-owned, supervised host child processes — **llama.cpp** (`llama-server`) for text,
+**stable-diffusion.cpp** (`sd-server`) for images and **whisper.cpp** (`whisper-server`) for speech-to-text.
 
-This wiki is the contributor deep-dive for the current codebase. It supersedes the older
-`docs/ai-runtime.md` notes where they conflict (those predate the runtime re-architecture).
+This wiki is the contributor deep-dive for the current codebase. `docs/ai-runtime.md` is a companion, not a
+predecessor: it holds the AI-seam maintenance rules and the current Microsoft.Extensions.AI / Microsoft Agent
+Framework pins, while the wiki covers architecture.
 
 ## Start here
 
@@ -25,77 +26,27 @@ This wiki is the contributor deep-dive for the current codebase. It supersedes t
   [Technical/Security Architecture Dossier](../audits/technical-security-architecture/README.md).
   It is a baseline description with evidence limitations, not an assurance or compliance package.
 
-## The one fact that changed everything
+## Architecture invariants
 
-The **runtime re-architecture** (locked 2026-06-17) replaced the old container/HostAgent model:
+- Inference runs in **host child processes the node supervises itself** — `llama-server` for text, `sd-server`
+  for images, `whisper-server` for speech-to-text. There is no container and no agent between the host and a
+  model runtime.
+- `XE-Local-AI-Engine.HostAgent.*` does not exist; the host owns the runtime directly.
+- Docker appears in exactly two places, neither on the inference path: the **Development Mode container
+  sandbox provider**, which is opt-in (`Development:Sandbox:Provider=docker`, unset in the shipped config) per
+  [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md), and the engine-owned container
+  runtime behind [External Apps](23-external-apps.md).
+- Detail: [Architecture Overview](01-architecture-overview.md), [Local Runtime & Providers](03-local-runtime-and-providers.md),
+  [Security & Privacy](12-security-and-privacy.md).
 
-| Was | Now |
-| --- | --- |
-| Docker / `Docker.DotNet` container sandbox for inference | **Host `llama-server` child process**, supervised in-process |
-| `XE-Local-AI-Engine.HostAgent.*` connection layer | **Deleted** — host owns the runtime directly |
-| Ollama as the default dev runtime | Ollama **present as a provider but de-orchestrated** from Aspire dev |
-| Models pre-provisioned | **HuggingFace GGUF** discovery/download + box-aware **Model Advisor** |
-| *(amended 2026-07-29)* Docker as a whole-product dependency | **Off the inference path for good** — and since [ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) permitted for **Development Mode build/test/lint execution only**, as a stopgap ahead of MXC |
+### Invariants worth knowing
 
-If you find a doc, comment, or assumption that still describes Docker **on the inference path**, or
-HostAgent as live anywhere, it is stale — trust the code and these pages. The mirror-image error is now
-just as easy: a doc or comment asserting "no Docker **anywhere**" predates
-[ADR 0004](../adr/0004-development-mode-container-execution-docker-stopgap.md) and is stale in the other
-direction. The container provider it approves is Development-Mode-only, is chosen **per feature**
-(AgentHome and Coder stay on the process sandbox provider), and has **shipped as an opt-in provider that
-is not the default** — `Development:Sandbox:Provider=docker` selects it, and the shipped config leaves that
-key unset. Read the ADR for what is *decided*, and
-[Development Mode container implementation status](../roadmaps/development-mode-container-status.md) for what
-is *built* — that page is the canonical status record, so no wiki page restates it.
-
-**Shipped since the last review (2026-06-24…27):** a profile-driven **inference optimizer** (per-machine
-explore → freeze → replay tuning; the supervisor no longer forces `--n-gpu-layers 999` — see
-[Local Runtime & Providers](03-local-runtime-and-providers.md) and the [Architecture Overview](01-architecture-overview.md) launch-args seam),
-**GGUF quant recommendation** (quality tier + hardware-fit + recommended-variant badge — see
-[Model-fit / Advisor](07-model-fit.md)), **chat file upload → agent attachments** (encrypted store — see
-[Chat](05-chat.md)), a browser **client voice runtime** (Web Speech through browser/OS voices), and an **onboarding first-response tour**.
-
-**Shipped flagship features (now documented):** local **image generation** via stable-diffusion.cpp (see
-[Image Generation](14-image-generation.md)) and an offline **Knowledge Base / RAG** with hybrid FTS+vector
-search and a local reranker (see [Knowledge Base / RAG](15-knowledge-base.md)). **Development Mode** is a
-default-on local coding workflow that binds a registered Git source repository to an engine-owned detached
-worktree — 21 `development/*` endpoints, a live-attempt hub, its own React feature, and three accepted Development Mode ADRs
-([0001](../adr/0001-development-mode-restart-recovery.md), [0002](../adr/0002-development-cloud-egress-carrier.md),
-[0004](../adr/0004-development-mode-container-execution-docker-stopgap.md));
-see [Architecture Overview](01-architecture-overview.md#development-mode-registered-source-managed-worktree)
-for the source/worktree flow and [Security & Privacy](12-security-and-privacy.md) for the host-user execution boundary.
-
-**Operator-authored Custom Tools** extend the local agent tool catalog with acknowledged, approval-required HTTP-fetch
-or host-program definitions. Their CRUD surface, generated React client, secret masking, SSRF/executable guards, and
-execution trust boundary are documented in [API & Hubs](09-api-and-hubs.md), [React Client](10-react-client.md), and
-[Security & Privacy](12-security-and-privacy.md).
-
-**Local fine-tuning and model benchmarking.** Two feature areas landed after the previous review and are
-visible across the whole stack. **Training** runs supervised fine-tuning on-node through a dedicated
-`XE-Local-AI-Engine.Providers.Training` project (a uv-provisioned Python runtime spawned as a supervised host
-child process, `TrainingRuntimeService`/`LinuxTrainingProcessSpawner`), with dataset generation, run execution,
-export and evaluation services under `Client.Application/Services/Training/` and three hubs
-(`DatasetGenerationHub`, `TrainingRuntimeHub`, `TrainingRunHub`); see [Training](18-training.md) and
-[ADR 0005](../adr/0005-training-runtime-python-exclusivity-and-project-placement.md). **Benchmarks** run frozen,
-receipt-carrying model comparisons (`Client.Application/Services/Benchmarks/`, `BenchmarkRunHub`,
-`LocalApiRoutes.Benchmarks`, the `AddBenchmarks`/`AddBenchmarkRunLaunchReceipts` migrations); it has **no
-dedicated wiki page yet**, so that code is the source of truth until one exists.
-
-**Shipped since the last review: Graph Workflows, and Open Canvas is gone.** [Graph Workflows](21-graph-workflows.md)
-are operator-authored acyclic graphs of agent turns, tool calls, conditions and human pauses, executed from the
-database by a single dispatcher loop and durable across a restart. The feature is **on by default** and is a
-top-level navigation entry. It replaced the **Open Canvas (Preview)** visual builder, which was removed together with
-its `preview/*` routes, its hub and its React feature; saved canvases are converted into Graph Workflow definitions
-**once, automatically, on the first start of the build that removed it**. That conversion is irreversible — read
-[§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import) before upgrading a node whose
-canvases matter. Any doc, comment or assumption that still describes Open Canvas as the visual workflow builder is
-stale.
-
-**In-app llama.cpp source builds.** Upstream ships no prebuilt Linux CUDA `llama-server`, so the node can
-compile one itself and adopt it as a managed runtime — an explicit, Operator-gated, prerequisite-checked
-action, never implicit. Prebuilt download stays the default. If you read anywhere that this engine has
-"no source build", that statement is wrong: see
-[Local Runtime & Providers §2.6](03-local-runtime-and-providers.md#26-in-app-source-builds-linux).
+- **The Open Canvas import runs once and cannot be undone.** Saved canvases from the removed Open Canvas
+  (Preview) builder are converted into Graph Workflow definitions automatically, on the first start of the
+  build that removed it. Read [§9 of the Graph Workflows page](21-graph-workflows.md#9-the-open-canvas-import)
+  before upgrading a node whose canvases matter.
+- **A doc or comment claiming "no Docker anywhere" predates ADR 0004 and is stale**; one claiming Docker on the
+  inference path is stale the other way. The bullet above is the current rule.
 
 ## Page index
 
@@ -108,8 +59,8 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 05 | [Chat](05-chat.md) | `RuntimeChatClient` per-send routing, ordered parts, sampling, attribution, at-rest encryption |
 | 06 | [Scheduler](06-scheduler.md) | Quartz.NET jobs, run history, cancellation, live hub, encoded gotchas |
 | 07 | [Model-fit / Advisor](07-model-fit.md) | Cache-read vs scheduler refresh, `MemoryFitEstimator`, hardware profiler, sanitization |
-| 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, migration timeline |
-| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`), WorkerHub, OpenAPI→hey-api |
+| 08 | [Data & Persistence](08-data-and-persistence.md) | EF Core + SQLite, per-column AEAD encryption, entities, schema milestones |
+| 09 | [API & Hubs](09-api-and-hubs.md) | FastEndpoints `/api/local/v1` (one route family per nested class in `LocalApiRoutes`), the local SignalR hubs registered by the `MapHub<>` block in `Client/Program.cs` (all unconditional except `DevelopmentAttemptHub`) — this page owns the hub list, WorkerHub, operator-authored custom tools, the inbound MCP tool surface, OpenAPI→hey-api |
 | 10 | [React Client](10-react-client.md) | The feature directories under `Client.React/src/features/`, TanStack Query/Zustand, hey-api, shared hub connections, dialog system, i18n, SPA serving |
 | 11 | [Hosting & Deployment](11-hosting-and-deployment.md) | Aspire AppHost, desktop launcher, publish profiles, legacy/manual cleanup |
 | 12 | [Security & Privacy](12-security-and-privacy.md) | Egress boundary, secret handling, loopback/Host-Origin, redaction, node-local AI ops, Development Mode execution boundary |
@@ -122,14 +73,14 @@ action, never implicit. Prebuilt download stays the default. If you read anywher
 | 19 | [Compute Tools](19-compute-tools.md) | Sandboxed code execution: the `run_python` tool, process-sandbox isolation, uv-pinned venv (numpy/scipy/sympy), security/gating (WriteExecute + approval-required, profile-opt-in), Linux-only v1, operator enablement |
 | 20 | [Benchmarks](20-benchmarks.md) | Task suites and long-context probes, freeze fan-out and cell ranking, verifiable criteria incl. `pythonTests` execution scoring, pairwise Bradley-Terry and paired-difference intervals, quant fidelity (perplexity/KLD, base-logit cache, comparability digest), the four-kind work queue, scheduled matrices and the training hand-off, export schema 4 |
 | 21 | [Graph Workflows](21-graph-workflows.md) | Operator-authored DAGs: the graph contract and its validation rules, the run and node-run lifecycles, the eight node kinds and their documents, the route family and the `graphWorkflowChanged` hub contract, the React editor and run view, the options table, and the one-shot Open Canvas import |
-| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | Dev Workflows vs. Graph Workflows: status/decision vocabulary, approval model, restart/reconciler behavior, the cross-node fix loop, persistence and hub shape, MAF/MEAI boundary, feature flags — what was deliberately dropped and what is an unintentional gap, with convergence explicitly deferred |
+| 22 | [Workflow Engines Divergence Register](22-workflow-engines-divergence-register.md) | Dev Workflows vs. Graph Workflows: status/decision vocabulary, approval model, restart/reconciler behavior, the cross-node fix loop, persistence and hub shape, MAF/MEAI boundary, feature flags — what was deliberately dropped and what is an unintentional gap, with convergence explicitly deferred. **Dev Workflows have no page of their own**: this register and the `DevelopmentWorkflows` rows in [API & Hubs](09-api-and-hubs.md) are their documentation |
 | 23 | [External Apps](23-external-apps.md) | Curated containerised applications: the catalog document and its fingerprint, the engine-owned container runtime layer beside the sandbox SPI, the container policy and what it verifies on read-back, per-instance storage and the storage-wipe helper container, the lifecycle and the boot reconciler, runtime selection and the daemon identity pin, the `ExternalApps:Enabled` kill switch and what disabling does not do |
 | 24 | [Audio Transcription](24-audio-transcription.md) | Local speech-to-text on whisper.cpp: the supervised `whisper-server` runtime in brief, the encrypted session and segment tables and their AAD layout, the batch upload path (streaming multipart, engine-owned temp slot, container sniffing, engine-side ffmpeg transcode, `Seq` from 1), the session route family, the React feature area, the never-persist-audio rule and its four enforcement points, the options table, and what the live capture slices have not built yet |
 
 ## Conventions in this wiki
 
 - Every structural claim cites source as `path/to/File.cs` (and symbol names where useful).
-- Pages are dated `Last reviewed`. When you change a subsystem, update the matching page.
+- Every page carries a `Reviewed:` date on line 3. When you change a subsystem, update the matching page.
 - Architecture invariants (egress, secrets, loopback, node-local privacy ops) are **rules**, not
   suggestions — see [Security & Privacy](12-security-and-privacy.md) and
   [Architecture Overview](01-architecture-overview.md).
