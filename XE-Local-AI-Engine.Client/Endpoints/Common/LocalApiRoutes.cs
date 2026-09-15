@@ -613,6 +613,17 @@ public static class LocalApiRoutes
         public const string SessionById = "transcription/sessions/{sessionId}";
         public const string SessionCancel = "transcription/sessions/{sessionId}/cancel";
         public const string SessionFile = "transcription/sessions/{sessionId}/file";
+
+        /// <summary>
+        ///     Starts live capture for an existing session. Idempotent and body-less; the client awaits it before it
+        ///     forwards a single audio frame.
+        /// </summary>
+        public const string SessionLiveStart = "transcription/sessions/{sessionId}/live/start";
+
+        // SignalR push hub for live transcription sessions. Full path (mapped via MapHub, not the FastEndpoints
+        // prefix), mirroring the other local hubs. It shares the family's first segment, so the feature gate's
+        // 404 covers its negotiate too.
+        public const string Hub = "/api/local/v1/transcription/hub";
     }
 
     /// <summary>

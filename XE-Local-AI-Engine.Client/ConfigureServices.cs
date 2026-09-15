@@ -49,6 +49,7 @@ using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Client.Services.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Services.Proxy;
 using XE_Local_AI_Engine.Client.Services.Scheduler;
+using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.WorkSessions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
@@ -216,6 +217,10 @@ public static class ConfigureServices
 
         // And for graph workflows, whose publishing store decorator announces every committed run mutation.
         builder.Services.AddSingleton<IGraphWorkflowEventPublisher, GraphWorkflowEventPublisher>();
+
+        // Transcription: the hub-backed publisher supersedes the no-op AddNodeTranscription registers with
+        // TryAddSingleton, so every committed live segment, partial and end reason reaches an open session view.
+        builder.Services.AddSingleton<ITranscriptionEventPublisher, TranscriptionEventPublisher>();
 
         // External apps: the hub-backed publisher supersedes the no-op AddNodeExternalApps registers with
         // TryAddSingleton, so a pull, a state change observed by the daemon watcher and the boot reconciler's

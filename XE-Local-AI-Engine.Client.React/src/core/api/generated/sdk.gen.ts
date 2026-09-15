@@ -1201,6 +1201,9 @@ import type {
 	StartImageModelDownloadData,
 	StartImageModelDownloadErrors,
 	StartImageModelDownloadResponses,
+	StartLiveTranscriptionSessionData,
+	StartLiveTranscriptionSessionErrors,
+	StartLiveTranscriptionSessionResponses,
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildErrors,
 	StartLlamaCppSourceBuildResponses,
@@ -2107,6 +2110,8 @@ import {
 	zStartGraphWorkflowRunResponse,
 	zStartImageModelDownloadBody,
 	zStartImageModelDownloadResponse,
+	zStartLiveTranscriptionSessionPath,
+	zStartLiveTranscriptionSessionResponse,
 	zStartLlamaCppSourceBuildBody,
 	zStartLlamaCppSourceBuildResponse,
 	zStartNodeBindingResponse,
@@ -3365,6 +3370,36 @@ export const selectTranscriptionModel = <ThrowOnError extends boolean = false>(
 			"Content-Type": "application/json",
 			...options.headers,
 		},
+	});
+
+export const startLiveTranscriptionSession = <ThrowOnError extends boolean = false>(
+	options: Options<StartLiveTranscriptionSessionData, ThrowOnError>,
+): RequestResult<StartLiveTranscriptionSessionResponses, StartLiveTranscriptionSessionErrors, ThrowOnError> =>
+	(options.client ?? client).post<StartLiveTranscriptionSessionResponses, StartLiveTranscriptionSessionErrors, ThrowOnError>({
+		requestValidator: async (data) =>
+			await z
+				.object({
+					body: z.never().optional(),
+					path: zStartLiveTranscriptionSessionPath,
+					query: z.never().optional(),
+				})
+				.parseAsync(data),
+		responseType: "json",
+		responseValidator: async (data) => await zStartLiveTranscriptionSessionResponse.parseAsync(data),
+		security: [
+			{
+				key: "JWTBearerAuth",
+				scheme: "bearer",
+				type: "http",
+			},
+			{
+				key: "Bearer",
+				scheme: "bearer",
+				type: "http",
+			},
+		],
+		url: "/api/local/v1/transcription/sessions/{sessionId}/live/start",
+		...options,
 	});
 
 export const startTranscriptionModelDownload = <ThrowOnError extends boolean = false>(

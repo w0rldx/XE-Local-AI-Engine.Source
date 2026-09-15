@@ -1,0 +1,180 @@
+{
+  "note": "Re-record when the model, the VAD file, the launch flags or the segmenter\u0027s window rules change.",
+  "clip": "jfk.wav",
+  "clipSha256": "59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e",
+  "sampleRate": 16000,
+  "model": "ggml-base.bin",
+  "modelSha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
+  "vadModel": "ggml-silero-v6.2.0.bin",
+  "vadSha256": "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
+  "maxWindowSeconds": 5,
+  "tailGuardMs": 800,
+  "tickMs": 1000,
+  "pushMs": 2000,
+  "singleShotText": "And so my fellow Americans, ask not what your country can\n do for you,\n ask what you can do for your country.",
+  "windows": [
+    {
+      "startMs": 0,
+      "endMs": 1000,
+      "pcmSha256": "a2826632bdc4d663e60ada191ed9efc3a07454ac9541d20e03ce3e70406ae44b",
+      "detectedLanguageCode": "en",
+      "segments": [
+        {
+          "startMs": 320,
+          "endMs": 830,
+          "text": "And so...",
+          "confidence": 0.6396982759034703
+        }
+      ]
+    },
+    {
+      "startMs": 0,
+      "endMs": 2000,
+      "pcmSha256": "3888ae92c9c592212752ff0a9922fee6a225e07b7e0cbb5971577cdfd3d955b2",
+      "segments": [
+        {
+          "startMs": 320,
+          "endMs": 2020,
+          "text": "And so my fellow America",
+          "confidence": 0.7770693128679098
+        }
+      ]
+    },
+    {
+      "startMs": 0,
+      "endMs": 3000,
+      "pcmSha256": "e37e218aaa418b972f3e8c9ecf6517f50ab02c7fdf184ce7864334776fbb76c1",
+      "segments": [
+        {
+          "startMs": 320,
+          "endMs": 2240,
+          "text": "And so my fellow Americans.",
+          "confidence": 0.8196043121220066
+        }
+      ]
+    },
+    {
+      "startMs": 0,
+      "endMs": 4000,
+      "pcmSha256": "c938465227d05ea0d579939a96f0f65e65c345213bcef25e8b2ef1e0f5be3cbd",
+      "segments": [
+        {
+          "startMs": 320,
+          "endMs": 3760,
+          "text": "And so my fellow Americans ask",
+          "confidence": 0.7756173150170514
+        }
+      ]
+    },
+    {
+      "startMs": 0,
+      "endMs": 5000,
+      "pcmSha256": "329d61c2b83e8e393b0d728ef43bc6c51aa5f798def1162f2dc60894651cba95",
+      "segments": [
+        {
+          "startMs": 320,
+          "endMs": 4400,
+          "text": "And so my fellow Americans ask not to.",
+          "confidence": 0.5836346779132779
+        }
+      ]
+    },
+    {
+      "startMs": 4400,
+      "endMs": 6000,
+      "pcmSha256": "e93d0e89d50ccf258200b0acc61965249d91741c1c241bd84b4544f31e6361f6",
+      "segments": [
+        {
+          "startMs": 5360,
+          "endMs": 6000,
+          "text": "Why do you are coming?",
+          "confidence": 0.9675328000086932
+        }
+      ]
+    },
+    {
+      "startMs": 4400,
+      "endMs": 7000,
+      "pcmSha256": "d379f66cce3f8c1de469997a350f0fc7b733d316945cec5c5b23d4ba2274e951",
+      "segments": [
+        {
+          "startMs": 5360,
+          "endMs": 6970,
+          "text": "what your country can do.",
+          "confidence": 0.7665270024171303
+        }
+      ]
+    },
+    {
+      "startMs": 4400,
+      "endMs": 8000,
+      "pcmSha256": "5e6e4dedbf736baa807f14428ca6284f0bc280ff8da1310cb7bc20c4bdca9691",
+      "segments": [
+        {
+          "startMs": 5360,
+          "endMs": 7600,
+          "text": "What your country can do for you!",
+          "confidence": 0.8325926597194098
+        }
+      ]
+    },
+    {
+      "startMs": 4400,
+      "endMs": 9000,
+      "pcmSha256": "da5296cf1226456a4a41a1d254e90ccedbce7e7f121b2ced35569ee3a0d89d80",
+      "segments": [
+        {
+          "startMs": 5360,
+          "endMs": 8150,
+          "text": "what your country can do for you.",
+          "confidence": 0.8268449744306108
+        },
+        {
+          "startMs": 8150,
+          "endMs": 9010,
+          "text": "Ask what you can do.",
+          "confidence": 0.5818642579856993
+        }
+      ]
+    },
+    {
+      "startMs": 8150,
+      "endMs": 10000,
+      "pcmSha256": "0f4365f1cba7124acd59f3dbaa35784cca25aca407c57bd6a5e135ca535b13da",
+      "segments": [
+        {
+          "startMs": 8150,
+          "endMs": 9990,
+          "text": "Ask what you can do for your family.",
+          "confidence": 0.7148767851408434
+        }
+      ]
+    },
+    {
+      "startMs": 8150,
+      "endMs": 11000,
+      "pcmSha256": "c4528f8e6d686c04470256a996e062048561148ededf38c1dfbdf9047562e513",
+      "segments": [
+        {
+          "startMs": 8150,
+          "endMs": 10470,
+          "text": "Ask what you can do for your country.",
+          "confidence": 0.901167242478628
+        }
+      ]
+    },
+    {
+      "startMs": 8150,
+      "endMs": 11000,
+      "pcmSha256": "c4528f8e6d686c04470256a996e062048561148ededf38c1dfbdf9047562e513",
+      "segments": [
+        {
+          "startMs": 8150,
+          "endMs": 10470,
+          "text": "Ask what you can do for your country.",
+          "confidence": 0.901167242478628
+        }
+      ]
+    }
+  ]
+}

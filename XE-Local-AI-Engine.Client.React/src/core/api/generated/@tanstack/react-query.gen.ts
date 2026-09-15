@@ -409,6 +409,7 @@ import {
 	startGgufImport,
 	startGraphWorkflowRun,
 	startImageModelDownload,
+	startLiveTranscriptionSession,
 	startLlamaCppSourceBuild,
 	startNodeBinding,
 	startStableDiffusionCppSourceBuild,
@@ -1409,6 +1410,9 @@ import type {
 	StartGraphWorkflowRunResponse,
 	StartImageModelDownloadData,
 	StartImageModelDownloadResponse,
+	StartLiveTranscriptionSessionData,
+	StartLiveTranscriptionSessionError,
+	StartLiveTranscriptionSessionResponse,
 	StartLlamaCppSourceBuildData,
 	StartLlamaCppSourceBuildError,
 	StartLlamaCppSourceBuildResponse,
@@ -2405,6 +2409,30 @@ export const selectTranscriptionModelMutation = (
 	> = {
 		mutationFn: async (fnOptions) => {
 			const { data } = await selectTranscriptionModel({
+				...options,
+				...fnOptions,
+				throwOnError: true,
+			});
+			return data;
+		},
+	};
+	return mutationOptions;
+};
+
+export const startLiveTranscriptionSessionMutation = (
+	options?: Partial<Options<StartLiveTranscriptionSessionData>>,
+): UseMutationOptions<
+	StartLiveTranscriptionSessionResponse,
+	AxiosError<StartLiveTranscriptionSessionError>,
+	Options<StartLiveTranscriptionSessionData>
+> => {
+	const mutationOptions: UseMutationOptions<
+		StartLiveTranscriptionSessionResponse,
+		AxiosError<StartLiveTranscriptionSessionError>,
+		Options<StartLiveTranscriptionSessionData>
+	> = {
+		mutationFn: async (fnOptions) => {
+			const { data } = await startLiveTranscriptionSession({
 				...options,
 				...fnOptions,
 				throwOnError: true,

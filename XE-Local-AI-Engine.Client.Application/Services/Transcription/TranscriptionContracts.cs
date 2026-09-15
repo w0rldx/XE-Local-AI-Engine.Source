@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Transcription;
 
 using System.Buffers;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 
 /// <summary>The options one transcription session runs under, serialized into the session's encrypted config column.</summary>
@@ -287,4 +288,75 @@ public sealed class TranscriptionUploadSlot : IAsyncDisposable
 
         return ValueTask.CompletedTask;
     }
+}
+
+/// <summary>Which of the four ways a live-session start can end actually happened.</summary>
+public enum StartLiveOutcome
+{
+    /// <summary>The lanes were registered and the row moved to <c>Transcribing</c>.</summary>
+    Started = 0,
+
+    /// <summary>The session was already live; nothing was registered twice.</summary>
+    AlreadyLive = 1,
+
+    /// <summary>The session id is unknown.</summary>
+    SessionNotFound = 2,
+
+    /// <summary>The session had already reached a terminal state and cannot be started again.</summary>
+    SessionAlreadyFinished = 3
+}
+
+/// <summary>
+///     The outcome of one live-session start, as data rather than as an exception.
+/// </summary>
+/// <remarks>
+///     An unknown session and a finished one are expected answers a caller maps to a status code, not faults. A
+///     source kind that cannot be captured live is different: it is a malformed request, and it throws.
+/// </remarks>
+public sealed record StartLiveResult
+{
+    /// <summary>What happened.</summary>
+    public required StartLiveOutcome Outcome { get; init; }
+
+    /// <summary>The session's status after the call; meaningful for <c>Started</c> and <c>AlreadyLive</c>.</summary>
+    public TranscriptionSessionStatus Status { get; init; }
+
+    /// <summary>
+    ///     The highest sequence the session has persisted, so a client subscribing after the start knows what to ask
+    ///     the hub to replay from.
+    /// </summary>
+    public long LastSeq { get; init; }
+
+    /// <summary>The options the session was registered with; set only when it was started by this call.</summary>
+    public LiveSessionOptions? Options { get; init; }
+}
+
+/// <summary>
+///     Raised when a live session is asked of a source kind that has no live capture path — an uploaded file.
+/// </summary>
+/// <remarks>
+///     A fault rather than an outcome: every other refusal describes a session that exists and is in the wrong state,
+///     while this one describes a request that could never have succeeded for this session at any time.
+/// </remarks>
+public sealed class LiveTranscriptionSourceKindException : Exception
+{
+    /// <summary>Creates the exception for a source kind that cannot be captured live.</summary>
+    public LiveTranscriptionSourceKindException(TranscriptionSourceKind sourceKind)
+        : base($"A {sourceKind} transcription session has no live capture path.") =>
+        SourceKind = sourceKind;
+
+    /// <summary>Creates the exception with an explicit message.</summary>
+    public LiveTranscriptionSourceKindException(string message)
+        : base(message)
+    {
+    }
+
+    /// <summary>Creates the exception with an explicit message and the underlying cause.</summary>
+    public LiveTranscriptionSourceKindException(string message, Exception innerException)
+        : base(message, innerException)
+    {
+    }
+
+    /// <summary>The source kind that was refused.</summary>
+    public TranscriptionSourceKind SourceKind { get; }
 }

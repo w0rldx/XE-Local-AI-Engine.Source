@@ -1603,6 +1603,14 @@ The Azure bearer policy regression is pinned by a request-capturing transport th
 
 For push hubs: assign per-run monotonic `Seq`; buffer outside the live-run dictionary through a short retention window; join the group before replay; dedupe client-side with high-water mark + gaps. Publish terminal directly from cancel; a model call that never unwinds cannot be allowed to leave UI running forever.
 
+### PROPOSED (awaiting operator approval): a live-audio hub method's size cap is application-level, not the SignalR default
+
+**Rule:** the node's SignalR `MaximumReceiveMessageSize` is 512 KB (`ConfigureServices.cs`), not the framework's
+32 KB default, so a per-frame bound must be asserted inside the hub method itself (`TranscriptionHub.MaxFrameBytes`),
+and its test must be a unit test of that method, not of the transport. **Prevents:** an oversized frame accepted
+silently, because the transport-level 32 KB default that would otherwise have rejected it was already raised to
+512 KB for the whole node. **Authority:** S3 plan §1a.2; `TranscriptionHubTests`.
+
 
 The replay buffer must outlive the live-run dictionary because a fast run can finish before HTTP returns the ID needed to subscribe. Join first, then replay to the caller; sequence/high-water/gap handling deduplicates replay racing live publication. Keep the buffer bounded and evict after the replay-retention window. Cancel publishes a terminal immediately rather than waiting for an unresponsive model call to unwind.
 
@@ -1903,6 +1911,14 @@ Re-using a generated `*Options()` adapter for a different page inside a hand-wri
 
 
 SignalR hubs are listed in `config/signalr-proxy-paths.json`; add the path there rather than another inline proxy entry. A missing websocket route can wedge Vite's generic `/api` proxy and break existing hubs. Push-only terminal handlers invalidate queries explicitly. `InvocationState.Clone()` is the single deep-copy boundary used by dispatcher/resume registry; any omitted field can look correct live and persist null.
+
+### PROPOSED (awaiting operator approval): `signalr:check` only diffs hub route strings, never method signatures
+
+**Rule:** `pnpm run signalr:check` compares `MapHub<T>(route)` path strings against
+`config/signalr-proxy-paths.json` only; it does not diff hub method signatures. **Prevents:** adding a hub path
+without the JSON entry fails it AND silently breaks that hub's WebSocket upgrade in `vite dev` — it works on the
+app origin and is dead on the Vite origin, with no error from the script naming why. **Authority:**
+`CheckSignalrProxySync.mjs`; the `vite.config.ts` proxy comment.
 
 
 Auto-advance tracks an explicit armed state: reset on step change, arm only after observing unmet, and advance only after a later met observation. This prevents returning users from flashing through content already satisfied. Globally mounted queries remain disabled until an access token exists; otherwise the pre-login 401 can remain cached after authentication. Controlled react-joyride v3 completes on final `STEP_AFTER`/`NEXT`, not `STATUS.FINISHED`.

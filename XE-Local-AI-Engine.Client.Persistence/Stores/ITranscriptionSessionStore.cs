@@ -45,6 +45,41 @@ public interface ITranscriptionSessionStore
     Task<bool> SetStatusAsync(Guid sessionId, TranscriptionSessionStatus status, long updatedAtUtc, CancellationToken cancellationToken);
 
     /// <summary>
+    ///     Moves a session from <paramref name="expected" /> to <paramref name="desired" />, and only from there.
+    ///     False — writing nothing — when the session does not exist or is no longer in <paramref name="expected" />.
+    /// </summary>
+    /// <remarks>
+    ///     The compare and the write are one <c>SaveChangesAsync</c> on a tracked row, so a caller acting on a status
+    ///     it read earlier cannot overwrite a terminal state another writer reached in between. A live start and a
+    ///     graceful end race for exactly this row, and the loser must not resurrect it.
+    /// </remarks>
+    Task<bool> TryTransitionStatusAsync(Guid sessionId,
+        TranscriptionSessionStatus expected,
+        TranscriptionSessionStatus desired,
+        long updatedAtUtc,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     One session without its transcript, decrypted, or <see langword="null" /> when the id is unknown.
+    ///     <see cref="TranscriptionSessionSummaryView.SegmentCount" /> is counted in the database.
+    /// </summary>
+    /// <remarks>
+    ///     The read for a caller that wants the session's state rather than its text.
+    ///     <see cref="GetWithSegmentsAsync" /> includes and decrypts every row, which for a long live session is the
+    ///     whole transcript loaded to answer a question about one column.
+    /// </remarks>
+    Task<TranscriptionSessionSummaryView?> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     The highest <see cref="TranscriptSegmentView.Seq" /> the session holds, or 0 when it holds none.
+    /// </summary>
+    /// <remarks>
+    ///     Not the segment count: a transcript with a gap in it — a dropped commit, a partial restore — would make a
+    ///     count re-allocate a sequence the unique <c>(session_id, seq)</c> index already holds.
+    /// </remarks>
+    Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken);
+
+    /// <summary>
     ///     Marks a session <see cref="TranscriptionSessionStatus.Completed" />, recording the detected language and the
     ///     audio duration. False when the session did not exist.
     /// </summary>
@@ -69,6 +104,18 @@ public interface ITranscriptionSessionStore
     ///     </para>
     /// </summary>
     Task<bool> AppendSegmentsAsync(Guid sessionId, IReadOnlyList<TranscriptSegmentWrite> segments, long updatedAtUtc, CancellationToken cancellationToken);
+
+    /// <summary>
+    ///     One page of transcript rows after a watermark, ordered by <see cref="TranscriptSegmentView.Seq" /> and
+    ///     decrypted. <paramref name="afterSeq" /> is an EXCLUSIVE lower bound, so a subscriber resuming from the last
+    ///     sequence it saw does not receive that row a second time; an unknown session returns an empty page rather
+    ///     than throwing.
+    ///     <para>
+    ///         Unlike <see cref="GetWithSegmentsAsync" /> this bounds the read in SQL. A live session's replay has to
+    ///         answer "what did I miss" without decrypting a transcript that may already run to thousands of rows.
+    ///     </para>
+    /// </summary>
+    Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -116,8 +163,13 @@ public sealed record TranscriptSegmentView
 
 /// <summary>
 ///     A decrypted, transport-neutral view of a session without its transcript rows — what the session list renders.
-///     It deliberately carries neither the config nor the error pair: a list of sessions has no use for either, and
-///     leaving them off keeps the page cheap and the failure detail behind an explicit read of one session.
+///     It deliberately carries no error pair: a list of sessions has no use for one, and leaving it off keeps the
+///     failure detail behind an explicit read of one session.
+///     <para>
+///         <see cref="ConfigJson" /> rides along because it is free: every read that produces this view materializes
+///         the whole entity, so the interceptor has already decrypted that column. The list DTO still does not
+///         expose it — the live-start path is what needs it, and it needs it without loading a transcript.
+///     </para>
 /// </summary>
 public sealed record TranscriptionSessionSummaryView
 {
@@ -128,6 +180,10 @@ public sealed record TranscriptionSessionSummaryView
     public required TranscriptionSessionStatus Status { get; init; }
     public required TranscriptionSourceKind SourceKind { get; init; }
     public required string ModelId { get; init; }
+
+    /// <summary>The session's resolved options as JSON, exactly as <c>TranscriptionSessionDetailView</c> carries it.</summary>
+    public required string ConfigJson { get; init; }
+
     public string? DetectedLanguage { get; init; }
     public long? DurationMs { get; init; }
 

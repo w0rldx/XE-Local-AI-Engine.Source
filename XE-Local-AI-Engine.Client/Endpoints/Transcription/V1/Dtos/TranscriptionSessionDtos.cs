@@ -110,6 +110,29 @@ public sealed class TranscriptionSessionRouteRequest
 }
 
 /// <summary>
+///     What <c>POST transcription/sessions/{sessionId}/live/start</c> answers: the state the session is in now and
+///     the sequence the client must replay from.
+/// </summary>
+/// <remarks>
+///     The same body is returned for a session that was already live — the route is idempotent, so a retry, a
+///     double-click or a reconnect is not an error — and for the <b>409</b> a session that has already finished
+///     answers with, so a client that raced a cancel can render what actually happened instead of a bare status code.
+/// </remarks>
+public sealed class StartLiveTranscriptionSessionResponse
+{
+    public required Guid SessionId { get; init; }
+
+    /// <summary><c>Created</c> / <c>Transcribing</c> / <c>Completed</c> / <c>Failed</c> / <c>Cancelled</c>.</summary>
+    public required string Status { get; init; }
+
+    /// <summary>
+    ///     The highest sequence already persisted for this session; the watermark to subscribe from. Zero means the
+    ///     transcript is empty, never "segment zero" — sequences ascend from one.
+    /// </summary>
+    public required long LastSeq { get; init; }
+}
+
+/// <summary>
 ///     The options a new session is created with. The title is decided here and never at upload time, so the file
 ///     flow sends the chosen file's name; a blank one falls back to a generated <c>Transcription {date}</c>.
 /// </summary>

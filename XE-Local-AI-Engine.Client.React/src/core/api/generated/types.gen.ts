@@ -489,6 +489,12 @@ export type XeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionMode
 	modelId?: string | null;
 };
 
+export type XeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse = {
+	sessionId: string;
+	status: string;
+	lastSeq: number;
+};
+
 export type XeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse = {
 	started: boolean;
 	status: XeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse;
@@ -7537,6 +7543,47 @@ export type SelectTranscriptionModelResponses = {
 };
 
 export type SelectTranscriptionModelResponse = SelectTranscriptionModelResponses[keyof SelectTranscriptionModelResponses];
+
+export type StartLiveTranscriptionSessionData = {
+	body?: never;
+	path: {
+		sessionId: string;
+	};
+	query?: never;
+	url: "/api/local/v1/transcription/sessions/{sessionId}/live/start";
+};
+
+export type StartLiveTranscriptionSessionErrors = {
+	/**
+	 * Bad Request
+	 */
+	400: FastEndpointsErrorResponse;
+	/**
+	 * Unauthorized
+	 */
+	401: unknown;
+	/**
+	 * Forbidden
+	 */
+	403: unknown;
+	/**
+	 * Not Found
+	 */
+	404: unknown;
+	409: XeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse;
+};
+
+export type StartLiveTranscriptionSessionError = StartLiveTranscriptionSessionErrors[keyof StartLiveTranscriptionSessionErrors];
+
+export type StartLiveTranscriptionSessionResponses = {
+	/**
+	 * Success
+	 */
+	200: XeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse;
+};
+
+export type StartLiveTranscriptionSessionResponse =
+	StartLiveTranscriptionSessionResponses[keyof StartLiveTranscriptionSessionResponses];
 
 export type StartTranscriptionModelDownloadData = {
 	body: XeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;

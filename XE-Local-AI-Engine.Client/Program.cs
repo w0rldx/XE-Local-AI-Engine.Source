@@ -753,6 +753,8 @@ namespace XE_Local_AI_Engine.Client
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
             app.MapHub<WorkSessionHub>(LocalApiRoutes.WorkSessions.Hub)
                .RequireAuthorization(NodeAuthorizationPolicies.Operator);
+            app.MapHub<TranscriptionHub>(LocalApiRoutes.Transcription.Hub)
+               .RequireAuthorization(NodeAuthorizationPolicies.Operator);
 
             // Mapped unconditionally, like the work-session hub: DevWorkflows:Enabled is enforced by the request-path
             // middleware above, which answers 404 for the whole prefix — including this path.

@@ -16,5 +16,6 @@
 	"/api/local/v1/work-sessions/hub",
 	"/api/local/v1/development-workflows/hub",
 	"/api/local/v1/graph-workflows/hub",
-	"/api/local/v1/external-apps/hub"
+	"/api/local/v1/external-apps/hub",
+	"/api/local/v1/transcription/hub"
 ]

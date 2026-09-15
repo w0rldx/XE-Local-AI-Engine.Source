@@ -301,6 +301,144 @@ public sealed class TranscriptionSessionStoreTests : IDisposable
         AssertEx.Equal(expected: 400L, summary.UpdatedAtUtc);
     }
 
+    [Test]
+    public async Task ListSegmentsAfter_PagesFromTheWatermarkAndExcludesIt()
+    {
+        var databasePath = await CreateSchemaAsync("store-segments-after.sqlite").ConfigureAwait(false);
+        var sessionId = Guid.NewGuid();
+        var otherId = Guid.NewGuid();
+
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "live", "{}", createdAtUtc: 100), CancellationToken.None)).ConfigureAwait(false);
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(otherId, "other", "{}", createdAtUtc: 200), CancellationToken.None)).ConfigureAwait(false);
+
+        // Appended out of sequence order on purpose: the read orders by seq, not by insertion.
+        await RunAsync(databasePath,
+                store => store.AppendSegmentsAsync(sessionId,
+                    [
+                        NewSegment(seq: 3, startMs: 2_000, "three"),
+                        NewSegment(seq: 1, startMs: 0, "one"),
+                        NewSegment(seq: 4, startMs: 3_000, "four", TranscriptChannel.Others),
+                        NewSegment(seq: 2, startMs: 1_000, "two")
+                    ],
+                    updatedAtUtc: 300,
+                    CancellationToken.None))
+            .ConfigureAwait(false);
+
+        // A row on a second session, to prove the read is keyed on the session and not on the sequence alone.
+        await RunAsync(databasePath,
+                store => store.AppendSegmentsAsync(otherId, [NewSegment(seq: 1, startMs: 0, "not mine")], updatedAtUtc: 300, CancellationToken.None))
+            .ConfigureAwait(false);
+
+        var fromStart = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(sessionId, afterSeq: 0, limit: 2, CancellationToken.None)).ConfigureAwait(false);
+        var afterTwo = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(sessionId, afterSeq: 2, limit: 10, CancellationToken.None)).ConfigureAwait(false);
+        var afterLast = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(sessionId, afterSeq: 4, limit: 10, CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.Equal("1:one,2:two", string.Join(',', fromStart.Select(static row => $"{row.Seq}:{row.Text}")),
+            "A fresh subscriber reads the first page in sequence order, decrypted, and stops at the limit.");
+        AssertEx.Equal("3:three,4:four", string.Join(',', afterTwo.Select(static row => $"{row.Seq}:{row.Text}")),
+            "The watermark is an EXCLUSIVE lower bound: sequence two is the last row seen, never a row to resend.");
+        AssertEx.Equal(TranscriptChannel.Others, afterTwo[^1].Channel, "The channel survives the read.");
+        AssertEx.Empty(afterLast, "A subscriber already at the end of the transcript is handed nothing.");
+    }
+
+    [Test]
+    public async Task ListSegmentsAfter_ForAnUnknownSession_IsEmpty()
+    {
+        var databasePath = await CreateSchemaAsync("store-segments-after-unknown.sqlite").ConfigureAwait(false);
+
+        var rows = await QueryAsync(databasePath, store => store.ListSegmentsAfterAsync(Guid.NewGuid(), afterSeq: 0, limit: 10, CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.Empty(rows, "An unknown session reads as an empty transcript, never as a throw — a persist-free live session has no row at all.");
+    }
+
+    [Test]
+    public async Task TryTransitionStatus_OnlyMovesTheRowFromTheExpectedStatus()
+    {
+        var databasePath = await CreateSchemaAsync("store-transition.sqlite").ConfigureAwait(false);
+        var sessionId = Guid.NewGuid();
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "live", "{}", createdAtUtc: 100), CancellationToken.None)).ConfigureAwait(false);
+
+        var moved = await QueryAsync(databasePath,
+            store => store.TryTransitionStatusAsync(sessionId,
+                TranscriptionSessionStatus.Created,
+                TranscriptionSessionStatus.Transcribing,
+                updatedAtUtc: 200,
+                CancellationToken.None)).ConfigureAwait(false);
+
+        // Someone else has since finished the session; a caller still holding the stale Created must not resurrect it.
+        _ = await QueryAsync(databasePath, store => store.SetStatusAsync(sessionId, TranscriptionSessionStatus.Completed, updatedAtUtc: 300, CancellationToken.None))
+            .ConfigureAwait(false);
+        var stale = await QueryAsync(databasePath,
+            store => store.TryTransitionStatusAsync(sessionId,
+                TranscriptionSessionStatus.Created,
+                TranscriptionSessionStatus.Transcribing,
+                updatedAtUtc: 400,
+                CancellationToken.None)).ConfigureAwait(false);
+
+        var unknown = await QueryAsync(databasePath,
+            store => store.TryTransitionStatusAsync(Guid.NewGuid(),
+                TranscriptionSessionStatus.Created,
+                TranscriptionSessionStatus.Transcribing,
+                updatedAtUtc: 500,
+                CancellationToken.None)).ConfigureAwait(false);
+
+        var view = AssertEx.NotNull(await QueryAsync(databasePath, store => store.GetSummaryAsync(sessionId, CancellationToken.None)).ConfigureAwait(false), "The session exists.");
+        AssertEx.True(moved, "A row in the expected status moves.");
+        AssertEx.False(stale, "A row that has moved on does not.");
+        AssertEx.False(unknown, "Neither does one that does not exist.");
+        AssertEx.Equal(TranscriptionSessionStatus.Completed, view.Status, "The losing transition wrote nothing at all.");
+        AssertEx.Equal(expected: 300L, view.UpdatedAtUtc, "Not even the timestamp.");
+    }
+
+    [Test]
+    public async Task GetSummary_ReadsTheSessionWithoutItsTranscript_AndCountsIt()
+    {
+        var databasePath = await CreateSchemaAsync("store-summary.sqlite").ConfigureAwait(false);
+        var sessionId = Guid.NewGuid();
+
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "titled", "{\"translate\":true}", createdAtUtc: 100), CancellationToken.None)).ConfigureAwait(false);
+        await RunAsync(databasePath,
+                store => store.AppendSegmentsAsync(sessionId,
+                    [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 2, startMs: 1_000, "two")],
+                    updatedAtUtc: 200,
+                    CancellationToken.None))
+            .ConfigureAwait(false);
+
+        var summary = AssertEx.NotNull(await QueryAsync(databasePath, store => store.GetSummaryAsync(sessionId, CancellationToken.None)).ConfigureAwait(false), "The session is readable.");
+        var unknown = await QueryAsync(databasePath, store => store.GetSummaryAsync(Guid.NewGuid(), CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.Equal("titled", summary.Title, "The title decrypts.");
+        AssertEx.Equal("{\"translate\":true}", summary.ConfigJson, "And so does the config the live start reads.");
+        AssertEx.Equal(expected: 2, summary.SegmentCount, "The count is the transcript's length, counted in SQL.");
+        AssertEx.Null(unknown, "An unknown id reads as null rather than throwing.");
+    }
+
+    [Test]
+    public async Task GetLastSeq_ReturnsTheMaximum_NotTheCount()
+    {
+        var databasePath = await CreateSchemaAsync("store-lastseq.sqlite").ConfigureAwait(false);
+        var sessionId = Guid.NewGuid();
+        await RunAsync(databasePath, store => store.CreateAsync(NewCreate(sessionId, "gappy", "{}", createdAtUtc: 100), CancellationToken.None)).ConfigureAwait(false);
+
+        var empty = await QueryAsync(databasePath, store => store.GetLastSeqAsync(sessionId, CancellationToken.None)).ConfigureAwait(false);
+
+        // A deliberate gap: two rows numbered 1 and 7. A count would answer 2 and re-allocate a sequence the unique
+        // (session_id, seq) index already holds.
+        await RunAsync(databasePath,
+                store => store.AppendSegmentsAsync(sessionId,
+                    [NewSegment(seq: 1, startMs: 0, "one"), NewSegment(seq: 7, startMs: 6_000, "seven")],
+                    updatedAtUtc: 200,
+                    CancellationToken.None))
+            .ConfigureAwait(false);
+
+        var last = await QueryAsync(databasePath, store => store.GetLastSeqAsync(sessionId, CancellationToken.None)).ConfigureAwait(false);
+        var unknown = await QueryAsync(databasePath, store => store.GetLastSeqAsync(Guid.NewGuid(), CancellationToken.None)).ConfigureAwait(false);
+
+        AssertEx.Equal(expected: 0L, empty, "A transcript with no rows starts the live counter at zero.");
+        AssertEx.Equal(expected: 7L, last, "The maximum, not the count of two.");
+        AssertEx.Equal(expected: 0L, unknown, "An unknown session has no sequences.");
+    }
+
     private async Task<string> CreateSchemaAsync(string fileName)
     {
         Directory.CreateDirectory(_rootPath);

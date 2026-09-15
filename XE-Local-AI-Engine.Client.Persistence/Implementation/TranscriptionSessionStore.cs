@@ -114,6 +114,49 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         return true;
     }
 
+    public async Task<bool> TryTransitionStatusAsync(Guid sessionId,
+        TranscriptionSessionStatus expected,
+        TranscriptionSessionStatus desired,
+        long updatedAtUtc,
+        CancellationToken cancellationToken)
+    {
+        var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        if (entity is null || entity.Status != expected)
+        {
+            return false;
+        }
+
+        entity.Status = desired;
+        entity.UpdatedAtUtc = updatedAtUtc;
+        _ = await _dbContext.SaveChangesAsync(cancellationToken).ConfigureAwait(false);
+        return true;
+    }
+
+    public async Task<TranscriptionSessionSummaryView?> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        // No Include: the count comes back as a correlated subquery, so the caller learns how long the transcript is
+        // without a single segment being loaded or decrypted.
+        var row = await _dbContext.TranscriptionSessions
+                                  .AsNoTracking()
+                                  .Where(session => session.Id == sessionId)
+                                  .Select(session => new SessionCountRow(session, session.Segments.Count))
+                                  .FirstOrDefaultAsync(cancellationToken)
+                                  .ConfigureAwait(false);
+
+        return row is null ? null : ToSummaryView(row.Session, row.SegmentCount);
+    }
+
+    public async Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        // MAX over the indexed column, never a count: the two disagree the moment a transcript has a gap in it.
+        return await _dbContext.TranscriptSegments
+                               .AsNoTracking()
+                               .Where(segment => segment.SessionId == sessionId)
+                               .Select(static segment => (long?)segment.Seq)
+                               .MaxAsync(cancellationToken)
+                               .ConfigureAwait(false) ?? 0L;
+    }
+
     public async Task<bool> CompleteAsync(Guid sessionId, string? detectedLanguage, long durationMs, long updatedAtUtc, CancellationToken cancellationToken)
     {
         var entity = await LoadTrackedAsync(sessionId, cancellationToken).ConfigureAwait(false);
@@ -188,6 +231,29 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
         return true;
     }
 
+    public async Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken)
+    {
+        // Floored for the same reason ListAsync floors its page: a negative limit reaches SQLite as LIMIT -1, which is
+        // "no limit" — the whole transcript, every row decrypted, for a caller that asked for none.
+        var take = Math.Max(val1: 0, limit);
+        if (take == 0)
+        {
+            return [];
+        }
+
+        // Whole entities, not a projection: the materialization interceptor is what decrypts the text, and a
+        // projection to an anonymous type would hand back the ciphertext.
+        var rows = await _dbContext.TranscriptSegments
+                                   .AsNoTracking()
+                                   .Where(segment => segment.SessionId == sessionId && segment.Seq > afterSeq)
+                                   .OrderBy(segment => segment.Seq)
+                                   .Take(take)
+                                   .ToListAsync(cancellationToken)
+                                   .ConfigureAwait(false);
+
+        return rows.Select(static segment => ToSegmentView(segment)).ToArray();
+    }
+
     // Tracked load so a status-only mutation leaves the encrypted properties unmodified — the SaveChanges interceptor
     // skips an unmodified column, preserving its stored ciphertext.
     private Task<TranscriptionSession?> LoadTrackedAsync(Guid sessionId, CancellationToken cancellationToken)
@@ -206,6 +272,7 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
             Status = entity.Status,
             SourceKind = entity.SourceKind,
             ModelId = entity.ModelId,
+            ConfigJson = Encoding.UTF8.GetString(entity.ConfigJson),
             DetectedLanguage = entity.DetectedLanguage,
             DurationMs = entity.DurationMs,
             SegmentCount = segmentCount
@@ -235,17 +302,22 @@ public sealed class TranscriptionSessionStore(NodeChatDbContext dbContext) : ITr
             SegmentCount = entity.Segments.Count,
             Segments = entity.Segments
                              .OrderBy(segment => segment.Seq)
-                             .Select(static segment => new TranscriptSegmentView
-                             {
-                                 Id = segment.Id,
-                                 Seq = segment.Seq,
-                                 StartMs = segment.StartMs,
-                                 EndMs = segment.EndMs,
-                                 Text = Encoding.UTF8.GetString(segment.Text),
-                                 Channel = segment.Channel,
-                                 Confidence = segment.Confidence
-                             })
+                             .Select(static segment => ToSegmentView(segment))
                              .ToArray()
+        };
+    }
+
+    private static TranscriptSegmentView ToSegmentView(TranscriptSegment segment)
+    {
+        return new TranscriptSegmentView
+        {
+            Id = segment.Id,
+            Seq = segment.Seq,
+            StartMs = segment.StartMs,
+            EndMs = segment.EndMs,
+            Text = Encoding.UTF8.GetString(segment.Text),
+            Channel = segment.Channel,
+            Confidence = segment.Confidence
         };
     }
 }

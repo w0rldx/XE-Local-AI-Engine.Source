@@ -40,10 +40,16 @@ public sealed class TranscriptionService : ITranscriptionService
     // slices reuse when they feed it two.
     private static readonly TranscriptChannel[] SingleChannel = [TranscriptChannel.Mono];
 
+    // The lane sets a live source kind implies. Shared instances: a session's channels are read, never mutated.
+    private static readonly TranscriptChannel[] MonoLanes = [TranscriptChannel.Mono];
+    private static readonly TranscriptChannel[] OthersLanes = [TranscriptChannel.Others];
+    private static readonly TranscriptChannel[] TwoLanes = [TranscriptChannel.You, TranscriptChannel.Others];
+
     // Keyed by session id; a running transcription owns a live source, and CancelAsync signals it through here.
     private readonly ConcurrentDictionary<Guid, CancellationTokenSource> _inFlight = new();
 
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly ILiveTranscriptionSessionRegistry _live;
     private readonly ITranscriptionRuntimeService _runtimeService;
     private readonly IWhisperServerSupervisor _supervisor;
     private readonly IWhisperTranscriber _transcriber;
@@ -53,6 +59,7 @@ public sealed class TranscriptionService : ITranscriptionService
     private readonly ILogger<TranscriptionService> _logger;
 
     public TranscriptionService(IServiceScopeFactory scopeFactory,
+        ILiveTranscriptionSessionRegistry live,
         ITranscriptionRuntimeService runtimeService,
         IWhisperServerSupervisor supervisor,
         IWhisperTranscriber transcriber,
@@ -62,6 +69,7 @@ public sealed class TranscriptionService : ITranscriptionService
         ILogger<TranscriptionService> logger)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
+        _live = live ?? throw new ArgumentNullException(nameof(live));
         _runtimeService = runtimeService ?? throw new ArgumentNullException(nameof(runtimeService));
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _transcriber = transcriber ?? throw new ArgumentNullException(nameof(transcriber));
@@ -107,6 +115,13 @@ public sealed class TranscriptionService : ITranscriptionService
                           .GetWithSegmentsAsync(sessionId, cancellationToken).ConfigureAwait(false);
     }
 
+    public async Task<TranscriptionSessionSummaryView?> GetSessionSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                          .GetSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task<TranscriptionSessionPage> ListSessionsAsync(int limit, int offset, CancellationToken cancellationToken)
     {
         var boundedLimit = Math.Clamp(limit, 1, MaxPageSize);
@@ -135,9 +150,19 @@ public sealed class TranscriptionService : ITranscriptionService
 
     public async Task<bool> CancelAsync(Guid sessionId, CancellationToken cancellationToken)
     {
+        // A live session ends through the registry's single termination path, never by signalling a batch source it
+        // does not own. Delete reaches this method first, so the lanes stop before the row is removed rather than
+        // feeding one that is already gone.
+        // Called unconditionally, not only when the session reads as live: IsLive flips false as the FIRST step of
+        // ending, so a delete arriving mid-teardown would otherwise skip this and remove the row while lanes were
+        // still running against it. EndAsync is a no-op for an unknown session and hands back the in-flight end's
+        // own task for one already ending, so awaiting it joins that teardown rather than racing it.
+        var wasLive = _live.IsLive(sessionId);
+        await _live.EndAsync(sessionId, LiveEndReason.Cancelled, cancellationToken).ConfigureAwait(false);
+
         if (!_inFlight.TryGetValue(sessionId, out var source))
         {
-            return false;
+            return wasLive;
         }
 
         try
@@ -147,7 +172,7 @@ public sealed class TranscriptionService : ITranscriptionService
         catch (ObjectDisposedException)
         {
             // The transcription finished between the lookup and the signal; there is nothing left to cancel.
-            return false;
+            return wasLive;
         }
 
         return true;
@@ -202,6 +227,227 @@ public sealed class TranscriptionService : ITranscriptionService
             _ = _inFlight.TryRemove(slot.SessionId, out _);
         }
     }
+
+    public async Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        // The summary, not the transcript: this method needs a status, a model, a config and a source kind, and
+        // decrypting every segment of a long session to reach them is work nobody asked for.
+        var session = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        if (session is null)
+        {
+            return new StartLiveResult { Outcome = StartLiveOutcome.SessionNotFound };
+        }
+
+        // Before the status checks: a file session has no live path at any status, so answering "already finished"
+        // would send the caller off to retry something that can never work.
+        var channels = LiveChannelsFor(session.SourceKind);
+
+        // The MAX sequence, never the segment count: a transcript with a gap in it would otherwise re-allocate a
+        // sequence the unique (session_id, seq) index already holds.
+        var lastSeq = await GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false);
+
+        if (IsTerminal(session.Status))
+        {
+            return new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.SessionAlreadyFinished,
+                Status = session.Status,
+                LastSeq = lastSeq
+            };
+        }
+
+        if (session.Status == TranscriptionSessionStatus.Transcribing && _live.IsLive(sessionId))
+        {
+            // A double-click, a retried fetch or a reconnect that re-issues the start must not produce two sets of lanes.
+            return new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.AlreadyLive,
+                Status = session.Status,
+                LastSeq = lastSeq
+            };
+        }
+
+        var config = DeserializeConfig(session.ConfigJson);
+        var options = new LiveSessionOptions
+        {
+            ModelId = session.ModelId,
+            Language = string.Equals(config.LanguageMode, "override", StringComparison.OrdinalIgnoreCase)
+                ? config.LanguageOverride
+                : null,
+            Translate = config.Translate,
+            Settings = LiveSegmenterSettings.FromSessionConfig(config.MaxWindowSeconds),
+            Channels = channels,
+            StartingSeq = lastSeq,
+            SourceKind = session.SourceKind,
+            Persist = true
+        };
+
+        // Compare-and-set, not a blind write from the status read above. A start racing a graceful end would
+        // otherwise overwrite the terminal status that end had just written and resurrect a finished session.
+        var previousStatus = session.Status;
+        if (!await TryTransitionAsync(sessionId, previousStatus, TranscriptionSessionStatus.Transcribing, cancellationToken).ConfigureAwait(false))
+        {
+            return await DescribeMovedRowAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        }
+
+        try
+        {
+            await _live.StartLiveSessionAsync(sessionId, options, cancellationToken).ConfigureAwait(false);
+        }
+        catch (LiveSessionAlreadyRegisteredException)
+        {
+            // Two starts read Created and both moved the row; this one lost the registration race. Rolling back now
+            // would reset the WINNER's row, so the loser reports the same answer a sequential second call gets and
+            // touches nothing. Deliberately NOT conditioned on IsLive: by the time this runs the winner may already
+            // be ending, and a loser that then rolled back would put a finished session back into Created.
+            return new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.AlreadyLive,
+                Status = TranscriptionSessionStatus.Transcribing,
+                LastSeq = lastSeq
+            };
+        }
+        catch
+        {
+            // A row reading Transcribing with no registry entry accepts no audio and never ends, which is worse than
+            // a start the caller can see failed. Compare-and-set again: a false result means the row moved on while
+            // this start was failing, and whoever moved it owns it now.
+            if (!await TryTransitionAsync(sessionId, TranscriptionSessionStatus.Transcribing, previousStatus, CancellationToken.None).ConfigureAwait(false))
+            {
+                _logger.LogDebug("Rolling transcription session {SessionId} back to {Status} found the row already moved on.", sessionId, previousStatus);
+            }
+
+            throw;
+        }
+
+        return new StartLiveResult
+        {
+            Outcome = StartLiveOutcome.Started,
+            Status = TranscriptionSessionStatus.Transcribing,
+            LastSeq = lastSeq,
+            Options = options
+        };
+    }
+
+    public async Task AppendLiveSegmentAsync(Guid sessionId,
+        long seq,
+        TranscriptChannel channel,
+        long startMs,
+        long endMs,
+        string text,
+        double? confidence,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        _ = await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                       .AppendSegmentsAsync(sessionId,
+                           [
+                               new TranscriptSegmentWrite
+                               {
+                                   Seq = seq,
+                                   StartMs = startMs,
+                                   EndMs = endMs,
+                                   Text = text,
+                                   Channel = channel,
+                                   Confidence = confidence
+                               }
+                           ],
+                           _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(),
+                           cancellationToken)
+                       .ConfigureAwait(false);
+    }
+
+    public async Task CompleteLiveAsync(Guid sessionId,
+        TranscriptionSessionStatus finalStatus,
+        long durationMs,
+        string? detectedLanguage,
+        string? errorCode,
+        string? errorMessage,
+        CancellationToken cancellationToken)
+    {
+        var updatedAtUtc = _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
+
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        var store = scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>();
+
+        switch (finalStatus)
+        {
+            case TranscriptionSessionStatus.Completed:
+                _ = await store.CompleteAsync(sessionId, detectedLanguage, durationMs, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                break;
+
+            // The error pair is what makes a failure readable; a failed end with neither still records the status
+            // rather than throwing on the store's own argument guards.
+            case TranscriptionSessionStatus.Failed when !string.IsNullOrWhiteSpace(errorCode) && !string.IsNullOrWhiteSpace(errorMessage):
+                _ = await store.FailAsync(sessionId, errorCode, errorMessage, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                break;
+
+            default:
+                _ = await store.SetStatusAsync(sessionId, finalStatus, updatedAtUtc, cancellationToken).ConfigureAwait(false);
+                break;
+        }
+    }
+
+    public async Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId,
+        long afterSeq,
+        int limit,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                          .ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken)
+                          .ConfigureAwait(false);
+    }
+
+    /// <summary>
+    ///     What to tell a caller whose status transition lost: the row moved under it between the read and the write.
+    /// </summary>
+    private async Task<StartLiveResult> DescribeMovedRowAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        var current = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        if (current is null)
+        {
+            return new StartLiveResult { Outcome = StartLiveOutcome.SessionNotFound };
+        }
+
+        return new StartLiveResult
+        {
+            // A session that is live belongs to whoever registered it; anything else has moved to a state this
+            // start cannot begin from, and the caller is told so rather than being handed a resurrected row.
+            Outcome = _live.IsLive(sessionId) ? StartLiveOutcome.AlreadyLive : StartLiveOutcome.SessionAlreadyFinished,
+            Status = current.Status,
+            LastSeq = await GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false)
+        };
+    }
+
+    private async Task<bool> TryTransitionAsync(Guid sessionId,
+        TranscriptionSessionStatus expected,
+        TranscriptionSessionStatus desired,
+        CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                          .TryTransitionStatusAsync(sessionId, expected, desired, _timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), cancellationToken)
+                          .ConfigureAwait(false);
+    }
+
+    private async Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        await using var scope = _scopeFactory.CreateAsyncScope();
+        return await scope.ServiceProvider.GetRequiredService<ITranscriptionSessionStore>()
+                          .GetLastSeqAsync(sessionId, cancellationToken).ConfigureAwait(false);
+    }
+
+    // Which lanes a source kind implies. A file has none, and that is a malformed request rather than a refused
+    // state, so it leaves as an exception where every other answer here is data.
+    private static IReadOnlyList<TranscriptChannel> LiveChannelsFor(TranscriptionSourceKind sourceKind) =>
+        sourceKind switch
+        {
+            TranscriptionSourceKind.Microphone or TranscriptionSourceKind.Dictation => MonoLanes,
+            TranscriptionSourceKind.SystemAudio or TranscriptionSourceKind.ApplicationProcess => OthersLanes,
+            TranscriptionSourceKind.MicrophoneAndSystem => TwoLanes,
+            _ => throw new LiveTranscriptionSourceKindException(sourceKind)
+        };
 
     /// <summary>
     ///     Moves the session to <see cref="TranscriptionSessionStatus.Transcribing" /> and runs it, mapping every way

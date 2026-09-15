@@ -59,6 +59,16 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
     /// <summary>How many times the endpoint reached for an upload slot — zero proves the body was never read.</summary>
     public int BeginUploadCallCount { get; private set; }
 
+    /// <summary>What <see cref="StartLiveAsync" /> answers; null derives it from whether the session was seeded.</summary>
+    public StartLiveResult? StartLiveResult { get; init; }
+
+    /// <summary>Thrown from <see cref="StartLiveAsync" />, to drive the unsupported-source-kind case.</summary>
+    public Exception? StartLiveThrows { get; init; }
+
+    public int StartLiveCallCount { get; private set; }
+
+    public Guid LastStartLiveSessionId { get; private set; }
+
     /// <summary>Inserts a session directly, for the tests that need one to exist without going through the API.</summary>
     public Guid SeedSession()
     {
@@ -116,6 +126,29 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
         return Task.FromResult(_sessions.TryGetValue(sessionId, out var session) ? session : null);
     }
 
+    public Task<TranscriptionSessionSummaryView?> GetSessionSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        if (GetReturnsNull || !_sessions.TryGetValue(sessionId, out var session))
+        {
+            return Task.FromResult<TranscriptionSessionSummaryView?>(result: null);
+        }
+
+        return Task.FromResult<TranscriptionSessionSummaryView?>(new TranscriptionSessionSummaryView
+        {
+            Id = session.Id,
+            Title = session.Title,
+            CreatedAtUtc = session.CreatedAtUtc,
+            UpdatedAtUtc = session.UpdatedAtUtc,
+            Status = session.Status,
+            SourceKind = session.SourceKind,
+            ModelId = session.ModelId,
+            ConfigJson = session.ConfigJson,
+            DetectedLanguage = session.DetectedLanguage,
+            DurationMs = session.DurationMs,
+            SegmentCount = session.SegmentCount
+        });
+    }
+
     public Task<TranscriptionSessionPage> ListSessionsAsync(int limit, int offset, CancellationToken cancellationToken)
     {
         LastLimit = limit;
@@ -131,6 +164,7 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
                 Status = TranscriptionSessionStatus.Completed,
                 SourceKind = TranscriptionSourceKind.File,
                 ModelId = "ggml-tiny",
+                ConfigJson = "{\"languageMode\":\"auto\"}",
                 SegmentCount = 3
             }
         ], TotalCount));
@@ -191,6 +225,49 @@ internal sealed class StubTranscriptionService : ITranscriptionService, IDisposa
 
         return TranscribeFileResult.Succeeded(session);
     }
+
+    /// <summary>Records the start call and answers whatever the test set up; it registers nothing.</summary>
+    public Task<StartLiveResult> StartLiveAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        StartLiveCallCount++;
+        LastStartLiveSessionId = sessionId;
+
+        if (StartLiveThrows is not null)
+        {
+            throw StartLiveThrows;
+        }
+
+        return Task.FromResult(StartLiveResult ?? new StartLiveResult
+        {
+            Outcome = _sessions.ContainsKey(sessionId) ? StartLiveOutcome.Started : StartLiveOutcome.SessionNotFound,
+            Status = TranscriptionSessionStatus.Transcribing
+        });
+    }
+
+    public Task AppendLiveSegmentAsync(Guid sessionId,
+        long seq,
+        TranscriptChannel channel,
+        long startMs,
+        long endMs,
+        string text,
+        double? confidence,
+        CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task CompleteLiveAsync(Guid sessionId,
+        TranscriptionSessionStatus finalStatus,
+        long durationMs,
+        string? detectedLanguage,
+        string? errorCode,
+        string? errorMessage,
+        CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId,
+        long afterSeq,
+        int limit,
+        CancellationToken cancellationToken) =>
+        Task.FromResult<IReadOnlyList<TranscriptSegmentView>>([]);
 
     public void Dispose()
     {

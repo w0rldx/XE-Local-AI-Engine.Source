@@ -276,6 +276,58 @@ internal sealed class GatedTranscriptionSessionStore(ITranscriptionSessionStore 
 
     public Task<bool> AppendSegmentsAsync(Guid sessionId, IReadOnlyList<TranscriptSegmentWrite> segments, long updatedAtUtc, CancellationToken cancellationToken) =>
         inner.AppendSegmentsAsync(sessionId, segments, updatedAtUtc, cancellationToken);
+
+    public Task<IReadOnlyList<TranscriptSegmentView>> ListSegmentsAfterAsync(Guid sessionId, long afterSeq, int limit, CancellationToken cancellationToken) =>
+        inner.ListSegmentsAfterAsync(sessionId, afterSeq, limit, cancellationToken);
+
+    public Task<bool> TryTransitionStatusAsync(Guid sessionId,
+        TranscriptionSessionStatus expected,
+        TranscriptionSessionStatus desired,
+        long updatedAtUtc,
+        CancellationToken cancellationToken) =>
+        inner.TryTransitionStatusAsync(sessionId, expected, desired, updatedAtUtc, cancellationToken);
+
+    public async Task<TranscriptionSessionSummaryView?> GetSummaryAsync(Guid sessionId, CancellationToken cancellationToken)
+    {
+        // Gated like GetWithSegmentsAsync: this is the read the live start decides on, so holding it is how a test
+        // puts another writer between that decision and the write it leads to.
+        var view = await inner.GetSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
+        await gate.HoldIfArmedAsync().ConfigureAwait(false);
+        return view;
+    }
+
+    public Task<long> GetLastSeqAsync(Guid sessionId, CancellationToken cancellationToken) =>
+        inner.GetLastSeqAsync(sessionId, cancellationToken);
+}
+
+/// <summary>
+///     A registry that never has a live session. The batch harness needs one because cancel and delete route a live
+///     session through it; answering "nothing is live" is what leaves the batch path exactly as it was.
+/// </summary>
+internal sealed class NoLiveSessionsRegistry : ILiveTranscriptionSessionRegistry
+{
+    public Task StartLiveSessionAsync(Guid sessionId, LiveSessionOptions options, CancellationToken cancellationToken) =>
+        throw new NotSupportedException("The batch harness does not start live sessions.");
+
+    public Task PushAudioAsync(Guid sessionId, TranscriptChannel channel, ReadOnlyMemory<byte> pcm16, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public Task EndAsync(Guid sessionId, LiveEndReason reason, CancellationToken cancellationToken) =>
+        Task.CompletedTask;
+
+    public LiveProducerRegistration AttachProducer(Guid sessionId, ILiveAudioProducer producer) =>
+        throw new InvalidOperationException($"Transcription session {sessionId} is not live.");
+
+    public void NoteBrowserAttached(Guid sessionId, string connectionId)
+    {
+    }
+
+    public void NoteBrowserDetached(Guid sessionId, string connectionId)
+    {
+    }
+
+    public bool IsLive(Guid sessionId) =>
+        false;
 }
 
 /// <summary>
@@ -298,7 +350,8 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
         FakeWhisperTranscriber transcriber,
         FakeWhisperServerSupervisor supervisor,
         FakeAudioTranscoder transcoder,
-        ManualTimeProvider time)
+        ManualTimeProvider time,
+        ILiveTranscriptionSessionRegistry live)
     {
         _provider = provider;
         Root = root;
@@ -307,7 +360,9 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
         Supervisor = supervisor;
         Transcoder = transcoder;
         Time = time;
+        Live = live;
         Service = new TranscriptionService(provider.GetRequiredService<IServiceScopeFactory>(),
+            live,
             new FakeTranscriptionRuntimeService(EffectiveModelId),
             supervisor,
             transcriber,
@@ -335,13 +390,16 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
 
     public ManualTimeProvider Time { get; }
 
+    /// <summary>The live registry cancel and delete route through.</summary>
+    public ILiveTranscriptionSessionRegistry Live { get; }
+
     /// <summary>The engine-owned temporary directory; every assertion about leaked audio looks here.</summary>
     public string TempDirectory => Path.Combine(Root, "tmp", "transcription");
 
     /// <summary>The files currently sitting in the engine's temporary directory.</summary>
     public IReadOnlyList<string> TempFiles => Directory.Exists(TempDirectory) ? Directory.GetFiles(TempDirectory) : [];
 
-    public static async Task<TranscriptionServiceHarness> CreateAsync()
+    public static async Task<TranscriptionServiceHarness> CreateAsync(ILiveTranscriptionSessionRegistry? live = null)
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         _ = Directory.CreateDirectory(root);
@@ -369,7 +427,8 @@ internal sealed class TranscriptionServiceHarness : IAsyncDisposable
             new FakeWhisperTranscriber(),
             new FakeWhisperServerSupervisor(),
             new FakeAudioTranscoder(),
-            new ManualTimeProvider());
+            new ManualTimeProvider(),
+            live ?? new NoLiveSessionsRegistry());
     }
 
     /// <summary>Creates a session and writes <paramref name="audio" /> into a fresh upload slot, ready to transcribe.</summary>

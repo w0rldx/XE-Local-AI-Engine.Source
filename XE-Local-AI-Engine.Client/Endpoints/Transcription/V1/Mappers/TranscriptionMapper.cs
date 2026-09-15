@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.Transcription.V1.Mappers;
 
 using System.Text.Json;
+using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 
@@ -75,10 +76,27 @@ internal static class TranscriptionMapper
             StartMs = segment.StartMs,
             EndMs = segment.EndMs,
             Text = segment.Text,
-            Channel = segment.Channel.ToString(),
+            Channel = ToWireChannel(segment.Channel),
             Confidence = segment.Confidence
         };
     }
+
+    /// <summary>
+    ///     The wire spelling of a transcript channel, written out rather than derived from the enum name.
+    /// </summary>
+    /// <remarks>
+    ///     The live hub pushes the same field, and a resuming client merges that stream into the rows this mapper
+    ///     produced — so the two must agree exactly, and renaming a member of <see cref="TranscriptChannel" /> must
+    ///     not be able to change what either of them says.
+    /// </remarks>
+    public static string ToWireChannel(TranscriptChannel channel) =>
+        channel switch
+        {
+            TranscriptChannel.Mono => "Mono",
+            TranscriptChannel.You => "You",
+            TranscriptChannel.Others => "Others",
+            _ => throw new ArgumentOutOfRangeException(nameof(channel), channel, "Unknown transcript channel.")
+        };
 
     private static TranscriptionSessionConfigResponse ToResponse(string configJson)
     {

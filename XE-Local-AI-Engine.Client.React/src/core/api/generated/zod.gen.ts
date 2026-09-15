@@ -536,6 +536,12 @@ export const zXeLocalAiEngineClientEndpointsTranscriptionV1SelectTranscriptionMo
 	modelId: z.string().nullish(),
 });
 
+export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse = z.object({
+	sessionId: z.guid(),
+	status: z.string(),
+	lastSeq: z.int(),
+});
+
 export const zXeLocalAiEngineClientEndpointsTranscriptionV1StartWhisperCppSourceBuildResponse = z.object({
 	started: z.boolean(),
 	status: zXeLocalAiEngineClientEndpointsTranscriptionV1WhisperCppSourceBuildStatusResponse,
@@ -8138,6 +8144,16 @@ export const zSelectTranscriptionModelBody = zXeLocalAiEngineClientEndpointsTran
  * Success
  */
 export const zSelectTranscriptionModelResponse = zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelListResponse;
+
+export const zStartLiveTranscriptionSessionPath = z.object({
+	sessionId: z.guid(),
+});
+
+/**
+ * Success
+ */
+export const zStartLiveTranscriptionSessionResponse =
+	zXeLocalAiEngineClientEndpointsTranscriptionV1StartLiveTranscriptionSessionResponse;
 
 export const zStartTranscriptionModelDownloadBody =
 	zXeLocalAiEngineClientEndpointsTranscriptionV1TranscriptionModelDownloadRequest;

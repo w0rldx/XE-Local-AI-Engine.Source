@@ -1,6 +1,6 @@
 # Audio Transcription (whisper.cpp)
 
-> Reviewed: 2026-09-12 · Code-grounded.
+> Reviewed: 2026-09-15 · Code-grounded.
 
 The node transcribes audio **locally** with [whisper.cpp](https://github.com/ggml-org/whisper.cpp), supervised as a
 `whisper-server` child process exactly the way `llama-server` and `sd-server` are. A **transcription session** is a
@@ -10,8 +10,10 @@ that minted it.
 
 This page covers what exists today: the runtime and its model catalogue (delivered first, summarized here and
 documented in full on [Local Runtime & Providers](03-local-runtime-and-providers.md#providerswhispercpp--the-supervised-speech-to-text-runtime)),
-the session/segment data model, and the **batch file-upload** transcription path with its endpoints and React feature.
-Live capture, the segmenter and the hub are **not built yet** — see [What is not here yet](#what-is-not-here-yet).
+the session/segment data model, the **batch file-upload** transcription path with its endpoints and React feature,
+and the **live** transcription pipeline (live-start endpoint, `TranscriptionHub` and the segmenter — see
+[Live sessions](#live-sessions)). The browser and Windows capture UI that drives a live session is **not built
+yet** — see [What is not here yet](#what-is-not-here-yet).
 
 The decisions behind the feature — browser-first capture, channel attribution instead of diarization, the managed
 Linux CUDA source build, the slice order, and the never-persist-audio rule — are recorded in
@@ -144,6 +146,125 @@ three source-build routes — are listed in [API & Hubs](09-api-and-hubs.md). Th
 `Transcription:Enabled` off, a request-path middleware in `Program.cs` answers 404 while the endpoints stay
 *discovered*, so the OpenAPI document and the generated client are identical on every node.
 
+## Live sessions
+
+S3 adds the rolling-buffer commit pipeline behind a live-start endpoint and one hub; the browser capture UI that
+drives them is S4. A live session and a file session are the same `TranscriptionSession` row taking a different
+path through `ITranscriptionService` — the batch path above is unaffected.
+
+### Starting a session live
+
+`POST transcription/sessions/{sessionId}/live/start` (`StartLiveTranscriptionSessionEndpoint`, Operator, idempotent,
+no body) reads only the session row and puts it on the live path:
+
+| Outcome | Response |
+|---|---|
+| `Started` or `AlreadyLive` | 200 with the session's status and `lastSeq` |
+| Unknown session | 404 |
+| Session already finished | 409 |
+| A `File`-kind session | 400 |
+
+The status move to `Transcribing` is a compare-and-set (`ITranscriptionSessionStore.TryTransitionStatusAsync`), so a
+start that raced a graceful end refuses with 409 rather than writing `Transcribing` over the terminal status that end
+had already recorded — a finished session is never resurrected by a start that arrived a moment too late.
+
+S4 must await a 200 from this endpoint before it starts pushing frames — a frame that arrives before the session is
+armed has nowhere to land.
+
+### `TranscriptionHub`
+
+Route: `/api/local/v1/transcription/hub`.
+
+Client → server:
+
+| Method | Contract |
+|---|---|
+| `SubscribeSession(sessionId, afterSeq)` | Joins the session's group, then replays committed segments after `afterSeq` as a snapshot `{ sessionId, status, lastSeq, segments, replayTruncated }`. Join happens before replay. |
+| `UnsubscribeSession(sessionId)` | Leaves the group. |
+| `PushAudioFrame(sessionId, channel, pcm16k)` | One frame: 16 kHz mono little-endian int16, base64 over the JSON protocol, at most 32 768 bytes and an even byte count — a bound the hub method asserts itself; see the agent-knowledge entry on why. `channel` is `Mono`, `You` or `Others`, spelled exactly as the REST DTO. |
+| `EndSession(sessionId)` | Ends the session as `Completed`. |
+
+Server → client:
+
+| Event | Payload |
+|---|---|
+| `transcriptionSegmentCommitted` | `{ sessionId, seq, startMs, endMs, text, channel, confidence }` |
+| `transcriptionPartialUpdated` | `{ sessionId, channel, text }` |
+| `transcriptionSessionStatusChanged` | `{ sessionId, status }`, one of `Completed`, `Cancelled`, `Abandoned`, `Overloaded`, `Failed` |
+
+Every hub-side rejection is a typed `HubException` from `TranscriptionHubErrors`. The replay bound is
+`Transcription:SegmentReplayLimit` (500, roughly fifteen minutes of two-lane speech); a truncated replay sets
+`replayTruncated`, and `lastSeq` is always the last row actually delivered, so a client resubscribes from where it
+left off rather than from where the server wishes it had.
+
+### The segmenter
+
+`LiveTranscriptionSegmenter` (`Client.Application/Services/Transcription/Live/`) turns one channel's raw PCM into
+committed segments. One instance is one lane; it is not thread-safe, and its owner (the registry, below) serializes
+calls into it per lane.
+
+- **The clock is audio time, not wall time**, derived from the cumulative pushed byte count via
+  `WavPcm16.BytesPerMillisecond` (32, at 16 kHz mono int16) rather than summed per frame — a per-frame sum would let
+  a frame under one millisecond of bytes never advance the clock at all.
+- **A tick fires every second of audio** and asks whether a window is due.
+- **The watermark is the whole de-duplication mechanism, never text matching.** A returned segment commits when its
+  end is at least `TailGuardMs` (800 ms) before the current audio end, its text is non-empty, and its start is at or
+  after the watermark; a segment starting before the watermark is discarded because overlapping windows re-transcribe
+  audio already said.
+- **At `MaxWindowSeconds` (clamped 2–10, default 5) the window is force-committed** with the tail guard suspended,
+  so no window ever exceeds the cap; a push that would cross it is split rather than accepted whole.
+- **A graceful end flushes the retained tail** with the same guard suspended, so audio shorter than one window still
+  reaches the model at least once.
+- **The known ceiling: one word may be inserted, dropped or duplicated per forced boundary.** Windows are cut with
+  no overlap, so a word straddling a forced cut is the model's guess from a fragment. `LiveSegmenterGoldenTests`
+  bounds this — the committed transcript's word-level edit distance against a whole-clip transcript may not exceed
+  the number of forced boundaries in the fixture. Recorded evidence: `ggml-base` inserts "to" into "ask not what" at
+  its 5 s cut on `jfk.wav`; `large-v3-turbo` duplicates "you" across the same cap's 7.1 s boundary. The upgrade path
+  is whisper.cpp's stream-style `keep_ms` window overlap with token-level de-duplication, not implemented here.
+
+### The registry
+
+`LiveTranscriptionSessionRegistry` is a singleton with **no hosted service** — every timer comes from
+`TimeProvider`. One session holds one lane per channel and one session-wide commit lock:
+
+- `PushAudioAsync` is the in-process audio entry point; `TranscriptionHub` merely forwards `PushAudioFrame` into it,
+  which is also how S5's Windows process capture will feed a lane without a socket — `AttachProducer` /
+  `ILiveAudioProducer` / `LiveProducerRegistration` are the seam for a non-hub producer.
+- Every commit — allocating `Seq` (from 1, or after the row's last persisted seq), persisting when the session is
+  `Persist`, then publishing — crosses one session-wide lock. **Persistence is a subscriber of the commit, never its
+  source**: a persist-free dictation session (S6) streams the identical event sequence with no rows behind it.
+- **One termination path, `EndAsync(reason)`, with six callers:** the hub's `EndSession` (`Completed`);
+  cancel/delete via `TranscriptionService.CancelAsync` (`Cancelled`); the disconnect grace,
+  `Transcription:AbandonedSessionGraceSeconds` (60 s) with no hub connection left (`Abandoned`); a 60 s
+  producer-attachment deadline with nothing ever feeding the session (`NeverAttached`); the pending-audio budget —
+  two windows' worth, capped at 640 KB — exceeded (`Overloaded`); and a stalled lane (`Failed`). Only `Completed`
+  flushes the retained tail; every other reason aborts in-flight inference instead, so stopping stays prompt.
+- Persisted status mapping: `Completed` → `Completed`; `Cancelled`, `Abandoned`, `NeverAttached` → `Cancelled`;
+  `Overloaded`, `Failed` → `Failed` with error codes `live-overloaded` / `live-failed`. A graceful end whose final
+  flush throws, or whose lane did not drain inside its bound, finalizes as `Failed` with `live-flush-failed` rather
+  than reporting `Completed` over a transcript that is missing its last seconds; the committed rows stay readable.
+- A commit that arrives after the session is finalized (a lane that outlived its drain bound) is dropped with a
+  warning: nothing is persisted or published after the terminal status push.
+
+### Known gaps
+
+- A persist-free session's reconnect replays nothing — there are no rows to replay from.
+- A reconnect mid-session sees partial text only from the next tick onward, not the in-flight one.
+
+### Golden fixture
+
+`LiveSegmenterGoldenTests` replays `XE-Local-AI-Engine.Tests/Fixtures/Transcription/jfk-golden-base.json`, recorded
+against the real runtime on the CPU backend:
+
+| Component | Value | SHA-256 |
+|---|---|---|
+| Model | `ggml-base.bin` | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` |
+| VAD | `ggml-silero-v6.2.0.bin` (pinned) | `2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987` |
+| Clip | `jfk.wav` | `59dfb9a4acb36fe2a2affc14bacbee2920ff435cb13cc314a08c13f66ba7860e` |
+
+Re-record with the opt-in `WhisperGoldenFixtureRecorder`, which needs a running server named by
+`XE_WHISPER_GOLDEN_SERVER_URL`.
+
 ## React feature
 
 `src/features/transcription/` renders the session list at `/transcription` and one session at
@@ -170,9 +291,10 @@ last two are persisted and normalized already, and are read by the live slices.
 
 ## What is not here yet
 
-- **Live capture and the segmenter** (S3/S4). The rolling-buffer commit pipeline, `TranscriptionHub`, the live-start
-  route and the browser capture UI do not exist. A fixed-window loop against the stateless inference route
-  hallucinates on a mid-word cut, which is why the window is a *maximum* and the commit layer gets its own slice.
+- **Browser capture UI** (S4). The rolling-buffer commit pipeline, `TranscriptionHub` and the live-start route exist
+  (see [Live sessions](#live-sessions)); the browser capture that pushes frames into them does not yet. A
+  fixed-window loop against the stateless inference route hallucinates on a mid-word cut, which is why the window is
+  a *maximum* and the commit layer got its own slice.
 - **Windows per-application capture** (S5). Browser capture cannot scope to one application; NAudio's WASAPI process
   loopback can, on Windows only.
 - **Dictation into the agent chat** (S6). It appends in place through a toolbar callback and deliberately does not

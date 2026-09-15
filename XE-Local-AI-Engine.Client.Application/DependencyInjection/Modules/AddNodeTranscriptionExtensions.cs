@@ -1,10 +1,12 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Implementation;
+using XE_Local_AI_Engine.Client.Services.Transcription.Live;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.WhisperCpp;
 using XE_Local_AI_Engine.Providers.WhisperCpp.Options;
@@ -61,9 +63,19 @@ internal static class AddNodeTranscriptionExtensions
         // at construction, and that same answer is what the runtime status publishes as its transcode capability.
         builder.Services.AddSingleton<IAudioTranscoder, FfmpegAudioTranscoder>();
 
+        // The no-op floor, so this layer resolves without a host. The host registers a SignalR-backed publisher after
+        // it in the same collection and the later registration wins — the idiom the image and graph publishers use.
+        builder.Services.TryAddSingleton<ITranscriptionEventPublisher, NullTranscriptionEventPublisher>();
+
+        // Live sessions. Singleton, and deliberately NOT an IHostedService: the end-to-end test factory removes every
+        // hosted service, so a background-timer design would be dead there. Everything is driven by pushed frames plus
+        // timers created from the injected TimeProvider.
+        builder.Services.AddSingleton<ILiveTranscriptionSessionRegistry, LiveTranscriptionSessionRegistry>();
+
         // The transcription service. Singleton: the in-flight cancellation registry must outlive the request that
         // started a transcription, and it composes the singleton whisper runtime; it opens its own scope per store
-        // operation.
+        // operation. It takes the registry so cancel and delete route a live session through one termination path;
+        // the registry resolves this service lazily, so the two singletons do not close a constructor cycle.
         builder.Services.AddSingleton<ITranscriptionService, TranscriptionService>();
 
         return builder;
