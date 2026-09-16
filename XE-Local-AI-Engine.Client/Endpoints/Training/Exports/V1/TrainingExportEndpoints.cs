@@ -66,10 +66,10 @@ public sealed class StartTrainingExportEndpoint(ITrainingExportService exports)
     }
 }
 
-public sealed class ListTrainingArtifactsEndpoint(ITrainingRunStore store)
+public sealed class ListTrainingArtifactsEndpoint(ITrainingExportService exports)
     : Endpoint<TrainingRunArtifactsRequest, ListTrainingArtifactsResponse>
 {
-    private readonly ITrainingRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
 
     public override void Configure()
     {
@@ -79,7 +79,7 @@ public sealed class ListTrainingArtifactsEndpoint(ITrainingRunStore store)
 
     public override async Task HandleAsync(TrainingRunArtifactsRequest req, CancellationToken ct)
     {
-        var artifacts = await _store.ListArtifactsAsync(req.RunId, ct).ConfigureAwait(false);
+        var artifacts = await _exports.ListArtifactsAsync(req.RunId, ct).ConfigureAwait(false);
         await Send.OkAsync(new ListTrainingArtifactsResponse
         {
             Items = artifacts.Select(item => item.ToResponse()).ToArray()
@@ -87,10 +87,10 @@ public sealed class ListTrainingArtifactsEndpoint(ITrainingRunStore store)
     }
 }
 
-public sealed class GetTrainingArtifactEndpoint(ITrainingRunStore store)
+public sealed class GetTrainingArtifactEndpoint(ITrainingExportService exports)
     : Endpoint<TrainingArtifactByIdRequest, TrainingArtifactResponse>
 {
-    private readonly ITrainingRunStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ITrainingExportService _exports = exports ?? throw new ArgumentNullException(nameof(exports));
 
     public override void Configure()
     {
@@ -100,7 +100,7 @@ public sealed class GetTrainingArtifactEndpoint(ITrainingRunStore store)
 
     public override async Task HandleAsync(TrainingArtifactByIdRequest req, CancellationToken ct)
     {
-        var artifact = await _store.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
+        var artifact = await _exports.GetArtifactAsync(req.ArtifactId, ct).ConfigureAwait(false);
         if (artifact is null)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);

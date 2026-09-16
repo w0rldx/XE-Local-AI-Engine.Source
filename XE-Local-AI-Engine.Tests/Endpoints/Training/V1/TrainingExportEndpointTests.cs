@@ -111,7 +111,7 @@ public sealed class TrainingExportEndpointTests
     public async Task ListArtifacts_PublishesTheFileNameButNotTheStagedPath()
     {
         await using var context = new Context();
-        _ = context.Store.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
+        _ = context.Exports.ListArtifactsAsync(RunId, Arg.Any<CancellationToken>())
                    .Returns<IReadOnlyList<TrainingArtifactRecord>>([
                        new TrainingArtifactRecord(ArtifactId, RunId, TrainingArtifactKind.MergedGguf,
                            "/var/lib/xe/training/runs/x/staged/merged-Q4_K_M.gguf", "abc", 1024,
@@ -472,18 +472,14 @@ public sealed class TrainingExportEndpointTests
             {
                 ConfigureAdditionalTestServices = services =>
                 {
-                    services.RemoveAll<ITrainingRunStore>();
                     services.RemoveAll<ITrainingExportService>();
                     services.RemoveAll<IArtifactPromotionService>();
                     services.RemoveAll<IArtifactQualityService>();
-                    _ = services.AddSingleton(Store);
                     _ = services.AddSingleton(Exports);
                     _ = services.AddSingleton(Promotion);
                     _ = services.AddSingleton(Quality);
                 }
             };
-
-        public ITrainingRunStore Store { get; } = Substitute.For<ITrainingRunStore>();
 
         public ITrainingExportService Exports { get; } = Substitute.For<ITrainingExportService>();
 

@@ -84,7 +84,7 @@ public sealed class EndpointDependencyTests
     ///     sides, because a short name can collide across endpoint areas, and because a per-endpoint key would let an
     ///     already-listed endpoint acquire a SECOND forbidden dependency unnoticed. Sorted, one pair per line.
     ///     <para>
-    ///         96 pairs across 80 endpoint types today: 53 a persistence store, 42 a concrete provider's contract or
+    ///         94 pairs across 78 endpoint types today: 51 a persistence store, 42 a concrete provider's contract or
     ///         options type, and one an <c>AI.Agent</c> tool policy — that last one is a dependency the rule's allow
     ///         list does not name, caught only because a leaf outside the allow list is a violation in its own right
     ///         rather than something the forbid list has to have anticipated.
@@ -179,8 +179,6 @@ public sealed class EndpointDependencyTests
         "XE_Local_AI_Engine.Client.Endpoints.Training.Datasets.V1.ListTrainingDatasetsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",
         "XE_Local_AI_Engine.Client.Endpoints.Training.Datasets.V1.ListTrainingSamplesEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",
         "XE_Local_AI_Engine.Client.Endpoints.Training.Datasets.V1.ReviewTrainingSampleEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Training.Exports.V1.GetTrainingArtifactEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingRunStore",
-        "XE_Local_AI_Engine.Client.Endpoints.Training.Exports.V1.ListTrainingArtifactsEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingRunStore",
         "XE_Local_AI_Engine.Client.Endpoints.Training.Mocks.V1.DeleteToolMockEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",
         "XE_Local_AI_Engine.Client.Endpoints.Training.Mocks.V1.GetToolMockEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",
         "XE_Local_AI_Engine.Client.Endpoints.Training.Mocks.V1.ListToolMocksEndpoint|XE_Local_AI_Engine.Client.Persistence.Stores.ITrainingDatasetStore",

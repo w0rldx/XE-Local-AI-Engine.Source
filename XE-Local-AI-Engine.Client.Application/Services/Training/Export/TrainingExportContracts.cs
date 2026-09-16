@@ -138,6 +138,12 @@ public interface ITrainingExportService
     /// </summary>
     Task<TrainingExportStart> StartExportAsync(Guid runId, TrainingExportRequest request, CancellationToken cancellationToken = default);
 
+    /// <summary>The run's staged artifacts, as the export surface publishes them. A read, with no policy of its own.</summary>
+    Task<IReadOnlyList<TrainingArtifactRecord>> ListArtifactsAsync(Guid runId, CancellationToken cancellationToken = default);
+
+    /// <summary>One staged artifact, as the export surface publishes it, or null when there is no such artifact.</summary>
+    Task<TrainingArtifactRecord?> GetArtifactAsync(Guid artifactId, CancellationToken cancellationToken = default);
+
     /// <summary>Re-runs the smoke gate against an already-staged artifact and records the new verdict.</summary>
     /// <exception cref="TrainingExportRejectedException">The artifact cannot be smoke-tested.</exception>
     Task<TrainedModelSmokeResult> RunSmokeAsync(Guid artifactId, CancellationToken cancellationToken = default);
