@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
@@ -8,6 +7,7 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -98,11 +98,7 @@ public sealed class LocalModelsExternalMappingTests
     {
         var localModels = new[]
         {
-            new Model
-            {
-                Name = "qwen3:8b",
-                ModifiedAt = DateTime.UtcNow
-            }
+            new OllamaModelSummary("qwen3:8b")
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {

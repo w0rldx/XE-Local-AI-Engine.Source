@@ -1,10 +1,15 @@
-namespace XE_Local_AI_Engine.Tests.Services.Chat;
+namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using System.Text.Json;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
-public sealed class OllamaModelInfoParserTests
+/// <summary>
+///     Context-length extraction from an Ollama <c>/api/show</c> model-info block. Ported from the deleted
+///     <c>OllamaModelInfoParser</c> tests when S5 collapsed the duplicate parser onto this reader, plus the null case
+///     the reader answers differently: it returns <see langword="false" /> where the parser threw.
+/// </summary>
+public sealed class OllamaModelInfoReaderTests
 {
     [Test]
     [Arguments("llama.context_length", 8192)]
@@ -20,7 +25,7 @@ public sealed class OllamaModelInfoParserTests
                                                   }
                                                   """);
 
-        var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out var contextLength);
+        var result = OllamaModelInfoReader.TryGetContextLength(ReadModelInfo(document), out var contextLength);
 
         AssertEx.True(result);
         AssertEx.Equal(expected, contextLength);
@@ -33,7 +38,7 @@ public sealed class OllamaModelInfoParserTests
             "Fixtures",
             "ollama-show-gemma3.json")));
 
-        var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out var contextLength);
+        var result = OllamaModelInfoReader.TryGetContextLength(ReadModelInfo(document), out var contextLength);
 
         AssertEx.True(result);
         AssertEx.Equal(expected: 131072, contextLength);
@@ -46,7 +51,7 @@ public sealed class OllamaModelInfoParserTests
             "Fixtures",
             "ollama-show-missing-context-length.json")));
 
-        var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out _);
+        var result = OllamaModelInfoReader.TryGetContextLength(ReadModelInfo(document), out _);
 
         AssertEx.False(result);
     }
@@ -66,7 +71,7 @@ public sealed class OllamaModelInfoParserTests
                                                   }
                                                   """);
 
-        var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out _);
+        var result = OllamaModelInfoReader.TryGetContextLength(ReadModelInfo(document), out _);
 
         AssertEx.False(result);
     }
@@ -82,9 +87,31 @@ public sealed class OllamaModelInfoParserTests
                                                 }
                                                 """);
 
-        var result = OllamaModelInfoParser.TryGetContextLength(ReadModelInfo(document), out _);
+        var result = OllamaModelInfoReader.TryGetContextLength(ReadModelInfo(document), out _);
 
         AssertEx.False(result);
+    }
+
+    [Test]
+    public void TryGetContextLength_WhenModelInfoIsNull_ReturnsFalseInsteadOfThrowing()
+    {
+        // The deleted OllamaModelInfoParser threw ArgumentNullException here. ShowModelDetailsAsync passes
+        // response.Info?.ExtraInfo straight through, so a daemon that reports no model-info block must answer
+        // "no context length" rather than fault the details call.
+        var result = OllamaModelInfoReader.TryGetContextLength((IDictionary<string, JsonElement>?)null, out var contextLength);
+
+        AssertEx.False(result);
+        AssertEx.Equal(expected: 0, contextLength);
+    }
+
+    [Test]
+    public void TryGetContextLength_WhenBoxedModelInfoIsNull_ReturnsFalseInsteadOfThrowing()
+    {
+        // The object-valued overload (the provider's ListModelsAsync path) shares the same null policy.
+        var result = OllamaModelInfoReader.TryGetContextLength((IDictionary<string, object>?)null, out var contextLength);
+
+        AssertEx.False(result);
+        AssertEx.Equal(expected: 0, contextLength);
     }
 
     private static Dictionary<string, JsonElement> ReadModelInfo(JsonDocument document)

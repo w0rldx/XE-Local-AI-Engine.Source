@@ -2,8 +2,12 @@ namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using System.Security.Cryptography;
 using Microsoft.Extensions.AI;
+using NSubstitute;
 using OllamaSharp;
+using OllamaSharp.Models;
+using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
@@ -160,6 +164,51 @@ public sealed class OllamaLocalModelProviderTests
         AssertEx.True(ReferenceEquals(connectTimeout, thrown.InnerException), "the connect-timeout should be the inner exception");
     }
 
+    [Test]
+    public async Task ListModelsAsync_WhenTheDaemonRejectsTheListing_TranslatesOffTheSdkException()
+    {
+        // OllamaSharp raises OllamaException for HTTP 400 only. It must not escape this project: the application-layer
+        // catch filters around ILocalModelProvider.ListModelsAsync (EmbeddingModelResolver.ResolveAsync and the two
+        // KnowledgeChunkEmbedder resolvers) name the provider-owned type, and an SDK type they cannot see would
+        // propagate as an unhandled failure instead of the degraded path they implement.
+        var rejection = new OllamaException("model listing rejected");
+        using var context = SubstitutedProvider(client => client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
+                                                                .Returns<Task<IEnumerable<Model>>>(_ => throw rejection));
+
+        var thrown = await AssertEx.ThrowsAsync<OllamaUnavailableException>(() => context.Provider.ListModelsAsync(CancellationToken.None));
+
+        AssertEx.True(ReferenceEquals(rejection, thrown.InnerException), "the SDK rejection must be preserved as the inner exception");
+    }
+
+    [Test]
+    public async Task ListModelsAsync_WhenTheDaemonIsUnreachable_LetsTheTransportFailureThrough()
+    {
+        // The other half of the contract: HttpRequestException is what an absent daemon produces, and the very same
+        // catch filters match it by name. Translating it too would hide the unreachable-daemon case from every other
+        // ILocalModelProvider consumer that catches only HttpRequestException.
+        var unreachable = new HttpRequestException("Connection refused");
+        using var context = SubstitutedProvider(client => client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
+                                                                .Returns<Task<IEnumerable<Model>>>(_ => throw unreachable));
+
+        var thrown = await AssertEx.ThrowsAsync<HttpRequestException>(() => context.Provider.ListModelsAsync(CancellationToken.None));
+
+        AssertEx.True(ReferenceEquals(unreachable, thrown), "the transport failure must reach the caller unwrapped");
+    }
+
+    /// <summary>A provider over a substituted management client, for the failure shapes the fake daemon cannot produce.</summary>
+    private static SubstitutedProviderContext SubstitutedProvider(Action<IOllamaApiClient> arrange)
+    {
+        var client = Substitute.For<IOllamaApiClient>();
+        arrange(client);
+#pragma warning disable CA2000 // Ownership transfers to the factory, which the returned context disposes.
+        var httpClient = new HttpClient
+        {
+            BaseAddress = new Uri("http://127.0.0.1:11434")
+        };
+#pragma warning restore CA2000
+        return new SubstitutedProviderContext(new OllamaApiClientFactory(httpClient, ownsHttpClient: true), client);
+    }
+
     private static async Task<ProviderTestContext> CreateContextAsync(params string[] models)
     {
         var server = await FakeOllamaServer.StartAsync(new FakeOllamaOptions
@@ -179,6 +228,25 @@ public sealed class OllamaLocalModelProviderTests
         var ollamaClient = factory.CreateClient(selectedModel: null);
         var provider = new OllamaLocalModelProvider(ollamaClient, factory, TimeProvider.System);
         return new ProviderTestContext(server, ollamaClient, factory, provider);
+    }
+
+    private sealed class SubstitutedProviderContext : IDisposable
+    {
+        private readonly OllamaApiClientFactory _factory;
+
+        public SubstitutedProviderContext(OllamaApiClientFactory factory, IOllamaApiClient client)
+        {
+            _factory = factory;
+            Provider = new OllamaLocalModelProvider(client, factory, TimeProvider.System);
+        }
+
+        public OllamaLocalModelProvider Provider { get; }
+
+        public void Dispose()
+        {
+            Provider.Dispose();
+            _factory.Dispose();
+        }
     }
 
     private sealed class ThrowingHandler(Exception exception) : HttpMessageHandler

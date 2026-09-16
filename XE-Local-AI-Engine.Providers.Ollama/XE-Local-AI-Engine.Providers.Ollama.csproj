@@ -11,7 +11,10 @@
          edge an OllamaSharp bump could drop. Version comes from CPM, so this adds no version surface. -->
     <PackageReference Include="Microsoft.Extensions.AI"/>
     <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions"/>
-    <PackageReference Include="OllamaSharp"/>
+    <!-- PrivateAssets="compile" is the OllamaSharp wall (slice S5): runtime assets still flow to consumers so the
+         node runs, but no project referencing this one can compile against an OllamaSharp type, which is what a
+         PackageReference allowlist alone cannot prevent. -->
+    <PackageReference Include="OllamaSharp" PrivateAssets="compile"/>
   </ItemGroup>
 
   <ItemGroup>

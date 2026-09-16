@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Providers.Ollama;
 using Microsoft.Extensions.DependencyInjection;
 using OllamaSharp;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
@@ -74,6 +75,10 @@ public static class OllamaLocalModelProviderServiceCollectionExtensions
             var registration = resolveRegistration(serviceProvider);
             return serviceProvider.GetRequiredService<OllamaApiClientFactory>().CreateClient(registration.Model);
         });
+
+        // The model-management service rides the SAME gated registration as the client it wraps, so a gate-off node
+        // keeps the composition root's UnavailableOllamaModelService instead of resolving a client that is not there.
+        _ = services.AddSingleton<IOllamaModelService, OllamaModelService>();
 
         _ = services.AddSingleton<ILocalModelProvider, OllamaLocalModelProvider>();
         _ = services.AddSingleton<IModelCapabilityClient, OllamaModelCapabilityClient>();

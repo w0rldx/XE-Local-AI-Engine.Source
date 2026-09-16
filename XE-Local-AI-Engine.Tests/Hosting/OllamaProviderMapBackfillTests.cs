@@ -4,12 +4,12 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Hosting;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -89,18 +89,15 @@ public sealed class OllamaProviderMapBackfillTests
 
     private sealed class FakeOllamaModelService(IReadOnlyList<string> installedNames) : StubOllamaModelService
     {
-        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        public override Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
-            return Task.FromResult<IEnumerable<Model>>(installedNames.Select(name => new Model
-            {
-                Name = name
-            }).ToArray());
+            return Task.FromResult<IEnumerable<OllamaModelSummary>>(installedNames.Select(static name => new OllamaModelSummary(name)).ToArray());
         }
     }
 
     private sealed class ThrowingOllamaModelService : StubOllamaModelService
     {
-        public override Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        public override Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
             throw new HttpRequestException("Ollama is not running.");
         }
@@ -109,19 +106,14 @@ public sealed class OllamaProviderMapBackfillTests
     // Base stub: only ListLocalModelsAsync is exercised by the backfill; the rest throw so an accidental call is loud.
     private abstract class StubOllamaModelService : IOllamaModelService
     {
-        public abstract Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default);
-
-        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
-        }
+        public abstract Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default);
 
         public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }
 
-        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default)
+        public IAsyncEnumerable<PullProgress> PullModelAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }
@@ -142,6 +134,11 @@ public sealed class OllamaProviderMapBackfillTests
         }
 
         public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<bool> IsLoopbackModelInstalledAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }

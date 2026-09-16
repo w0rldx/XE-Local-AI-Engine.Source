@@ -5,8 +5,6 @@ using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using OllamaSharp;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -18,6 +16,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -246,8 +245,8 @@ public sealed class DefaultConfigDraftServiceTests
     [Arguments("unclassified")]
     [Arguments("embedding")]
     [Arguments("not-installed")]
-    [Arguments("remote-ollama")]
-    public async Task Eligibility_UnknownUnclassifiedCloudOrRemoteOllama_RejectsBeforeResolver(string scenario)
+    [Arguments("ollama-reports-not-installed")]
+    public async Task Eligibility_UnknownUnclassifiedCloudOrIneligibleOllama_RejectsBeforeResolver(string scenario)
     {
         var harness = new Harness();
         switch (scenario)
@@ -266,10 +265,12 @@ public sealed class DefaultConfigDraftServiceTests
                 harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                        .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
                 break;
-            case "remote-ollama":
+            case "ollama-reports-not-installed":
+                // The loopback decision itself now lives in OllamaModelService (covered by its own tests): from here a
+                // remote endpoint is indistinguishable from an uninstalled model — both answer "not eligible".
                 harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                        .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-                harness.UseOllama(new Uri("http://198.51.100.7:11434"), LlamaModel);
+                harness.UseOllama(installedOnLoopback: false);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(scenario));
@@ -311,7 +312,7 @@ public sealed class DefaultConfigDraftServiceTests
         };
         harness.GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())
                .Returns(Task.FromResult<IReadOnlyList<LocalModelDescriptor>>([]));
-        harness.UseOllama(new Uri("http://127.0.0.1:11434"), LlamaModel);
+        harness.UseOllama(installedOnLoopback: true);
 
         var result = await harness.Service.DraftAgentDefinitionAsync(Request("Draft an agent.")).ConfigureAwait(false);
 
@@ -500,20 +501,16 @@ public sealed class DefaultConfigDraftServiceTests
 
         public DefaultConfigDraftService Service => _service ??= Build();
 
-        private IOllamaApiClient? OllamaApiClient { get; set; }
+        private IOllamaModelService OllamaModelService { get; } = Substitute.For<IOllamaModelService>();
 
-        public void UseOllama(Uri endpoint, params string[] installedModelNames)
+        /// <summary>
+        ///     Stubs the one question drafting asks the Ollama runtime. Left unstubbed it answers false, which is the
+        ///     "no Ollama runtime on this node" default every other scenario here relies on.
+        /// </summary>
+        public void UseOllama(bool installedOnLoopback)
         {
-            var client = Substitute.For<IOllamaApiClient>();
-            client.Uri.Returns(endpoint);
-            client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-                  .Returns(Task.FromResult<IEnumerable<Model>>([
-                      .. installedModelNames.Select(static name => new Model
-                      {
-                          Name = name
-                      })
-                  ]));
-            OllamaApiClient = client;
+            OllamaModelService.IsLoopbackModelInstalledAsync(LlamaModel, Arg.Any<CancellationToken>())
+                              .Returns(Task.FromResult(installedOnLoopback));
         }
 
         private DefaultConfigDraftService Build()
@@ -552,7 +549,7 @@ public sealed class DefaultConfigDraftServiceTests
                 nodeSettings,
                 new FixedTimeProvider(DraftedAt),
                 NullLogger<DefaultConfigDraftService>.Instance,
-                OllamaApiClient);
+                OllamaModelService);
         }
     }
 

@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Tests.Services.Chat;
 
 using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ModelClassificationServiceTests
@@ -173,8 +173,8 @@ public sealed class ModelClassificationServiceTests
 
     private static void StubDetails(IOllamaModelService ollama, string modelName, params string[] capabilities)
     {
-        // The service reads only OllamaModelDetails.Capabilities, so the ShowModelResponse payload can be empty.
-        var details = new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: null, capabilities);
+        // The service reads only OllamaModelDetails.Capabilities, so every other field can stay unset.
+        var details = new OllamaModelDetails(MaxContextTokens: null, capabilities);
         ollama.ShowModelDetailsAsync(modelName, Arg.Any<CancellationToken>()).Returns(details);
     }
 

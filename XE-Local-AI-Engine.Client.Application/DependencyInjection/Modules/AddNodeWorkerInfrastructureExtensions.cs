@@ -8,6 +8,7 @@ using XE_Local_AI_Engine.Client.Services.Shutdown;
 using XE_Local_AI_Engine.Client.Services.Shutdown.Implementation;
 using XE_Local_AI_Engine.Client.Services.Workspace;
 using XE_Local_AI_Engine.Client.Services.Workspace.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal static class AddNodeWorkerInfrastructureExtensions
 {

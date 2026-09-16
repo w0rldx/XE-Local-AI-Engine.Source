@@ -2,7 +2,7 @@ namespace XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IModelFitQueryService" />: a thin cache reader over the model-fit stores. It composes the

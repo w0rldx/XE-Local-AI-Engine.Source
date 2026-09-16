@@ -165,17 +165,16 @@ public sealed class CapabilityReporterTests
         await using var context = await CreateContextAsync(configurationOverrides: new Dictionary<string, string?>
         {
             ["Ollama:ChatModel"] = "qwen3.5:0.8b",
-            ["Agent:LocalChat:DefaultModel"] = "qwen3.5:0.8b",
-            ["Aspire:OllamaSharp:chat:SelectedModel"] = "qwen3:0.6b",
-            ["Aspire:OllamaSharp:embeddings:SelectedModel"] = "qwen3-embedding:0.6b"
+            ["Agent:LocalChat:DefaultModel"] = "qwen3-agent:0.6b"
         });
         context.SetModelsResponse();
 
         var result = await context.Reporter.DetectCapabilitiesAsync();
 
+        // Distinct values per key, so each of the two surviving configured-model sources is proven on its own
+        // (the two dead Aspire-convention keys this test also used to cover were deleted with their reads).
         AssertEx.Contains(result.InstalledModels, "qwen3.5:0.8b");
-        AssertEx.Contains(result.InstalledModels, "qwen3:0.6b");
-        AssertEx.Contains(result.InstalledModels, "qwen3-embedding:0.6b");
+        AssertEx.Contains(result.InstalledModels, "qwen3-agent:0.6b");
     }
 
     [Test]

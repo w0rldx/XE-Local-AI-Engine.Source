@@ -1,8 +1,8 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Answers "which provider owns this model, and what does <em>details</em> mean for it" for the model-details

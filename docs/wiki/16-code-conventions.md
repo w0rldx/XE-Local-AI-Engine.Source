@@ -173,10 +173,15 @@ service belongs in its own file (same folder/namespace).
 
 The reverse direction is fenced too: a third-party runtime SDK belongs to the provider that owns it, and
 `ThirdPartySdkBoundaryTests` keeps `OllamaSharp`, `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` out
-of the host, application, persistence, agent and contracts layers. Nothing in the project graph says so on its
-own, because those packages are referenced by `Client.Application` itself, so every such reference compiles.
-That is why the rule is a source scan with its own shrink-only allowlist per SDK. The Docker entries are the two
-`ADR 0004` sanctions; the `OllamaSharp` entries are what the Ollama seam still owes.
+of the host, application, persistence, agent and contracts layers. For Docker and Azure nothing in the project
+graph says so on its own, because those packages are referenced by `Client.Application` itself, so every such
+reference compiles. That is why the rule is a source scan with its own shrink-only allowlist per SDK. The Docker
+entries are the two `ADR 0004` sanctions; the `OllamaSharp` allowlist is empty and stays empty.
+
+A provider whose third-party SDK must not leak marks that `PackageReference` `PrivateAssets="compile"`, and
+`LayerDependencyTests` fences a direct re-add in a consumer project the same way it fences `ProjectReference`s —
+a per-project allowlist test alone does not stop a transitive compile-asset leak, because a `ProjectReference`
+flows the referenced project's package compile assets by default.
 
 ### Placement is pinned by architecture tests, not by review
 

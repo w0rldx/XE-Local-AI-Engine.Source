@@ -18,9 +18,7 @@ internal sealed class ModelCapabilityProber
     private static readonly string[] ConfiguredModelKeys =
     [
         "Agent:LocalChat:DefaultModel",
-        "Ollama:ChatModel",
-        "Aspire:OllamaSharp:chat:SelectedModel",
-        "Aspire:OllamaSharp:embeddings:SelectedModel"
+        "Ollama:ChatModel"
     ];
 
     private static readonly string[] ModelConnectionStringNames = ["chat", "embeddings"];

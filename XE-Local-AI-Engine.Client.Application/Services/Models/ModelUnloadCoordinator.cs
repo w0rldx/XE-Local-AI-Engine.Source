@@ -1,9 +1,9 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <inheritdoc />
 internal sealed class ModelUnloadCoordinator(

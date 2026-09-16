@@ -2,10 +2,10 @@ namespace XE_Local_AI_Engine.Client.Services.Knowledge;
 
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IKnowledgeChunkEmbedder" />. Reuses the node-local embedding resolution path from
@@ -118,7 +118,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 // diagnostic (see KnowledgeIngestionService's failure logging).
                 throw new KnowledgeIngestionException(EmbeddingRejectedReason, exception);
             }
-            catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+            catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
             {
                 // Mirror the ranker's caught set: model not pulled / provider process down / transport error / unregistered
                 // provider name. None of the exception's text is surfaced — only a fixed, content-free reason.
@@ -171,7 +171,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
 
             return descriptor?.MaxContextTokens is int window && window > 0 ? window : null;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             // Provider process down / transport error / unmapped provider. The window is simply unknown; chunking falls
             // back to the configured token budget. The subsequent embed step surfaces any genuine provider failure.
@@ -196,7 +196,7 @@ public sealed class KnowledgeChunkEmbedder : IKnowledgeChunkEmbedder
                 ? null
                 : new KnowledgeEmbeddingDescriptor(resolution.Name, identity, KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             return null;
         }

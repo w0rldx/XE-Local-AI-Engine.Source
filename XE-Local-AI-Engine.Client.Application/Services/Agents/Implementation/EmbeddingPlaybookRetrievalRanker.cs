@@ -2,12 +2,12 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Embedding-backed <see cref="IPlaybookRetrievalRanker" />: ranks candidates by cosine similarity between the
@@ -93,13 +93,14 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
             // Never swallow cancellation — let the send's own cancellation propagate.
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             // Any node-local embedding hiccup degrades gracefully to the deterministic lexical ranker so the send still
             // completes: model not pulled / Ollama or llama-server down / transport error (HttpRequestException,
             // IOException — the llama-server deferred generator wraps its LlamaRuntimeException to IOException — or
-            // OllamaException), or a misconfigured/unregistered EmbeddingProviderName (InvalidOperationException from
-            // the resolver). None of these are a reason to break the send.
+            // OllamaUnavailableException, which the Ollama provider translates its transport failures into),
+            // or a misconfigured/unregistered EmbeddingProviderName (InvalidOperationException from the resolver).
+            // None of these are a reason to break the send.
             return await FallBackToLexicalAsync(query, candidates, k, exception, cancellationToken).ConfigureAwait(false);
         }
     }

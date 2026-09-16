@@ -26,8 +26,6 @@ public sealed class EmbeddingSmokeTests
         var fallbackEndpoint = fakeOllamaServer?.BaseAddress;
         var chatConnectionString = ResolveOllamaConnectionString("ConnectionStrings__chat", fallbackEndpoint, ChatModel);
         var embeddingsConnectionString = ResolveOllamaConnectionString("ConnectionStrings__embeddings", fallbackEndpoint, EmbeddingModel);
-        var chatEndpoint = ResolveOllamaEndpoint("ConnectionStrings__chat", fallbackEndpoint);
-        var embeddingsEndpoint = ResolveOllamaEndpoint("ConnectionStrings__embeddings", fallbackEndpoint);
 
         await WithTemporaryEnvironmentVariableAsync("ConnectionStrings__chat",
             chatConnectionString,
@@ -40,11 +38,7 @@ public sealed class EmbeddingSmokeTests
                         AdditionalConfiguration = new Dictionary<string, string?>
                         {
                             ["ConnectionStrings:chat"] = chatConnectionString,
-                            ["ConnectionStrings:embeddings"] = embeddingsConnectionString,
-                            ["Aspire:OllamaSharp:chat:Endpoint"] = chatEndpoint,
-                            ["Aspire:OllamaSharp:chat:SelectedModel"] = ChatModel,
-                            ["Aspire:OllamaSharp:embeddings:Endpoint"] = embeddingsEndpoint,
-                            ["Aspire:OllamaSharp:embeddings:SelectedModel"] = EmbeddingModel
+                            ["ConnectionStrings:embeddings"] = embeddingsConnectionString
                         }
                     };
 
@@ -111,24 +105,5 @@ public sealed class EmbeddingSmokeTests
         return fallbackEndpoint is null
             ? throw new InvalidOperationException($"Set {environmentVariableName} to 'Endpoint=<url>;Model={model}' or allow the test to start fake Ollama.")
             : $"Endpoint={fallbackEndpoint};Model={model}";
-    }
-
-    private static string ResolveOllamaEndpoint(string environmentVariableName, Uri? fallbackEndpoint)
-    {
-        var configuredConnectionString = Environment.GetEnvironmentVariable(environmentVariableName);
-        if (!string.IsNullOrWhiteSpace(configuredConnectionString))
-        {
-            var endpointPrefix = "Endpoint=";
-            var endpoint = configuredConnectionString.Split(separator: ';', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries)
-                                                     .FirstOrDefault(part => part.StartsWith(endpointPrefix, StringComparison.OrdinalIgnoreCase));
-
-            if (endpoint is not null)
-            {
-                return endpoint[endpointPrefix.Length..];
-            }
-        }
-
-        return fallbackEndpoint?.ToString()
-               ?? throw new InvalidOperationException($"Set {environmentVariableName} to include Endpoint=<url> or allow the test to start fake Ollama.");
     }
 }

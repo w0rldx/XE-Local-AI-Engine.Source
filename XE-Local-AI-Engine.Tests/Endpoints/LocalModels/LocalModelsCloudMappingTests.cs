@@ -1,12 +1,12 @@
 namespace XE_Local_AI_Engine.Tests.Endpoints.LocalModels;
 
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -46,11 +46,7 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new Model
-            {
-                Name = "qwen3:8b",
-                ModifiedAt = DateTime.UtcNow
-            }
+            new OllamaModelSummary("qwen3:8b")
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {
@@ -73,11 +69,7 @@ public sealed class LocalModelsCloudMappingTests
     {
         var localModels = new[]
         {
-            new Model
-            {
-                Name = "qwen3:8b",
-                ModifiedAt = DateTime.UtcNow
-            }
+            new OllamaModelSummary("qwen3:8b")
         };
         var classifications = new Dictionary<string, ModelClassificationResult>
         {

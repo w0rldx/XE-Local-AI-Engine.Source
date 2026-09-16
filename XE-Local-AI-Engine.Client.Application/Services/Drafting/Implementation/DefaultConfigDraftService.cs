@@ -5,7 +5,6 @@ using System.Text.Json;
 using Microsoft.Agents.AI;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Options;
-using OllamaSharp;
 using XE_Local_AI_Engine.AI.Agent.Chat;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
@@ -14,6 +13,7 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.LlamaServer;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 /// <summary>
@@ -56,7 +56,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
     private readonly ILogger<DefaultConfigDraftService> _logger;
     private readonly IModelClassificationStore _modelClassificationStore;
     private readonly INodeSettingsStore _nodeSettingsStore;
-    private readonly IOllamaApiClient? _ollamaApiClient;
+    private readonly IOllamaModelService _ollamaModelService;
     private readonly DraftingOptions _options;
     private readonly ILocalModelProviderResolver _providerResolver;
     private readonly TimeProvider _timeProvider;
@@ -69,7 +69,7 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         INodeSettingsStore nodeSettingsStore,
         TimeProvider timeProvider,
         ILogger<DefaultConfigDraftService> logger,
-        IOllamaApiClient? ollamaApiClient)
+        IOllamaModelService ollamaModelService)
     {
         _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
         _ggufModelStore = ggufModelStore ?? throw new ArgumentNullException(nameof(ggufModelStore));
@@ -80,9 +80,9 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
         _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
-        // Optional: the Ollama runtime is capability-gated (XE_OLLAMA_RUNTIME_ENABLED), so on a llama.cpp-only node this
-        // client is absent — which simply makes every Ollama model ineligible.
-        _ollamaApiClient = ollamaApiClient;
+        // Always registered: the capability gate decides which implementation answers, and the gate-off substitute
+        // reports no installed model — which simply makes every Ollama model ineligible on a llama.cpp-only node.
+        _ollamaModelService = ollamaModelService ?? throw new ArgumentNullException(nameof(ollamaModelService));
     }
 
     public Task<DraftResult> DraftAgentDefinitionAsync(ConfigDraftRequest request, CancellationToken cancellationToken = default)
@@ -241,31 +241,9 @@ internal sealed class DefaultConfigDraftService : IConfigDraftService
 
         // The two installed-model universes are disjoint and there is no unified inventory facade, so the Ollama side is
         // composed separately — and only when its endpoint is loopback.
-        return await IsLoopbackOllamaModelAsync(modelName, cancellationToken).ConfigureAwait(false)
+        return await _ollamaModelService.IsLoopbackModelInstalledAsync(modelName, cancellationToken).ConfigureAwait(false)
             ? OllamaLocalModelProvider.OllamaProviderName
             : null;
-    }
-
-    private async Task<bool> IsLoopbackOllamaModelAsync(string modelName, CancellationToken cancellationToken)
-    {
-        // Uri.IsLoopback is the same fact the composition-time SSRF guard enforces, read without throwing. An absent
-        // client (Ollama runtime disabled) or a remote endpoint makes every Ollama model ineligible.
-        if (_ollamaApiClient is null || !_ollamaApiClient.Uri.IsLoopback)
-        {
-            return false;
-        }
-
-        try
-        {
-            var models = await _ollamaApiClient.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false);
-            return models.Any(model => string.Equals(model.Name, modelName, StringComparison.OrdinalIgnoreCase));
-        }
-        catch (HttpRequestException exception)
-        {
-            // An unreachable daemon is not an error here — it just means no Ollama model is installed as far as we know.
-            _logger.LogDebug(exception, "Ollama inventory unavailable while checking draft-model eligibility.");
-            return false;
-        }
     }
 
     private ConfigDraft? NormalizeAgentDraft(AgentDraftEnvelope envelope)

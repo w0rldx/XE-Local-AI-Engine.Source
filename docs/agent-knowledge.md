@@ -1197,7 +1197,7 @@ carrying both.
 
 ### The Ollama gate-off branch registers no-op `IModelCapabilityClient` and `IOllamaModelService`, so the node still boots
 
-**Rule:** `AddNodeModelRuntimeExtensions.AddOllamaRuntime` owns BOTH branches of the gate, and the gate-off branch registers a no-op for every service whose Ollama-side dependency lives inside the `AddOllamaLocalModelProvider` call that branch skips. There are two. `UnavailableModelCapabilityClient` (`Client.Application`, `Services/Capabilities/Implementation/`) supplies `IModelCapabilityClient`, whose only other registration is in that call; without it `ModelCapabilityProber` cannot be activated. `UnavailableOllamaModelService` (`Services/Chat/Implementation/`) supplies `IOllamaModelService`, which used to be registered unconditionally in `AddNodeWorkerInfrastructureExtensions` even though `OllamaModelService` takes an `IOllamaApiClient` that only exists on the gate-on side — so a gate-off Development host failed `ValidateOnBuild` outright, and any other host threw at the first resolve of `LocalModelCatalogService`, `CapacityService`, `ModelClassificationService`, `ModelFitQueryService`, `OllamaProviderMapBackfillCoordinator`, `GetRunningLocalModelsEndpoint`, `GetLocalModelDetailsEndpoint` or `UnloadLocalModelEndpoint`. The real service is now registered on the gate-on branch beside the provider, so it can never outlive the client it needs.
+**Rule:** `AddNodeModelRuntimeExtensions.AddOllamaRuntime` owns BOTH branches of the gate, and the gate-off branch registers a no-op for every service whose Ollama-side dependency lives inside the `AddOllamaLocalModelProvider` call that branch skips. There are two. `UnavailableModelCapabilityClient` (`Client.Application`, `Services/Capabilities/Implementation/`) supplies `IModelCapabilityClient`, whose only other registration is in that call; without it `ModelCapabilityProber` cannot be activated. `UnavailableOllamaModelService` (`Client.Application`, `Services/Chat/Implementation/` — unchanged by S5) supplies `IOllamaModelService`, which since S5 lives in `Providers.Ollama/Contracts/` (was `Client.Application/Services/Chat/`) alongside the real `OllamaModelService` in `Providers.Ollama/Implementation/` (was `Client.Application/Services/Chat/Implementation/`). It used to be registered unconditionally in `AddNodeWorkerInfrastructureExtensions` even though `OllamaModelService` takes an `IOllamaApiClient` that only exists on the gate-on side — so a gate-off Development host failed `ValidateOnBuild` outright, and any other host threw at the first resolve of `LocalModelCatalogService`, `CapacityService`, `ModelClassificationService`, `ModelFitQueryService`, `OllamaProviderMapBackfillCoordinator`, `GetRunningLocalModelsEndpoint`, `GetLocalModelDetailsEndpoint` or `UnloadLocalModelEndpoint`. The real service is now registered on the gate-on branch beside the provider, so it can never outlive the client it needs.
 
 Both no-ops answer as an absent daemon, not as an error, because that is the shape every consumer already handles. The capability client reports unreachable, no version, empty installed and running inventories and a null context length, so a node started with `XE_OLLAMA_RUNTIME_ENABLED=false` reports exactly what a desktop without an Ollama daemon reports: `OllamaReachable=false`, the `ollama-unreachable` diagnostic, `ManagementMode=unknown`, and the configured-model fallbacks as the installed set. The model service answers its two list probes empty and `IsAvailableAsync` false, and throws a bare `HttpRequestException` with a null `StatusCode` from the members that need a live daemon — the exact transport failure a refused connection produces, which is what those consumers' catches already map to "Ollama not reachable". One nuance on the capability side: `InstalledModelInventoryResult.OllamaQuerySucceeded` is `true` under the no-op, because an empty list is a successful query, whereas a dead daemon throws and yields `false`; `CapabilityReportComposer` ANDs it with the runtime status, so the reported reachability is unchanged either way.
 
@@ -1673,6 +1673,37 @@ V1 `TeacherSampleRecordV1` represents **exactly one tool call**. `SampleValidati
 A training run links to its installed base GGUF before adapter export/smoke/promotion. `IInstalledBaseModelLinker` uses explicit wizard selection, official `<base>-GGUF`, or same repository ID—never display-name similarity. Comparison membership deliberately excludes TrainingRunId because the frozen dataset identity and hold-out set, not the path used to reach them, determine comparability.
 
 The training navigation flag is compile-time UI visibility only; endpoints remain registered and Operator-gated. Evaluation uses the current sample rows because frozen JSONL has no sample IDs, but refuses fingerprint drift both at request time and after queue claim so edits between create and execution cannot change the question silently.
+
+### PROPOSED (awaiting operator approval): OllamaSharp types live only in `Providers.Ollama`, and a `PackageReference` allowlist is what enforces it
+
+**Rule:** `IOllamaModelService`, `OllamaModelService` and `IOllamaApiClient` all live in `Providers.Ollama`
+(`Contracts/` and `Implementation/`). `Client` and `Client.Application` see the interface and its XE DTOs from
+`XE_Local_AI_Engine.Providers.Ollama.Contracts`, or `ILocalModelProvider` from `Providers.Abstractions` — never an
+OllamaSharp type. Two mechanisms hold it: `Providers.Ollama`'s `OllamaSharp` `PackageReference` is
+`PrivateAssets="compile"`, so the package's compile assets stop at that project even though runtime assets still flow
+and the node still runs; and `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` pins every
+production csproj's declared package set, which is the only thing that catches a DIRECT re-add (a direct
+`PackageReference` brings its own compile assets and walks straight through the wall). **Prevents:** a new call site
+importing `OllamaSharp` directly, which every namespace-scoped architecture test was blind to before this slice — a
+`ProjectReference` flows the referenced project's package compile assets by default, so a per-project allowlist alone
+never stopped `using OllamaSharp;` from compiling in a consumer. **Authority:**
+`LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences`,
+`ThirdPartySdkBoundaryTests.ProductionLayers_ReferenceNoUnlistedThirdPartySdk` (whose OllamaSharp allowlist is now
+empty), and the S5 compile-time break-proof: `using OllamaSharp;` in `Client.Application` or `Client` fails the Release
+build with `CS0246: The type or namespace name 'OllamaSharp' could not be found`.
+
+### PROPOSED (awaiting operator approval): a reverse provider→application `ProjectReference` fails at RESTORE, not in an architecture test
+
+**Rule:** a break-proof that adds a `ProjectReference` back up the layering graph (here `Providers.Ollama` →
+`Client.Application`, which already references `Providers.Ollama`) never reaches a test. `dotnet restore
+XE-Local-AI-Engine.slnx` fails first with `error MSB4006: There is a circular dependency in the target dependency graph
+involving target "_GenerateRestoreProjectPathWalk"`, attributed to the mutated csproj. So the proof shape is
+compile-time, and the guard being demonstrated is the project graph itself, not `LayerDependencyTests`. **Prevents:**
+writing a shape-(b) runtime-test recipe for a cycle and then reporting the restore failure as an unexplained infra
+error, or concluding the architecture test is broken because it never ran. **Authority:** the reverse-cycle
+recipe in `Plans/static-quality-enforcement-2026-09-15/S5-ollamasharp-boundary-migration-plan.md` §6, and the
+`MSB4006` circular-dependency diagnostic the restore itself prints, naming `_GenerateRestoreProjectPathWalk` and the
+mutated csproj.
 
 ---
 

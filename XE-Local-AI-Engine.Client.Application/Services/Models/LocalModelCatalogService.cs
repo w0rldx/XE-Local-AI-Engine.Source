@@ -1,17 +1,17 @@
 ﻿namespace XE_Local_AI_Engine.Client.Services.Models;
 
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
-using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Represents local model catalog service. Each source is read independently and degrades on its own, so a
@@ -72,6 +72,12 @@ public sealed class LocalModelCatalogService(
             externalModels);
     }
 
+    /// <inheritdoc />
+    public Task<IReadOnlyList<RunningModelSnapshot>> ListRunningOllamaModelsAsync(CancellationToken cancellationToken = default)
+    {
+        return _modelService.ListRunningModelsAsync(cancellationToken);
+    }
+
     /// <summary>
     ///     Enumerates the models registered on the operator's external OpenAI-compatible connections. A best-effort
     ///     read like every other source: an unreadable encrypted store yields no external entries rather than failing
@@ -107,7 +113,7 @@ public sealed class LocalModelCatalogService(
         {
             var models = (await _modelService.ListLocalModelsAsync(cancellationToken).ConfigureAwait(false)).ToArray();
             var classifications = await _classificationService
-                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.ReadModelName(), model.Digest)), cancellationToken)
+                                        .ClassifyAsync(models.Select(static model => new ModelIdentity(model.Name, model.Digest)), cancellationToken)
                                         .ConfigureAwait(false);
 
             return new OllamaModelListing(models, classifications);
@@ -178,5 +184,5 @@ public sealed class LocalModelCatalogService(
 
     // The Ollama runtime's models and their effective kinds. Models is null — not empty — when the runtime could not
     // be reached, which the catalog renders differently from "reachable, but nothing installed".
-    private sealed record OllamaModelListing(IReadOnlyList<Model>? Models, IReadOnlyDictionary<string, ModelClassificationResult> Classifications);
+    private sealed record OllamaModelListing(IReadOnlyList<OllamaModelSummary>? Models, IReadOnlyDictionary<string, ModelClassificationResult> Classifications);
 }

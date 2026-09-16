@@ -2,11 +2,11 @@ namespace XE_Local_AI_Engine.Client.Services.Memory.Implementation;
 
 using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Knowledge;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Default <see cref="IMemorySemanticDeduplicator" />. Embeds lexically-surviving candidates with the node-local
@@ -93,7 +93,7 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
             // Never swallow a genuine caller cancellation (the extraction run's own token fired).
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             // Any node-local embedding hiccup (model not pulled, Ollama/llama-server down, transport error, or an
             // unregistered provider name -> InvalidOperationException from the resolver) degrades to lexical-only

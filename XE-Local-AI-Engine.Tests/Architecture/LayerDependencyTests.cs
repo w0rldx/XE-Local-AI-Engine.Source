@@ -40,7 +40,6 @@ public sealed class LayerDependencyTests
     // into a red herring about the floor.
     private const int RepositoryBuildCustomizationFileFloor = 5;
     private const int ApprovedProjectReferencesFloor = 15;
-
     private const string ClientNamespace = "XE_Local_AI_Engine.Client";
     private const string PersistenceNamespace = "XE_Local_AI_Engine.Client.Persistence";
     private const string ApplicationNamespace = "XE_Local_AI_Engine.Client.Application";
@@ -159,6 +158,185 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.Training"] = ["XE-Local-AI-Engine.Providers.Abstractions"],
             ["XE-Local-AI-Engine.Providers.WhisperCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
+        };
+
+    // The direct-re-add guard that the compile-asset wall cannot provide (slice S5). PrivateAssets="compile" on
+    // Providers.Ollama's OllamaSharp reference stops that package's compile assets flowing to consumers, but a
+    // developer adding <PackageReference Include="OllamaSharp"/> straight to Client.Application.csproj brings its OWN
+    // compile assets and bypasses the wall entirely — a direct add compiles fine, and only this list catches it.
+    //
+    // Keyed by the SAME production-project set as ApprovedProjectReferences (the test below asserts the two key sets
+    // are equal, so a project added to one and forgotten in the other is a red, not a silent hole). Values are what
+    // the csproj DECLARES, not what NuGet restores: a conditioned PackageReference belongs here too, because the
+    // condition is a build-time choice and the declaration is the reviewable fact. No production project uses one
+    // today.
+    private static readonly IReadOnlyDictionary<string, string[]> ApprovedPackageReferences =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["XE-Local-AI-Engine.AI.Agent"] =
+            [
+                "Microsoft.Agents.AI",
+                "Microsoft.Agents.AI.Abstractions",
+                "Microsoft.Agents.AI.Workflows",
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.Configuration.Abstractions",
+                "Microsoft.Extensions.Options.ConfigurationExtensions",
+                "Microsoft.Extensions.Options.DataAnnotations",
+                "Scrutor"
+            ],
+            ["XE-Local-AI-Engine.AI.Contracts"] = [],
+            ["XE-Local-AI-Engine.AppHost"] =
+            [
+                "Aspire.Hosting.AppHost",
+                "Aspire.Hosting.Browsers",
+                "Aspire.Hosting.JavaScript",
+                "CommunityToolkit.Aspire.Hosting.Sqlite"
+            ],
+            ["XE-Local-AI-Engine.Client"] =
+            [
+                "Azure.AI.OpenAI",
+                "BouncyCastle.Cryptography",
+                "FastEndpoints",
+                "FastEndpoints.Swagger",
+                "Microsoft.AspNetCore.Authentication.JwtBearer",
+                "Microsoft.AspNetCore.SignalR.Client",
+                "Microsoft.EntityFrameworkCore.Sqlite",
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.AI.OpenAI",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.IdentityModel.JsonWebTokens",
+                "ModelContextProtocol.AspNetCore",
+                "Scalar.AspNetCore",
+                "Serilog",
+                "Serilog.AspNetCore",
+                "Serilog.Enrichers.Environment",
+                "Serilog.Enrichers.Process",
+                "Serilog.Enrichers.Thread",
+                "Serilog.Expressions",
+                "Serilog.Settings.Configuration",
+                "Serilog.Sinks.Console",
+                "Serilog.Sinks.File",
+                "System.Security.Cryptography.ProtectedData",
+                "Velopack"
+            ],
+            ["XE-Local-AI-Engine.Client.Application"] =
+            [
+                "Azure.AI.OpenAI",
+                "Azure.Identity",
+                "BouncyCastle.Cryptography",
+                "Docker.DotNet.Enhanced",
+                "DocumentFormat.OpenXml",
+                "Microsoft.Agents.AI",
+                "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
+                "Microsoft.AspNetCore.SignalR.Client",
+                "Microsoft.EntityFrameworkCore.Sqlite",
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.AI.OpenAI",
+                "Microsoft.Extensions.DataIngestion.Abstractions",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Identity.Client",
+                "Microsoft.Identity.Client.Extensions.Msal",
+                "Microsoft.IdentityModel.JsonWebTokens",
+                "ModelContextProtocol",
+                "NAudio.Wasapi",
+                "NSec.Cryptography",
+                "PdfPig",
+                "Quartz",
+                "Quartz.Extensions.Hosting",
+                "Quartz.Plugins",
+                "Quartz.Plugins.TimeZoneConverter",
+                "Quartz.Serialization.SystemTextJson",
+                "Serilog",
+                "System.Numerics.Tensors",
+                "UTF.Unknown"
+            ],
+            ["XE-Local-AI-Engine.Client.Persistence"] =
+            [
+                "Microsoft.AspNetCore.Identity.EntityFrameworkCore",
+                "Microsoft.EntityFrameworkCore.Design",
+                "Microsoft.EntityFrameworkCore.Sqlite",
+                "Microsoft.EntityFrameworkCore.Tools"
+            ],
+            ["XE-Local-AI-Engine.Client.Testing"] =
+            [
+                "Microsoft.Extensions.Configuration.Abstractions",
+                "Scrutor"
+            ],
+            ["XE-Local-AI-Engine.Providers.Abstractions"] = ["Microsoft.Extensions.AI.Abstractions"],
+            ["XE-Local-AI-Engine.Providers.Capabilities"] =
+            [
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Logging.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Providers.CodexOAuth"] =
+            [
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.AI.OpenAI"
+            ],
+            ["XE-Local-AI-Engine.Providers.HuggingFace"] =
+            [
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Extensions.Options.ConfigurationExtensions"
+            ],
+            ["XE-Local-AI-Engine.Providers.LlamaServer"] =
+            [
+                "Azure.AI.OpenAI",
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.AI.OpenAI",
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Logging.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Providers.Ollama"] =
+            [
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "OllamaSharp"
+            ],
+            ["XE-Local-AI-Engine.Providers.OpenAICompat"] =
+            [
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.AI.OpenAI",
+                "Microsoft.Extensions.DependencyInjection.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Providers.OpenAICompatible.Core"] =
+            [
+                "Microsoft.Extensions.AI",
+                "Microsoft.Extensions.AI.Abstractions",
+                "Microsoft.Extensions.AI.OpenAI"
+            ],
+            ["XE-Local-AI-Engine.Providers.StableDiffusionCpp"] =
+            [
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Extensions.Logging.Abstractions",
+                "Microsoft.Extensions.Options.ConfigurationExtensions"
+            ],
+            ["XE-Local-AI-Engine.Providers.Training"] =
+            [
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Extensions.Logging.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Providers.WhisperCpp"] =
+            [
+                "Microsoft.Extensions.DependencyInjection.Abstractions",
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Extensions.Logging.Abstractions",
+                "Microsoft.Extensions.Options.ConfigurationExtensions"
+            ],
+            ["XE-Local-AI-Engine.ServiceDefaults"] =
+            [
+                "Microsoft.Extensions.Http.Resilience",
+                "Microsoft.Extensions.ServiceDiscovery",
+                "OpenTelemetry.Exporter.OpenTelemetryProtocol",
+                "OpenTelemetry.Extensions.Hosting",
+                "OpenTelemetry.Instrumentation.AspNetCore",
+                "OpenTelemetry.Instrumentation.Http",
+                "OpenTelemetry.Instrumentation.Runtime"
+            ],
+            ["XE-Local-AI-Engine.WindowsLauncher"] = ["Velopack"]
         };
 
     // Test and support projects, keyed by REPOSITORY-RELATIVE CSPROJ PATH rather than by project name: the negative-fence
@@ -329,6 +507,54 @@ public sealed class LayerDependencyTests
 
             AssertExactReferences(projectName, approvedReferences, actualReferences);
         }
+    }
+
+    [Test]
+    public void ProductionProjects_HaveOnlyTheApprovedPackageReferences()
+    {
+        var approvedProjects = ApprovedPackageReferences.Keys.Order(StringComparer.Ordinal).ToArray();
+        var projectReferenceProjects = ApprovedProjectReferences.Keys.Order(StringComparer.Ordinal).ToArray();
+
+        // The two allow-lists pin the same set of production projects. Cross-checking them here is what keeps a new
+        // project from landing in one and being invisible to the other; ProductionProjects_HaveOnlyTheApprovedDirect-
+        // ProjectReferences already pins that set against the solution's own /Src membership.
+        AssertExactReferences("Production projects pinned by ApprovedPackageReferences", projectReferenceProjects, approvedProjects);
+
+        foreach (var (projectName, approvedReferences) in ApprovedPackageReferences)
+        {
+            var projectPath = RepositoryPaths.Combine(projectName, $"{projectName}.csproj");
+            var project = XDocument.Load(projectPath);
+            var actualReferences = project.Descendants("PackageReference")
+                                          .Select(reference => (string?)reference.Attribute("Include"))
+                                          .Where(include => !string.IsNullOrWhiteSpace(include))
+                                          .Select(include => include!)
+                                          .Order(StringComparer.Ordinal)
+                                          .ToArray();
+
+            AssertExactReferences(projectName, approvedReferences, actualReferences);
+        }
+    }
+
+    [Test]
+    public void OllamaSharpReference_IsCompileWalledInsideTheOllamaProvider()
+    {
+        // ProductionProjects_HaveOnlyTheApprovedPackageReferences reads only Include, so deleting PrivateAssets from
+        // this one reference leaves every other test green while the package's compile assets flow again to everything
+        // that references Providers.Ollama — and `using OllamaSharp;` compiles in the application layer once more.
+        // PrivateAssets="compile" is what keeps the SDK confined; nothing else in the repository asserts it.
+        const string projectName = "XE-Local-AI-Engine.Providers.Ollama";
+        var project = XDocument.Load(RepositoryPaths.Combine(projectName, $"{projectName}.csproj"));
+        var ollamaSharp = AssertEx.NotNull(project.Descendants("PackageReference")
+                                                  .SingleOrDefault(reference =>
+                                                      string.Equals((string?)reference.Attribute("Include"), "OllamaSharp", StringComparison.Ordinal)),
+            $"{projectName}.csproj declares no OllamaSharp PackageReference, so this guard scanned nothing. The wall it "
+            + "protects only exists while that reference does.");
+        var privateAssets = ((string?)ollamaSharp.Attribute("PrivateAssets"))?.Trim();
+
+        AssertEx.Equal("compile", privateAssets,
+            $"{projectName}'s OllamaSharp PackageReference must keep PrivateAssets=\"compile\". Without it the package's "
+            + "compile assets flow through the ProjectReference to every consumer, and the S5 boundary — no OllamaSharp "
+            + "type outside this provider — silently reopens with no other test noticing.");
     }
 
     [Test]

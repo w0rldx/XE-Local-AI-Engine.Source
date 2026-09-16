@@ -13,7 +13,6 @@ using XE_Local_AI_Engine.Client.Persistence.Sqlite;
 using XE_Local_AI_Engine.Client.Services.Agents.Approval.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capabilities.Implementation;
 using XE_Local_AI_Engine.Client.Services.Capacity;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.CloudProviders.Implementation;
@@ -39,6 +38,7 @@ using XE_Local_AI_Engine.Providers.LlamaServer;
 using XE_Local_AI_Engine.Providers.LlamaServer.Contracts;
 using XE_Local_AI_Engine.Providers.LlamaServer.Options;
 using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.OpenAICompat;
 
 internal static class AddNodeModelRuntimeExtensions
@@ -334,9 +334,9 @@ internal static class AddNodeModelRuntimeExtensions
             return new OllamaLocalModelProviderRegistration(chatConnectionSettings.Endpoint, chatConnectionSettings.Model);
         });
 
-        // Moved here from AddNodeWorkerInfrastructure so it sits on the same side of the gate as the IOllamaApiClient
-        // it depends on. Registered exactly once on each branch, so no path can double-register it.
-        builder.Services.AddSingleton<IOllamaModelService, OllamaModelService>();
+        // IOllamaModelService's real registration now rides inside AddOllamaLocalModelProvider, next to the
+        // IOllamaApiClient it wraps — still exactly once on this branch, and still the mirror of the gate-off branch's
+        // UnavailableOllamaModelService above.
     }
 
     /// <summary>

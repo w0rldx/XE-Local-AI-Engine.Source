@@ -1,4 +1,4 @@
-namespace XE_Local_AI_Engine.Tests.Services.Chat;
+namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using System.Net;
 using System.Runtime.CompilerServices;
@@ -6,12 +6,12 @@ using NSubstitute;
 using OllamaSharp;
 using OllamaSharp.Models;
 using OllamaSharp.Models.Exceptions;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
-///     Tests the app-service eject path (<c>OllamaModelService.UnloadModelAsync</c>, behind the
+///     Tests the provider eject path (<c>OllamaModelService.UnloadModelAsync</c>, behind the
 ///     <c>models/{modelName}/unload</c> endpoint) against the fake Ollama. The eviction must target the REQUESTED model,
 ///     not the shared client's <c>SelectedModel</c>.
 /// </summary>
@@ -89,6 +89,88 @@ public sealed class OllamaModelServiceTests
         using var service = new OllamaModelService(client);
 
         await AssertEx.ThrowsAsync<OllamaException>(() => service.UnloadModelAsync("qwen3:8b")).ConfigureAwait(false);
+    }
+
+    [Test]
+    public async Task IsLoopbackModelInstalledAsync_WhenLoopbackDaemonHasTheModel_ReturnsTrue()
+    {
+        // The drafting eligibility check: a model is draftable only when a LOOPBACK daemon reports it installed.
+        var client = LoopbackClientWith("qwen3:8b", "llama3.2:3b");
+        using var service = new OllamaModelService(client);
+
+        AssertEx.True(await service.IsLoopbackModelInstalledAsync("QWEN3:8B").ConfigureAwait(false),
+            "the name match is case-insensitive, matching the classification and picker surfaces");
+    }
+
+    [Test]
+    public async Task IsLoopbackModelInstalledAsync_WhenTheDaemonOnlyFillsTheModelField_ReturnsTrue()
+    {
+        // /api/tags fills "model" on current daemons and only "name" on older ones, which is why every name-keyed
+        // surface reads it through OllamaModelName.ReadModelName. Comparing Model.Name alone made every model on a
+        // current daemon look uninstalled, silently disqualifying it for drafting.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.Uri.Returns(new Uri("http://127.0.0.1:11434"));
+        client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
+              .Returns(Task.FromResult<IEnumerable<Model>>([
+                  new Model
+                  {
+                      ModelName = "qwen3:8b"
+                  }
+              ]));
+        using var service = new OllamaModelService(client);
+
+        AssertEx.True(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false),
+            "a daemon that reports the name in \"model\" must still count as installed");
+    }
+
+    [Test]
+    public async Task IsLoopbackModelInstalledAsync_WhenLoopbackDaemonDoesNotHaveTheModel_ReturnsFalse()
+    {
+        var client = LoopbackClientWith("llama3.2:3b");
+        using var service = new OllamaModelService(client);
+
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+    }
+
+    [Test]
+    public async Task IsLoopbackModelInstalledAsync_WhenEndpointIsRemote_ReturnsFalseWithoutListing()
+    {
+        // Uri.IsLoopback is the same fact the composition-time SSRF guard enforces, read without throwing: a remote
+        // endpoint makes every Ollama model ineligible, and the inventory is never even requested.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.Uri.Returns(new Uri("http://198.51.100.7:11434"));
+        using var service = new OllamaModelService(client);
+
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+
+        _ = client.DidNotReceive().ListLocalModelsAsync(Arg.Any<CancellationToken>());
+    }
+
+    [Test]
+    public async Task IsLoopbackModelInstalledAsync_WhenDaemonIsUnreachable_ReturnsFalse()
+    {
+        // An unreachable daemon is not an error here — it just means no Ollama model is installed as far as we know.
+        var client = Substitute.For<IOllamaApiClient>();
+        client.Uri.Returns(new Uri("http://127.0.0.1:11434"));
+        client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
+              .Returns<Task<IEnumerable<Model>>>(_ => throw new HttpRequestException("Connection refused"));
+        using var service = new OllamaModelService(client);
+
+        AssertEx.False(await service.IsLoopbackModelInstalledAsync("qwen3:8b").ConfigureAwait(false));
+    }
+
+    private static IOllamaApiClient LoopbackClientWith(params string[] installedModelNames)
+    {
+        var client = Substitute.For<IOllamaApiClient>();
+        client.Uri.Returns(new Uri("http://127.0.0.1:11434"));
+        client.ListLocalModelsAsync(Arg.Any<CancellationToken>())
+              .Returns(Task.FromResult<IEnumerable<Model>>([
+                  .. installedModelNames.Select(static name => new Model
+                  {
+                      Name = name
+                  })
+              ]));
+        return client;
     }
 
     /// <summary>An <c>/api/generate</c> stream that fails on first move, the way a non-200 response surfaces.</summary>

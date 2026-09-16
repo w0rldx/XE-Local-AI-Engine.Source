@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 
 public sealed class OllamaProviderMapBackfillCoordinator(

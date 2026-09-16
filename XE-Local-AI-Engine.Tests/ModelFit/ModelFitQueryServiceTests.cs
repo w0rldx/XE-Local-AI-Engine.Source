@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Tests.ModelFit;
 
 using Microsoft.Extensions.Logging.Abstractions;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Endpoints.ModelFit.V1.Mappers;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
-using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.ModelFit.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
+using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.ModelFit.Fakes;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -233,22 +233,14 @@ public sealed class ModelFitQueryServiceTests
     {
         private readonly IReadOnlyList<string> _installed = installedModelNames?.ToList() ?? [];
 
-        public Task<IEnumerable<Model>> ListLocalModelsAsync(CancellationToken ct = default)
+        public Task<IEnumerable<OllamaModelSummary>> ListLocalModelsAsync(CancellationToken ct = default)
         {
             if (throwOnList)
             {
                 throw new InvalidOperationException("Ollama unreachable (test).");
             }
 
-            return Task.FromResult(_installed.Select(name => new Model
-            {
-                Name = name
-            }));
-        }
-
-        public Task<ShowModelResponse> ShowModelAsync(string modelName, CancellationToken ct = default)
-        {
-            throw new NotSupportedException();
+            return Task.FromResult(_installed.Select(static name => new OllamaModelSummary(name)));
         }
 
         public Task<OllamaModelDetails> ShowModelDetailsAsync(string modelName, CancellationToken ct = default)
@@ -256,7 +248,7 @@ public sealed class ModelFitQueryServiceTests
             throw new NotSupportedException();
         }
 
-        public IAsyncEnumerable<PullModelResponse> PullModelAsync(string modelName, CancellationToken ct = default)
+        public IAsyncEnumerable<PullProgress> PullModelAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }
@@ -277,6 +269,11 @@ public sealed class ModelFitQueryServiceTests
         }
 
         public Task<bool> IsAvailableAsync(CancellationToken ct = default)
+        {
+            throw new NotSupportedException();
+        }
+
+        public Task<bool> IsLoopbackModelInstalledAsync(string modelName, CancellationToken ct = default)
         {
             throw new NotSupportedException();
         }

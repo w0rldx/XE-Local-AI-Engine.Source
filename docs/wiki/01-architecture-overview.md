@@ -260,6 +260,10 @@ Application and agent code depend only on `ILocalModelProvider` / `IChatClient` 
 `CreateChatClient(LocalModelSelection)`, `CreateEmbeddingGenerator(...)`,
 `Pull/Delete/Warm/UnloadModelAsync`). **Provider-specific SDK types never leak across this seam** —
 they stay inside the provider projects (`LlamaServerLocalModelProvider`, `OllamaLocalModelProvider`).
+For OllamaSharp this is enforced, not just intended: `Providers.Ollama`'s `OllamaSharp` reference is
+`PrivateAssets="compile"` so its compile assets do not flow to consumers, and
+`LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` catches a direct re-add of the
+package. Docker and Azure remain source-scan-only, with no compile-asset boundary yet.
 Exactly **two** classes implement `ILocalModelProvider` — `LlamaServerLocalModelProvider` (`llamacpp`, the
 default) and `OllamaLocalModelProvider` (`ollama`, the gated secondary). The remaining `Providers.*`
 projects sit alongside that seam rather than on it: `Abstractions` (contracts), `HuggingFace` (the
@@ -330,7 +334,9 @@ A maintainer must preserve these. Each is enforced or anchored in code today:
    The host wires only web concerns; logic registers via `AddNodeApplication`.
 5. **Provider SDK types do not cross `Providers.Abstractions`.** Depend on `ILocalModelProvider` /
    `IChatClient` / `IEmbeddingGenerator`; keep OllamaSharp / llama-server HTTP types inside provider
-   projects.
+   projects. OllamaSharp is enforced by a compile-asset boundary (`PrivateAssets="compile"` on
+   `Providers.Ollama`'s reference) plus `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences`
+   against a direct re-add; Docker and Azure remain source-scan-only.
 6. **No inference path requires Docker or WSL, and nothing requires a CUDA toolkit to *run*.** The only
    external dependency for inference is a GPU driver — and CPU fallback always works (re-architecture
    invariant §3). Two opt-in features sit outside this and need more: the **in-app source build**, an

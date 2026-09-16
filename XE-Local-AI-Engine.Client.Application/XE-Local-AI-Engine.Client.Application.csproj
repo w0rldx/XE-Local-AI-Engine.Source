@@ -8,7 +8,6 @@
     <PackageReference Include="Azure.AI.OpenAI"/>
     <PackageReference Include="Azure.Identity"/>
     <PackageReference Include="BouncyCastle.Cryptography"/>
-    <PackageReference Include="CommunityToolkit.Aspire.OllamaSharp"/>
     <!-- Development Mode container sandbox (ADR 0004). See Directory.Packages.props for why the id is the `.Enhanced`
          fork rather than the 2023-era original. -->
     <PackageReference Include="Docker.DotNet.Enhanced"/>
@@ -38,7 +37,6 @@
          [SupportedOSPlatform] guards that keep CA1416 green on this plain net10.0 project. -->
     <PackageReference Include="NAudio.Wasapi"/>
     <PackageReference Include="NSec.Cryptography"/>
-    <PackageReference Include="OllamaSharp"/>
     <PackageReference Include="Quartz"/>
     <PackageReference Include="Quartz.Extensions.Hosting"/>
     <PackageReference Include="Quartz.Plugins"/>

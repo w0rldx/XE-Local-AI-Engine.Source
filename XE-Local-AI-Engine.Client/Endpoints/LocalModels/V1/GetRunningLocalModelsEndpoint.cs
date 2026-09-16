@@ -4,7 +4,7 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Client.Services.Chat;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 
 /// <summary>
@@ -14,13 +14,13 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     (<see cref="RunningLocalModelsResponse.OllamaConfigured" />) so the client stops polling when it is switched off.
 /// </summary>
 public sealed class GetRunningLocalModelsEndpoint(
-    IOllamaModelService modelService,
+    ILocalModelCatalogService catalogService,
     IConfiguration configuration,
     ILogger<GetRunningLocalModelsEndpoint> logger) : EndpointWithoutRequest<RunningLocalModelsResponse>
 {
+    private readonly ILocalModelCatalogService _catalogService = catalogService ?? throw new ArgumentNullException(nameof(catalogService));
     private readonly IConfiguration _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
     private readonly ILogger<GetRunningLocalModelsEndpoint> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-    private readonly IOllamaModelService _modelService = modelService ?? throw new ArgumentNullException(nameof(modelService));
 
     public override void Configure()
     {
@@ -36,7 +36,7 @@ public sealed class GetRunningLocalModelsEndpoint(
 
         try
         {
-            var running = await _modelService.ListRunningModelsAsync(ct).ConfigureAwait(false);
+            var running = await _catalogService.ListRunningOllamaModelsAsync(ct).ConfigureAwait(false);
             await Send.OkAsync(LocalModelsMapper.ToRunningResponse(running, ollamaConfigured), ct).ConfigureAwait(false);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)

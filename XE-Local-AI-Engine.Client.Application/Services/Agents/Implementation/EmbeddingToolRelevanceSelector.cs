@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Services.Agents.Implementation;
 
 using System.Numerics.Tensors;
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.AI.Agent.Tools;
 using XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
@@ -10,6 +9,7 @@ using XE_Local_AI_Engine.Client.Common.Caching;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Embedding-backed <see cref="IToolRelevanceSelector" />, in the same shape as
@@ -115,7 +115,7 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             // the guard stays honest if a future revision flows a token in.
             throw;
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             // Every node-local embedding hiccup lands here: model not pulled, runtime down or ejected, a spent
             // profiling retry, a transport error (the deferred llama-server generator wraps its LlamaRuntimeException

@@ -3,7 +3,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.AI.Agent.Configuration;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
@@ -16,6 +15,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -71,7 +71,7 @@ public sealed class LocalModelCatalogServiceTests
         // would render as "available, nothing installed" and hide the outage.
         var harness = new Harness();
         harness.ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-               .Returns<Task<IEnumerable<Model>>>(_ => throw new HttpRequestException("connection refused"));
+               .Returns<Task<IEnumerable<OllamaModelSummary>>>(_ => throw new HttpRequestException("connection refused"));
         harness.WithInstalledGguf("local/gguf:Q4_K_M");
         harness.WithCodexSession(Now.AddHours(1));
 
@@ -145,7 +145,7 @@ public sealed class LocalModelCatalogServiceTests
         public Harness()
         {
             RuntimeSettings.GetDefaultModelNameAsync(Arg.Any<CancellationToken>()).Returns("selected:model");
-            ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<Model>().AsEnumerable());
+            ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<OllamaModelSummary>().AsEnumerable());
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>()).Returns(Array.Empty<LocalModelDescriptor>());
             CodexTokenStore.LoadAsync(Arg.Any<CancellationToken>()).Returns((CodexTokens?)null);
             CloudModelResolver.ResolveAzureFoundryConnectionAsync(Arg.Any<CancellationToken>()).Returns((StoredAzureFoundryConnection?)null);
@@ -165,11 +165,7 @@ public sealed class LocalModelCatalogServiceTests
 
         public void WithOllamaModels(params string[] modelNames) =>
             ModelService.ListLocalModelsAsync(Arg.Any<CancellationToken>())
-                        .Returns(modelNames.Select(static name => new Model
-                        {
-                            Name = name,
-                            ModelName = name
-                        }).AsEnumerable());
+                        .Returns(modelNames.Select(static name => new OllamaModelSummary(name)).AsEnumerable());
 
         public void WithInstalledGguf(string modelName) =>
             GgufModelStore.ListInstalledModelsAsync(Arg.Any<CancellationToken>())

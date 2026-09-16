@@ -1,6 +1,5 @@
 namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
 
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Persistence;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
@@ -10,11 +9,11 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
 using XE_Local_AI_Engine.Providers.CodexOAuth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Implementation;
-using XE_Local_AI_Engine.Providers.Ollama;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal static class LocalModelsMapper
 {
-    public static ListLocalModelsResponse ToListResponse(IEnumerable<Model> models,
+    public static ListLocalModelsResponse ToListResponse(IEnumerable<OllamaModelSummary> models,
         string? selectedModelName,
         string? configuredDefaultModelName,
         IReadOnlyDictionary<string, ModelClassificationResult> classifications,
@@ -26,7 +25,7 @@ internal static class LocalModelsMapper
         ArgumentNullException.ThrowIfNull(classifications);
 
         var ollamaItems = models
-                          .Where(static model => !string.IsNullOrWhiteSpace(model.ModelName) || !string.IsNullOrWhiteSpace(model.Name))
+                          .Where(static model => !string.IsNullOrWhiteSpace(model.Name))
                           .Select(model => model.ToResponse(selectedModelName, classifications))
                           .OrderBy(static model => model.ModelName, StringComparer.OrdinalIgnoreCase)
                           .ToArray();
@@ -358,14 +357,14 @@ internal static class LocalModelsMapper
         };
     }
 
-    public static LocalModelResponse ToResponse(this Model model,
+    public static LocalModelResponse ToResponse(this OllamaModelSummary model,
         string? selectedModelName,
         IReadOnlyDictionary<string, ModelClassificationResult> classifications)
     {
         ArgumentNullException.ThrowIfNull(model);
         ArgumentNullException.ThrowIfNull(classifications);
 
-        var modelName = model.ReadModelName();
+        var modelName = model.Name;
         var classification = classifications.TryGetValue(modelName, out var resolved)
             ? resolved
             : UnknownClassification(modelName);
@@ -373,11 +372,11 @@ internal static class LocalModelsMapper
         return new LocalModelResponse
         {
             ModelName = modelName,
-            SizeBytes = model.Size,
-            ModifiedAtUtc = new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)).ToUnixTimeMilliseconds(),
-            Family = model.Details?.Family,
-            ParameterSize = model.Details?.ParameterSize,
-            QuantizationLevel = model.Details?.QuantizationLevel,
+            SizeBytes = model.SizeBytes,
+            ModifiedAtUtc = model.ModifiedAtUtc.ToUnixTimeMilliseconds(),
+            Family = model.Family,
+            ParameterSize = model.ParameterSize,
+            QuantizationLevel = model.QuantizationLevel,
             IsSelected = string.Equals(modelName, selectedModelName, StringComparison.OrdinalIgnoreCase),
             Kind = classification.Kind.ToString(),
             DetectedKind = classification.DetectedKind.ToString(),
@@ -415,9 +414,9 @@ internal static class LocalModelsMapper
         {
             ModelName = modelName,
             MaxContextTokens = modelDetails.MaxContextTokens,
-            Template = modelDetails.Response.Template,
-            System = modelDetails.Response.System,
-            License = modelDetails.Response.License
+            Template = modelDetails.Template,
+            System = modelDetails.System,
+            License = modelDetails.License
         };
     }
 

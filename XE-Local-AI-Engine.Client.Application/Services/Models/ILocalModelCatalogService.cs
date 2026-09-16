@@ -1,10 +1,11 @@
 namespace XE_Local_AI_Engine.Client.Services.Models;
 
-using OllamaSharp.Models;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
+using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.External;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     The model picker's whole catalog, gathered from five independent sources that each degrade on their own.
@@ -34,7 +35,7 @@ using XE_Local_AI_Engine.Providers.Abstractions.External;
 public sealed record LocalModelCatalog(
     string? SelectedModelName,
     string? ConfiguredDefaultModelName,
-    IReadOnlyList<Model>? OllamaModels,
+    IReadOnlyList<OllamaModelSummary>? OllamaModels,
     IReadOnlyDictionary<string, ModelClassificationResult> Classifications,
     IReadOnlyList<LocalModelDescriptor> InstalledGgufModels,
     bool HasUsableCodexSession,
@@ -52,4 +53,11 @@ public interface ILocalModelCatalogService
     ///     Reads every source. Never throws for a source-level failure — only cancellation propagates.
     /// </summary>
     Task<LocalModelCatalog> GetCatalogAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    ///     Lists the models the Ollama runtime currently holds in memory. Delegates straight to the runtime service this
+    ///     catalog already depends on, so the loaded-models endpoint reaches it through an Application-owned seam rather
+    ///     than injecting a concrete provider's contract.
+    /// </summary>
+    Task<IReadOnlyList<RunningModelSnapshot>> ListRunningOllamaModelsAsync(CancellationToken cancellationToken = default);
 }

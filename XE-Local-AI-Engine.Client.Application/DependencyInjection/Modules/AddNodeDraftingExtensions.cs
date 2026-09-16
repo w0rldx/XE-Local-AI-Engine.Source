@@ -1,13 +1,13 @@
 namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 
 using Microsoft.Extensions.Options;
-using OllamaSharp;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.CloudProviders;
 using XE_Local_AI_Engine.Client.Services.Drafting;
 using XE_Local_AI_Engine.Client.Services.Drafting.Implementation;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 internal static class AddNodeDraftingExtensions
 {
@@ -44,8 +44,8 @@ internal static class AddNodeDraftingExtensions
         builder.Services.AddSingleton<DraftAdmissionGate>();
 
         // Scoped, not singleton: eligibility reads the scoped, DbContext-backed IModelClassificationStore. The Ollama
-        // API client is resolved OPTIONALLY — the Ollama runtime is capability-gated, and its absence must make Ollama
-        // models ineligible rather than break the drafting surface on a llama.cpp-only node.
+        // model service is always registered — the capability gate swaps in a substitute that reports no installed
+        // model, so a llama.cpp-only node makes Ollama models ineligible instead of breaking the drafting surface.
         builder.Services.AddScoped<IConfigDraftService>(serviceProvider => new DefaultConfigDraftService(serviceProvider.GetRequiredService<ILocalModelProviderResolver>(),
             serviceProvider.GetRequiredService<IGgufModelStore>(),
             serviceProvider.GetRequiredService<IModelClassificationStore>(),
@@ -54,7 +54,7 @@ internal static class AddNodeDraftingExtensions
             serviceProvider.GetRequiredService<INodeSettingsStore>(),
             serviceProvider.GetRequiredService<TimeProvider>(),
             serviceProvider.GetRequiredService<ILogger<DefaultConfigDraftService>>(),
-            serviceProvider.GetService<IOllamaApiClient>()));
+            serviceProvider.GetRequiredService<IOllamaModelService>()));
 
         return builder;
     }

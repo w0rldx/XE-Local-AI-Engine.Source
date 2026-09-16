@@ -52,7 +52,7 @@ Every project below is grounded in its `.csproj` (`Sdk=` / `OutputType` / `Proje
 
 ### Providers (`/Src/Providers/`)
 
-Provider projects reference `Providers.Abstractions` and, for the two that speak the OpenAI wire protocol, the leaf `Providers.OpenAICompatible.Core` transport library. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`). No provider references a sibling provider.
+Provider projects reference `Providers.Abstractions` and, for the two that speak the OpenAI wire protocol, the leaf `Providers.OpenAICompatible.Core` transport library. SDK-specific types stay inside each provider; consumers depend on the abstraction seams (`ILocalModelProvider`, `IChatClient`, `IEmbeddingGenerator`). Enforced for OllamaSharp: `Providers.Ollama`'s `OllamaSharp` reference is `PrivateAssets="compile"`, so no consumer can compile against the SDK even though it references the project, and `LayerDependencyTests.ProductionProjects_HaveOnlyTheApprovedPackageReferences` catches a direct re-add of the package in a consumer csproj. Docker and Azure remain source-scan-only, with no compile-asset boundary yet. No provider references a sibling provider.
 
 | Project | Role | Key symbols |
 |---|---|---|

@@ -3,8 +3,10 @@ namespace XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using Microsoft.Extensions.AI;
 using OllamaSharp;
 using OllamaSharp.Models;
+using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Ollama implementation of the provider-neutral local-model management and chat-client boundary.
@@ -78,7 +80,20 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     /// <inheritdoc />
     public async Task<IReadOnlyList<LocalModelDescriptor>> ListModelsAsync(CancellationToken ct)
     {
-        var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
+        IEnumerable<Model> models;
+        try
+        {
+            models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
+        }
+        catch (OllamaException exception)
+        {
+            // OllamaSharp parses HTTP 400 into OllamaException; every other status, and an unreachable daemon, stays an
+            // HttpRequestException, which the ILocalModelProvider consumers catch by name and must keep seeing. Only
+            // the SDK-typed shape is translated, which is exactly the coverage those catch filters had before the SDK
+            // was confined to this project.
+            throw new OllamaUnavailableException("The Ollama daemon could not serve the model listing.", exception);
+        }
+
         var descriptors = new List<LocalModelDescriptor>();
 
         foreach (var model in models)
@@ -121,13 +136,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
                     continue;
                 }
 
-                progress?.Report(new PullProgress
-                {
-                    ModelName = modelName,
-                    Status = response.Status ?? string.Empty,
-                    TotalBytes = response.Total,
-                    CompletedBytes = response.Completed
-                });
+                progress?.Report(OllamaPullProgressMapper.ToPullProgress(modelName, response));
             }
         }
         finally
@@ -230,12 +239,15 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
         // carry conversation, memory and knowledge-base text that this node keeps on-box, and the operator's
         // interactive-pipeline opt-in must never widen to it. Setting it explicitly also beats the ambient
         // OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT, which Aspire injects as true.
+        // The translating decorator sits outermost so an OllamaSharp transport failure never escapes this project:
+        // callers catch OllamaUnavailableException, not the SDK's own exception type.
 #pragma warning disable CA2000 // Ownership of the minted client transfers to the returned generator, which disposes it with itself.
-        return _clientFactory.CreateClient(selection.ModelName)
-                             .AsBuilder<string, Embedding<float>>()
-                             .UseOpenTelemetry(sourceName: "Microsoft.Extensions.AI",
-                                 configure: static openTelemetryGenerator => openTelemetryGenerator.EnableSensitiveData = false)
-                             .Build();
+        var instrumentedGenerator = _clientFactory.CreateClient(selection.ModelName)
+                                                  .AsBuilder<string, Embedding<float>>()
+                                                  .UseOpenTelemetry(sourceName: "Microsoft.Extensions.AI",
+                                                      configure: static openTelemetryGenerator => openTelemetryGenerator.EnableSensitiveData = false)
+                                                  .Build();
+        return new OllamaExceptionTranslatingEmbeddingGenerator(instrumentedGenerator);
 #pragma warning restore CA2000
     }
 

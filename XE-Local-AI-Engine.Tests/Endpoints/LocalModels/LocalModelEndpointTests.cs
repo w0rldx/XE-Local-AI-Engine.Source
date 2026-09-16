@@ -21,6 +21,8 @@ using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
 using XE_Local_AI_Engine.Providers.Abstractions.Gguf;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
 using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;
 using XE_Local_AI_Engine.Tests.Testing;
 
@@ -184,7 +186,7 @@ public sealed class LocalModelEndpointTests
     public async Task ListLocalModels_WhenProviderUnavailable_ReturnsSafeUnavailableResponse()
     {
         var modelService = Substitute.For<IOllamaModelService>();
-        modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<Model>>>(_ => throw new InvalidOperationException("provider offline"));
+        modelService.ListLocalModelsAsync(Arg.Any<CancellationToken>()).Returns<Task<IEnumerable<OllamaModelSummary>>>(_ => throw new InvalidOperationException("provider offline"));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 
@@ -493,7 +495,7 @@ public sealed class LocalModelEndpointTests
         // Ollama branch (default-stubbed resolver): the decoded canonical name is the one probed via /api/show.
         var modelService = Substitute.For<IOllamaModelService>();
         modelService.ShowModelDetailsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
-                    .Returns(new OllamaModelDetails(new ShowModelResponse(), MaxContextTokens: 4096, []));
+                    .Returns(new OllamaModelDetails(MaxContextTokens: 4096, Capabilities: []));
         await using var context = CreateContext(modelService, new StubNodeSettingsStore(new StoredNodeSettings()));
         using var client = context.Factory.CreateClient();
 

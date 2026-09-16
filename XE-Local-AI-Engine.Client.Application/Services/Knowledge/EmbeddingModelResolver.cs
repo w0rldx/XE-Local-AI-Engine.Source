@@ -4,10 +4,10 @@ using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Options;
-using OllamaSharp.Models.Exceptions;
 using XE_Local_AI_Engine.Client.Services.Chat;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Abstractions.Contracts;
+using XE_Local_AI_Engine.Providers.Ollama.Contracts;
 
 /// <summary>
 ///     Resolves the ACTUAL embedding model name to hand to a provider's embedding generator from the configured
@@ -69,7 +69,7 @@ public sealed class EmbeddingModelResolver : IEmbeddingModelResolver
         {
             installed = await provider.ListModelsAsync(cancellationToken).ConfigureAwait(false);
         }
-        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaException or InvalidOperationException)
+        catch (Exception exception) when (exception is HttpRequestException or IOException or OllamaUnavailableException or InvalidOperationException)
         {
             // Provider process down / transport error / unmapped provider. Keep the configured name so the caller's
             // existing graceful "embedding model not available" path fires unchanged. No model or chunk text is involved.
