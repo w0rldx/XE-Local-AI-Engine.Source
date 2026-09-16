@@ -86,7 +86,7 @@ An incremental Release result is evidence only when projects actually compiled. 
 
 ### Commit before you trap-guard a mutation on a file you are still editing
 
-**Rule:** a deliberate-break mutation is installed behind `trap 'git checkout -- <file>' EXIT`, and that restore goes back to **HEAD**, not to the working tree you started from. If the same file carries uncommitted work, the trap discards the work along with the mutation. Commit first, then mutate, and the trap restores exactly what you meant. **Failure prevented:** losing a slice's edits to its own safety net. The S1 lane hardening the layer-guard floors measured through the very file it was writing, and lost a cycle re-applying it. **Authority:** S1 regression-guards slice, `LayerDependencyTests`, 2026-09-16.
+**Rule:** a deliberate-break mutation is installed behind `trap 'git checkout -- <file>' EXIT`, and that restore goes back to **HEAD**, not to the working tree you started from. If the same file carries uncommitted work, the trap discards the work along with the mutation. Commit first, then mutate, and the trap restores exactly what you meant. **Failure prevented:** losing a slice's edits to its own safety net. The S1 lane hardening the layer-guard floors measured through the very file it was writing, and lost a cycle re-applying it. **Authority:** S1 regression-guards slice, `LayerDependencyTests`, 2026-09-16; paid for again in S6a (`progress/S6a-report.md`).
 
 ### Measure a non-vacuity floor through the guard itself, never with a grep over source
 
@@ -809,6 +809,18 @@ MA0045` with that reason; do not "just make `Create` async" without first moving
 **Prevents:** a half-async factory chain that still blocks under `GetService`, or a behaviour change on a
 credential/token path that this static-analysis slice is not authorised to make. **Authority:** the S4 plan §3c,
 `RuntimeChatClient.cs` (`GetResponseAsync`, `GetStreamingResponseAsync`, `GetService` → `ResolveActiveClient`).
+
+---
+
+### PROPOSED (awaiting operator approval): `ArgumentNullException.ThrowIfNull` on a FIELD fails this repo's Release build (MA0015)
+
+**Rule:** `ArgumentNullException.ThrowIfNull(x)` compiles for any expression — it is Meziantou's MA0015 ("the
+expression does not match a parameter"), enforced as an error by this repo's analyzer set, that rejects it when `x` is
+a field rather than a parameter. So it cannot be used to make a field count as read. When a break-proof needs a
+re-added dependency to be used, read the field in the method body (a field that is assigned and never read trips the
+unused-member analyzer next). **Prevents:** a break-proof whose Release build reports `1 Error(s)`, which voids the
+proof (the stale binary would run and report the old green). **Authority:** the MA0015 error on
+`CodexLoginEndpoint.cs` during S6a; `docs/agent-knowledge.md` §1 break-proof rule.
 
 ---
 
@@ -1948,6 +1960,20 @@ Since S7 the parser still raises it for every Agent node, and `GraphWorkflowDefi
 ### A fix in one workflow engine is not automatically engine-local
 
 **Rule:** before changing behaviour in `Services/DevWorkflows/` or `Services/GraphWorkflows/`, read `docs/wiki/22-workflow-engines-divergence-register.md` for the sibling engine's equivalent. The two were copy-adapted, not shared, so most differences are deliberate — but the register also tracks unintentional gaps nobody has examined, and the register, not the reader's assumption, says which is which. **Prevents:** fixing a restart-recovery, approval or retry defect in one engine and leaving the same defect in the other, on the belief that the divergence was already a conscious choice. **Authority:** `docs/wiki/22-workflow-engines-divergence-register.md`, which records each divergence and its ruling; operator ruling D10, 2026-09-09 (write the register, defer convergence).
+
+### PROPOSED (awaiting operator approval): an endpoint constructor may only take `Client.Application` / `AI.Contracts` / `Providers.Abstractions` / host / BCL types
+
+**Rule:** a FastEndpoints endpoint never injects a `Client.Persistence` `I*Store` or a concrete `Providers.<X>` contract
+or options type, not even wrapped in `IOptions<T>` — put it behind a `Client.Application` service and inject that. The
+service is a concrete `sealed class` with no interface by default, registered as itself and matching the lifetime of
+everything it wraps; give it an interface only when a named test must substitute it. Copy the endpoint's old
+`HandleAsync` body into the service **verbatim**, which is what lets the existing endpoint tests keep their
+store-level `Substitute.For<T>()` arranges and go on exercising the real logic through the host with no test edit.
+**Prevents:** a store or provider silently reaching the HTTP edge, bypassing the Application layer's business rules and
+making the endpoint untestable without a real store — and, when the migration is done by rewriting rather than copying,
+a behaviour change (an expiry or skew decision) that the untouched tests would not catch. **Authority:**
+`XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs`;
+`Plans/static-quality-enforcement-2026-09-15/S6-endpoint-dependency-migration-plan.md` §3e/§4.
 
 ## 5. Frontend, chat UX, API boundary
 

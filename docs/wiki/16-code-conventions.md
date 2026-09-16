@@ -43,9 +43,14 @@ Both halves of that shape are now regression guards rather than review habits.
 after the type it declares, the plural `*Endpoints.cs` groupings named in an allowlist and nothing else plural,
 every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather than written as a string literal.
 `EndpointDependencyTests` enforces the dependency rule above the same way, with a ratchet allowlist keyed by
-fully-qualified endpoint-and-parameter pairs, measured 2026-09-16 at 117 pairs across 98 endpoints, covering
-today's persistence-store and concrete-provider injections including the ones wrapped in a generic. The list
-only shrinks: an entry whose dependency is gone fails the guard as loudly as a new pair does. One of those
+fully-qualified endpoint-and-parameter pairs, covering the persistence-store and concrete-provider injections that
+existed when it was written, including the ones wrapped in a generic. That test's own XML doc carries the current
+pair and endpoint counts; read them there rather than from this page. The list only shrinks: an entry whose dependency is gone fails the guard as loudly as a new pair does. Slice S6 empties it
+sub-slice by sub-slice (S6a's Codex migration retired the first five pairs), and after S6m there are no exemptions
+left — the rule then holds for every endpoint with no list to add to. A new `Client.Application` service introduced
+only to put a store or provider behind an endpoint is a concrete `sealed class` with no interface, registered as
+itself; add an interface only when a specific test must substitute it, and move the displaced behavioural
+assertions to a service-level test when you do. One of those
 pairs reaches `AI.Agent` (`GetToolCatalogEndpoint`'s approval policy) and is an open question. Either the
 allowed set gains that project deliberately, or the site migrates behind an application-layer service with the
 rest.

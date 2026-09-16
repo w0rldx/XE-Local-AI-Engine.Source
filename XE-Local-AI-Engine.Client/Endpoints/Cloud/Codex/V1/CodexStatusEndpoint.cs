@@ -1,12 +1,9 @@
 ﻿namespace XE_Local_AI_Engine.Client.Endpoints.Cloud.Codex.V1;
 
 using FastEndpoints;
-using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Auth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
 ///     <c>GET cloud/codex/status</c> (Operator): reports the current Codex session and login state. The UI
@@ -20,24 +17,10 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Options;
 ///         state.
 ///     </para>
 /// </summary>
-public sealed class CodexStatusEndpoint(
-    ICodexTokenStore tokenStore,
-    ICodexLoginCoordinator loginCoordinator,
-    IOptions<CodexOptions> codexOptions,
-    TimeProvider timeProvider)
+public sealed class CodexStatusEndpoint(CodexSessionService session)
     : EndpointWithoutRequest<CodexStatusResponse>
 {
-    private readonly CodexOptions _codexOptions =
-        (codexOptions ?? throw new ArgumentNullException(nameof(codexOptions))).Value;
-
-    private readonly ICodexLoginCoordinator _loginCoordinator =
-        loginCoordinator ?? throw new ArgumentNullException(nameof(loginCoordinator));
-
-    private readonly TimeProvider _timeProvider =
-        timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
-
-    private readonly ICodexTokenStore _tokenStore =
-        tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
+    private readonly CodexSessionService _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public override void Configure()
     {
@@ -47,25 +30,14 @@ public sealed class CodexStatusEndpoint(
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var session = await _tokenStore.LoadAsync(ct).ConfigureAwait(false);
-        var loginPending = _loginCoordinator.GetStatus().State == CodexLoginState.Pending;
+        var status = await _session.GetStatusAsync(ct).ConfigureAwait(false);
 
-        var response = session is null
-            ? new CodexStatusResponse
-            {
-                SignedIn = false,
-                LoginPending = loginPending
-            }
-            : new CodexStatusResponse
-            {
-                // Signed-in iff the access token is still valid (skew-adjusted); an expired session reports
-                // SignedIn=false while keeping AccountId/ExpiresAtUtc so the UI can prompt re-authentication.
-                SignedIn = !session.IsExpired(_codexOptions.ExpirySkew, _timeProvider.GetUtcNow()),
-                AccountId = session.AccountId,
-                ExpiresAtUtc = session.ExpiresUtc,
-                LoginPending = loginPending
-            };
-
-        await Send.OkAsync(response, ct).ConfigureAwait(false);
+        await Send.OkAsync(new CodexStatusResponse
+        {
+            SignedIn = status.SignedIn,
+            AccountId = status.AccountId,
+            ExpiresAtUtc = status.ExpiresAtUtc,
+            LoginPending = status.LoginPending
+        }, ct).ConfigureAwait(false);
     }
 }

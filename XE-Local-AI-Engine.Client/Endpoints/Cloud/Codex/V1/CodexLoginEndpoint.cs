@@ -3,7 +3,7 @@
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
+using XE_Local_AI_Engine.Client.Services.CloudProviders;
 
 /// <summary>
 ///     <c>POST cloud/codex/login</c> (Operator): starts the loopback PKCE login and returns the authorize URL so the
@@ -11,11 +11,10 @@ using XE_Local_AI_Engine.Providers.CodexOAuth.Contracts;
 ///     that a second call supersedes any stale pending login. The token exchange completes in the background — the UI
 ///     polls <c>cloud/codex/status</c> for completion. Never returns token material.
 /// </summary>
-public sealed class CodexLoginEndpoint(ICodexLoginCoordinator loginCoordinator)
+public sealed class CodexLoginEndpoint(CodexSessionService session)
     : EndpointWithoutRequest<CodexLoginResponse>
 {
-    private readonly ICodexLoginCoordinator _loginCoordinator =
-        loginCoordinator ?? throw new ArgumentNullException(nameof(loginCoordinator));
+    private readonly CodexSessionService _session = session ?? throw new ArgumentNullException(nameof(session));
 
     public override void Configure()
     {
@@ -25,7 +24,7 @@ public sealed class CodexLoginEndpoint(ICodexLoginCoordinator loginCoordinator)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var authorizeUrl = _loginCoordinator.Start();
+        var authorizeUrl = _session.StartLogin();
         await Send.OkAsync(new CodexLoginResponse
         {
             AuthorizeUrl = authorizeUrl.ToString()
