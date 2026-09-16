@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>One definition in full, graph included — what the editor opens.</summary>
-public sealed class GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowStore store) : Endpoint<GraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
+public sealed class GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions) : Endpoint<GraphWorkflowDefinitionRequest, GraphWorkflowDefinitionResponse>
 {
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
 
     public override void Configure()
     {
@@ -22,7 +22,7 @@ public sealed class GetGraphWorkflowDefinitionEndpoint(IGraphWorkflowStore store
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        var definition = await _store.GetDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
+        var definition = await _definitions.GetAsync(req.DefinitionId, ct).ConfigureAwait(false);
         await Send.OkAsync(definition.ToResponse(), ct).ConfigureAwait(false);
     }
 }

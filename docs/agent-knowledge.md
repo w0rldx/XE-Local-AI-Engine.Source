@@ -2022,6 +2022,18 @@ a behaviour change (an expiry or skew decision) that the untouched tests would n
 `XE-Local-AI-Engine.Tests/Architecture/EndpointDependencyTests.cs`;
 `Plans/static-quality-enforcement-2026-09-15/S6-endpoint-dependency-migration-plan.md` §3e/§4.
 
+### PROPOSED (awaiting operator approval): the migrated service's parameter name collides with the local the endpoint body already uses
+
+**Rule:** when an endpoint's store injection is replaced by an Application service, read the whole `HandleAsync` body
+before picking the parameter name — the house name for the new dependency is often the name the body already gives its
+result (`definitions`, `runs`, `datasets`), and a local that shadows a primary-constructor parameter is a Release build
+ERROR here (Sonar `S1117` plus Meziantou `MA0084`), not a warning. Rename the local, never the parameter: the parameter
+name is what the sibling endpoints' field-initialiser shape depends on. **Prevents:** a two-error Release build at the
+end of an otherwise complete migration, which under `--no-incremental` costs a full rebuild and, if the failure is
+missed, leaves the previous binary reporting the old green. **Authority:**
+`XE-Local-AI-Engine.Client/Endpoints/GraphWorkflows/V1/ListGraphWorkflowDefinitionsEndpoint.cs`; the S6c build log
+`Plans/static-quality-enforcement-2026-09-15/progress/S6c-evidence/00-build.log`.
+
 ## 5. Frontend, chat UX, API boundary
 
 ### Chat rendering contract

@@ -66,6 +66,15 @@ internal sealed class GraphWorkflowDefinitionService(
                            .ConfigureAwait(false);
     }
 
+    public Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListAsync(CancellationToken cancellationToken = default) =>
+        _store.ListDefinitionsAsync(cancellationToken);
+
+    public Task<GraphWorkflowDefinitionSnapshot> GetAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        _store.GetDefinitionAsync(definitionId, cancellationToken);
+
+    public Task DeleteAsync(Guid definitionId, CancellationToken cancellationToken = default) =>
+        _store.DeleteDefinitionAsync(definitionId, cancellationToken);
+
     /// <summary>
     ///     The one place the option-bearing half of validation lives. A blank document is turned into the same
     ///     structured refusal every other whole-document failure produces, so <see cref="ValidateAsync" /> can promise

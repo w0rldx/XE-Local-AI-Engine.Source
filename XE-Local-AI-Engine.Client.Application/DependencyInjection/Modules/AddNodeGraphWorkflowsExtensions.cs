@@ -47,7 +47,8 @@ internal static class AddNodeGraphWorkflowsExtensions
         // that maps no hub still resolves the store.
         builder.Services.TryAddSingleton<IGraphWorkflowEventPublisher, NoOpGraphWorkflowEventPublisher>();
 
-        // The one write seam. Scoped because the store it drives is, and because a validation answer is per-request.
+        // The definitions seam: writes are validated here, reads pass through. Scoped because the store it drives
+        // is, and because a validation answer is per-request.
         builder.Services.AddScoped<IGraphWorkflowDefinitionService, GraphWorkflowDefinitionService>();
 
         // The run command surface, scoped for the same reason.

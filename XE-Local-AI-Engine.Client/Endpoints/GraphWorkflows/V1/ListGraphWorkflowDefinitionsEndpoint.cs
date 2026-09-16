@@ -3,13 +3,13 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>The definition picker's feed. Never loads a graph blob: the node count is a column, not a parse.</summary>
-public sealed class ListGraphWorkflowDefinitionsEndpoint(IGraphWorkflowStore store) : EndpointWithoutRequest<ListGraphWorkflowDefinitionsResponse>
+public sealed class ListGraphWorkflowDefinitionsEndpoint(IGraphWorkflowDefinitionService definitions) : EndpointWithoutRequest<ListGraphWorkflowDefinitionsResponse>
 {
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
 
     public override void Configure()
     {
@@ -19,7 +19,7 @@ public sealed class ListGraphWorkflowDefinitionsEndpoint(IGraphWorkflowStore sto
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var definitions = await _store.ListDefinitionsAsync(ct).ConfigureAwait(false);
-        await Send.OkAsync(new ListGraphWorkflowDefinitionsResponse([.. definitions.Select(GraphWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
+        var summaries = await _definitions.ListAsync(ct).ConfigureAwait(false);
+        await Send.OkAsync(new ListGraphWorkflowDefinitionsResponse([.. summaries.Select(GraphWorkflowContractMapper.ToResponse)]), ct).ConfigureAwait(false);
     }
 }

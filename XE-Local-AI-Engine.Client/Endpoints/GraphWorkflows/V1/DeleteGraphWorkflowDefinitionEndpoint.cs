@@ -2,17 +2,17 @@ namespace XE_Local_AI_Engine.Client.Endpoints.GraphWorkflows.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.GraphWorkflows;
 
 /// <summary>
 ///     A hard delete, refused with a 409 while any run that pins this definition is still live — checked inside the
 ///     store's transaction. Terminal runs are unaffected: each pinned its own copy of the graph at start, so history
 ///     survives the row.
 /// </summary>
-public sealed class DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowStore store) : Endpoint<GraphWorkflowDefinitionRequest>
+public sealed class DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowDefinitionService definitions) : Endpoint<GraphWorkflowDefinitionRequest>
 {
-    private readonly IGraphWorkflowStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IGraphWorkflowDefinitionService _definitions = definitions ?? throw new ArgumentNullException(nameof(definitions));
 
     public override void Configure()
     {
@@ -27,7 +27,7 @@ public sealed class DeleteGraphWorkflowDefinitionEndpoint(IGraphWorkflowStore st
     {
         ArgumentNullException.ThrowIfNull(req);
 
-        await _store.DeleteDefinitionAsync(req.DefinitionId, ct).ConfigureAwait(false);
+        await _definitions.DeleteAsync(req.DefinitionId, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

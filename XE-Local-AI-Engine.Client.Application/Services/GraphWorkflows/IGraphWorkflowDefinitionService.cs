@@ -6,8 +6,13 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 ///     The one write seam for graph workflow definitions: every save comes through here, so the parse and the node cap
 ///     have a single home and no caller — the API, or S4's importer — can store a graph the dispatcher could not route.
 ///     <para>
-///         Three members and no more. Reads (list, get, delete) go straight to <see cref="IGraphWorkflowStore" />: they
-///         have no validation to own, and a pass-through here would be a second name for the same call.
+///         The reads (<see cref="ListAsync" />, <see cref="GetAsync" />, <see cref="DeleteAsync" />) are here because
+///         the endpoint-dependency rule (<c>EndpointDependencyTests</c>, <c>docs/wiki/16-code-conventions.md</c>) makes
+///         this service the endpoints' only door to <see cref="IGraphWorkflowStore" />. They are deliberate
+///         pass-throughs with no validation of their own: their semantics are the store's, so what
+///         <see cref="IGraphWorkflowStore.ListDefinitionsAsync" /> promises about the graph blob and what
+///         <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" /> refuses while a run is live are answered there and
+///         restated nowhere.
 ///     </para>
 /// </summary>
 public interface IGraphWorkflowDefinitionService
@@ -43,4 +48,13 @@ public interface IGraphWorkflowDefinitionService
         string? description,
         string? graphJson,
         CancellationToken cancellationToken = default);
+
+    /// <summary>The picker's feed, exactly as <see cref="IGraphWorkflowStore.ListDefinitionsAsync" /> answers it.</summary>
+    Task<IReadOnlyList<GraphWorkflowDefinitionSummary>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>One definition in full, exactly as <see cref="IGraphWorkflowStore.GetDefinitionAsync" /> answers it.</summary>
+    Task<GraphWorkflowDefinitionSnapshot> GetAsync(Guid definitionId, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes, on <see cref="IGraphWorkflowStore.DeleteDefinitionAsync" />'s terms — the live-run refusal included.</summary>
+    Task DeleteAsync(Guid definitionId, CancellationToken cancellationToken = default);
 }
