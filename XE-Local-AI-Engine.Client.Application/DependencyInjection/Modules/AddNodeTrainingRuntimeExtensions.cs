@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.DependencyInjection.Modules;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
 using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Training.BaseArtifacts;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 using XE_Local_AI_Engine.Providers.HuggingFace;
 using XE_Local_AI_Engine.Providers.Training;
 
@@ -21,6 +22,11 @@ internal static class AddNodeTrainingRuntimeExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         _ = builder.Services.AddTrainingRuntime();
+
+        // The Training runtime endpoints' only path to the provider's runtime service and prerequisite probe.
+        // Singleton, matching both wrapped registrations.
+        builder.Services.AddSingleton<TrainingRuntimeOrchestrationService>();
+
         _ = builder.Services.AddHuggingFaceBaseCheckpointStore();
 
         builder.Services.AddScoped<ITrainingBaseArtifactStore, TrainingBaseArtifactStore>();

@@ -17,6 +17,7 @@ Two decisions shape everything on this page, both recorded in [ADR 0005](../adr/
 |---|---|
 | uv/venv/subprocess mechanics only (ADR 0005 §3) | `XE-Local-AI-Engine.Providers.Training/` — `Contracts/ITrainingRuntimeService.cs`, `Implementation/TrainingRuntimeService.cs`, `Implementation/UvBinaryAcquirer.cs`, `Implementation/TrainingRuntimeLayout.cs`, `TrainingRuntimePins.cs` |
 | Linux process spawn / group kill / inspect | `…/Providers.Training/Implementation/LinuxTrainingProcessSpawner.cs`, `…/LinuxTrainingProcessRunner.cs`, `…/LinuxTrainingProcessGroupHandle.cs`, `…/LinuxTrainingProcessInspector.cs` |
+| Runtime endpoints' door onto the provider (endpoint-dependency rule) | `…/Services/Training/Runtime/TrainingRuntimeOrchestrationService.cs` — pass-through over `ITrainingRuntimeService` + `ITrainingRuntimePrerequisiteProbe`; the four `Endpoints/Training/Runtime/` endpoints inject it, never the provider contracts |
 | The node's single GPU admission point | `XE-Local-AI-Engine.Client.Application/Services/Training/GpuWorkGate.cs` (`IGpuWorkGate`) |
 | Dataset definitions, generation, review, export | `…/Services/Training/Datasets/` — `DatasetDefinitionService.cs`, `DatasetGenerationService.cs`, `DatasetGenerationExecutor.cs`, `StructuredAgentRunner.cs`, `SampleValidationPipeline.cs`, `ToolMockService.cs`, `DatasetExportService.cs` |
 | Base checkpoint acquisition + licensing | `…/Services/Training/BaseArtifacts/` (`BaseArtifactService.cs`, `BaseArtifactDownloadCoordinator.cs`), `…/Services/Training/Runs/LicenseGateService.cs` |

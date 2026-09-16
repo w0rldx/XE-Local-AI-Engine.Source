@@ -4,9 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 
-public sealed class GetTrainingRuntimePrerequisitesEndpoint(ITrainingRuntimePrerequisiteProbe prerequisiteProbe)
+public sealed class GetTrainingRuntimePrerequisitesEndpoint(TrainingRuntimeOrchestrationService runtime)
     : EndpointWithoutRequest<TrainingRuntimePrerequisitesResponse>
 {
     public override void Configure()
@@ -18,7 +18,7 @@ public sealed class GetTrainingRuntimePrerequisitesEndpoint(ITrainingRuntimePrer
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var report = await prerequisiteProbe.ProbeAsync(ct).ConfigureAwait(false);
+        var report = await runtime.ProbeAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(report.ToResponse(), ct).ConfigureAwait(false);
     }
 }

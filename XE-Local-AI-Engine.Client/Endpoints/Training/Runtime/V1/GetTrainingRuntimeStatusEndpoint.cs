@@ -4,9 +4,9 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.Runtime.V1.Mappers;
 using XE_Local_AI_Engine.Client.Services.Auth;
-using XE_Local_AI_Engine.Providers.Training.Contracts;
+using XE_Local_AI_Engine.Client.Services.Training.Runtime;
 
-public sealed class GetTrainingRuntimeStatusEndpoint(ITrainingRuntimeService runtimeService)
+public sealed class GetTrainingRuntimeStatusEndpoint(TrainingRuntimeOrchestrationService runtime)
     : EndpointWithoutRequest<TrainingRuntimeStatusResponse>
 {
     public override void Configure()
@@ -18,6 +18,6 @@ public sealed class GetTrainingRuntimeStatusEndpoint(ITrainingRuntimeService run
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        await Send.OkAsync(runtimeService.GetStatus().ToResponse(), ct).ConfigureAwait(false);
+        await Send.OkAsync(runtime.GetStatus().ToResponse(), ct).ConfigureAwait(false);
     }
 }
