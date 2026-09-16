@@ -940,7 +940,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
             await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id, CancellationToken.None)
-                .ConfigureAwait(false);
+                                                                   .ConfigureAwait(false);
         }
         catch (InvalidOperationException)
         {

@@ -76,8 +76,7 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
         }
 
         // The CoreAudio calls are blocking COM; the picker is a request path, so they go off the request thread.
-        return new ValueTask<IReadOnlyList<ProcessAudioCaptureCandidate>>(
-            Task.Run(ListCandidatesCore, cancellationToken));
+        return new ValueTask<IReadOnlyList<ProcessAudioCaptureCandidate>>(Task.Run(ListCandidatesCore, cancellationToken));
     }
 
     /// <inheritdoc />
@@ -87,9 +86,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
 
         if (!IsSupported)
         {
-            throw new TranscriptionProcessCaptureNotSupportedException(
-                $"Transcription session {sessionId} cannot capture process {processId}. "
-                + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
+            throw new TranscriptionProcessCaptureNotSupportedException($"Transcription session {sessionId} cannot capture process {processId}. "
+                                                                       + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
         }
 
         // Two version numbers, two jobs — do not merge them. IsSupported gates the CAPABILITY on Microsoft's
@@ -98,9 +96,8 @@ internal sealed class WindowsProcessAudioCaptureSource : IProcessAudioCaptureSou
         // the higher floor, so this branch is unreachable in practice — the analyzer cannot know that.
         if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 19041))
         {
-            throw new TranscriptionProcessCaptureNotSupportedException(
-                $"Transcription session {sessionId} cannot capture process {processId}. "
-                + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
+            throw new TranscriptionProcessCaptureNotSupportedException($"Transcription session {sessionId} cannot capture process {processId}. "
+                                                                       + TranscriptionProcessCaptureNotSupportedException.DefaultMessage);
         }
 
         // BuildAsync, never Build: the process-loopback activation path is asynchronous and Build() throws for it.

@@ -253,12 +253,12 @@ public sealed class NodeChatStreamService(
             cancellationToken).ConfigureAwait(false);
 
         var package = await BuildRuntimePackageAsync(request,
-                          resolution,
-                          ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
-                          allowedTools,
-                          runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
-                          requestId)
-                      .ConfigureAwait(false);
+                resolution,
+                ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
+                allowedTools,
+                runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+                requestId)
+            .ConfigureAwait(false);
         var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
         var onTerminal = BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package);

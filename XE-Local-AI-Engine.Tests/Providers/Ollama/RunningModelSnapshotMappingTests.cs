@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Providers.Ollama;
 
 using OllamaSharp;
 using XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1.Mappers;
-using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 using XE_Local_AI_Engine.Providers.Abstractions;
 using XE_Local_AI_Engine.Providers.Ollama.Implementation;
 using XE_Local_AI_Engine.Testing.FakeOllama;

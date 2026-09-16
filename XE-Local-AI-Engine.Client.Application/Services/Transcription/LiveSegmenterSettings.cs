@@ -36,6 +36,9 @@ public sealed record LiveSegmenterSettings
     /// <param name="maxWindowSeconds">The operator's preference, or <see langword="null" /> for the default.</param>
     public static LiveSegmenterSettings FromSessionConfig(int? maxWindowSeconds) =>
         maxWindowSeconds is { } requested
-            ? new LiveSegmenterSettings { MaxWindowSeconds = Math.Clamp(requested, MinWindowSeconds, MaxAllowedWindowSeconds) }
+            ? new LiveSegmenterSettings
+            {
+                MaxWindowSeconds = Math.Clamp(requested, MinWindowSeconds, MaxAllowedWindowSeconds)
+            }
             : new LiveSegmenterSettings();
 }

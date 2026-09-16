@@ -161,8 +161,7 @@ public sealed class LiveTranscriptionSegmenter
                 {
                     if (++_noProgressSubmissions >= NoProgressSubmissionLimit)
                     {
-                        throw new LiveSegmenterStalledException(
-                            $"The transcription lane made no progress across {NoProgressSubmissionLimit} submissions ending at {_audioEndMs} ms.");
+                        throw new LiveSegmenterStalledException($"The transcription lane made no progress across {NoProgressSubmissionLimit} submissions ending at {_audioEndMs} ms.");
                     }
                 }
                 else
@@ -280,15 +279,15 @@ public sealed class LiveTranscriptionSegmenter
 
         // The one place seconds become milliseconds. Past this line the slice has no doubles and no "seconds".
         var segments = result.Segments
-            .Select(segment => new
-            {
-                StartMs = (long)Math.Round(segment.StartSeconds * 1000, MidpointRounding.AwayFromZero) + windowStartMs,
-                EndMs = (long)Math.Round(segment.EndSeconds * 1000, MidpointRounding.AwayFromZero) + windowStartMs,
-                Text = segment.Text.Trim(),
-                segment.Confidence
-            })
-            .OrderBy(segment => segment.StartMs)
-            .ToList();
+                             .Select(segment => new
+                             {
+                                 StartMs = (long)Math.Round(segment.StartSeconds * 1000, MidpointRounding.AwayFromZero) + windowStartMs,
+                                 EndMs = (long)Math.Round(segment.EndSeconds * 1000, MidpointRounding.AwayFromZero) + windowStartMs,
+                                 Text = segment.Text.Trim(),
+                                 segment.Confidence
+                             })
+                             .OrderBy(segment => segment.StartMs)
+                             .ToList();
 
         var pending = new List<string>();
         var watermarkMs = _committedEndMs;

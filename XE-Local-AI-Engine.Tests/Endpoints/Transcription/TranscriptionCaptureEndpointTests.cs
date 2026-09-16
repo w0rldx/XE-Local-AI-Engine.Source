@@ -48,7 +48,10 @@ public sealed class TranscriptionCaptureEndpointTests
             using var forbidden = new HttpRequestMessage(method, route);
             if (method == HttpMethod.Post)
             {
-                forbidden.Content = JsonContent.Create(new { processId = 4321 });
+                forbidden.Content = JsonContent.Create(new
+                {
+                    processId = 4321
+                });
             }
 
             factory.AddNonOperatorBearerToken(forbidden);
@@ -59,7 +62,10 @@ public sealed class TranscriptionCaptureEndpointTests
             using var allowed = new HttpRequestMessage(method, route);
             if (method == HttpMethod.Post)
             {
-                allowed.Content = JsonContent.Create(new { processId = 4321 });
+                allowed.Content = JsonContent.Create(new
+                {
+                    processId = 4321
+                });
             }
 
             factory.AddNodeBearerToken(allowed);
@@ -130,7 +136,10 @@ public sealed class TranscriptionCaptureEndpointTests
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/capture/process");
-        request.Content = JsonContent.Create(new { processId = 4321 });
+        request.Content = JsonContent.Create(new
+        {
+            processId = 4321
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode);
@@ -144,11 +153,17 @@ public sealed class TranscriptionCaptureEndpointTests
     {
         // The call order is create, subscribe, live/start, then this. Without the live start the session has no
         // lanes, so a recorder would capture audio with nowhere to put it.
-        await using var factory = FactoryWith(new StubProcessAudioCaptureSource { IsSupported = true });
+        await using var factory = FactoryWith(new StubProcessAudioCaptureSource
+        {
+            IsSupported = true
+        });
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/capture/process");
-        request.Content = JsonContent.Create(new { processId = 4321 });
+        request.Content = JsonContent.Create(new
+        {
+            processId = 4321
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, response.StatusCode);
@@ -160,11 +175,17 @@ public sealed class TranscriptionCaptureEndpointTests
     [Test]
     public async Task StartProcessCapture_WithANonPositiveProcessId_IsRejected()
     {
-        await using var factory = FactoryWith(new StubProcessAudioCaptureSource { IsSupported = true });
+        await using var factory = FactoryWith(new StubProcessAudioCaptureSource
+        {
+            IsSupported = true
+        });
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Post, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/capture/process");
-        request.Content = JsonContent.Create(new { processId = 0 });
+        request.Content = JsonContent.Create(new
+        {
+            processId = 0
+        });
         using var response = await client.SendAsync(request).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.BadRequest, response.StatusCode,
@@ -174,7 +195,10 @@ public sealed class TranscriptionCaptureEndpointTests
     [Test]
     public async Task StopProcessCapture_WhenNothingIsCapturing_Returns404()
     {
-        await using var factory = FactoryWith(new StubProcessAudioCaptureSource { IsSupported = true });
+        await using var factory = FactoryWith(new StubProcessAudioCaptureSource
+        {
+            IsSupported = true
+        });
         using var client = factory.CreateClient();
 
         using var request = Authorized(factory, HttpMethod.Delete, $"{ApiPrefix}/transcription/sessions/{Guid.NewGuid()}/capture/process");
@@ -229,13 +253,19 @@ public sealed class TranscriptionCaptureEndpointTests
     {
         // The Started arm and the stop that actually stopped something: both are the wire shape the SPA drives, and
         // neither was reachable without a genuinely live session.
-        await using var factory = FactoryWith(new StubProcessAudioCaptureSource { IsSupported = true });
+        await using var factory = FactoryWith(new StubProcessAudioCaptureSource
+        {
+            IsSupported = true
+        });
         using var client = factory.CreateClient();
         var sessionId = await RegisterLiveSessionAsync(factory).ConfigureAwait(false);
         var route = $"{ApiPrefix}/transcription/sessions/{sessionId}/capture/process";
 
         using var start = Authorized(factory, HttpMethod.Post, route);
-        start.Content = JsonContent.Create(new { processId = 4321 });
+        start.Content = JsonContent.Create(new
+        {
+            processId = 4321
+        });
         using var started = await client.SendAsync(start).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.OK, started.StatusCode);
@@ -254,18 +284,27 @@ public sealed class TranscriptionCaptureEndpointTests
     {
         // Two recorders on one session would interleave two audio clocks into one lane. The reason code is what the
         // SPA branches on to say "stop the current capture first".
-        await using var factory = FactoryWith(new StubProcessAudioCaptureSource { IsSupported = true });
+        await using var factory = FactoryWith(new StubProcessAudioCaptureSource
+        {
+            IsSupported = true
+        });
         using var client = factory.CreateClient();
         var sessionId = await RegisterLiveSessionAsync(factory).ConfigureAwait(false);
         var route = $"{ApiPrefix}/transcription/sessions/{sessionId}/capture/process";
 
         using var first = Authorized(factory, HttpMethod.Post, route);
-        first.Content = JsonContent.Create(new { processId = 4321 });
+        first.Content = JsonContent.Create(new
+        {
+            processId = 4321
+        });
         using var firstResponse = await client.SendAsync(first).ConfigureAwait(false);
         AssertEx.Equal(HttpStatusCode.OK, firstResponse.StatusCode, "The control: the first start must succeed, or the conflict below proves nothing.");
 
         using var second = Authorized(factory, HttpMethod.Post, route);
-        second.Content = JsonContent.Create(new { processId = 9876 });
+        second.Content = JsonContent.Create(new
+        {
+            processId = 9876
+        });
         using var secondResponse = await client.SendAsync(second).ConfigureAwait(false);
 
         AssertEx.Equal(HttpStatusCode.Conflict, secondResponse.StatusCode);

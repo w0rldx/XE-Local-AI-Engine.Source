@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Architecture;
 
 using System.Text.RegularExpressions;
 using ArchUnitNET.Domain;
-using ArchUnitNET.Fluent;
 using ArchUnitNET.Fluent.Extensions;
 using FastEndpoints;
 using TUnit.Core.Exceptions;
@@ -110,14 +109,17 @@ public sealed class EndpointConventionTests
     ];
 
     private static readonly Regex ClassDeclaration = new(@"\bclass\s+(\w+)", RegexOptions.None, TimeSpan.FromSeconds(5));
+
     // The lookbehind keeps the rule on FastEndpoints' own verb calls, which an endpoint makes unqualified inside
     // Configure(). A qualified call is somebody else's method that happens to share the name — response.Cookies
     // .Delete(name, options) is a cookie, not a route, and the repo bans this-qualification so nothing legitimate
     // arrives here with a dot in front of it.
     private static readonly Regex VerbCall = new(@"(?<![\w.])(?<call>Get|Post|Put|Delete|Patch|Routes)\s*\(", RegexOptions.None, TimeSpan.FromSeconds(5));
     private static readonly Regex VerbsCall = new(@"(?<![\w.])Verbs\s*\(", RegexOptions.None, TimeSpan.FromSeconds(5));
+
     private static readonly Regex MapCall = new(@"\b(?<call>MapHub\s*<[^>]+>|MapMcp|MapGet|MapPost|MapPut|MapDelete|MapPatch)\s*\(",
         RegexOptions.None, TimeSpan.FromSeconds(5));
+
     private static readonly Regex MappingFileMarker = new(@"\bMap(Get|Post|Put|Delete|Patch|Hub\s*<|Mcp|Fallback)", RegexOptions.None, TimeSpan.FromSeconds(5));
     private static readonly Regex RouteMemberChain = new(@"^LocalApiRoutes(\.\w+)+$", RegexOptions.None, TimeSpan.FromSeconds(5));
     private static readonly Regex Identifier = new(@"^\w+$", RegexOptions.None, TimeSpan.FromSeconds(5));
@@ -346,9 +348,9 @@ public sealed class EndpointConventionTests
             ("verbatim literal", """Configure() { Get(@"/literal"); }"""),
             ("untraceable local", """Configure() { Get(someUnrelatedLocal); }"""),
             ("local whose declaration is a plain literal", """
-                                                          var someUnrelatedLocal = ComputeRoute();
-                                                          Configure() { Get(someUnrelatedLocal); }
-                                                          """),
+                                                           var someUnrelatedLocal = ComputeRoute();
+                                                           Configure() { Get(someUnrelatedLocal); }
+                                                           """),
             ("local that merely spells the type name", """
                                                        var fakeRoute = "LocalApiRoutes";
                                                        Configure() { Get(fakeRoute); }

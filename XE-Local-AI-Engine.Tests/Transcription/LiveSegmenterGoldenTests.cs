@@ -135,7 +135,7 @@ public sealed class LiveSegmenterGoldenTests
         for (var offset = 0; offset < pcm.Length; offset += frameBytes)
         {
             var tick = await segmenter.PushAsync(pcm.Slice(offset, Math.Min(frameBytes, pcm.Length - offset)), CancellationToken.None)
-                .ConfigureAwait(false);
+                                      .ConfigureAwait(false);
             commits.AddRange(tick.Commits);
         }
 

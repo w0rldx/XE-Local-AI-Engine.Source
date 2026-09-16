@@ -50,8 +50,7 @@ internal sealed class Wasapi16kMonoPcmConverter
         // fails loudly rather than emitting a stream whose channels are silently interleaved into the transcript.
         if (sourceFormat.Channels > 2)
         {
-            throw new NotSupportedException(
-                $"Per-application capture handles mono and stereo sources; this one carries {sourceFormat.Channels} channels.");
+            throw new NotSupportedException($"Per-application capture handles mono and stereo sources; this one carries {sourceFormat.Channels} channels.");
         }
 
         _buffer = new BufferedWaveProvider(sourceFormat)

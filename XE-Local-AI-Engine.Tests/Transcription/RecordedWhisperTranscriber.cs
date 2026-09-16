@@ -153,8 +153,7 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
         var actualSha = Convert.ToHexStringLower(SHA256.HashData(payload.Span));
         if (!string.Equals(actualSha, window.PcmSha256, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException(
-                $"The audio submitted for [{window.StartMs}, {window.EndMs}) hashed to {actualSha}; the fixture recorded {window.PcmSha256}.");
+            throw new InvalidOperationException($"The audio submitted for [{window.StartMs}, {window.EndMs}) hashed to {actualSha}; the fixture recorded {window.PcmSha256}.");
         }
 
         _submissions.Add((window.StartMs, window.EndMs));
@@ -162,11 +161,11 @@ internal sealed class RecordedWhisperTranscriber : IWhisperTranscriber
         // Back to the provider's contract — fractional seconds, relative to the submitted audio — so that the
         // seconds-to-milliseconds conversion in the segmenter is exercised rather than bypassed.
         var segments = window.Segments
-            .Select(segment => new WhisperTranscriptSegment((segment.StartMs - window.StartMs) / 1000.0,
-                (segment.EndMs - window.StartMs) / 1000.0,
-                segment.Text,
-                segment.Confidence))
-            .ToList();
+                             .Select(segment => new WhisperTranscriptSegment((segment.StartMs - window.StartMs) / 1000.0,
+                                 (segment.EndMs - window.StartMs) / 1000.0,
+                                 segment.Text,
+                                 segment.Confidence))
+                             .ToList();
 
         return new WhisperTranscriptionResult(string.Join(' ', segments.Select(segment => segment.Text)).Trim(),
             segments,

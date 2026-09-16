@@ -71,8 +71,8 @@ public sealed class EndpointAuthorizationPolicyTests
     public void EveryFastEndpointsEndpoint_ResolvesToOperatorPolicyOrIsExplicitlyAnonymous()
     {
         var endpoints = RouteEndpoints(Factory)
-            .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointDefinition>() is not null)
-            .ToList();
+                        .Where(endpoint => endpoint.Metadata.GetMetadata<EndpointDefinition>() is not null)
+                        .ToList();
 
         AssertEx.True(endpoints.Count >= EndpointFloor,
             $"Only {endpoints.Count} FastEndpoints routes were discovered; the floor is {EndpointFloor}. "
@@ -234,8 +234,7 @@ public sealed class EndpointAuthorizationPolicyTests
 
         foreach (var (path, method, policy) in expectedRoutes)
         {
-            var match = AssertEx.NotNull(
-                routes.SingleOrDefault(endpoint =>
+            var match = AssertEx.NotNull(routes.SingleOrDefault(endpoint =>
                     string.Equals(endpoint.RoutePattern.RawText, path, StringComparison.Ordinal)
                     && endpoint.Metadata.GetMetadata<HttpMethodMetadata>() is { } methods
                     && methods.HttpMethods.Contains(method, StringComparer.Ordinal)),

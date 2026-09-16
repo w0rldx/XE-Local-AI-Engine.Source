@@ -235,7 +235,10 @@ public sealed class TranscriptionService : ITranscriptionService
         var session = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
         if (session is null)
         {
-            return new StartLiveResult { Outcome = StartLiveOutcome.SessionNotFound };
+            return new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.SessionNotFound
+            };
         }
 
         // Before the status checks: a file session has no live path at any status, so answering "already finished"
@@ -407,7 +410,10 @@ public sealed class TranscriptionService : ITranscriptionService
         var current = await GetSessionSummaryAsync(sessionId, cancellationToken).ConfigureAwait(false);
         if (current is null)
         {
-            return new StartLiveResult { Outcome = StartLiveOutcome.SessionNotFound };
+            return new StartLiveResult
+            {
+                Outcome = StartLiveOutcome.SessionNotFound
+            };
         }
 
         return new StartLiveResult

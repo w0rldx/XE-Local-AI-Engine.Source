@@ -1,6 +1,7 @@
 namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using System.Buffers.Binary;
+using System.Globalization;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
 using XE_Local_AI_Engine.Client.Services.Transcription;
 using XE_Local_AI_Engine.Client.Services.Transcription.Live;
@@ -317,15 +318,17 @@ public sealed class LiveTranscriptionSegmenterTests
         var transcriber = new ScriptedWhisperTranscriber(_ => [new WhisperTranscriptSegment(0.0, 0.0, "x", 0.5)]);
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 2));
 
-        _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(
-            async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None).ConfigureAwait(false),
+        _ = await AssertEx.ThrowsAsync<LiveSegmenterStalledException>(async () => await segmenter.PushAsync(LivePcm.Range(0, 4_000), CancellationToken.None).ConfigureAwait(false),
             "A lane that cannot progress fails the session instead of discarding the audio it cannot resolve.").ConfigureAwait(false);
     }
 
     [Test]
     public async Task DetectedLanguage_IsAskedForOncePerSessionAndThenRemembered()
     {
-        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech) { DetectedLanguageCode = "en" };
+        var transcriber = new ScriptedWhisperTranscriber(ContinuousSpeech)
+        {
+            DetectedLanguageCode = "en"
+        };
         var segmenter = Create(transcriber, Settings(maxWindowSeconds: 5));
 
         var ticks = await PushAsync(segmenter, 0, 3_000, 500).ConfigureAwait(false);
@@ -347,7 +350,7 @@ public sealed class LiveTranscriptionSegmenterTests
     public void Settings_ClampTheOperatorsWindowIntoTheAllowedRange(int? requested, int expected) =>
         AssertEx.Equal(expected,
             LiveSegmenterSettings.FromSessionConfig(requested).MaxWindowSeconds,
-            $"A stored window of {requested?.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null"} resolves to {expected} s.");
+            $"A stored window of {requested?.ToString(CultureInfo.InvariantCulture) ?? "null"} resolves to {expected} s.");
 
     [Test]
     public async Task AtTheCap_ASegmentOverrunningTheWindowEndIsCommittedNotDropped()
@@ -399,7 +402,12 @@ public sealed class LiveTranscriptionSegmenterTests
     }
 
     private static LiveSegmenterSettings Settings(int maxWindowSeconds, int tailGuardMs = 800, int tickMs = 1_000) =>
-        new() { MaxWindowSeconds = maxWindowSeconds, TailGuardMs = tailGuardMs, TickMs = tickMs };
+        new()
+        {
+            MaxWindowSeconds = maxWindowSeconds,
+            TailGuardMs = tailGuardMs,
+            TickMs = tickMs
+        };
 
     private static LiveTranscriptionSegmenter Create(IWhisperTranscriber transcriber, LiveSegmenterSettings settings) =>
         new(transcriber, TranscriptChannel.Mono, ModelId, languageCode: null, translate: false, settings);

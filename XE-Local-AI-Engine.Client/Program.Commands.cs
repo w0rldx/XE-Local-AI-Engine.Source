@@ -194,7 +194,7 @@ public sealed partial class Program
                 if (running)
                 {
                     using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status"), CancellationToken.None)
-                                                  .ConfigureAwait(false);
+                                                         .ConfigureAwait(false);
                     if (!authResponse.IsSuccessStatusCode)
                     {
                         running = false;

@@ -118,7 +118,7 @@ public sealed partial class Program
 
         // CancellationToken.None: no token exists on the startup path.
         await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), CancellationToken.None)
-                     .ConfigureAwait(false);
+                             .ConfigureAwait(false);
     }
 
     private static async Task ReconcileStaleScheduledRunsAsync(IServiceProvider services)

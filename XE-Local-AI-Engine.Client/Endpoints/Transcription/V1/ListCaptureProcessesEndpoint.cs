@@ -33,12 +33,15 @@ public sealed class ListCaptureProcessesEndpoint(IProcessAudioCaptureSource capt
         await Send.OkAsync(new CaptureProcessListResponse
         {
             Supported = _captureSource.IsSupported,
-            Processes = [.. candidates.Select(static candidate => new CaptureProcessResponse
-            {
-                Pid = candidate.ProcessId,
-                Name = candidate.Name,
-                HasAudio = candidate.HasAudio
-            })]
+            Processes =
+            [
+                .. candidates.Select(static candidate => new CaptureProcessResponse
+                {
+                    Pid = candidate.ProcessId,
+                    Name = candidate.Name,
+                    HasAudio = candidate.HasAudio
+                })
+            ]
         }, ct).ConfigureAwait(false);
     }
 }

@@ -1374,7 +1374,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var binding = Binding(firstAttempt, repository);
 
         DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
-            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance, TimeProvider.System);
+            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+                TimeProvider.System);
 
         _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding).ConfigureAwait(false);
         _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding).ConfigureAwait(false);

@@ -14,13 +14,13 @@ public sealed class MigrationSchemaProbeTests
         var undeclared = Guid.NewGuid().ToString("N");
 
         var failure = await AssertEx.ThrowsAsync<InvalidOperationException>(async () =>
-            {
-                await using var probe = await MigrationSchemaProbe
-                                              .CreateAsync(rootPath, "undeclared.sqlite",
-                                                  path => MigratedDatabaseTemplate.CopyChatAtAsync(path, undeclared))
-                                              .ConfigureAwait(false);
-            })
-            .ConfigureAwait(false);
+                                    {
+                                        await using var probe = await MigrationSchemaProbe
+                                                                      .CreateAsync(rootPath, "undeclared.sqlite",
+                                                                          path => MigratedDatabaseTemplate.CopyChatAtAsync(path, undeclared))
+                                                                      .ConfigureAwait(false);
+                                    })
+                                    .ConfigureAwait(false);
 
         AssertEx.True(failure.Message.Contains(undeclared, StringComparison.Ordinal),
             "The cleanup must not swallow or replace the failure that caused it.");

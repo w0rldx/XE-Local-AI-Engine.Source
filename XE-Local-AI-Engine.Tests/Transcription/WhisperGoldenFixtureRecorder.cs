@@ -55,7 +55,10 @@ public sealed class WhisperGoldenFixtureRecorder
         var clip = await File.ReadAllBytesAsync(clipPath).ConfigureAwait(false);
         var pcm = WavPayload.Read(clip);
 
-        using var httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        using var httpClient = new HttpClient
+        {
+            Timeout = Timeout.InfiniteTimeSpan
+        };
         var transcriber = new WhisperServerTranscriber(new GoldenRecorderSupervisor(new Uri(baseUrl, UriKind.Absolute)),
             httpClient,
             new WhisperRuntimeOptions());
@@ -122,7 +125,12 @@ public sealed class WhisperGoldenFixtureRecorder
             ModelId,
             languageCode: null,
             translate: false,
-            new LiveSegmenterSettings { MaxWindowSeconds = MaxWindowSeconds, TailGuardMs = TailGuardMs, TickMs = TickMs });
+            new LiveSegmenterSettings
+            {
+                MaxWindowSeconds = MaxWindowSeconds,
+                TailGuardMs = TailGuardMs,
+                TickMs = TickMs
+            });
         recorder.WindowStartMs = () => segmenter.CommittedEndMs;
 
         var frameBytes = PushMs * WavPcm16.BytesPerMillisecond;
@@ -185,14 +193,14 @@ internal sealed class RecordingWhisperTranscriber(IWhisperTranscriber inner) : I
             PcmSha256 = Convert.ToHexStringLower(SHA256.HashData(payload.Span)),
             DetectedLanguageCode = result.DetectedLanguageCode,
             Segments = result.Segments
-                .Select(segment => new GoldenSegment
-                {
-                    StartMs = (long)Math.Round(segment.StartSeconds * 1000, MidpointRounding.AwayFromZero) + startMs,
-                    EndMs = (long)Math.Round(segment.EndSeconds * 1000, MidpointRounding.AwayFromZero) + startMs,
-                    Text = segment.Text,
-                    Confidence = segment.Confidence
-                })
-                .ToList()
+                             .Select(segment => new GoldenSegment
+                             {
+                                 StartMs = (long)Math.Round(segment.StartSeconds * 1000, MidpointRounding.AwayFromZero) + startMs,
+                                 EndMs = (long)Math.Round(segment.EndSeconds * 1000, MidpointRounding.AwayFromZero) + startMs,
+                                 Text = segment.Text,
+                                 Confidence = segment.Confidence
+                             })
+                             .ToList()
         });
 
         return result;

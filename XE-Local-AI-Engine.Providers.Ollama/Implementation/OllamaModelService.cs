@@ -26,15 +26,15 @@ public sealed class OllamaModelService : IOllamaModelService, IDisposable
         var models = await _ollamaClient.ListLocalModelsAsync(ct).ConfigureAwait(false);
 
         return models.Select(static model => new OllamaModelSummary(model.ReadModelName(),
-                                 model.Digest ?? string.Empty,
-                                 model.Size,
-                                 // Explicit ctor (MA0132) with the same semantics the endpoint mapper applied per call
-                                 // site before this type existed: the daemon reports UTC, so stamp the kind rather than
-                                 // letting the local-time conversion shift the instant.
-                                 new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)),
-                                 model.Details?.Family,
-                                 model.Details?.ParameterSize,
-                                 model.Details?.QuantizationLevel))
+                         model.Digest ?? string.Empty,
+                         model.Size,
+                         // Explicit ctor (MA0132) with the same semantics the endpoint mapper applied per call
+                         // site before this type existed: the daemon reports UTC, so stamp the kind rather than
+                         // letting the local-time conversion shift the instant.
+                         new DateTimeOffset(DateTime.SpecifyKind(model.ModifiedAt, DateTimeKind.Utc)),
+                         model.Details?.Family,
+                         model.Details?.ParameterSize,
+                         model.Details?.QuantizationLevel))
                      .ToArray();
     }
 

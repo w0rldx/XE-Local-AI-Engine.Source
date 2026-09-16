@@ -54,7 +54,13 @@ public sealed class OllamaExceptionTranslatingEmbeddingGeneratorTests
     [Test]
     public async Task GenerateAsync_WhenInnerSucceeds_PassesTheEmbeddingsThrough()
     {
-        var expected = new GeneratedEmbeddings<Embedding<float>>([new Embedding<float>(new float[] { 0.1f, 0.2f })]);
+        var expected = new GeneratedEmbeddings<Embedding<float>>([
+            new Embedding<float>(new float[]
+            {
+                0.1f,
+                0.2f
+            })
+        ]);
         var inner = Substitute.For<IEmbeddingGenerator<string, Embedding<float>>>();
         inner.GenerateAsync(Arg.Any<IEnumerable<string>>(), Arg.Any<EmbeddingGenerationOptions?>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(expected));

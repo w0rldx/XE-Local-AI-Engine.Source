@@ -373,8 +373,8 @@ internal sealed class HfDownloadClient
         var chunkSize = Math.Max(val1: 1, (total + connections - 1) / connections);
         var chunkCount = (int)Math.Min(connections, (total + chunkSize - 1) / chunkSize);
         var state = await RangeResumeState
-            .CreateAsync(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision, ct)
-            .ConfigureAwait(false);
+                          .CreateAsync(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision, ct)
+                          .ConfigureAwait(false);
 
         // ONE handle shared by every chunk. RandomAccess writes are positional and keep no user-mode buffer, so
         // non-overlapping chunks never contend and a cursor written after a completed write can never claim more bytes

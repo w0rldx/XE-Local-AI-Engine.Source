@@ -88,8 +88,8 @@ public sealed class MemoryExtractionWorker : BackgroundService
         // safety net for a stop that trips the token before StopAsync runs. The loop deliberately reads on the drain token,
         // NOT the stopping token, so a stop can never abandon jobs already buffered on the channel — they are drained.
         await using var stopRegistration = stoppingToken.Register(static state => ((MemoryExtractionDispatcher)state!).CompleteWriter(),
-                                                        _dispatcher)
-                                                    .ConfigureAwait(false);
+                                                            _dispatcher)
+                                                        .ConfigureAwait(false);
 
         try
         {

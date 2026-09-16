@@ -24,7 +24,8 @@ using XE_Local_AI_Engine.Tests.E2ETests.Infrastructure;
 [ParallelGroup("BrowserSerial", Order = 0)]
 public abstract class XESerialE2ETestBase : XEE2ETestBase
 {
-    protected override Task SignInAsync() => SignInWithFormAsync(Page, NodeAppUrl);
+    protected override Task SignInAsync() =>
+        SignInWithFormAsync(Page, NodeAppUrl);
 
     /// <summary>
     ///     The real password login, driven against an arbitrary page rather than the harness's shared one.

@@ -100,10 +100,9 @@ internal static class MigratedDatabaseTemplate
 
         if (!DeclaredChatMigrations.Value.Contains(targetMigrationId))
         {
-            throw new InvalidOperationException(
-                $"'{targetMigrationId}' is not a declared chat migration id, so there is no chain state to build a template for. "
-                + "Pass the id of a declared migration: a target derived from anything else — a file name, a GUID — costs a full "
-                + "chain replay per caller and reintroduces exactly the cost these templates exist to remove.");
+            throw new InvalidOperationException($"'{targetMigrationId}' is not a declared chat migration id, so there is no chain state to build a template for. "
+                                                + "Pass the id of a declared migration: a target derived from anything else — a file name, a GUID — costs a full "
+                                                + "chain replay per caller and reintroduces exactly the cost these templates exist to remove.");
         }
     }
 
@@ -149,13 +148,16 @@ internal static class MigratedDatabaseTemplate
             await applyAsync(scratchDatabase).ConfigureAwait(false);
             await CheckpointAndReleaseAsync(scratchDatabase).ConfigureAwait(false);
 
-            foreach (var sidecar in new[] { scratchDatabase + "-wal", scratchDatabase + "-shm" })
+            foreach (var sidecar in new[]
+                     {
+                         scratchDatabase + "-wal",
+                         scratchDatabase + "-shm"
+                     })
             {
                 if (File.Exists(sidecar))
                 {
-                    throw new InvalidOperationException(
-                        $"The migrated template left {Path.GetFileName(sidecar)} behind, so copying the database file alone would lose committed rows. "
-                        + "A published template has to be checkpointed and fully closed — being in WAL mode is expected, an outstanding sidecar is not.");
+                    throw new InvalidOperationException($"The migrated template left {Path.GetFileName(sidecar)} behind, so copying the database file alone would lose committed rows. "
+                                                        + "A published template has to be checkpointed and fully closed — being in WAL mode is expected, an outstanding sidecar is not.");
                 }
             }
 

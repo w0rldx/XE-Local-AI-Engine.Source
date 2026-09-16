@@ -631,8 +631,7 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             {
                 if (IsFinalized(session))
                 {
-                    _logger.LogWarning(
-                        "Dropping a {Channel} commit ({StartMs}-{EndMs} ms) that arrived after transcription session {SessionId} was finalized.",
+                    _logger.LogWarning("Dropping a {Channel} commit ({StartMs}-{EndMs} ms) that arrived after transcription session {SessionId} was finalized.",
                         commit.Channel,
                         commit.StartMs,
                         commit.EndMs,

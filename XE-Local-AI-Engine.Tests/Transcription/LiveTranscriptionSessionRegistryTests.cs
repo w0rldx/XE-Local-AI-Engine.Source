@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Tests.Transcription;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -207,13 +206,13 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var firstAppend = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var appendCount = 0;
         _ = fixture.Service.AppendLiveSegmentAsync(Arg.Any<Guid>(),
-                           Arg.Any<long>(),
-                           Arg.Any<TranscriptChannel>(),
-                           Arg.Any<long>(),
-                           Arg.Any<long>(),
-                           Arg.Any<string>(),
-                           Arg.Any<double?>(),
-                           Arg.Any<CancellationToken>())
+                       Arg.Any<long>(),
+                       Arg.Any<TranscriptChannel>(),
+                       Arg.Any<long>(),
+                       Arg.Any<long>(),
+                       Arg.Any<string>(),
+                       Arg.Any<double?>(),
+                       Arg.Any<CancellationToken>())
                    .Returns(_ => Interlocked.Increment(ref appendCount) == 1 ? firstAppend.Task : Task.CompletedTask);
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(channels: TwoLanes), CancellationToken.None).ConfigureAwait(false);
@@ -461,7 +460,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
         var order = fixture.RecordOrder();
-        var producer = new RecordingAudioProducer(order) { Hangs = true };
+        var producer = new RecordingAudioProducer(order)
+        {
+            Hangs = true
+        };
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
@@ -570,7 +572,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         [
             new WhisperTranscriptSegment(0.0, 0.8, "committed", 0.9),
             new WhisperTranscriptSegment(0.8, 1.2, "provisional", 0.9)
-        ]) { IgnoresCancellation = true };
+        ])
+        {
+            IgnoresCancellation = true
+        };
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
@@ -612,7 +617,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
     {
         // Only the first call parks, and only the You lane submits before the end, so You is the wedged lane and the
         // Others flush is free to answer. One shared gate would have wedged both lanes and proved nothing.
-        var transcriber = new GatedWhisperTranscriber(OneSegment) { GatesFirstCallOnly = true };
+        var transcriber = new GatedWhisperTranscriber(OneSegment)
+        {
+            GatesFirstCallOnly = true
+        };
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
         var statuses = fixture.RecordStatuses();
@@ -689,7 +697,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
@@ -713,7 +724,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
@@ -737,7 +751,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         _ = await AssertEx.ThrowsAsync<ObjectDisposedException>(() => harness.Service.StartLiveAsync(created.Id, CancellationToken.None),
@@ -764,7 +781,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         // The start reads Created and is then parked inside that read.
@@ -796,7 +816,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         var result = await harness.Service.StartLiveAsync(created.Id, CancellationToken.None).ConfigureAwait(false);
@@ -820,7 +843,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await using var harness = await TranscriptionServiceHarness.CreateAsync(registry).ConfigureAwait(false);
         var created = await harness.Service
-                                   .CreateSessionAsync(new CreateTranscriptionSessionInput { SourceKind = "Microphone" }, CancellationToken.None)
+                                   .CreateSessionAsync(new CreateTranscriptionSessionInput
+                                   {
+                                       SourceKind = "Microphone"
+                                   }, CancellationToken.None)
                                    .ConfigureAwait(false);
 
         var delete = harness.Service.DeleteSessionAsync(created.Id, CancellationToken.None);
@@ -843,7 +869,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
-        var first = new RecordingAudioProducer { Hangs = true };
+        var first = new RecordingAudioProducer
+        {
+            Hangs = true
+        };
         var late = new RecordingAudioProducer();
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
@@ -893,7 +922,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
         var transcriber = new ScriptedWhisperTranscriber(OneSegment);
         await using var fixture = new RegistryFixture(transcriber);
         var sessionId = Guid.NewGuid();
-        var producer = new RecordingAudioProducer { Hangs = true };
+        var producer = new RecordingAudioProducer
+        {
+            Hangs = true
+        };
 
         await fixture.Registry.StartLiveSessionAsync(sessionId, LiveOptions(), CancellationToken.None).ConfigureAwait(false);
         producer.Token = fixture.Registry.AttachProducer(sessionId, producer).ProducerToken;
@@ -945,7 +977,12 @@ public sealed class LiveTranscriptionSessionRegistryTests
 
         await fixture.Registry
                      .StartLiveSessionAsync(sessionId,
-                         LiveOptions(settings: new LiveSegmenterSettings { MaxWindowSeconds = 10, TailGuardMs = 5_000, TickMs = 1_000 }),
+                         LiveOptions(settings: new LiveSegmenterSettings
+                         {
+                             MaxWindowSeconds = 10,
+                             TailGuardMs = 5_000,
+                             TickMs = 1_000
+                         }),
                          CancellationToken.None)
                      .ConfigureAwait(false);
 
@@ -1130,7 +1167,12 @@ public sealed class LiveTranscriptionSessionRegistryTests
             ModelId = ModelId,
             // A zero tail guard makes one tick produce one commit, so every assertion below is about the pipeline
             // rather than about when the segmenter decides a word is finished — that is the segmenter's own suite.
-            Settings = settings ?? new LiveSegmenterSettings { MaxWindowSeconds = 2, TailGuardMs = 0, TickMs = 1_000 },
+            Settings = settings ?? new LiveSegmenterSettings
+            {
+                MaxWindowSeconds = 2,
+                TailGuardMs = 0,
+                TickMs = 1_000
+            },
             Channels = channels ?? MonoLane,
             StartingSeq = startingSeq,
             SourceKind = sourceKind,
@@ -1211,7 +1253,10 @@ public sealed class LiveTranscriptionSessionRegistryTests
             Registry = new LiveTranscriptionSessionRegistry(transcriber,
                 Publisher,
                 _provider.GetRequiredService<IServiceScopeFactory>(),
-                Options.Create(new TranscriptionOptions { AbandonedSessionGraceSeconds = GraceSeconds }),
+                Options.Create(new TranscriptionOptions
+                {
+                    AbandonedSessionGraceSeconds = GraceSeconds
+                }),
                 Time,
                 Logger);
         }

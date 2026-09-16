@@ -141,7 +141,8 @@ internal sealed class FakeJfkWhisperTranscriber : IWhisperTranscriber
             : Rejected(durationSeconds);
     }
 
-    private static TaskCompletionSource<double> NewSignal() => new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private static TaskCompletionSource<double> NewSignal() =>
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private static WhisperTranscriptionResult Rejected(double durationSeconds) =>
         new(string.Empty, [], DetectedLanguageCode: null, DetectedLanguageProbability: null, durationSeconds);

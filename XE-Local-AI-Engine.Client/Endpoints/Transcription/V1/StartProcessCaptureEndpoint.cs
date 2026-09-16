@@ -54,7 +54,11 @@ public sealed class StartProcessCaptureEndpoint(ProcessAudioCaptureCoordinator c
         switch (outcome)
         {
             case StartProcessCaptureOutcome.Started:
-                await Send.OkAsync(new ProcessCaptureStatusResponse { SessionId = req.SessionId, Capturing = true }, ct)
+                await Send.OkAsync(new ProcessCaptureStatusResponse
+                          {
+                              SessionId = req.SessionId,
+                              Capturing = true
+                          }, ct)
                           .ConfigureAwait(false);
                 return;
 

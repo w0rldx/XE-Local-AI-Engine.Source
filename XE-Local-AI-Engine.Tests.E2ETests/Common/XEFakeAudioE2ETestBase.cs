@@ -53,8 +53,7 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
         // transcript thirty seconds later.
         if (!File.Exists(wavPath))
         {
-            throw new FileNotFoundException(
-                $"The fake-audio fixture is missing, so the browser would capture silence: {wavPath}", wavPath);
+            throw new FileNotFoundException($"The fake-audio fixture is missing, so the browser would capture silence: {wavPath}", wavPath);
         }
 
         _wavPath = wavPath;
@@ -68,15 +67,15 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
     ///     command line actually carries this suite's WAV — never to the harness's shared, per-worker browser.
     /// </summary>
     protected IPage FakeAudioPage =>
-        _fakeAudioPage ?? throw new InvalidOperationException(
-            $"{nameof(FakeAudioPage)} is only available inside a test: {nameof(LaunchFakeAudioBrowserAsync)} creates it in a [Before(Test)] hook.");
+        _fakeAudioPage ?? throw new InvalidOperationException($"{nameof(FakeAudioPage)} is only available inside a test: {nameof(LaunchFakeAudioBrowserAsync)} creates it in a [Before(Test)] hook.");
 
     /// <summary>
     ///     Re-arms the fake transcriber's first-non-silent-input signal. The host is shared for the whole test session,
     ///     so without this the second audio test would await a signal the first one already completed.
     /// </summary>
     [Before(Test)]
-    public void ResetFakeTranscriber() => Transcriber.ResetForTests();
+    public void ResetFakeTranscriber() =>
+        Transcriber.ResetForTests();
 
     /// <summary>
     ///     Nothing here reads the harness's shared page, so signing it in would cost a navigation and a login per test
@@ -85,7 +84,8 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
     ///     <see cref="XESerialE2ETestBase.SignInWithFormAsync" /> steps. The shared context is left as the harness
     ///     created it — untouched, not half-initialised.
     /// </summary>
-    protected override Task SignInAsync() => Task.CompletedTask;
+    protected override Task SignInAsync() =>
+        Task.CompletedTask;
 
     /// <summary>
     ///     Launches this test's own Chromium with the fake-audio switches on <b>its</b> command line, opens a context
@@ -210,11 +210,11 @@ public abstract class XEFakeAudioE2ETestBase : XESerialE2ETestBase
         // actionability check refuses the input ("element is not visible"); the label is what a person clicks.
         // Exact: "Microphone + system" is the other option whose label starts with the same word.
         await FakeAudioPage.GetByTestId("new-transcription-session-source")
-                  .GetByText("Microphone", new LocatorGetByTextOptions
-                  {
-                      Exact = true
-                  })
-                  .ClickAsync().ConfigureAwait(false);
+                           .GetByText("Microphone", new LocatorGetByTextOptions
+                           {
+                               Exact = true
+                           })
+                           .ClickAsync().ConfigureAwait(false);
 
         await FakeAudioPage.GetByTestId("new-transcription-session-submit").ClickAsync().ConfigureAwait(false);
 

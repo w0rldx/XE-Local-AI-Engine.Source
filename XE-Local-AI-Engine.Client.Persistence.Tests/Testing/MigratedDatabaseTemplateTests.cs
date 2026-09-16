@@ -2,7 +2,6 @@ namespace XE_Local_AI_Engine.Client.Persistence.Tests.Testing;
 
 using System.Globalization;
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Migrations;
 using XE_Local_AI_Engine.Client.Persistence.Implementation;
@@ -104,9 +103,10 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
         // target costs a full chain replay to build, so it has to fail on the first call, not after dozens of them.
         var undeclared = Guid.NewGuid().ToString("N");
 
-        var failure = await AssertEx.ThrowsAsync<InvalidOperationException>(
-                async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared).ConfigureAwait(false))
-            .ConfigureAwait(false);
+        var failure = await AssertEx
+                            .ThrowsAsync<InvalidOperationException>(async () =>
+                                await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "undeclared.sqlite"), undeclared).ConfigureAwait(false))
+                            .ConfigureAwait(false);
 
         AssertEx.True(failure.Message.Contains(undeclared, StringComparison.Ordinal),
             "The message must name the rejected id, or the caller cannot tell which call site is wrong.");
@@ -119,18 +119,16 @@ public sealed class MigratedDatabaseTemplateTests : IDisposable
         var databasePath = Path.Combine(_rootPath, "double-copy", "node.sqlite");
         await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false);
 
-        _ = await AssertEx.ThrowsAsync<IOException>(
-                async () => await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false))
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<IOException>(async () => await MigratedDatabaseTemplate.CopyChatHeadAsync(databasePath).ConfigureAwait(false))
+                          .ConfigureAwait(false);
     }
 
     [Test]
     public async Task CopyChatAtAsync_RejectsABlankTargetMigrationId()
     {
         // The guard that keeps a caller from silently keying a template on nothing and getting the head chain.
-        _ = await AssertEx.ThrowsAsync<ArgumentException>(
-                async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "blank.sqlite"), "   ").ConfigureAwait(false))
-            .ConfigureAwait(false);
+        _ = await AssertEx.ThrowsAsync<ArgumentException>(async () => await MigratedDatabaseTemplate.CopyChatAtAsync(Path.Combine(_rootPath, "blank.sqlite"), "   ").ConfigureAwait(false))
+                          .ConfigureAwait(false);
     }
 
     private static void AssertNoSidecars(string databasePath, string subject)

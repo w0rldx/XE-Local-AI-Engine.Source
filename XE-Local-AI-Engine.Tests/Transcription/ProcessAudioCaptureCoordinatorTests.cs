@@ -282,7 +282,8 @@ public sealed class ProcessAudioCaptureCoordinatorTests
     }
 
     /// <summary>The coordinator wired to the two fakes, disposed together.</summary>
-    private sealed class Harness(ProcessAudioCaptureCoordinator coordinator,
+    private sealed class Harness(
+        ProcessAudioCaptureCoordinator coordinator,
         FakeProcessAudioCaptureSource source,
         RecordingLiveSessionRegistry registry) : IAsyncDisposable
     {
@@ -500,6 +501,5 @@ public sealed class ProcessAudioCaptureCoordinatorTests
 
         private TaskCompletionSource Entered(Guid sessionId) =>
             _entered.GetOrAdd(sessionId, static _ => new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously));
-
     }
 }

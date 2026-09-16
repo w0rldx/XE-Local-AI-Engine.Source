@@ -43,8 +43,7 @@ public abstract class XEE2ETestBase : PageTest
     ///     launches its OWN browser (<see cref="XEFakeAudioE2ETestBase" />) must honour <c>HEADED</c> the same way
     ///     the harness's shared browser does, and two copies of an environment-variable rule drift.
     /// </summary>
-    private protected static bool LaunchHeadless =>
-        !string.Equals(Environment.GetEnvironmentVariable("HEADED"), "true", StringComparison.OrdinalIgnoreCase);
+    private protected static bool LaunchHeadless => !string.Equals(Environment.GetEnvironmentVariable("HEADED"), "true", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>The host origin (API base). Same as the frontend origin — the host serves both.</summary>
     protected Uri ApiBaseUrl => new(Factory.ServerAddress, UriKind.Absolute);

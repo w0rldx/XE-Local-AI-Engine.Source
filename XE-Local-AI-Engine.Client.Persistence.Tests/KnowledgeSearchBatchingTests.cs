@@ -1,7 +1,6 @@
 namespace XE_Local_AI_Engine.Client.Persistence.Tests;
 
 using Microsoft.Data.Sqlite;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.AI;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;

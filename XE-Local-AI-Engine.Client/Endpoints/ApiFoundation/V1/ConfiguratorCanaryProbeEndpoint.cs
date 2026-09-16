@@ -21,5 +21,6 @@ public sealed class ConfiguratorCanaryProbeEndpoint : EndpointWithoutRequest
         Options(x => x.ExcludeFromDescription());
     }
 
-    public override Task HandleAsync(CancellationToken ct) => Send.NoContentAsync(ct);
+    public override Task HandleAsync(CancellationToken ct) =>
+        Send.NoContentAsync(ct);
 }

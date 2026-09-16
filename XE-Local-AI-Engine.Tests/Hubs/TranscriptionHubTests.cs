@@ -417,8 +417,7 @@ public sealed class TranscriptionHubTests
         // The status read is held open until the test has flipped the row, standing in for an end that lands in
         // exactly that window.
         _ = sessions.GetSessionSummaryAsync(SessionId, Arg.Any<CancellationToken>())
-                    .Returns(_ => joined.Task.ContinueWith(
-                        static _ => (TranscriptionSessionSummaryView?)Summary(TranscriptionSessionStatus.Completed),
+                    .Returns(_ => joined.Task.ContinueWith(static _ => (TranscriptionSessionSummaryView?)Summary(TranscriptionSessionStatus.Completed),
                         CancellationToken.None,
                         TaskContinuationOptions.ExecuteSynchronously,
                         TaskScheduler.Default));

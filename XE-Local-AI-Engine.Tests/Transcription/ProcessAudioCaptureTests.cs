@@ -55,8 +55,7 @@ public sealed class ProcessAudioCaptureTests
         AssertEx.Empty(await source.ListCandidatesAsync(CancellationToken.None),
             "The picker answers with an empty list rather than an error: having nothing to offer is a normal answer.");
 
-        var failure = await AssertEx.ThrowsAsync<TranscriptionProcessCaptureNotSupportedException>(
-            () => source.CaptureAsync(Guid.NewGuid(), processId: 4321, CancellationToken.None),
+        var failure = await AssertEx.ThrowsAsync<TranscriptionProcessCaptureNotSupportedException>(() => source.CaptureAsync(Guid.NewGuid(), processId: 4321, CancellationToken.None),
             "Capture must fail CLOSED with a named error; returning quietly would open a live session that silently receives no audio.");
 
         AssertEx.Contains(failure.Message, "4321", StringComparison.Ordinal,
@@ -184,8 +183,7 @@ public sealed class ProcessAudioCaptureTests
         // Keeping the FIRST session seen made the answer depend on enumeration order: an idle session encountered
         // before a playing one reported a playing application as silent. Activity belongs to the process, not to
         // whichever of its sessions came back first, so both orderings must agree.
-        var candidates = ProcessAudioCaptureCandidates.Aggregate(
-            [(1234, firstActive), (1234, secondActive)],
+        var candidates = ProcessAudioCaptureCandidates.Aggregate([(1234, firstActive), (1234, secondActive)],
             static processId => $"app-{processId}");
 
         AssertEx.Equal(1, candidates.Count, "One process is one row however many sessions it holds.");
@@ -196,8 +194,7 @@ public sealed class ProcessAudioCaptureTests
     public void Candidates_ReportNoAudioWhenEverySessionOfTheProcessIsIdle()
     {
         // The control for the test above: OR must not collapse into "always true".
-        var candidates = ProcessAudioCaptureCandidates.Aggregate(
-            [(1234, false), (1234, false)],
+        var candidates = ProcessAudioCaptureCandidates.Aggregate([(1234, false), (1234, false)],
             static processId => $"app-{processId}");
 
         AssertEx.Equal(1, candidates.Count, "Still one row.");
@@ -208,8 +205,7 @@ public sealed class ProcessAudioCaptureTests
     public void Candidates_DropNonPositiveProcessIdsAndOrderByName()
     {
         // WithProcessLoopback takes a uint, so a zero or negative id is not a process capture could ever target.
-        var candidates = ProcessAudioCaptureCandidates.Aggregate(
-            [(0, true), (-1, true), (30, true), (10, false), (20, true)],
+        var candidates = ProcessAudioCaptureCandidates.Aggregate([(0, true), (-1, true), (30, true), (10, false), (20, true)],
             static processId => processId switch
             {
                 30 => "alpha",

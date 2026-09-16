@@ -20,8 +20,7 @@ internal static class ProcessAudioCaptureCandidates
     /// </remarks>
     /// <param name="sessions">One entry per enumerated session: its process id, and whether that session is active.</param>
     /// <param name="resolveName">Resolves a display name, called once per distinct process id.</param>
-    internal static IReadOnlyList<ProcessAudioCaptureCandidate> Aggregate(
-        IEnumerable<(int ProcessId, bool Active)> sessions,
+    internal static IReadOnlyList<ProcessAudioCaptureCandidate> Aggregate(IEnumerable<(int ProcessId, bool Active)> sessions,
         Func<int, string> resolveName)
     {
         ArgumentNullException.ThrowIfNull(sessions);
@@ -39,9 +38,12 @@ internal static class ProcessAudioCaptureCandidates
             activeByProcessId[processId] = activeByProcessId.TryGetValue(processId, out var seen) ? seen || active : active;
         }
 
-        return [.. activeByProcessId
-                   .Select(entry => new ProcessAudioCaptureCandidate(entry.Key, resolveName(entry.Key), entry.Value))
-                   .OrderBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
-                   .ThenBy(candidate => candidate.ProcessId)];
+        return
+        [
+            .. activeByProcessId
+               .Select(entry => new ProcessAudioCaptureCandidate(entry.Key, resolveName(entry.Key), entry.Value))
+               .OrderBy(candidate => candidate.Name, StringComparer.OrdinalIgnoreCase)
+               .ThenBy(candidate => candidate.ProcessId)
+        ];
     }
 }
