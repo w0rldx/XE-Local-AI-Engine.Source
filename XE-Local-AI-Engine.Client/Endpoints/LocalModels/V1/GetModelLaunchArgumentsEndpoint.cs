@@ -2,8 +2,8 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
@@ -11,10 +11,10 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     string when the model has no override.
 /// </summary>
 public sealed class GetModelLaunchArgumentsEndpoint(
-    IModelLaunchArgumentsStore store,
+    ModelLaunchArgumentsService launchArguments,
     ModelNameValidator modelNameValidator) : Endpoint<GetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
 {
-    private readonly IModelLaunchArgumentsStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ModelLaunchArgumentsService _launchArguments = launchArguments ?? throw new ArgumentNullException(nameof(launchArguments));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
     public override void Configure()
@@ -36,7 +36,7 @@ public sealed class GetModelLaunchArgumentsEndpoint(
             return;
         }
 
-        var raw = await _store.GetRawArgumentsAsync(decodedModelName!, ct).ConfigureAwait(false);
+        var raw = await _launchArguments.GetRawArgumentsAsync(decodedModelName!, ct).ConfigureAwait(false);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
             {
                 ModelName = decodedModelName!,

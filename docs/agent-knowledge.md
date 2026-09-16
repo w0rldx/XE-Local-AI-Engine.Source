@@ -459,6 +459,22 @@ Do not wrap the whole project validator in one outer lock: its internally locked
 
 A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
 
+### PROPOSED (awaiting operator approval): a batched-module red keeps only 3 grep'd lines, so capture the failure detail on the FIRST red
+
+**Rule:** when `scripts/run-backend-tests.sh` reds inside `XE-Local-AI-Engine.Tests`, the three
+`[<namespace>] …` lines it prints ARE the whole surviving record. `scripts/run-tests-memory-safe.sh`'s `run_ns`
+writes the batch's raw output to a `mktemp` file, keeps only
+`grep -E 'failed|error' | grep -viE 'failed: 0' | head -3` of it in `$RESULTS_DIR/$ns.fails`, then `rm -f`s the
+raw file; `RESULTS_DIR` is a `mktemp -d` wiped by the script's own `trap … EXIT`. TRX is opt-in behind
+`COVERAGE_DIR`, so the batched module leaves no `.trx` in a plain gate run (the sibling lanes do). If a red's
+exception message matters, re-run the failing namespace or class targeted, or set `COVERAGE_DIR`, **before**
+re-running the gate — a second gate run overwrites nothing useful but recovers nothing either. **Prevents:**
+promising a reviewer the exception text of a red that is already gone, or reconstructing it from memory. Paid for
+in S6b (2026-09-16): a one-test `System.Net.Sockets` red in `XE_Local_AI_Engine.Tests.Hosting` kept its stack
+frame but not the `SocketError` value or the port, because the message line was line 4 of a `head -3`.
+**Authority:** `scripts/run-tests-memory-safe.sh` `run_ns` and its `RESULTS_DIR` trap;
+`Plans/static-quality-enforcement-2026-09-15/progress/S6b-report.md` §6a.
+
 ### PROPOSED (awaiting operator approval): a solution build overwrites the E2E test host, so the flagged build must be the LAST one before a `--no-build` E2E run
 
 **Rule:** `XE-Local-AI-Engine.Tests.E2ETests` compiles as `IsTestProject=false` / `OutputType=Library` unless

@@ -46,7 +46,8 @@ every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather th
 fully-qualified endpoint-and-parameter pairs, covering the persistence-store and concrete-provider injections that
 existed when it was written, including the ones wrapped in a generic. That test's own XML doc carries the current
 pair and endpoint counts; read them there rather than from this page. The list only shrinks: an entry whose dependency is gone fails the guard as loudly as a new pair does. Slice S6 empties it
-sub-slice by sub-slice (S6a's Codex migration retired the first five pairs), and after S6m there are no exemptions
+sub-slice by sub-slice (S6a's Codex migration retired the first five pairs, S6b's LocalModels launch-argument
+migration the next three), and after S6m there are no exemptions
 left — the rule then holds for every endpoint with no list to add to. A new `Client.Application` service introduced
 only to put a store or provider behind an endpoint is a concrete `sealed class` with no interface, registered as
 itself; add an interface only when a specific test must substitute it, and move the displaced behavioural

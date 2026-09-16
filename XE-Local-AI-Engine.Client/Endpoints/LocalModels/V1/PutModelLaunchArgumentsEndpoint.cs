@@ -2,9 +2,9 @@ namespace XE_Local_AI_Engine.Client.Endpoints.LocalModels.V1;
 
 using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Inference;
+using XE_Local_AI_Engine.Client.Services.Models;
 using XE_Local_AI_Engine.Client.Services.Validation;
 
 /// <summary>
@@ -17,14 +17,14 @@ using XE_Local_AI_Engine.Client.Services.Validation;
 ///     the next time the model is (re)loaded.
 /// </summary>
 public sealed class PutModelLaunchArgumentsEndpoint(
-    IModelLaunchArgumentsStore store,
+    ModelLaunchArgumentsService launchArguments,
     ModelNameValidator modelNameValidator) : Endpoint<SetModelLaunchArgumentsRequest, ModelLaunchArgumentsResponse>
 {
     // A generous cap for a hand-typed flag string; guards the store against an abusive payload while leaving room for
     // several flags with values. Well above any realistic llama.cpp argument line.
     private const int MaxRawArgumentsLength = 4096;
 
-    private readonly IModelLaunchArgumentsStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly ModelLaunchArgumentsService _launchArguments = launchArguments ?? throw new ArgumentNullException(nameof(launchArguments));
     private readonly ModelNameValidator _modelNameValidator = modelNameValidator ?? throw new ArgumentNullException(nameof(modelNameValidator));
 
     public override void Configure()
@@ -58,7 +58,7 @@ public sealed class PutModelLaunchArgumentsEndpoint(
         // A blank override is a clear-to-default, not a stored empty row.
         if (raw.Length == 0)
         {
-            _ = await _store.DeleteAsync(decodedModelName!, ct).ConfigureAwait(false);
+            await _launchArguments.ClearAsync(decodedModelName!, ct).ConfigureAwait(false);
             await Send.OkAsync(new ModelLaunchArgumentsResponse
                 {
                     ModelName = decodedModelName!,
@@ -79,7 +79,7 @@ public sealed class PutModelLaunchArgumentsEndpoint(
             return;
         }
 
-        var result = await _store.UpsertAsync(decodedModelName!, raw, ct).ConfigureAwait(false);
+        var result = await _launchArguments.SaveAsync(decodedModelName!, raw, ct).ConfigureAwait(false);
         await Send.OkAsync(new ModelLaunchArgumentsResponse
             {
                 ModelName = result.ModelName,
