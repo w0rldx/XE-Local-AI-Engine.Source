@@ -135,18 +135,23 @@ public sealed class ImageRuntimeActivityGate : IImageRuntimeActivityGate
     {
         private int _disposed;
 
-        public void Dispose()
+        public void Dispose() =>
+            ReleaseOnce();
+
+        public ValueTask DisposeAsync()
+        {
+            ReleaseOnce();
+            return ValueTask.CompletedTask;
+        }
+
+        // Shared by both disposal shapes; there is nothing to await, so DisposeAsync releases through this rather than
+        // through Dispose().
+        private void ReleaseOnce()
         {
             if (Interlocked.Exchange(ref _disposed, value: 1) == 0)
             {
                 owner.Release(kind);
             }
-        }
-
-        public ValueTask DisposeAsync()
-        {
-            Dispose();
-            return ValueTask.CompletedTask;
         }
     }
 }

@@ -124,7 +124,7 @@ internal sealed class HfDownloadClient
         Directory.CreateDirectory(directory);
 
         // Hard disk guard FIRST — refuse before opening any stream so no .part is written when space is short.
-        var existingPartBytes = GetCompletedPartBytes(partPath);
+        var existingPartBytes = await GetCompletedPartBytesAsync(partPath, ct).ConfigureAwait(false);
         var remainingBytes = Math.Max(val1: 0, expectedSizeBytes - existingPartBytes);
         EnsureDiskSpace(directory, remainingBytes);
 
@@ -196,7 +196,7 @@ internal sealed class HfDownloadClient
         // wrote splices two versions of the file into one that never existed upstream, and there is usually no sha256
         // to catch it. A .part with no record (one written before this client recorded revisions, or one whose ref has
         // since moved) is refetched from byte 0 instead: a bounded one-time cost, paid once per abandoned file.
-        var resume = ReadSingleStreamResume(partPath, expectedSizeBytes);
+        var resume = await ReadSingleStreamResumeAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false);
         var existingPartBytes = resume?.Bytes ?? 0L;
         // Pin to the recorded commit where it looks like one, exactly as the parallel path does, so the resumed bytes
         // are asked for at the version that wrote the prefix rather than at whatever the mutable ref points to now.
@@ -360,7 +360,7 @@ internal sealed class HfDownloadClient
         var probe = await ProbeRangeSupportAsync(requestUri, expectedSizeBytes, ct).ConfigureAwait(false);
         if (probe is null)
         {
-            DiscardRangedPartial(partPath, expectedSizeBytes);
+            await DiscardRangedPartialAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false);
             return null;
         }
 
@@ -372,7 +372,9 @@ internal sealed class HfDownloadClient
         var total = probe.TotalBytes;
         var chunkSize = Math.Max(val1: 1, (total + connections - 1) / connections);
         var chunkCount = (int)Math.Min(connections, (total + chunkSize - 1) / chunkSize);
-        var state = RangeResumeState.Create(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision);
+        var state = await RangeResumeState
+            .CreateAsync(partPath + RangeSidecarSuffix, total, chunkCount, chunkSize, GetExistingPartLength(partPath), probe.Revision, ct)
+            .ConfigureAwait(false);
 
         // ONE handle shared by every chunk. RandomAccess writes are positional and keep no user-mode buffer, so
         // non-overlapping chunks never contend and a cursor written after a completed write can never claim more bytes
@@ -598,9 +600,10 @@ internal sealed class HfDownloadClient
     ///     whose record says one contiguous run from byte 0 is kept — that is the single-stream path's own file, and it
     ///     is exactly what the fallback below is about to resume.
     /// </summary>
-    private static void DiscardRangedPartial(string partPath, long expectedSizeBytes)
+    private static async Task DiscardRangedPartialAsync(string partPath, long expectedSizeBytes, CancellationToken ct)
     {
-        if (!File.Exists(partPath + RangeSidecarSuffix) || ReadSingleStreamResume(partPath, expectedSizeBytes) is not null)
+        if (!File.Exists(partPath + RangeSidecarSuffix)
+            || await ReadSingleStreamResumeAsync(partPath, expectedSizeBytes, ct).ConfigureAwait(false) is not null)
         {
             return;
         }
@@ -621,7 +624,7 @@ internal sealed class HfDownloadClient
     ///     no partial, no record, a torn one, a record for a different file length, or a pre-sized parallel partial —
     ///     is <see langword="null" />, meaning refetch from byte 0.
     /// </summary>
-    private static SingleStreamResume? ReadSingleStreamResume(string partPath, long expectedSizeBytes)
+    private static async Task<SingleStreamResume?> ReadSingleStreamResumeAsync(string partPath, long expectedSizeBytes, CancellationToken ct)
     {
         var partBytes = GetExistingPartLength(partPath);
         if (partBytes <= 0)
@@ -629,7 +632,7 @@ internal sealed class HfDownloadClient
             return null;
         }
 
-        return RangeResumeState.TryReadRecord(partPath + RangeSidecarSuffix) is { Cursors.Length: 1 } record
+        return await RangeResumeState.TryReadRecordAsync(partPath + RangeSidecarSuffix, ct).ConfigureAwait(false) is { Cursors.Length: 1 } record
                && record.Total == expectedSizeBytes
                && record.Cursors[0] == partBytes
             ? new SingleStreamResume(partBytes, record.Revision)
@@ -642,7 +645,7 @@ internal sealed class HfDownloadClient
     ///     before any commit is known, so a partial that later turns out to be from a moved ref is counted here and
     ///     refetched afterwards — it over-states free space by at most the partial, which the disk margin absorbs.)
     /// </summary>
-    private static long GetCompletedPartBytes(string partPath)
+    private static async Task<long> GetCompletedPartBytesAsync(string partPath, CancellationToken ct)
     {
         if (!File.Exists(partPath))
         {
@@ -658,7 +661,7 @@ internal sealed class HfDownloadClient
 
         // A sidecar that will not parse buys nothing: the resume path refetches every range, so the guard must size for
         // the whole file rather than for a pre-sized .part full of holes.
-        return RangeResumeState.TryReadRecord(sidecarPath)?.Cursors.Sum() ?? 0L;
+        return (await RangeResumeState.TryReadRecordAsync(sidecarPath, ct).ConfigureAwait(false))?.Cursors.Sum() ?? 0L;
     }
 
     private static bool HasCaseInsensitiveCollision(string destinationPath)
@@ -1015,7 +1018,7 @@ internal sealed class HfDownloadClient
     ///         written only AFTER the corresponding positional write returned, and <see cref="RandomAccess" /> keeps no
     ///         user-mode buffer, so a cursor can never claim more bytes than the file holds. The line is rewritten in
     ///         place rather than atomically: a crash mid-write leaves an unparseable line, which
-    ///         <see cref="TryReadRecord" /> discards — the partial is lost, but a torn cursor is never trusted. A
+    ///         <see cref="RangeResumeState.TryReadRecordAsync" /> discards — the partial is lost, but a torn cursor is never trusted. A
     ///         mismatched total, chunk count, or revision is discarded the same way, so changing
     ///         <see cref="HuggingFaceOptions.DownloadConnections" /> mid-download is safe and a mutable ref that moved
     ///         between attempts refetches rather than splicing two commits together.
@@ -1049,18 +1052,19 @@ internal sealed class HfDownloadClient
         ///     Loads the cursors for this file. <paramref name="existingPartBytes" /> is the length of an existing
         ///     <c>.part</c>, used to check that the sidecar still describes the file that is actually on disk.
         /// </summary>
-        public static RangeResumeState Create(string sidecarPath,
+        public static async Task<RangeResumeState> CreateAsync(string sidecarPath,
             long totalBytes,
             int chunkCount,
             long chunkSize,
             long existingPartBytes,
-            string revision)
+            string revision,
+            CancellationToken ct)
         {
             var stamped = Stamp(revision);
             return new RangeResumeState(sidecarPath,
                 totalBytes,
                 stamped,
-                ResolveCursors(sidecarPath, totalBytes, chunkCount, chunkSize, existingPartBytes, stamped));
+                await ResolveCursorsAsync(sidecarPath, totalBytes, chunkCount, chunkSize, existingPartBytes, stamped, ct).ConfigureAwait(false));
         }
 
         /// <summary>
@@ -1085,17 +1089,18 @@ internal sealed class HfDownloadClient
         ///     commit from bytes from the one the ref moved off — so the record beside the <c>.part</c> is the ONLY
         ///     thing that may grant a head start, and only when it still describes the file that is actually there.
         /// </summary>
-        private static long[] ResolveCursors(string sidecarPath,
+        private static async Task<long[]> ResolveCursorsAsync(string sidecarPath,
             long totalBytes,
             int chunkCount,
             long chunkSize,
             long existingPartBytes,
-            string revision)
+            string revision,
+            CancellationToken ct)
         {
             // No record, a torn one, a record for a different file length, or one written by a commit this ref has
             // since moved off: refetch every range. That includes a .part from before this client recorded revisions —
             // deliberately, since there is no way to learn what wrote it, and the cost is one re-download.
-            if (TryReadRecord(sidecarPath) is not { } record
+            if (await TryReadRecordAsync(sidecarPath, ct).ConfigureAwait(false) is not { } record
                 || record.Total != totalBytes
                 || !string.Equals(record.Revision, revision, StringComparison.Ordinal))
             {
@@ -1178,7 +1183,7 @@ internal sealed class HfDownloadClient
             }
         }
 
-        public static (long Total, string Revision, long[] Cursors)? TryReadRecord(string sidecarPath)
+        public static async Task<(long Total, string Revision, long[] Cursors)?> TryReadRecordAsync(string sidecarPath, CancellationToken ct)
         {
             string content;
             try
@@ -1188,7 +1193,7 @@ internal sealed class HfDownloadClient
                     return null;
                 }
 
-                content = File.ReadAllText(sidecarPath);
+                content = await File.ReadAllTextAsync(sidecarPath, ct).ConfigureAwait(false);
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
             {

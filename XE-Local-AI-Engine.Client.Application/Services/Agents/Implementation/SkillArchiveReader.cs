@@ -78,7 +78,9 @@ internal static class SkillArchiveReader
     ///     <c>.github/plugins/</c>).
     /// </summary>
     /// <exception cref="SkillImportException">Any guard tripped.</exception>
-    public static IReadOnlyList<SkillArchiveFolder> Read(ReadOnlyMemory<byte> archive, SkillImportOptions options)
+    public static async Task<IReadOnlyList<SkillArchiveFolder>> ReadAsync(ReadOnlyMemory<byte> archive,
+        SkillImportOptions options,
+        CancellationToken cancellationToken = default)
     {
         if (archive.Length > options.MaxArchiveBytes)
         {
@@ -86,7 +88,7 @@ internal static class SkillArchiveReader
         }
 
         using var stream = new MemoryStream(archive.ToArray(), writable: false);
-        using var zip = OpenArchive(stream);
+        await using var zip = OpenArchive(stream);
 
         var entries = InspectEntries(zip, options);
         var roots = entries.Keys
@@ -99,10 +101,16 @@ internal static class SkillArchiveReader
             throw new SkillImportException("No SKILL.md was found in the archive.");
         }
 
+        // Sequential, not concurrent: the inflation budget below is shared, single-threaded state, and the roots are
+        // walked in archive order so the budget is spent in the same order the synchronous reader spent it.
         var budget = new InflationBudget(options.MaxTotalInflatedBytes);
-        return roots.Select(root => ReadFolder(entries, root, budget, options))
-                    .OrderBy(static folder => folder.RootPath, StringComparer.Ordinal)
-                    .ToList();
+        var folders = new List<SkillArchiveFolder>(roots.Count);
+        foreach (var root in roots)
+        {
+            folders.Add(await ReadFolderAsync(entries, root, budget, options, cancellationToken).ConfigureAwait(false));
+        }
+
+        return folders.OrderBy(static folder => folder.RootPath, StringComparer.Ordinal).ToList();
     }
 
     private static ZipArchive OpenArchive(Stream stream)
@@ -167,10 +175,11 @@ internal static class SkillArchiveReader
         return result;
     }
 
-    private static SkillArchiveFolder ReadFolder(Dictionary<string, ZipArchiveEntry> entries,
+    private static async Task<SkillArchiveFolder> ReadFolderAsync(Dictionary<string, ZipArchiveEntry> entries,
         string root,
         InflationBudget budget,
-        SkillImportOptions options)
+        SkillImportOptions options,
+        CancellationToken cancellationToken)
     {
         var files = new List<SkillArchiveFile>();
         var refusedScripts = new List<string>();
@@ -210,13 +219,13 @@ internal static class SkillArchiveReader
                 continue;
             }
 
-            files.Add(new SkillArchiveFile(relative, MediaTypeFor(relative), ReadText(entry, budget, options)));
+            files.Add(new SkillArchiveFile(relative, MediaTypeFor(relative), await ReadTextAsync(entry, budget, options, cancellationToken).ConfigureAwait(false)));
         }
 
         var directoryName = root.Length == 0 ? string.Empty : root.TrimEnd('/').Split('/')[^1];
         return new SkillArchiveFolder(directoryName,
             root,
-            ReadText(entries[root + SkillFileName], budget, options),
+            await ReadTextAsync(entries[root + SkillFileName], budget, options, cancellationToken).ConfigureAwait(false),
             files,
             refusedScripts,
             resourceLimitExceeded);
@@ -242,9 +251,12 @@ internal static class SkillArchiveReader
     /// <summary>
     ///     Inflates one entry under the per-entry, whole-archive and ratio caps, then validates it as strict UTF-8.
     /// </summary>
-    private static string ReadText(ZipArchiveEntry entry, InflationBudget budget, SkillImportOptions options)
+    private static async Task<string> ReadTextAsync(ZipArchiveEntry entry,
+        InflationBudget budget,
+        SkillImportOptions options,
+        CancellationToken cancellationToken)
     {
-        var bytes = ReadBounded(entry, options);
+        var bytes = await ReadBoundedAsync(entry, options, cancellationToken).ConfigureAwait(false);
 
         // CompressedLength is attacker-authored too, but understating it can only make the ratio look worse, so this
         // comparison can over-reject and never under-reject. A zero compressed length with real output is a lie.
@@ -273,9 +285,9 @@ internal static class SkillArchiveReader
         return text.TrimStart('\uFEFF');
     }
 
-    private static byte[] ReadBounded(ZipArchiveEntry entry, SkillImportOptions options)
+    private static async Task<byte[]> ReadBoundedAsync(ZipArchiveEntry entry, SkillImportOptions options, CancellationToken cancellationToken)
     {
-        using var source = entry.Open();
+        await using var source = await entry.OpenAsync(cancellationToken).ConfigureAwait(false);
 
         // The cap is measured against bytes ACTUALLY INFLATED; entry.Length is never read. Both directions of the
         // header lie are covered, and only one of them is reachable — keep it that way:
@@ -290,7 +302,7 @@ internal static class SkillArchiveReader
         var total = 0;
         while (total < buffer.Length)
         {
-            var read = source.Read(buffer, total, buffer.Length - total);
+            var read = await source.ReadAsync(buffer.AsMemory(total, buffer.Length - total), cancellationToken).ConfigureAwait(false);
             if (read == 0)
             {
                 break;

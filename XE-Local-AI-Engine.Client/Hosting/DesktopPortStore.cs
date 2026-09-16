@@ -36,11 +36,11 @@ internal static class DesktopPortStore
     ///     Never throws — any IO / parse / availability failure resolves to the dynamic bind.
     /// </summary>
     /// <param name="dataDirectory">The per-user data directory that holds the port file.</param>
-    internal static string ResolveBindUrl(string dataDirectory)
+    internal static async Task<string> ResolveBindUrlAsync(string dataDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
 
-        var port = TryReadPersistedPort(dataDirectory);
+        var port = await TryReadPersistedPortAsync(dataDirectory, cancellationToken).ConfigureAwait(false);
         if (port is null)
         {
             return DesktopLaunch.LoopbackBindUrl;
@@ -73,7 +73,9 @@ internal static class DesktopPortStore
         var tempPath = portFilePath + ".tmp";
         try
         {
+#pragma warning disable MA0045 // Reached only from DesktopLifecycle.OnApplicationStarted, the synchronous Action registered on IHostApplicationLifetime.ApplicationStarted.
             File.WriteAllText(tempPath, port.ToString(CultureInfo.InvariantCulture));
+#pragma warning restore MA0045
             File.Move(tempPath, portFilePath, overwrite: true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -103,7 +105,9 @@ internal static class DesktopPortStore
         var tempPath = path + ".tmp";
         try
         {
+#pragma warning disable MA0045 // Reached only from DesktopLifecycle.OnApplicationStarted, the synchronous Action registered on IHostApplicationLifetime.ApplicationStarted.
             File.WriteAllText(tempPath, JsonSerializer.Serialize(info, JsonSerializerOptions.Web));
+#pragma warning restore MA0045
             File.Move(tempPath, path, overwrite: true);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
@@ -113,17 +117,17 @@ internal static class DesktopPortStore
         }
     }
 
-    internal static ReadyInfo? ReadReady(string dataDirectory) =>
-        ReadReadyEvidence(dataDirectory).Info;
+    internal static async Task<ReadyInfo?> ReadReadyAsync(string dataDirectory, CancellationToken cancellationToken = default) =>
+        (await ReadReadyEvidenceAsync(dataDirectory, cancellationToken).ConfigureAwait(false)).Info;
 
-    internal static ReadyEvidence ReadReadyEvidence(string dataDirectory)
+    internal static async Task<ReadyEvidence> ReadReadyEvidenceAsync(string dataDirectory, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(dataDirectory);
         var path = Path.Combine(dataDirectory, ReadyFileName);
         try
         {
-            using var stream = File.OpenRead(path);
-            var parsed = JsonSerializer.Deserialize<ReadyInfo>(stream, JsonSerializerOptions.Web);
+            await using var stream = File.OpenRead(path);
+            var parsed = await JsonSerializer.DeserializeAsync<ReadyInfo>(stream, JsonSerializerOptions.Web, cancellationToken).ConfigureAwait(false);
             return TryValidateReadyInfo(parsed, dataDirectory, out var validated)
                 ? new ReadyEvidence(ReadyEvidenceState.Valid, validated)
                 : new ReadyEvidence(ReadyEvidenceState.Invalid, Info: null);
@@ -228,7 +232,7 @@ internal static class DesktopPortStore
         }
     }
 
-    private static int? TryReadPersistedPort(string dataDirectory)
+    private static async Task<int?> TryReadPersistedPortAsync(string dataDirectory, CancellationToken cancellationToken)
     {
         var portFilePath = Path.Combine(dataDirectory, PortFileName);
 
@@ -240,7 +244,7 @@ internal static class DesktopPortStore
                 return null;
             }
 
-            content = File.ReadAllText(portFilePath);
+            content = await File.ReadAllTextAsync(portFilePath, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

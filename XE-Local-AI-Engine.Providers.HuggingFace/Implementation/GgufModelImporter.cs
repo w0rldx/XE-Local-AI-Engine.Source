@@ -26,7 +26,7 @@ internal sealed class GgufModelImporter(
         ValidateDestination(destination);
 
         var mode = InspectionModeFor(destination);
-        await using var openedSource = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
+        await using var openedSource = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
         var inspection = await GgufImportInspector.InspectOpenedAsync(openedSource, mode, cancellationToken).ConfigureAwait(false);
         if (!IsUsableInspection(inspection, destination))
         {
@@ -344,7 +344,7 @@ internal sealed class GgufModelImporter(
             throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source changed while it was copied.");
         }
 
-        source.VerifyStillCurrent();
+        await source.VerifyStillCurrentAsync(cancellationToken).ConfigureAwait(false);
 
         return new CopiedFile(Convert.ToHexStringLower(hasher.GetHashAndReset()), total);
     }

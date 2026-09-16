@@ -533,6 +533,19 @@ dotnet_diagnostic.MA0004.severity = none
 dotnet_diagnostic.MA0016.severity = none
 # MA0011: IFormatProvider on TryParse — consistent with the existing CA1305=none decision above.
 dotnet_diagnostic.MA0011.severity = none
+# S4 (blocking calls + cancellation forwarding), measured 2026-09-16 in Release with warnings not promoted
+# (-p:TreatWarningsAsErrors=false), all 26 solution projects compiled, de-duplicated by (rule, file, line):
+#   MA0042 26 sites / 17 files, MA0045 150 / 79, MA0079 2 / 2, MA0080 0 / 0, MA0040 12 / 11,
+#   CA2016 0 / 0 (already a build warning under AnalysisMode=All, i.e. already enforced), MA0032 50 / 22.
+# Every rule was under the 80-file cap and every site was fixed or carries a per-site reasoned pragma (S4):
+dotnet_diagnostic.MA0042.severity = warning
+dotnet_diagnostic.MA0045.severity = warning
+dotnet_diagnostic.MA0079.severity = warning
+dotnet_diagnostic.MA0080.severity = warning
+dotnet_diagnostic.MA0040.severity = warning
+dotnet_diagnostic.MA0032.severity = warning
+# CA2016 is a warning already (AnalysisMode=All); stated explicitly so the S4 rule set is visible in one place.
+dotnet_diagnostic.CA2016.severity = warning
 
 # Ignore paths
 [**/Migrations/*.cs]

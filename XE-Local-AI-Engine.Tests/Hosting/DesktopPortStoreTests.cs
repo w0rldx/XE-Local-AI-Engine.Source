@@ -15,17 +15,17 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DesktopPortStoreTests
 {
     [Test]
-    public void ResolveBindUrl_WhenPortFileMissing_FallsBackToDynamicBind()
+    public async Task ResolveBindUrl_WhenPortFileMissing_FallsBackToDynamicBind()
     {
         using var directory = new TempDirectory();
 
-        var resolved = DesktopPortStore.ResolveBindUrl(directory.Path);
+        var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path).ConfigureAwait(false);
 
         AssertEx.Equal(DesktopLaunch.LoopbackBindUrl, resolved);
     }
 
     [Test]
-    public void ResolveBindUrl_WhenPortFileMalformedOrOutOfRange_FallsBackToDynamicBind()
+    public async Task ResolveBindUrl_WhenPortFileMalformedOrOutOfRange_FallsBackToDynamicBind()
     {
         // Non-numeric, zero, privileged (<= 1024), and above the max port all reject to the dynamic :0 bind.
         foreach (var invalid in new[]
@@ -41,26 +41,26 @@ public sealed class DesktopPortStoreTests
             using var directory = new TempDirectory();
             WritePortFile(directory.Path, invalid);
 
-            var resolved = DesktopPortStore.ResolveBindUrl(directory.Path);
+            var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path).ConfigureAwait(false);
 
             AssertEx.Equal(DesktopLaunch.LoopbackBindUrl, resolved);
         }
     }
 
     [Test]
-    public void ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort()
+    public async Task ResolveBindUrl_WhenPersistedPortIsFree_RebindsThatPort()
     {
         using var directory = new TempDirectory();
         var freePort = FindFreeLoopbackPort();
         WritePortFile(directory.Path, freePort.ToString(CultureInfo.InvariantCulture));
 
-        var resolved = DesktopPortStore.ResolveBindUrl(directory.Path);
+        var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path).ConfigureAwait(false);
 
         AssertEx.Equal($"http://{DesktopLaunch.LoopbackHost}:{freePort.ToString(CultureInfo.InvariantCulture)}", resolved);
     }
 
     [Test]
-    public void ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind()
+    public async Task ResolveBindUrl_WhenPersistedPortIsTaken_FallsBackToDynamicBind()
     {
         using var directory = new TempDirectory();
         var port = FindFreeLoopbackPort();
@@ -71,19 +71,19 @@ public sealed class DesktopPortStoreTests
 
         WritePortFile(directory.Path, port.ToString(CultureInfo.InvariantCulture));
 
-        var resolved = DesktopPortStore.ResolveBindUrl(directory.Path);
+        var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path).ConfigureAwait(false);
 
         AssertEx.Equal(DesktopLaunch.LoopbackBindUrl, resolved);
     }
 
     [Test]
-    public void PersistThenResolve_RoundTripsToTheSameLoopbackUrl()
+    public async Task PersistThenResolve_RoundTripsToTheSameLoopbackUrl()
     {
         using var directory = new TempDirectory();
         var freePort = FindFreeLoopbackPort();
 
         DesktopPortStore.Persist(directory.Path, freePort, NullLogger.Instance);
-        var resolved = DesktopPortStore.ResolveBindUrl(directory.Path);
+        var resolved = await DesktopPortStore.ResolveBindUrlAsync(directory.Path).ConfigureAwait(false);
 
         AssertEx.Equal($"http://{DesktopLaunch.LoopbackHost}:{freePort.ToString(CultureInfo.InvariantCulture)}", resolved);
     }
@@ -101,7 +101,7 @@ public sealed class DesktopPortStoreTests
     }
 
     [Test]
-    public void ReadyFile_PersistsRoundTripsAndDeletes()
+    public async Task ReadyFile_PersistsRoundTripsAndDeletes()
     {
         using var directory = new TempDirectory();
         var info = new ReadyInfo("1.2.3", "http://127.0.0.1:41234",
@@ -109,17 +109,17 @@ public sealed class DesktopPortStoreTests
 
         DesktopPortStore.PersistReady(directory.Path, info, NullLogger.Instance);
 
-        AssertEx.Equal(info, AssertEx.NotNull(DesktopPortStore.ReadReady(directory.Path)));
+        AssertEx.Equal(info, AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(directory.Path).ConfigureAwait(false)));
         DesktopPortStore.DeleteReady(directory.Path, NullLogger.Instance);
-        AssertEx.Null(DesktopPortStore.ReadReady(directory.Path));
+        AssertEx.Null(await DesktopPortStore.ReadReadyAsync(directory.Path).ConfigureAwait(false));
         DesktopPortStore.DeleteReady(directory.Path, NullLogger.Instance);
     }
 
     [Test]
-    public void ReadyEvidence_DistinguishesAbsentFromInvalidAndRejectsUnsafeUris()
+    public async Task ReadyEvidence_DistinguishesAbsentFromInvalidAndRejectsUnsafeUris()
     {
         using var directory = new TempDirectory();
-        AssertEx.Equal(ReadyEvidenceState.Absent, DesktopPortStore.ReadReadyEvidence(directory.Path).State);
+        AssertEx.Equal(ReadyEvidenceState.Absent, (await DesktopPortStore.ReadReadyEvidenceAsync(directory.Path).ConfigureAwait(false)).State);
 
         foreach (var invalidJson in new[]
                  {
@@ -129,8 +129,8 @@ public sealed class DesktopPortStoreTests
                      $$"""{"version":"1.0.0","url":"http://127.0.0.1:41234","mcpUrl":"http://127.0.0.1:41234/api/local/v1/mcp/server","dataDir":"{{directory.Path}}","pid":0,"startedAtUtc":"1970-01-01T00:00:00Z"}"""
                  })
         {
-            File.WriteAllText(Path.Combine(directory.Path, DesktopPortStore.ReadyFileName), invalidJson);
-            var evidence = DesktopPortStore.ReadReadyEvidence(directory.Path);
+            await File.WriteAllTextAsync(Path.Combine(directory.Path, DesktopPortStore.ReadyFileName), invalidJson).ConfigureAwait(false);
+            var evidence = await DesktopPortStore.ReadReadyEvidenceAsync(directory.Path).ConfigureAwait(false);
             AssertEx.Equal(ReadyEvidenceState.Invalid, evidence.State);
             AssertEx.Null(evidence.Info);
         }

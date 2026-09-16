@@ -145,7 +145,9 @@ public sealed class DevelopmentCloudContextBuilder : IDevelopmentCloudContextBui
         IReadOnlyList<DevelopmentCloudContextExcerpt> excerpts)
     {
         using var stream = new MemoryStream();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(stream))
+#pragma warning restore MA0045
         {
             writer.WriteStartObject();
             writer.WriteString("bundleId", request.BundleId);

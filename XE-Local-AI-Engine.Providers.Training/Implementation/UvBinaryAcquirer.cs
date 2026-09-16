@@ -57,7 +57,7 @@ public sealed class UvBinaryAcquirer(HttpClient httpClient)
             }
 
             logSink("Verified the uv download digest.");
-            ExtractTarGzAtomically(tempArchive, versionDir);
+            await ExtractTarGzAtomicallyAsync(tempArchive, versionDir, ct).ConfigureAwait(false);
         }
         finally
         {
@@ -119,16 +119,16 @@ public sealed class UvBinaryAcquirer(HttpClient httpClient)
     }
 
     // Extract into a temp sibling then move into place, so an interrupted extract cannot be mistaken for a warm cache.
-    private static void ExtractTarGzAtomically(string archivePath, string versionDir)
+    private static async Task ExtractTarGzAtomicallyAsync(string archivePath, string versionDir, CancellationToken ct)
     {
         var stagingDir = $"{versionDir}.{Guid.NewGuid():N}.tmp";
         Directory.CreateDirectory(stagingDir);
         try
         {
-            using (var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
-                using (var gzip = new GZipStream(fileStream, CompressionMode.Decompress))
+            await using (var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                await using (var gzip = new GZipStream(fileStream, CompressionMode.Decompress))
                 {
-                    TarFile.ExtractToDirectory(gzip, stagingDir, overwriteFiles: true);
+                    await TarFile.ExtractToDirectoryAsync(gzip, stagingDir, overwriteFiles: true, ct).ConfigureAwait(false);
                 }
 
             Directory.CreateDirectory(Path.GetDirectoryName(versionDir.TrimEnd(Path.DirectorySeparatorChar))!);

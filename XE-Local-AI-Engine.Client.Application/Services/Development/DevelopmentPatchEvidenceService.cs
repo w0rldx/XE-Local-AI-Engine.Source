@@ -148,7 +148,7 @@ internal sealed class DevelopmentPatchEvidenceService : IDevelopmentPatchEvidenc
     /// </summary>
     private async Task StageWorkingTreeAsync(DevelopmentWorkspaceSession session, CancellationToken cancellationToken)
     {
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(session.HostWorktreePath);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(session.HostWorktreePath, cancellationToken).ConfigureAwait(false);
         _ = await RunGitExactAsync(session,
             ["reset", "--mixed", "--quiet", "HEAD", "--"],
             maxOutputBytes: 4096,

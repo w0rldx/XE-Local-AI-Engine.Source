@@ -73,7 +73,7 @@ internal sealed class OrchestrationRunSession : IOrchestrationRunSession
                     idleCts.Token,
                     cancellationToken));
 
-            await foreach (var evt in guarded.ConfigureAwait(false))
+            await foreach (var evt in guarded.WithCancellation(cancellationToken).ConfigureAwait(false))
             {
                 // One source event can normalize to MORE than one update — a single streaming update carrying both
                 // reasoning and visible text yields a reasoning fragment AND a text fragment. Each is

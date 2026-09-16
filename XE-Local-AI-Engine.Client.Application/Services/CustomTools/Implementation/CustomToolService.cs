@@ -444,9 +444,9 @@ internal sealed partial class CustomToolService : ICustomToolService
         // uses the SYNC (built-in + MCP) known-names view deliberately: it is a pure in-memory read (no store I/O), and the
         // async view additionally lists existing custom tools, which would make an unchanged-name UPDATE collide with
         // itself. Custom-vs-custom uniqueness (with self-exclusion) is the store check immediately below.
-#pragma warning disable CA1849, S6966 // GetKnownToolNames() does no I/O; the async twin would introduce a self-collision on update. See comment above.
+#pragma warning disable CA1849, S6966, MA0042 // GetKnownToolNames() does no I/O; the async twin would introduce a self-collision on update. See comment above.
         if (_offerProvider.GetKnownToolNames().Any(known => string.Equals(known, name, StringComparison.OrdinalIgnoreCase)))
-#pragma warning restore CA1849, S6966
+#pragma warning restore CA1849, S6966, MA0042
         {
             throw new CustomToolValidationException($"The name '{name}' collides with an existing built-in or MCP tool.");
         }

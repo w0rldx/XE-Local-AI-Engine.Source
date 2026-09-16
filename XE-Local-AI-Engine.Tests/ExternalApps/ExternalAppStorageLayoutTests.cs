@@ -34,7 +34,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     [Test]
-    public void Prepare_CreatesOneVolumeDirectoryPerServiceAndStorageName()
+    public async Task Prepare_CreatesOneVolumeDirectoryPerServiceAndStorageName()
     {
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([
@@ -42,7 +42,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
             ExternalAppTestManifests.Service("db", storage: [new ApplicationStorage("data", "/var/lib/data")], image: ExternalAppTestManifests.SecondImage)
         ]);
 
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         var app = paths.VolumePath("app", "data");
         var db = paths.VolumePath("db", "data");
@@ -52,12 +52,12 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     [Test]
-    public void Prepare_OnLinux_NarrowsCreatedDirectoriesToOwnerOnly()
+    public async Task Prepare_OnLinux_NarrowsCreatedDirectoriesToOwnerOnly()
     {
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
 
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {
@@ -70,7 +70,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     [Test]
-    public void Prepare_WhenAVolumeComponentIsASymlink_FailsAndWritesNothingBeneathIt()
+    public async Task Prepare_WhenAVolumeComponentIsASymlink_FailsAndWritesNothingBeneathIt()
     {
         SymlinkSupport.EnsureSupported();
 
@@ -83,12 +83,12 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
 
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
         AssertEx.False(Directory.Exists(Path.Combine(elsewhere, "data")), "A refused path must not have been created through the link.");
     }
 
     [Test]
-    public void Prepare_WhenTheFilesParentIsASymlink_Fails()
+    public async Task Prepare_WhenTheFilesParentIsASymlink_Fails()
     {
         SymlinkSupport.EnsureSupported();
 
@@ -101,39 +101,39 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
 
         var manifest = ManifestWithAsset("settings", "hello");
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
         AssertEx.Empty(Directory.GetFiles(elsewhere, "*", SearchOption.AllDirectories));
     }
 
     [Test]
-    public void Prepare_WhenAFileSitsWhereADirectoryBelongs_Fails()
+    public async Task Prepare_WhenAFileSitsWhereADirectoryBelongs_Fails()
     {
         var layout = CreateLayout();
         var paths = layout.Describe(_instanceId);
         _ = Directory.CreateDirectory(paths.VolumesRoot);
-        File.WriteAllText(Path.Combine(paths.VolumesRoot, "app"), "not a directory");
+        await File.WriteAllTextAsync(Path.Combine(paths.VolumesRoot, "app"), "not a directory", CancellationToken.None);
 
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
     }
 
     [Test]
     [Arguments("../escape.yml")]
     [Arguments("conf/../../escape.yml")]
     [Arguments("/etc/passwd")]
-    public void Prepare_WithATraversingOrRootedAssetSource_FailsBeforeAnyByteIsWritten(string source)
+    public async Task Prepare_WithATraversingOrRootedAssetSource_FailsBeforeAnyByteIsWritten(string source)
     {
         var layout = CreateLayout();
         var asset = ExternalAppTestManifests.File(source, "/app/settings.yml", "body");
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", files: [asset])]);
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
         AssertEx.Empty(Directory.Exists(_root) ? Directory.GetFiles(_root, "*", SearchOption.AllDirectories) : []);
     }
 
     [Test]
-    public void Prepare_WhenTheAssetHashDisagreesWithItsContent_Fails()
+    public async Task Prepare_WhenTheAssetHashDisagreesWithItsContent_Fails()
     {
         var layout = CreateLayout();
         var bytes = Encoding.UTF8.GetBytes("body");
@@ -143,19 +143,19 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
             Convert.ToBase64String(bytes));
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", files: [lying])]);
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
     }
 
     [Test]
-    public void Materialize_WritesTheAssetAndItsNestedDirectories()
+    public async Task Materialize_WritesTheAssetAndItsNestedDirectories()
     {
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("files/app/settings.yml", "server: on");
 
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         var target = paths.FilePath("app", Path.Combine("files", "app", "settings.yml"));
-        AssertEx.Equal("server: on", File.ReadAllText(target));
+        AssertEx.Equal("server: on", await File.ReadAllTextAsync(target, CancellationToken.None));
     }
 
     /// <summary>
@@ -164,17 +164,17 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     ///     "the content is the same" is true either way.
     /// </summary>
     [Test]
-    public void Materialize_WhenTheFileExistsWithTheRecordedHash_ReusesItAndDoesNotRewrite()
+    public async Task Materialize_WhenTheFileExistsWithTheRecordedHash_ReusesItAndDoesNotRewrite()
     {
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("settings.yml", "server: on");
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
         var target = paths.FilePath("app", "settings.yml");
 
         var stamp = new DateTime(2020, 1, 2, 3, 4, 5, DateTimeKind.Utc);
         File.SetLastWriteTimeUtc(target, stamp);
 
-        _ = layout.Prepare(_instanceId, manifest);
+        _ = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         AssertEx.Equal(stamp, File.GetLastWriteTimeUtc(target));
     }
@@ -185,44 +185,44 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     ///     directory into the container. The leaf is checked before the hash is even read.
     /// </summary>
     [Test]
-    public void Materialize_WhenTheExistingFileIsASymlinkThatHashesCorrectly_IsRefused()
+    public async Task Materialize_WhenTheExistingFileIsASymlinkThatHashesCorrectly_IsRefused()
     {
         SymlinkSupport.EnsureSupported();
 
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("settings.yml", "server: on");
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
         var target = paths.FilePath("app", "settings.yml");
 
         // The link's own target carries the very bytes the manifest declares, so every hash check passes.
         var elsewhere = Path.Combine(_root, "outside-the-instance.yml");
-        File.WriteAllText(elsewhere, "server: on");
+        await File.WriteAllTextAsync(elsewhere, "server: on", CancellationToken.None);
         File.Delete(target);
         File.CreateSymbolicLink(target, elsewhere);
 
-        var failure = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        var failure = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
 
         AssertEx.Contains(failure.Message, "is a link");
         AssertEx.True(new FileInfo(target).LinkTarget is not null, "The refusal must leave the planted link alone rather than quietly replacing it.");
     }
 
     [Test]
-    public void Materialize_WhenTheFileExistsWithADifferentHash_ReplacesItAndLeavesNoTempFile()
+    public async Task Materialize_WhenTheFileExistsWithADifferentHash_ReplacesItAndLeavesNoTempFile()
     {
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("settings.yml", "server: on");
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
         var target = paths.FilePath("app", "settings.yml");
-        File.WriteAllText(target, "tampered");
+        await File.WriteAllTextAsync(target, "tampered", CancellationToken.None);
 
-        _ = layout.Prepare(_instanceId, manifest);
+        _ = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
-        AssertEx.Equal("server: on", File.ReadAllText(target));
+        AssertEx.Equal("server: on", await File.ReadAllTextAsync(target, CancellationToken.None));
         AssertEx.Empty(Directory.GetFiles(Path.GetDirectoryName(target)!, "*.tmp-*"));
     }
 
     [Test]
-    public void Materialize_WhenTheRenameFails_LeavesNoTempFileBehind()
+    public async Task Materialize_WhenTheRenameFails_LeavesNoTempFileBehind()
     {
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("settings.yml", "server: on");
@@ -230,14 +230,14 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
         var target = paths.FilePath("app", "settings.yml");
         _ = Directory.CreateDirectory(target);
 
-        _ = AssertEx.Throws<ExternalAppStorageException>(() => layout.Prepare(_instanceId, manifest));
+        _ = await AssertEx.ThrowsAsync<ExternalAppStorageException>(() => layout.PrepareAsync(_instanceId, manifest, CancellationToken.None));
 
         AssertEx.Empty(Directory.GetFiles(Path.GetDirectoryName(target)!, "*.tmp-*"));
     }
 
     /// <summary>Reset wipes the writable volumes and nothing else; the assets survive and are re-verified, not trusted.</summary>
     [Test]
-    public void DeleteVolumes_RemovesTheWritableTreeAndKeepsTheAssets()
+    public async Task DeleteVolumes_RemovesTheWritableTreeAndKeepsTheAssets()
     {
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([
@@ -245,24 +245,24 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
                 storage: [new ApplicationStorage("data", "/data")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/app/settings.yml", "server: on")])
         ]);
-        var paths = layout.Prepare(_instanceId, manifest);
-        File.WriteAllText(Path.Combine(paths.VolumePath("app", "data"), "state.db"), "rows");
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
+        await File.WriteAllTextAsync(Path.Combine(paths.VolumePath("app", "data"), "state.db"), "rows", CancellationToken.None);
 
         layout.DeleteVolumes(_instanceId);
 
         AssertEx.False(Directory.Exists(paths.VolumesRoot), "Reset must remove the writable tree.");
         AssertEx.True(File.Exists(paths.FilePath("app", "settings.yml")), "Reset must keep the catalog assets.");
 
-        _ = layout.Prepare(_instanceId, manifest);
+        _ = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
         AssertEx.True(Directory.Exists(paths.VolumePath("app", "data")), "The re-entered pass must recreate the volume.");
     }
 
     [Test]
-    public void Delete_RemovesTheWholeInstanceDirectoryAndIsIdempotent()
+    public async Task Delete_RemovesTheWholeInstanceDirectoryAndIsIdempotent()
     {
         var layout = CreateLayout();
         var manifest = ManifestWithAsset("settings.yml", "server: on");
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         AssertEx.True(layout.Delete(_instanceId), "The first delete must succeed.");
         AssertEx.False(Directory.Exists(paths.InstanceRoot), "The instance directory must be gone.");
@@ -299,18 +299,18 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     /// <summary>
-    ///     The check a plan needs and the one <see cref="ExternalAppStorageLayout.Prepare" /> cannot give it: Prepare
+    ///     The check a plan needs and the one <see cref="ExternalAppStorageLayout.PrepareAsync" /> cannot give it: Prepare
     ///     ran before the daemon calls, and the plan carries path strings, which resolve nothing. A component swapped
     ///     for a link in between is refused here, immediately before the container that would bind it is created.
     /// </summary>
     [Test]
-    public void VerifyBindSources_WhenAComponentBecameALinkAfterPrepare_IsRefused()
+    public async Task VerifyBindSources_WhenAComponentBecameALinkAfterPrepare_IsRefused()
     {
         SymlinkSupport.EnsureSupported();
 
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([ExternalAppTestManifests.Service("app", storage: [new ApplicationStorage("data", "/data")])]);
-        var paths = layout.Prepare(_instanceId, manifest);
+        var paths = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
         var plan = PlanFor(layout, manifest);
 
         // The prepared pass left a real directory here; this is the swap the window allows.
@@ -326,7 +326,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     }
 
     [Test]
-    public void VerifyBindSources_OnThePathsPrepareJustWrote_Passes()
+    public async Task VerifyBindSources_OnThePathsPrepareJustWrote_Passes()
     {
         var layout = CreateLayout();
         var manifest = ExternalAppTestManifests.Manifest([
@@ -334,7 +334,7 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
                 storage: [new ApplicationStorage("data", "/data")],
                 files: [ExternalAppTestManifests.File("settings.yml", "/app/settings.yml", "server: on")])
         ]);
-        _ = layout.Prepare(_instanceId, manifest);
+        _ = await layout.PrepareAsync(_instanceId, manifest, CancellationToken.None);
 
         // The negative control for the test above: without this, a VerifyBindSources that refused everything would
         // look just as green. Asserted rather than merely called: a test whose body throws nothing but states nothing
@@ -360,10 +360,10 @@ public sealed class ExternalAppStorageLayoutTests : IDisposable
     ///     image reads it as the identity the bind mount already belongs to.
     /// </summary>
     [Test]
-    public void Materialize_OnLinux_WritesTheAssetOwnerOnly()
+    public async Task Materialize_OnLinux_WritesTheAssetOwnerOnly()
     {
         var layout = CreateLayout();
-        var paths = layout.Prepare(_instanceId, ManifestWithAsset("settings.yml", "server: on"));
+        var paths = await layout.PrepareAsync(_instanceId, ManifestWithAsset("settings.yml", "server: on"), CancellationToken.None);
 
         if (!OperatingSystem.IsLinux() && !OperatingSystem.IsMacOS())
         {

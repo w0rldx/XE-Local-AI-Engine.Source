@@ -195,7 +195,7 @@ public sealed class WhisperCppSourceBuildServiceTests
     public async Task PostBuild_AbsoluteRunpath_FailsBeforeAdoption()
     {
         // The gate's POSITION is the property, and the parser tests above cannot see it: moving
-        // ValidateRelocatableRunpathAsync below AdoptAsync would keep every one of them green. Driven end to end
+        // ValidateServerRunpathAsync below AdoptAsync would keep every one of them green. Driven end to end
         // through StartAsync, the absence of a record and of a managed directory is what proves adoption was never
         // reached.
         using var cache = new TempDirectory();

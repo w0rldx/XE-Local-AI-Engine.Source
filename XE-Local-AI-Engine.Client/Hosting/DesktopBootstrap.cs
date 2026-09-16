@@ -269,7 +269,9 @@ internal static class DesktopBootstrap
         string fileContent;
         try
         {
+#pragma warning disable MA0045 // The desktop operator-key bootstrap runs from the synchronous EnsureLocalDataConfiguration configuration step, and its retry reads through a SpinWait.SpinUntil(Func<bool>) predicate that cannot await.
             fileContent = File.ReadAllText(keyPath).Trim();
+#pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -419,11 +421,13 @@ internal static class DesktopBootstrap
 
         try
         {
+#pragma warning disable MA0045 // The desktop operator-key bootstrap runs from the synchronous EnsureLocalDataConfiguration configuration step, and its retry reads through a SpinWait.SpinUntil(Func<bool>) predicate that cannot await.
             using (stream)
             {
                 stream.Write(Encoding.ASCII.GetBytes(fileContent));
                 stream.Flush();
             }
+#pragma warning restore MA0045
 
             return true;
         }
@@ -486,7 +490,9 @@ internal static class DesktopBootstrap
         var tempPath = keyPath + ".tmp";
         try
         {
+#pragma warning disable MA0045 // The desktop operator-key bootstrap runs from the synchronous EnsureLocalDataConfiguration configuration step, and its retry reads through a SpinWait.SpinUntil(Func<bool>) predicate that cannot await.
             File.WriteAllText(tempPath, fileContent);
+#pragma warning restore MA0045
             ProtectKeyFile(tempPath);
             File.Move(tempPath, keyPath, overwrite: true);
         }

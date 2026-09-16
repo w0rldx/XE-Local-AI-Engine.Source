@@ -62,7 +62,7 @@ public interface IBaseArtifactService
     Task<BaseArtifactLicenseView?> GetLicenseAsync(Guid artifactId, CancellationToken ct);
 
     /// <summary>Requests cancellation of an in-flight download. False when nothing is running for that artifact.</summary>
-    bool Cancel(Guid artifactId);
+    Task<bool> CancelAsync(Guid artifactId);
 
     Task<BaseArtifactDeleteOutcome> DeleteAsync(Guid artifactId, CancellationToken ct);
 }

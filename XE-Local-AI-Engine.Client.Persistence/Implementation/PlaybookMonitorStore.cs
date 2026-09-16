@@ -93,7 +93,9 @@ public sealed class PlaybookMonitorStore(NodeChatDbContext dbContext) : IPlayboo
 
     private static int ReadCount(DbDataReader reader, int ordinal)
     {
-        return reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+        // GetValue yields DBNull.Value for a SQL NULL, so the null check needs no separate (blocking) IsDBNull probe.
+        var value = reader.GetValue(ordinal);
+        return value is DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
     }
 
     private static Task OpenIfNeededAsync(DbConnection connection, CancellationToken cancellationToken)

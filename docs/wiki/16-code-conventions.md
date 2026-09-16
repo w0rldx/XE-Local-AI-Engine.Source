@@ -132,6 +132,25 @@ the `*Options` pattern. Never read ambient time (`DateTimeOffset.UtcNow`/`.Now`,
 `GetUtcNow()`/`GetLocalNow()` — enforced by `BannedSymbols.txt` (RS0030), documented in
 [Security & Privacy](12-security-and-privacy.md) §8.
 
+### Blocking calls and cancellation forwarding are enforced
+
+Meziantou's blocking-call and cancellation rules are build errors in Release (`.editorconfig` sets them to
+`warning`, `TreatWarningsAsErrors` promotes them): **MA0042** (a blocking call — `.Result`, `.Wait()`,
+`GetAwaiter().GetResult()`, a sync `File`/`Stream`/`Process` API with an async twin, a `using` over an
+`IAsyncDisposable` — inside an `async` method), **MA0045** (the same shapes inside a method that could become
+async), **MA0079**/**MA0080** (`await foreach` without the in-scope token or `.WithCancellation(...)`),
+**MA0040**/**MA0032** (a `CancellationToken` overload exists and the argument was omitted, with and without a token in
+scope) and **CA2016** (the CA twin of MA0040, already a warning under `AnalysisMode=All`). Fix shape: `await`, `await
+using`, the `*Async` twin, thread the token that is already in scope (`stoppingToken`, a hub's
+`Context.ConnectionAborted`, the class's own CTS); pass `CancellationToken.None` explicitly only where no token is
+architecturally available (a DI factory delegate, disposal) — the analyzers treat the explicit `None` as the
+documented "intentionally not propagating" opt-out. A `#pragma warning disable MA00xx // <reason>` is allowed only where
+the sync shape is forced by a contract — sync `Main` (Velopack), `IDisposable.Dispose` drains, a DI factory delegate,
+a constructor, a third-party sync member (`TokenCredential.GetToken`, `IChatClient.GetService`), a sync event
+handler, a zero-timeout `Wait(0)` poll — one reason per site, restored on the next line after the span. A text-literal
+ban on `.Result` would hit the DTO properties named `Result`; these rules are type-aware, which is why they replace a
+`BannedSymbols.txt` line.
+
 ### Custom Tools keep authoring, offering, and execution gates aligned
 
 Custom Tools follow the same endpoint/service/store separation as other areas, but their executable safety checks

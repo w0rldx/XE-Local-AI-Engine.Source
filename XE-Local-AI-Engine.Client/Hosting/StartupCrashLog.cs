@@ -15,22 +15,23 @@ internal static class StartupCrashLog
 {
     private const string LogFileName = "startup-crash.log";
 
-    internal static void Record(string message) =>
-        RecordTo(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+    internal static Task RecordAsync(string message, CancellationToken cancellationToken = default) =>
+        RecordToAsync(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 DesktopBootstrap.ApplicationDataFolderName,
                 "logs"),
-            message);
+            message,
+            cancellationToken);
 
     /// <summary>Directory-injected core (mirrors DesktopBootstrap's resolver seam) so the write path is testable without
     ///     touching the real per-user profile.</summary>
-    internal static void RecordTo(string directory, string message)
+    internal static async Task RecordToAsync(string directory, string message, CancellationToken cancellationToken = default)
     {
         try
         {
             Directory.CreateDirectory(directory);
             var line = string.Create(CultureInfo.InvariantCulture,
                 $"[{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}");
-            File.AppendAllText(Path.Combine(directory, LogFileName), line);
+            await File.AppendAllTextAsync(Path.Combine(directory, LogFileName), line, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                                               or ArgumentException or NotSupportedException)
@@ -39,9 +40,10 @@ internal static class StartupCrashLog
         }
     }
 
-    internal static void Record(string context, Exception exception)
+    internal static Task RecordAsync(string context, Exception exception, CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        Record($"{context}: {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}{exception.StackTrace}");
+        return RecordAsync($"{context}: {exception.GetType().FullName}: {exception.Message}{Environment.NewLine}{exception.StackTrace}",
+            cancellationToken);
     }
 }

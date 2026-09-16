@@ -34,7 +34,11 @@ internal static class StartupDiagnostics
             Directory.CreateDirectory(directory);
             var line = string.Create(CultureInfo.InvariantCulture,
                 $"[{TimeProvider.System.GetLocalNow():yyyy-MM-dd HH:mm:ss.fff zzz}] {message}{Environment.NewLine}");
+            // Forced sync: the only callers are the synchronous Fail/MissingRuntime result helpers and the synchronous
+            // Velopack Main path, none of which can await (see Program.Main).
+#pragma warning disable MA0045
             File.AppendAllText(Path.Combine(directory, LogFileName), line);
+#pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException
                                               or ArgumentException or NotSupportedException)

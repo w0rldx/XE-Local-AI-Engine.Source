@@ -922,7 +922,8 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
         {
             try
             {
-                await scopeKiller.KillAsync(unitName).ConfigureAwait(false);
+                // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
+                await scopeKiller.KillAsync(unitName, CancellationToken.None).ConfigureAwait(false);
             }
             catch (Exception exception)
             {
@@ -937,7 +938,9 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
         try
         {
-            await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id).ConfigureAwait(false);
+            // Explicitly not propagating: best-effort teardown must finish even when the run was cancelled.
+            await new LinuxSandboxProcessGroupKiller(_timeProvider).KillProcessGroupAsync(process.Id, CancellationToken.None)
+                .ConfigureAwait(false);
         }
         catch (InvalidOperationException)
         {

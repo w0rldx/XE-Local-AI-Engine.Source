@@ -66,9 +66,10 @@ internal sealed partial class SkillImportService : ISkillImportService
         _downloader = new GitHubSkillArchiveDownloader(httpClient, options);
     }
 
-    public Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default)
+    public async Task<SkillImportPreview> PreviewArchiveAsync(ReadOnlyMemory<byte> archive, CancellationToken cancellationToken = default)
     {
-        return BuildPreviewAsync(SkillArchiveReader.Read(archive, _options), UploadSourceUri, cancellationToken);
+        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken).ConfigureAwait(false);
+        return await BuildPreviewAsync(folders, UploadSourceUri, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<SkillImportPreview> PreviewArchiveAsync(Stream archive, CancellationToken cancellationToken = default)
@@ -90,7 +91,8 @@ internal sealed partial class SkillImportService : ISkillImportService
     public async Task<SkillImportPreview> PreviewGitHubRepositoryAsync(string owner, string repository, CancellationToken cancellationToken = default)
     {
         var archive = await _downloader.DownloadAsync(owner, repository, cancellationToken).ConfigureAwait(false);
-        return await BuildPreviewAsync(SkillArchiveReader.Read(archive, _options), $"github:{owner}/{repository}", cancellationToken).ConfigureAwait(false);
+        var folders = await SkillArchiveReader.ReadAsync(archive, _options, cancellationToken).ConfigureAwait(false);
+        return await BuildPreviewAsync(folders, $"github:{owner}/{repository}", cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<SkillImportResult> CommitAsync(SkillImportCommitRequest request, CancellationToken cancellationToken = default)

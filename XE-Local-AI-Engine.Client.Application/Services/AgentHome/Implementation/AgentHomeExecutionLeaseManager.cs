@@ -46,7 +46,9 @@ internal sealed class AgentHomeExecutionLeaseManager : IAgentHomeExecutionLeaseM
         }
 
         var gate = _gates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
+#pragma warning disable MA0032 // zero-timeout poll is a TryEnter, not a blocking wait: a token would change nothing
         if (!gate.Wait(millisecondsTimeout: 0))
+#pragma warning restore MA0032
         {
             return null;
         }

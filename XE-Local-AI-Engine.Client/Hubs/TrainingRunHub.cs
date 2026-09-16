@@ -62,5 +62,5 @@ public sealed class TrainingRunHub(ITrainingRunStore store, ITrainingRunEventBuf
     }
 
     public Task Unsubscribe(Guid runId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId), Context.ConnectionAborted);
 }

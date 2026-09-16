@@ -46,7 +46,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     }
 
     [Test]
-    public void RestoreMinimal_KeepsTheKeysGitRefusesToOperateWithout()
+    public async Task RestoreMinimal_KeepsTheKeysGitRefusesToOperateWithout()
     {
         // Minimal is NOT empty. A clone of a repository using a newer object format carries extensions.* keys that git
         // refuses to open the repository without, and core.repositoryformatversion is what selects that rule — so
@@ -63,7 +63,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	refstorage = reftable
                                         """);
 
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(workspace);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
         var config = ReadConfig(workspace);
 
         AssertEx.Contains(config, "repositoryformatversion = 1");
@@ -74,7 +74,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     }
 
     [Test]
-    public void RestoreMinimal_RemovesEveryExecBearingDefinitionIncludingOnesNobodyEnumerated()
+    public async Task RestoreMinimal_RemovesEveryExecBearingDefinitionIncludingOnesNobodyEnumerated()
     {
         var workspace = CreateWorkspace("""
                                         [core]
@@ -93,7 +93,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	path = /tmp/evil-config
                                         """);
 
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(workspace);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
         var config = ReadConfig(workspace);
 
         // Asserted as the absence of the PAYLOAD rather than of specific key names: the property is that no definition
@@ -105,7 +105,7 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
     }
 
     [Test]
-    public void RestoreMinimal_DoesNotReintroduceARemote()
+    public async Task RestoreMinimal_DoesNotReintroduceARemote()
     {
         // The clone drops origin deliberately — it points straight back at the trusted source repository — and a test
         // asserts the workspace has no remote. Restoring it here would quietly undo that isolation boundary.
@@ -117,13 +117,13 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	fetch = +refs/heads/*:refs/remotes/origin/*
                                         """);
 
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(workspace);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.False(ReadConfig(workspace).Contains("origin", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
-    public void RestoreMinimal_ClosesTheSecondConfigFileRatherThanLeavingItUnsanitised()
+    public async Task RestoreMinimal_ClosesTheSecondConfigFileRatherThanLeavingItUnsanitised()
     {
         // extensions.worktreeConfig makes git read .git/config.worktree, which this rewrite does not cover — so keeping
         // the extension would leave an unsanitised second file holding whatever the first one may no longer hold. A
@@ -135,16 +135,16 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
                                         	worktreeConfig = true
                                         """);
         var worktreeConfig = Path.Combine(workspace, ".git", "config.worktree");
-        File.WriteAllText(worktreeConfig, "[core]\n\tfsmonitor = /tmp/pwn.sh\n");
+        await File.WriteAllTextAsync(worktreeConfig, "[core]\n\tfsmonitor = /tmp/pwn.sh\n", CancellationToken.None).ConfigureAwait(false);
 
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(workspace);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
 
         AssertEx.False(File.Exists(worktreeConfig));
         AssertEx.False(ReadConfig(workspace).Contains("worktreeConfig", StringComparison.OrdinalIgnoreCase));
     }
 
     [Test]
-    public void RestoreMinimal_WhenTheConfigWasSwappedForASymlink_WritesTheRealFileRatherThanThroughTheLink()
+    public async Task RestoreMinimal_WhenTheConfigWasSwappedForASymlink_WritesTheRealFileRatherThanThroughTheLink()
     {
         // A command running in the workspace can replace the file with a link; an ordinary write would then follow it
         // out of the workspace and rewrite whatever it points at.
@@ -152,14 +152,14 @@ public sealed class DevelopmentWorkspaceGitConfigTests : IDisposable
 
         var workspace = CreateWorkspace("[core]\n\trepositoryformatversion = 0\n");
         var outside = Path.Combine(_root, "outside.txt");
-        File.WriteAllText(outside, "untouched");
+        await File.WriteAllTextAsync(outside, "untouched", CancellationToken.None).ConfigureAwait(false);
         var configPath = Path.Combine(workspace, ".git", "config");
         File.Delete(configPath);
         File.CreateSymbolicLink(configPath, outside);
 
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(workspace);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(workspace, CancellationToken.None).ConfigureAwait(false);
 
-        AssertEx.Equal("untouched", File.ReadAllText(outside));
+        AssertEx.Equal("untouched", await File.ReadAllTextAsync(outside, CancellationToken.None).ConfigureAwait(false));
         AssertEx.Null(File.ResolveLinkTarget(configPath, returnFinalTarget: false));
     }
 

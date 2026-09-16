@@ -117,7 +117,9 @@ internal sealed class IntegrationSseWriter : IDisposable
 
     private static void WriteJson(SseItem<IntegrationStreamEvent> item, IBufferWriter<byte> writer)
     {
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using var json = new Utf8JsonWriter(writer);
+#pragma warning restore MA0045
         // Compact JSON never contains a raw newline, so `data:` is always exactly one line whatever a payload holds.
         JsonSerializer.Serialize(json, item.Data, JsonOptions);
     }

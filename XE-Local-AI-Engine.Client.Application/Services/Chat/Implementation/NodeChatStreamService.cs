@@ -182,7 +182,9 @@ public sealed class NodeChatStreamService(
         using var registration = cancellationRegistry.Register(correlation, () =>
         {
             invocationRunner.Cancel(requestId);
+#pragma warning disable MA0045 // INodeChatStreamCancellationRegistry.Register takes a synchronous Action; a cancel callback has no async form to convert to.
             runCancellation.Cancel();
+#pragma warning restore MA0045
         });
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
@@ -250,12 +252,13 @@ public sealed class NodeChatStreamService(
             runCancellation,
             cancellationToken).ConfigureAwait(false);
 
-        var package = BuildRuntimePackage(request,
-            resolution,
-            ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
-            allowedTools,
-            runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
-            requestId);
+        var package = await BuildRuntimePackageAsync(request,
+                          resolution,
+                          ConversationContextBuilder.Build(conversation, userMessage, selectedPath, turnContext.Attachment, turnContext.Image, turnContext.Knowledge),
+                          allowedTools,
+                          runtimeNodeSettings.MaxMessageRequestTimeoutSeconds,
+                          requestId)
+                      .ConfigureAwait(false);
         var preRunDurationMs = Stopwatch.GetElapsedTime(harnessStartedTimestamp).TotalMilliseconds;
 
         var onTerminal = BuildMemoryExtractionHook(resolution, conversation, userMessage, selectedPath, package);
@@ -765,7 +768,7 @@ public sealed class NodeChatStreamService(
     // operator-controlled — the tool-call and stream-idle timeouts keep their defaults, and when the operator's value
     // equals the TimeoutSettings default the package (and therefore its config hash) is byte-identical to one built
     // without an explicit Timeouts.
-    private RuntimePackage BuildRuntimePackage(NodeChatStreamRequest request,
+    private async Task<RuntimePackage> BuildRuntimePackageAsync(NodeChatStreamRequest request,
         ChatTurnResolution resolution,
         IReadOnlyList<ConversationMessageDto> conversationContext,
         IReadOnlyList<AllowedToolDto>? allowedTools,
@@ -775,7 +778,7 @@ public sealed class NodeChatStreamService(
         var resolved = resolution.Resolved;
         return runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
             request.ConversationId,
-            resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
+            resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(localChatOptions.Value).ConfigureAwait(false),
             conversationContext,
             resolution.EffectiveModel,
             resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -908,7 +911,7 @@ public sealed class NodeChatStreamService(
     ///     the same versioned base scaffold a resolved, non-opted-out agent definition gets, so an unbound send is
     ///     covered identically to a bound one.
     /// </summary>
-    private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)
+    private static async Task<string> LoadResolvedSystemPromptAsync(LocalChatAgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(options.InstructionsResource))
@@ -916,18 +919,21 @@ public sealed class NodeChatStreamService(
             throw new ArgumentException("Instructions resource must be provided.", nameof(options));
         }
 
-        var persona = LoadEmbeddedResource(options.InstructionsResource);
-        var scaffold = LoadEmbeddedResource(BaseScaffoldResourceName);
+        var persona = await LoadEmbeddedResourceAsync(options.InstructionsResource).ConfigureAwait(false);
+        var scaffold = await LoadEmbeddedResourceAsync(BaseScaffoldResourceName).ConfigureAwait(false);
         return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
     }
 
-    private static string LoadEmbeddedResource(string resourceName)
+    // Reads an embedded manifest resource: the bytes are already in the loaded assembly image, so there is no I/O a
+    // caller could usefully abandon and nothing a token would shorten. CancellationToken.None is the analyzers'
+    // documented "intentionally not propagating" opt-out, not a claim about who may cancel the enclosing turn.
+    private static async Task<string> LoadEmbeddedResourceAsync(string resourceName)
     {
         var assembly = typeof(LocalChatAgentOptions).Assembly;
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-                           ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
+        await using var stream = assembly.GetManifestResourceStream(resourceName)
+                                 ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>

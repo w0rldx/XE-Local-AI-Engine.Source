@@ -328,10 +328,10 @@ public sealed class SupervisorBenchmarkReceiptTests
     }
 
     [Test]
-    public void RunningImageSha256_ForThisLiveProcess_IsLowercaseHex()
+    public async Task RunningImageSha256_ForThisLiveProcess_IsLowercaseHex()
     {
         // The digest is read back from the RUNNING image, so this test process is a genuine subject for it.
-        var sha256 = LlamaServerProcessSupervisor.TryComputeRunningImageSha256(Environment.ProcessId);
+        var sha256 = await LlamaServerProcessSupervisor.TryComputeRunningImageSha256Async(Environment.ProcessId);
 
         var digest = AssertEx.NotNull(sha256);
         AssertEx.Equal(expected: 64, digest.Length);
@@ -343,17 +343,17 @@ public sealed class SupervisorBenchmarkReceiptTests
     [Arguments(0)]
     [Arguments(-1)]
     [Arguments(int.MaxValue)]
-    public void RunningImageSha256_WhenTheImageCannotBeRead_IsNullRatherThanAThrow(int processId)
+    public async Task RunningImageSha256_WhenTheImageCannotBeRead_IsNullRatherThanAThrow(int processId)
     {
-        AssertEx.Null(LlamaServerProcessSupervisor.TryComputeRunningImageSha256(processId));
+        AssertEx.Null(await LlamaServerProcessSupervisor.TryComputeRunningImageSha256Async(processId));
     }
 
     [Test]
-    public void BuildBenchmarkLaunchReceipt_WithEveryUnreadableFactMissing_StillProducesAReceipt()
+    public async Task BuildBenchmarkLaunchReceipt_WithEveryUnreadableFactMissing_StillProducesAReceipt()
     {
         // A receipt must never be the reason a healthy measurement fails, so every fact it cannot read has to degrade
         // to null instead of throwing — including the running-image digest for a process that does not exist.
-        var receipt = LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceipt(GpuVariant.Cpu,
+        var receipt = await LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceiptAsync(GpuVariant.Cpu,
             executableVersion: null,
             manifestSha256: null,
             LlamaServerLaunchProjection.From(GpuVariant.Cpu, ResolvedLaunchArguments.Explore(), plan: null),

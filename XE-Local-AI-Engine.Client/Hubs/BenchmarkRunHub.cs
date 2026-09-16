@@ -63,5 +63,5 @@ public sealed class BenchmarkRunHub(IBenchmarkStore store, IBenchmarkEventBuffer
     }
 
     public Task Unsubscribe(Guid runId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, RunGroup(runId), Context.ConnectionAborted);
 }

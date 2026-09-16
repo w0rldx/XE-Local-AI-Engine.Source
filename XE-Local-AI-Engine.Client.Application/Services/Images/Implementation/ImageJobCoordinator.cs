@@ -211,7 +211,9 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
 
         try
         {
-            await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout).ConfigureAwait(false);
+            // Explicitly not propagating: this is the shutdown drain itself, so cancelling it is exactly what must
+            // not happen — the per-job tokens in _inFlight were already signalled by CancelAllInFlight above.
+            await Task.WhenAll(_runTasks.Values.ToArray()).WaitAsync(ShutdownDrainTimeout, CancellationToken.None).ConfigureAwait(false);
         }
         catch (TimeoutException)
         {
@@ -229,7 +231,11 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
         {
             try
             {
+                // Forced sync: CancelAllInFlight is shared with Dispose(), which cannot await, and CancelAsync would
+                // also move callback execution off this thread ahead of ReleaseDisposables.
+#pragma warning disable MA0045 // forced sync: shared with IDisposable.Dispose (see comment above)
                 cts.Cancel();
+#pragma warning restore MA0045
             }
             catch (ObjectDisposedException)
             {
@@ -531,7 +537,8 @@ public sealed class ImageJobCoordinator : IImageJobCoordinator, IDisposable, IAs
     {
         try
         {
-            await _eventPublisher.PublishStatusAsync(payload).ConfigureAwait(false);
+            // Explicitly not propagating: this is a fire-and-forget status push with no caller left to cancel it.
+            await _eventPublisher.PublishStatusAsync(payload, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

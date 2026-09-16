@@ -345,7 +345,9 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
 
     public async Task<IReadOnlyList<AllowedToolDto>> GetOfferedToolsAsync(string? activeModelId, bool isCloudModel, CancellationToken cancellationToken = default)
     {
+#pragma warning disable MA0042 // The synchronous overload IS this method's base: it is the pure in-memory built-in + MCP view, which the async overload extends with the custom-tool store read. Calling the async twin here recurses.
         var baseOffer = GetOfferedTools(activeModelId, isCloudModel);
+#pragma warning restore MA0042
 
         // Custom tools are merged ONLY in the tool-capable branch (mirroring the MCP/knowledge gating) and ONLY for a
         // node-local model — a custom command/fetch tool can reach local data and the host, so it is never offered to a
@@ -526,6 +528,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
         // UNGATED by capability AND by the node kill-switch: an authored custom tool exists on the node regardless of the
         // active model or the kill-switch, so CRUD collision validation and the agent form see the full name space.
         var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+#pragma warning disable MA0042 // The synchronous overload IS this method's base: it is the pure in-memory built-in + MCP view, which the async overload extends with the custom-tool store read. Calling the async twin here recurses.
         if (customDescriptors.Count == 0)
         {
             return GetKnownToolNames();
@@ -536,11 +539,13 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
             .. GetKnownToolNames(),
             .. customDescriptors.Select(static descriptor => descriptor.Name)
         ];
+#pragma warning restore MA0042
     }
 
     public async Task<IReadOnlyList<LocalToolCatalogEntry>> GetKnownToolsAsync(CancellationToken cancellationToken = default)
     {
         var customDescriptors = await GetEnabledCustomDescriptorsAsync(cancellationToken).ConfigureAwait(false);
+#pragma warning disable MA0042 // The synchronous overload IS this method's base: it is the pure in-memory built-in + MCP view, which the async overload extends with the custom-tool store read. Calling the async twin here recurses.
         if (customDescriptors.Count == 0)
         {
             return GetKnownTools();
@@ -559,6 +564,7 @@ internal sealed class LocalToolOfferProvider : ILocalToolOfferProvider
                 IsFixedCustomTool = descriptor.IsFixedCustomTool
             })
         ];
+#pragma warning restore MA0042
     }
 
     // Reads the enabled, acknowledged custom-tool offer descriptors LIVE from the scoped catalog through a fresh scope

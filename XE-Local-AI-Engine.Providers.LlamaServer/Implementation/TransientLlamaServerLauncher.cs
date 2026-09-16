@@ -169,7 +169,7 @@ internal sealed class TransientLlamaServerLauncher(
                 _logger.LogDebug(exception, "The transient evaluation runtime did not report an effective context window.");
             }
 
-            receipt = LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceipt(variant,
+            receipt = await LlamaServerProcessSupervisor.BuildBenchmarkLaunchReceiptAsync(variant,
                 manifest.Version ?? binary.Version,
                 manifest.ExecutableSha256,
                 LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
@@ -186,7 +186,7 @@ internal sealed class TransientLlamaServerLauncher(
                 effectiveContext,
                 request.LaunchPolicy,
                 processId,
-                capabilityDecision.OmittedOptions);
+                capabilityDecision.OmittedOptions).ConfigureAwait(false);
             var session = new TransientLlamaServerEvaluationSession(spec.BaseAddress, endpointModelAlias, model, receipt);
             await bindProvenance(session.Provenance, ct).ConfigureAwait(false);
             value = await body(session, ct).ConfigureAwait(false);

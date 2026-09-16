@@ -27,7 +27,8 @@ public sealed partial class WorkerHubConnection
 
     private async Task<string?> GetRequiredAccessTokenAsync()
     {
-        if (!await EnsureFreshAccessTokenAsync().ConfigureAwait(false))
+        // Explicitly not propagating: the SignalR reconnect callbacks this path serves carry no token.
+        if (!await EnsureFreshAccessTokenAsync(CancellationToken.None).ConfigureAwait(false))
         {
             throw new InvalidOperationException("No valid access token available. Re-pairing is required.");
         }
@@ -156,7 +157,8 @@ public sealed partial class WorkerHubConnection
         bool tokenIsFresh;
         try
         {
-            tokenIsFresh = await EnsureFreshAccessTokenAsync().ConfigureAwait(false);
+            // Explicitly not propagating: OnReconnectedAsync is a SignalR callback and carries no token.
+            tokenIsFresh = await EnsureFreshAccessTokenAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch (WorkerCredentialsRevokedException exception)
         {
@@ -174,10 +176,11 @@ public sealed partial class WorkerHubConnection
         var clientNodeId = await _tokenStore.GetClientNodeIdAsync().ConfigureAwait(false);
         if (clientNodeId is not null)
         {
-            await SendWorkerHelloAsync(clientNodeId.Value).ConfigureAwait(false);
-            await _capabilityReporter.Value.ReportToApiAsync().ConfigureAwait(false);
-            await RegisterNodeKeyAsync().ConfigureAwait(false);
-            await _deadLetterFlushService.FlushAsync().ConfigureAwait(false);
+            // Explicitly not propagating: the reconnect handshake has no token to inherit (see above).
+            await SendWorkerHelloAsync(clientNodeId.Value, CancellationToken.None).ConfigureAwait(false);
+            await _capabilityReporter.Value.ReportToApiAsync(CancellationToken.None).ConfigureAwait(false);
+            await RegisterNodeKeyAsync(CancellationToken.None).ConfigureAwait(false);
+            await _deadLetterFlushService.FlushAsync(CancellationToken.None).ConfigureAwait(false);
         }
 
         _connectionState.TransitionTo(WorkerConnectionState.Connected);

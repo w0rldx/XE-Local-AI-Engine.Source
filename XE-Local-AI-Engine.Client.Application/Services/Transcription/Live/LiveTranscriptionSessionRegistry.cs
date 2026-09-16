@@ -477,7 +477,9 @@ public sealed class LiveTranscriptionSessionRegistry : ILiveTranscriptionSession
             var drained = true;
             try
             {
-                await chain.WaitAsync(LaneDrainTimeout, _timeProvider).ConfigureAwait(false);
+                // Explicitly not propagating: this drain is what the abort tokens already triggered, so passing
+                // session.Abort.Token or lane.Abort.Token would abandon the lane the flush below must not race.
+                await chain.WaitAsync(LaneDrainTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
             }
             catch (TimeoutException)
             {

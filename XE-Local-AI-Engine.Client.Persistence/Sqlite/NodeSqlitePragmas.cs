@@ -60,6 +60,9 @@ public static class NodeSqlitePragmas
     /// <summary>Applies the pragmas to an already-open connection (synchronous path — EF may open synchronously).</summary>
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",
         Justification = "PRAGMA text is composed only from a validated internal integer and fixed keywords — never user input; PRAGMAs do not accept bound parameters for these values.")]
+    // Forced sync: this is the documented sync twin of ApplyAsync, called from EF Core's synchronous
+    // DbConnectionInterceptor.ConnectionOpened (NodeSqliteConnectionInterceptor) which has no async shape.
+#pragma warning disable MA0045
     public static void Apply(DbConnection connection, NodeSqlitePragmaSettings settings, ILogger? logger)
     {
         ArgumentNullException.ThrowIfNull(connection);
@@ -92,6 +95,7 @@ public static class NodeSqlitePragmas
             command.ExecuteNonQuery();
         });
     }
+#pragma warning restore MA0045
 
     /// <summary>Applies the pragmas to an already-open connection (async path).</summary>
     [SuppressMessage("Security", "CA2100:Review SQL queries for security vulnerabilities",

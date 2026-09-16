@@ -402,7 +402,9 @@ internal sealed class SandboxLifecycleRegistry
             // directory processes are still writing to is how a teardown leaves a half-removed jail behind.
             if (inFlight.ScopeUnitName is { } unitName)
             {
+#pragma warning disable MA0045 // forced sync: the jail directory is deleted below, see the comment above
                 scopeKiller?.Kill(unitName);
+#pragma warning restore MA0045
             }
 
             SandboxProcessTree.TreeKill(inFlight.Process);

@@ -196,7 +196,11 @@ internal sealed class SandboxScopeUnitKiller : ISandboxScopeUnitKiller
             return durations;
         }
 
+        // Forced sync: ReadActiveDurations serves ListEngineOwnedUnits, the synchronous twin this class carries
+        // for the disposal path (see Kill above); the orphan reaper's startup sweep enumerates it directly.
+#pragma warning disable MA0045 // forced sync: synchronous ListEngineOwnedUnits twin (see comment above)
         var output = process.StandardOutput.ReadToEnd();
+#pragma warning restore MA0045
         if (!process.WaitForExit(ListTimeout))
         {
             TryKillHelper(process);

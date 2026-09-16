@@ -512,7 +512,7 @@ public sealed class TrainingExportService(
             _workspace.WorkDirectory(plan.RunId),
             Guid.NewGuid().ToString("N"),
             ggufPyDirectory));
-        using var registration = cancellationToken.Register(handle.KillGroup);
+        await using var registration = cancellationToken.Register(handle.KillGroup).ConfigureAwait(false);
 
         string? protocolError = null;
         var tail = new Queue<string>();

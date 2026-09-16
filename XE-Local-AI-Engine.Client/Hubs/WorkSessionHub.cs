@@ -98,7 +98,7 @@ public sealed class WorkSessionHub(IWorkSessionService service, IOptions<WorkSes
     }
 
     public Task UnsubscribeSession(Guid sessionId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, WorkSessionHubGroups.Session(sessionId), Context.ConnectionAborted);
 }
 
 internal static class WorkSessionHubGroups

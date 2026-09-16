@@ -129,9 +129,9 @@ public sealed class BaseArtifactServiceTests : IDisposable
     }
 
     [Test]
-    public void Cancel_WhenNothingIsRunning_ReportsFalse()
+    public async Task CancelAsync_WhenNothingIsRunning_ReportsFalse()
     {
-        AssertEx.False(Service().Cancel(Guid.NewGuid()));
+        AssertEx.False(await Service().CancelAsync(Guid.NewGuid()));
     }
 
     private BaseArtifactService Service()

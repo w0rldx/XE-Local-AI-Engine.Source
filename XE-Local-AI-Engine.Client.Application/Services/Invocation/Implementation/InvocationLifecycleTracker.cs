@@ -137,7 +137,9 @@ public sealed class InvocationLifecycleTracker
             }
         }
 
+#pragma warning disable MA0045 // Backs IInvocationRunner.Cancel, a synchronous void invoked from the chat cancellation registry's Action callback.
         invocationCancellationTokenSource?.Cancel();
+#pragma warning restore MA0045
         CancelPendingToolCalls(invocationId);
     }
 

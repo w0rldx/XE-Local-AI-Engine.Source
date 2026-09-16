@@ -78,7 +78,7 @@ internal static class DevelopmentWorkspaceGitConfig
     ///     The workspace's <c>.git</c> is a symbolic link, which means the path the engine is about to rewrite is not
     ///     the one it created.
     /// </exception>
-    public static void RestoreMinimal(string workspacePath)
+    public static async Task RestoreMinimalAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workspacePath);
 
@@ -110,7 +110,7 @@ internal static class DevelopmentWorkspaceGitConfig
         DeleteIfPresent(configPath);
         DeleteIfPresent(Path.Combine(gitDirectory, "config.worktree"));
 
-        File.WriteAllText(configPath, Render(preserved), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        await File.WriteAllTextAsync(configPath, Render(preserved), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>

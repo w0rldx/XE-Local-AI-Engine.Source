@@ -104,7 +104,7 @@ public sealed class DevWorkflowRunHub(IDevWorkflowStore store, IDevWorkflowRunSe
     }
 
     public Task UnsubscribeRun(Guid runId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, DevWorkflowHubGroups.Run(runId), Context.ConnectionAborted);
 }
 
 internal static class DevWorkflowHubGroups

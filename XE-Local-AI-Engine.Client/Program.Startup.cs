@@ -39,7 +39,9 @@ public sealed partial class Program
             var dbContext = scope.ServiceProvider.GetRequiredService<NodeChatDbContext>();
             var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CanvasWorkflowImport));
 
-            return await CanvasWorkflowImport.ReadAsync(dbContext, logger).ConfigureAwait(false);
+            // CancellationToken.None: the startup path has no token — it runs before the host (and its
+            // ApplicationStopping) exists, and abandoning it half-done would leave the node partially migrated.
+            return await CanvasWorkflowImport.ReadAsync(dbContext, logger, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -69,7 +71,8 @@ public sealed partial class Program
             var store = scope.ServiceProvider.GetRequiredService<IGraphWorkflowStore>();
             var logger = scope.ServiceProvider.GetRequiredService<ILoggerFactory>().CreateLogger(typeof(CanvasWorkflowImport));
 
-            await CanvasWorkflowImport.ImportAsync(definitions, store, pending, logger).ConfigureAwait(false);
+            // CancellationToken.None: no token exists on the startup path (see ReadPendingCanvasWorkflowsAsync).
+            await CanvasWorkflowImport.ImportAsync(definitions, store, pending, logger, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -85,11 +88,13 @@ public sealed partial class Program
 
         // Snapshot the node database before applying pending migrations, in the same scope. Best-effort — a backup
         // failure is logged and swallowed inside the service, so it can never block migration or brick startup.
+        // CancellationToken.None throughout the migration path: no token exists before the host is built, and a
+        // half-applied schema migration is worse than a slow one.
         var backupService = scope.ServiceProvider.GetRequiredService<INodeDbBackupService>();
-        await backupService.BackupBeforeMigrationAsync().ConfigureAwait(false);
+        await backupService.BackupBeforeMigrationAsync(CancellationToken.None).ConfigureAwait(false);
 
         var migrationService = scope.ServiceProvider.GetRequiredService<NodeChatMigrationRecoveryService>();
-        await migrationService.MigrateAsync().ConfigureAwait(false);
+        await migrationService.MigrateAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     private static async Task ApplyNodeIdentityMigrationsAsync(IServiceProvider services)
@@ -99,7 +104,8 @@ public sealed partial class Program
         await using var scope = services.CreateAsyncScope();
         var initializationService = scope.ServiceProvider.GetRequiredService<NodeIdentityInitializationService>();
 
-        await initializationService.MigrateAndSeedAsync().ConfigureAwait(false);
+        // CancellationToken.None: no token exists on the startup/migration path (see ApplyNodeChatMigrationsAsync).
+        await initializationService.MigrateAndSeedAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     private static async Task RecoverInterruptedNodeChatMessagesAsync(IServiceProvider services)
@@ -110,7 +116,9 @@ public sealed partial class Program
         var recoveryService = scope.ServiceProvider.GetRequiredService<NodeChatRestartRecoveryService>();
         var timeProvider = scope.ServiceProvider.GetRequiredService<TimeProvider>();
 
-        await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds()).ConfigureAwait(false);
+        // CancellationToken.None: no token exists on the startup path.
+        await recoveryService.RecoverInterruptedMessagesAsync(timeProvider.GetUtcNow().ToUnixTimeMilliseconds(), CancellationToken.None)
+                     .ConfigureAwait(false);
     }
 
     private static async Task ReconcileStaleScheduledRunsAsync(IServiceProvider services)
@@ -123,8 +131,10 @@ public sealed partial class Program
         await using var scope = services.CreateAsyncScope();
         var runStore = scope.ServiceProvider.GetRequiredService<IScheduledJobRunStore>();
 
+        // CancellationToken.None: no token exists on the startup path.
         var reconciledCount = await runStore.MarkStaleActiveRunsAsync(ScheduledRunStatus.Failed,
-            "Run was interrupted by a node restart and reconciled at startup.").ConfigureAwait(false);
+            "Run was interrupted by a node restart and reconciled at startup.",
+            CancellationToken.None).ConfigureAwait(false);
 
         if (reconciledCount > 0)
         {
@@ -192,7 +202,11 @@ public sealed partial class Program
                 var hardCeiling = configuredTimeout + TimeSpan.FromSeconds(5);
 
                 var drainTask = drainService.DrainAsync(CancellationToken.None);
-                if (!drainTask.Wait(hardCeiling))
+
+                // ApplicationStopping.Register takes a synchronous Action<object?>: the drain cannot be awaited here, so the
+                // hard ceiling is a blocking wait by contract. The host is already stopping, so there is no token to honor.
+#pragma warning disable MA0045 // ApplicationStopping.Register callback is synchronous by contract; awaiting the drain is not possible here.
+                if (!drainTask.Wait(hardCeiling, CancellationToken.None))
                 {
                     Log.Warning("Worker shutdown drain exceeded its hard ceiling of {HardCeilingSeconds}s; abandoning remaining steps.",
                         hardCeiling.TotalSeconds);
@@ -200,6 +214,7 @@ public sealed partial class Program
                 }
 
                 var result = drainTask.GetAwaiter().GetResult();
+#pragma warning restore MA0045
                 if (!result.Succeeded)
                 {
                     Log.Warning("Worker shutdown drain completed with incomplete steps. Diagnostics: {Diagnostics}.", result.Diagnostics);

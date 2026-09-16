@@ -380,8 +380,13 @@ public sealed class NodeRuntimeSettings : INodeRuntimeSettings
         return await _store.LoadAsync(cancellationToken).ConfigureAwait(false) ?? new StoredNodeSettings();
     }
 
+    // The synchronous property readers above cannot await, so they go through NodeSettingsStore.Load — the
+    // XML-doc-declared synchronous twin of LoadAsync kept for exactly this composition/startup path. The token is
+    // passed explicitly as None: a property getter has none to forward.
     private StoredNodeSettings LoadStored()
     {
-        return _store.Load() ?? new StoredNodeSettings();
+#pragma warning disable MA0045 // Documented synchronous twin (NodeSettingsStore.Load beside LoadAsync); the callers are synchronous property getters.
+        return _store.Load(CancellationToken.None) ?? new StoredNodeSettings();
+#pragma warning restore MA0045
     }
 }

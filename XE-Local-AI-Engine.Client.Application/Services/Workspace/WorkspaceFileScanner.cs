@@ -365,7 +365,9 @@ internal static class WorkspaceFileScanner
                 int read;
                 try
                 {
+#pragma warning disable MA0045 // ListFiles/SearchText and the Func<int, string, bool> visit callback are synchronous by contract; see the remark on ForEachTextLine.
                     read = reader.Read(characters, 0, characters.Length);
+#pragma warning restore MA0045
                 }
                 catch (IOException)
                 {
@@ -413,7 +415,9 @@ internal static class WorkspaceFileScanner
         }
         finally
         {
+#pragma warning disable MA0045 // Synchronous scanner (see above); a sync method cannot await DisposeAsync.
             stream?.Dispose();
+#pragma warning restore MA0045
         }
     }
 

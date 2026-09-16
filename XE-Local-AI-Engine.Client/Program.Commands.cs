@@ -166,7 +166,9 @@ public sealed partial class Program
                 standardOutput).ConfigureAwait(false);
         }
 
-        var evidence = DesktopPortStore.ReadReadyEvidence(dataDirectory);
+        // CancellationToken.None throughout this command: status runs pre-DI, with no host and no token to inherit,
+        // and every remote call below is already bounded by the 2 s client timeout before the process exits.
+        var evidence = await DesktopPortStore.ReadReadyEvidenceAsync(dataDirectory, CancellationToken.None).ConfigureAwait(false);
         if (evidence.State == ReadyEvidenceState.Invalid)
         {
             await standardError.WriteLineAsync("The readiness file is invalid or unreadable.").ConfigureAwait(false);
@@ -187,18 +189,19 @@ public sealed partial class Program
                 using var fallbackClient = injectedClient is null ? new HttpClient() : null;
                 var client = injectedClient ?? fallbackClient!;
                 client.Timeout = TimeSpan.FromSeconds(2);
-                using var readyResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/health/ready")).ConfigureAwait(false);
+                using var readyResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/health/ready"), CancellationToken.None).ConfigureAwait(false);
                 running = readyResponse.IsSuccessStatusCode;
                 if (running)
                 {
-                    using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status")).ConfigureAwait(false);
+                    using var authResponse = await client.GetAsync(new Uri(new Uri(ready.Url), "/api/local/v1/auth/status"), CancellationToken.None)
+                                                  .ConfigureAwait(false);
                     if (!authResponse.IsSuccessStatusCode)
                     {
                         running = false;
                     }
                     else
                     {
-                        var authStatus = await authResponse.Content.ReadFromJsonAsync<NodeAuthStatusResponse>().ConfigureAwait(false);
+                        var authStatus = await authResponse.Content.ReadFromJsonAsync<NodeAuthStatusResponse>(CancellationToken.None).ConfigureAwait(false);
                         if (authStatus is null)
                         {
                             running = false;

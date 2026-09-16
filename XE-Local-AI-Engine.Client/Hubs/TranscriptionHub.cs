@@ -197,7 +197,7 @@ public sealed class TranscriptionHub(
     {
         Untrack(sessionId);
         _live.NoteBrowserDetached(sessionId, Context.ConnectionId);
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId));
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, TranscriptionHubGroups.Session(sessionId), Context.ConnectionAborted);
     }
 
     /// <summary>

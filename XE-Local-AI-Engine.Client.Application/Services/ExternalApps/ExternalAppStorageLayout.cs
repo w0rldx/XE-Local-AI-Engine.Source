@@ -74,7 +74,7 @@ internal sealed class ExternalAppStorageLayout
     ///         temp file and an atomic rename. It must run only while no container of the instance exists.
     ///     </para>
     /// </summary>
-    public ExternalAppStoragePaths Prepare(Guid instanceId, ApplicationManifest manifest)
+    public async Task<ExternalAppStoragePaths> PrepareAsync(Guid instanceId, ApplicationManifest manifest, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(manifest);
 
@@ -90,7 +90,7 @@ internal sealed class ExternalAppStorageLayout
 
             foreach (var file in service.Files)
             {
-                Materialize(paths, service.Name, file);
+                await MaterializeAsync(paths, service.Name, file, cancellationToken).ConfigureAwait(false);
             }
         }
 
@@ -99,7 +99,7 @@ internal sealed class ExternalAppStorageLayout
 
     /// <summary>
     ///     Deletes the instance's writable volumes and nothing else — the reset contract. <c>files/</c> survives, and
-    ///     the caller re-enters <see cref="Prepare" /> afterwards, which re-verifies every surviving asset rather than
+    ///     the caller re-enters <see cref="PrepareAsync" /> afterwards, which re-verifies every surviving asset rather than
     ///     trusting it.
     /// </summary>
     public void DeleteVolumes(Guid instanceId)
@@ -191,7 +191,7 @@ internal sealed class ExternalAppStorageLayout
     ///     Re-validates every bind source of a plan, immediately before the daemon is asked to create the container
     ///     that binds them.
     ///     <para>
-    ///         <see cref="Prepare" /> already checked these components, but a plan crosses asynchronous daemon calls
+    ///         <see cref="PrepareAsync" /> already checked these components, but a plan crosses asynchronous daemon calls
     ///         and a path string resolves nothing: a component replaced by a link in between would hand the daemon a
     ///         bind source outside the instance directory, and nothing downstream would notice.
     ///     </para>
@@ -238,7 +238,7 @@ internal sealed class ExternalAppStorageLayout
         return Path.Combine(segments);
     }
 
-    private void Materialize(ExternalAppStoragePaths paths, string serviceName, ApplicationFile file)
+    private async Task MaterializeAsync(ExternalAppStoragePaths paths, string serviceName, ApplicationFile file, CancellationToken cancellationToken)
     {
         var relative = ValidateRelativeName(file.Source, "files[].source");
         var target = paths.FilePath(serviceName, relative);
@@ -271,18 +271,18 @@ internal sealed class ExternalAppStorageLayout
             // then be handed to the daemon as a read-only bind source pointing outside the instance directory.
             EnsureNotALink(target);
 
-            if (string.Equals(HashFile(target), expected, StringComparison.Ordinal))
+            if (string.Equals(await HashFileAsync(target, cancellationToken).ConfigureAwait(false), expected, StringComparison.Ordinal))
             {
                 return;
             }
         }
 
-        WriteThroughTempFile(target, content, expected);
+        await WriteThroughTempFileAsync(target, content, expected, cancellationToken).ConfigureAwait(false);
     }
 
-    private void WriteThroughTempFile(string target, byte[] content, string expected)
+    private async Task WriteThroughTempFileAsync(string target, byte[] content, string expected, CancellationToken cancellationToken)
     {
-        var temporary = CreateTempFile(target, content);
+        var temporary = await CreateTempFileAsync(target, content, cancellationToken).ConfigureAwait(false);
         try
         {
             EnsureNoLinksOnPath(target);
@@ -297,22 +297,23 @@ internal sealed class ExternalAppStorageLayout
             TryDeleteTempFile(temporary);
         }
 
-        if (!string.Equals(HashFile(target), expected, StringComparison.Ordinal))
+        if (!string.Equals(await HashFileAsync(target, cancellationToken).ConfigureAwait(false), expected, StringComparison.Ordinal))
         {
             throw new ExternalAppStorageException($"The catalog asset written to '{target}' does not hash to the value the manifest declares.");
         }
     }
 
-    private static string CreateTempFile(string target, byte[] content)
+    private static async Task<string> CreateTempFileAsync(string target, byte[] content, CancellationToken cancellationToken)
     {
         for (var attempt = 0; attempt < MaxTempAttempts; attempt++)
         {
             var candidate = target + ".tmp-" + attempt.ToString(CultureInfo.InvariantCulture);
             try
             {
-                using (var stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                // CreateNew + FileShare.None is what keeps the write from following a link someone else planted.
+                await using (var stream = new FileStream(candidate, FileMode.CreateNew, FileAccess.Write, FileShare.None))
                 {
-                    stream.Write(content);
+                    await stream.WriteAsync(content, cancellationToken).ConfigureAwait(false);
                 }
 
                 SecureFilePermissions.Apply(candidate);
@@ -345,12 +346,12 @@ internal sealed class ExternalAppStorageLayout
         }
     }
 
-    private static string HashFile(string path)
+    private static async Task<string> HashFileAsync(string path, CancellationToken cancellationToken)
     {
         try
         {
-            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            await using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, cancellationToken).ConfigureAwait(false));
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

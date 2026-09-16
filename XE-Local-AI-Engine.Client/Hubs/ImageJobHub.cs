@@ -44,6 +44,6 @@ public sealed class ImageJobHub(IImageJobCoordinator coordinator) : Hub
     /// <summary>Removes this connection from a job's group (e.g. when the gallery closes a job view).</summary>
     public Task Unsubscribe(Guid jobId)
     {
-        return Groups.RemoveFromGroupAsync(Context.ConnectionId, JobGroup(jobId));
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, JobGroup(jobId), Context.ConnectionAborted);
     }
 }

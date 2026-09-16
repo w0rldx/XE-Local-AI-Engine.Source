@@ -44,7 +44,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 
     [SuppressMessage("Reliability", "CA2000:Dispose objects before losing scope",
         Justification = "The successful FileStream constructor takes ownership of the SafeFileHandle; every constructor failure disposes it below.")]
-    public static ValidatedGgufImportSource Open(string sourcePath, string modelsDirectory)
+    public static async Task<ValidatedGgufImportSource> OpenAsync(string sourcePath, string modelsDirectory, CancellationToken cancellationToken)
     {
         try
         {
@@ -75,7 +75,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 var stream = new FileStream(handle, FileAccess.Read, bufferSize: 81920, openedHandle.IsAsync);
                 try
                 {
-                    var identity = CaptureIdentity(handle, canonicalPath, stream.Length);
+                    var identity = await CaptureIdentityAsync(handle, canonicalPath, stream.Length, cancellationToken).ConfigureAwait(false);
                     var lastWriteUtc = File.GetLastWriteTimeUtc(canonicalPath);
                     if (stream.Length <= 0)
                     {
@@ -86,7 +86,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 }
                 catch
                 {
-                    stream.Dispose();
+                    await stream.DisposeAsync().ConfigureAwait(false);
                     throw;
                 }
             }
@@ -111,14 +111,14 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
     public void Rewind() =>
         _stream.Position = 0;
 
-    public void VerifyStillCurrent()
+    public async Task VerifyStillCurrentAsync(CancellationToken cancellationToken)
     {
         try
         {
             EnsureNoReparseComponents(_canonicalPath);
             using var currentHandle = OpenNoFollow(_canonicalPath).Handle;
             var currentLength = RandomAccess.GetLength(currentHandle);
-            var current = CaptureIdentity(currentHandle, _canonicalPath, currentLength);
+            var current = await CaptureIdentityAsync(currentHandle, _canonicalPath, currentLength, cancellationToken).ConfigureAwait(false);
             if (current != _identity || currentLength != Length || File.GetLastWriteTimeUtc(_canonicalPath) != _lastWriteUtc)
             {
                 throw new GgufImportException(GgufImportRejectionCode.InvalidSource, "The selected source changed while it was being copied.");
@@ -207,7 +207,7 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
 
     [SuppressMessage("Sonar Code Smell", "S3869:SafeHandle instances should not use DangerousGetHandle",
         Justification = "Linux /proc exposes identity for the live owned descriptor; the handle is never released or transferred here.")]
-    private static SourceIdentity CaptureIdentity(SafeFileHandle handle, string canonicalPath, long length)
+    private static async Task<SourceIdentity> CaptureIdentityAsync(SafeFileHandle handle, string canonicalPath, long length, CancellationToken cancellationToken)
     {
         if (OperatingSystem.IsLinux())
         {
@@ -219,7 +219,8 @@ internal sealed class ValidatedGgufImportSource : IAsyncDisposable
                 throw new UnauthorizedAccessException("The selected source handle did not resolve to the validated path.");
             }
 
-            var fields = File.ReadAllLines(string.Create(CultureInfo.InvariantCulture, $"/proc/self/fdinfo/{descriptor}"));
+            var fields = await File.ReadAllLinesAsync(string.Create(CultureInfo.InvariantCulture, $"/proc/self/fdinfo/{descriptor}"), cancellationToken)
+                                   .ConfigureAwait(false);
             var mount = ReadField(fields, "mnt_id:");
             var inode = ReadField(fields, "ino:");
             if (mount is not null && inode is not null)

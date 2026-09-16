@@ -441,7 +441,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
                 return new StableDiffusionRuntimeException("The stable-diffusion.cpp runtime download failed integrity verification.");
             }
 
-            ExtractArchive(tempArchive, backendDir);
+            await ExtractArchiveAsync(tempArchive, backendDir, ct).ConfigureAwait(false);
             return null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -498,7 +498,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ExtractArchive(string archivePath, string backendDir)
+    private static async Task ExtractArchiveAsync(string archivePath, string backendDir, CancellationToken ct)
     {
         // Every stable-diffusion.cpp asset is a .zip (unlike llama.cpp's tar.gz on Linux). Extract into a temp sibling
         // then atomically move into place so a partial extract can't masquerade as a cached install.
@@ -506,7 +506,7 @@ public sealed class StableDiffusionCppBinaryManager : IStableDiffusionBinaryMana
         Directory.CreateDirectory(stagingDir);
         try
         {
-            ZipFile.ExtractToDirectory(archivePath, stagingDir);
+            await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
 
             Directory.CreateDirectory(Path.GetDirectoryName(backendDir.TrimEnd(Path.DirectorySeparatorChar))!);
             if (Directory.Exists(backendDir))

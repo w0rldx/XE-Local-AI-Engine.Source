@@ -85,7 +85,7 @@ internal sealed partial class ExternalAppService
 
             using var hold = HoldPorts(manifest);
             var plan = BuildPlan(manifest, instanceId, variables, identity, hold, bridgeGrant);
-            PrepareStorage(instanceId, manifest);
+            await PrepareStorageAsync(instanceId, manifest, cancellationToken).ConfigureAwait(false);
 
             try
             {
@@ -144,7 +144,8 @@ internal sealed partial class ExternalAppService
                 return;
             }
 
-            var progress = new Progress<ContainerPullProgress>(report => PublishPullProgress(instanceId, progressLabel, report));
+            // Fire-and-forget by contract: Progress<T> hands the report to a synchronous Action<T>.
+            var progress = new Progress<ContainerPullProgress>(report => _ = PublishPullProgressAsync(instanceId, progressLabel, report));
             await runtime.PullImageAsync(image, progress, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException and not ExternalAppPipelineException)
@@ -204,11 +205,11 @@ internal sealed partial class ExternalAppService
         }
     }
 
-    private void PrepareStorage(Guid instanceId, ApplicationManifest manifest)
+    private async Task PrepareStorageAsync(Guid instanceId, ApplicationManifest manifest, CancellationToken cancellationToken)
     {
         try
         {
-            _ = _layout.Prepare(instanceId, manifest);
+            _ = await _layout.PrepareAsync(instanceId, manifest, cancellationToken).ConfigureAwait(false);
         }
         catch (Exception exception) when (exception is not OperationCanceledException)
         {
@@ -983,11 +984,6 @@ internal sealed partial class ExternalAppService
         {
             _logger.LogDebug(exception, "Publishing the {Kind} event for external application instance {InstanceId} failed.", kind, instanceId);
         }
-    }
-
-    private void PublishPullProgress(Guid instanceId, string service, ContainerPullProgress report)
-    {
-        _ = PublishPullProgressAsync(instanceId, service, report);
     }
 
     private async Task PublishPullProgressAsync(Guid instanceId, string service, ContainerPullProgress report)

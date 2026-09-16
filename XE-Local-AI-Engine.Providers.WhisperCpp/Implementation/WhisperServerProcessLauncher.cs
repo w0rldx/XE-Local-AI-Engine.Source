@@ -136,14 +136,14 @@ internal sealed class WhisperServerProcessLauncher(ILogger<WhisperServerProcessL
     /// </summary>
     private void StartDrain(StreamReader reader, string label)
     {
-        _ = Task.Run(() => DrainAsync(reader, label));
+        _ = Task.Run(() => DrainAsync(reader, label), CancellationToken.None);
     }
 
     private async Task DrainAsync(StreamReader reader, string label)
     {
         try
         {
-            while (await reader.ReadLineAsync().ConfigureAwait(false) is { } line)
+            while (await reader.ReadLineAsync(CancellationToken.None).ConfigureAwait(false) is { } line)
             {
                 if (!string.IsNullOrWhiteSpace(line))
                 {

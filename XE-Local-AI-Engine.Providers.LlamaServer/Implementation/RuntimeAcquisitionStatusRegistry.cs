@@ -123,7 +123,9 @@ public sealed class RuntimeAcquisitionStatusRegistry : IRuntimeAcquisitionStatus
     {
         try
         {
-            await _publisher.PublishStatusAsync(statusEvent).ConfigureAwait(false);
+            // Fire-and-forget push off the byte loop (see the caller's `_ = PublishAsync(...)`): there is no request
+            // token to observe, so the token is not propagated, explicitly.
+            await _publisher.PublishStatusAsync(statusEvent, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

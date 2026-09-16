@@ -22,7 +22,7 @@ using OS = TUnit.Core.Enums.OS;
 ///         (<c>ListFiles_NeitherFollowsNorEmitsASymbolicLink</c> and
 ///         <c>ListFiles_WhenTheScanRootIsItselfALink_Refuses</c>). The other five cover different link guards
 ///         entirely — AgentHome's selected-folder preparation, the sandbox <c>CopyInto</c> destination check,
-///         <c>DevelopmentWorkspaceGitConfig.RestoreMinimal</c>, and registered-path resolution — and they remain
+///         <c>DevelopmentWorkspaceGitConfig.RestoreMinimalAsync</c>, and registered-path resolution — and they remain
 ///         unproven on an unprivileged Windows box. Junctions would close those too, the same way, and that is
 ///         worth doing; it is simply not what this file does.
 ///     </para>

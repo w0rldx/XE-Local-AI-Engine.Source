@@ -34,7 +34,7 @@ public sealed class NodeChatMigrationRecoveryService
         var connectionString = _configuration.GetConnectionString(ConnectionStringName)
                                ?? throw new InvalidOperationException($"Connection string '{ConnectionStringName}' is required.");
 
-        using var startupLock = await AcquireStartupLockAsync(connectionString, cancellationToken).ConfigureAwait(false);
+        await using var startupLock = await AcquireStartupLockAsync(connectionString, cancellationToken).ConfigureAwait(false);
 
         if (await TryMigrateOnceAsync(cancellationToken).ConfigureAwait(false))
         {

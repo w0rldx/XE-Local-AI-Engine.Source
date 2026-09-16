@@ -182,7 +182,8 @@ public sealed partial class WorkerHubConnection
         try
         {
             _logger.LogInformation("Capabilities report requested by central platform.");
-            await _capabilityReporter.Value.ReportToApiAsync().ConfigureAwait(false);
+            // Explicitly not propagating: a hub-initiated report has no caller token to inherit.
+            await _capabilityReporter.Value.ReportToApiAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

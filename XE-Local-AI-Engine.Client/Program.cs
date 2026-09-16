@@ -33,7 +33,8 @@ catch (Exception ex)
     // rolling file and is skipped.
     if (!XE_Local_AI_Engine.Client.Program.StartupLoggerReady)
     {
-        StartupCrashLog.Record("The application failed during early startup, before logging was initialized", ex);
+        await StartupCrashLog.RecordAsync("The application failed during early startup, before logging was initialized", ex, CancellationToken.None)
+                             .ConfigureAwait(false);
     }
 
     Log.Fatal(ex, "The Application failed to start");
@@ -283,7 +284,7 @@ namespace XE_Local_AI_Engine.Client
                 }
                 else
                 {
-                    builder.WebHost.UseUrls(DesktopPortStore.ResolveBindUrl(desktopDataDirectory));
+                    builder.WebHost.UseUrls(await DesktopPortStore.ResolveBindUrlAsync(desktopDataDirectory, CancellationToken.None).ConfigureAwait(false));
                 }
 
                 // Desktop double-click launch supplies neither the node SQLite connection string nor the operator secret via

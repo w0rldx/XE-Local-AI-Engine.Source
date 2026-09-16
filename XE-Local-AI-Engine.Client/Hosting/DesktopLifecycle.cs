@@ -184,7 +184,9 @@ internal sealed class DesktopLifecycle : IDisposable
             TriggerGracefulStop();
 
             using var stopped = new ManualResetEventSlim(initialState: false, spinCount: 0);
+#pragma warning disable MA0045 // Native SetConsoleCtrlHandler callback: it runs on an OS thread that Windows force-kills on return, so it cannot be async.
             using var registration = _lifetime.ApplicationStopped.Register(stopped.Set);
+#pragma warning restore MA0045
             stopped.Wait(ConsoleCloseDrainBudget, CancellationToken.None);
         }
         catch (Exception exception)
@@ -220,7 +222,9 @@ internal sealed class DesktopLifecycle : IDisposable
                 DesktopPortStore.PersistReady(_dataDirectory,
                     new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, _timeProvider.GetUtcNow()),
                     _logger);
+#pragma warning disable MA0045 // OnApplicationStarted is the synchronous Action registered on IHostApplicationLifetime.ApplicationStarted.
                 _standardOutput.WriteLine($"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
+#pragma warning restore MA0045
             }
         }
         catch (Exception exception)

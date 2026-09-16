@@ -3,6 +3,7 @@ namespace XE_Local_AI_Engine.Client.Persistence.Implementation;
 using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using Microsoft.Data.Sqlite;
 using Microsoft.EntityFrameworkCore;
 using XE_Local_AI_Engine.Client.Persistence.Entities;
@@ -99,20 +100,12 @@ public sealed class SlashCommandStore(NodeChatDbContext dbContext, TimeProvider 
 
     private static byte[] SerializeAction(string prompt)
     {
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream, new JsonWriterOptions
-               {
-                   Indented = false
-               }))
+        return Encoding.UTF8.GetBytes(new JsonObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("type", "sendPrompt");
-            writer.WriteNumber("version", 1);
-            writer.WriteString("prompt", prompt);
-            writer.WriteEndObject();
-        }
-
-        return stream.ToArray();
+            ["type"] = "sendPrompt",
+            ["version"] = 1,
+            ["prompt"] = prompt
+        }.ToJsonString());
     }
 
     private static SlashCommandRecord ToRecord(SlashCommand entity)

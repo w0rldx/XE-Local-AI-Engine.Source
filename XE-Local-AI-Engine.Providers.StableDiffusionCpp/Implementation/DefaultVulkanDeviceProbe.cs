@@ -112,7 +112,11 @@ public sealed class DefaultVulkanDeviceProbe : IVulkanDeviceProbe
             return false;
         }
 
+        // Forced sync: this runs behind the Func<bool> probe seam the constructor binds (DetectWslFromHost), which has
+        // no async shape; the source is procfs, which never blocks on a device.
+#pragma warning disable MA0045
         var contents = File.ReadAllText(path);
+#pragma warning restore MA0045
         return contents.Contains("microsoft", StringComparison.OrdinalIgnoreCase)
                || contents.Contains("WSL", StringComparison.OrdinalIgnoreCase);
     }

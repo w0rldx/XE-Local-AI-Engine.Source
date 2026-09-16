@@ -248,7 +248,11 @@ public sealed class EntraDeviceCodeSignInCoordinator : IEntraDeviceCodeSignInCoo
     {
         try
         {
+            // Forced sync: this helper is shared with Dispose(), which cannot await; the type is IDisposable and its
+            // consumers do not "await using" it, so the disposal contract stays synchronous.
+#pragma warning disable MA0045 // forced sync: shared with IDisposable.Dispose (see comment above)
             cts.Cancel();
+#pragma warning restore MA0045
         }
         catch (ObjectDisposedException)
         {

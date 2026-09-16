@@ -137,7 +137,9 @@ internal static class DesktopLaunch
     }
 
     internal static bool TryGetSetupCommand(string[] args, out SetupCommand? command, out string? error) =>
+#pragma warning disable MA0045 // Func<string?> stdin-reader seam for a synchronous Try-parser whose out parameters forbid an async signature.
         TryGetSetupCommand(args, Environment.GetEnvironmentVariable, static () => Console.In.ReadLine(), out command, out error);
+#pragma warning restore MA0045
 
     internal static bool TryGetSetupCommand(string[] args,
         Func<string, string?> environmentReader,

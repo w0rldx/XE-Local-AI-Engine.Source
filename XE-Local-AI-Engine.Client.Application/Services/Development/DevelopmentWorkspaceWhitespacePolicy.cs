@@ -49,7 +49,7 @@ using XE_Local_AI_Engine.Client.Services.AgentHome.Implementation;
 ///         <b>The repository's own config is NOT the source, and could not be.</b> The managed workspace is a
 ///         standalone clone, and <c>git clone</c> copies no <c>core.*</c> from the source repository — verified: a
 ///         source repository with <c>core.whitespace=cr-at-eol</c> and <c>core.autocrlf=input</c> produces a clone
-///         whose config carries neither. So <see cref="DevelopmentWorkspaceGitConfig.RestoreMinimal" />'s allow-list is
+///         whose config carries neither. So <see cref="DevelopmentWorkspaceGitConfig.RestoreMinimalAsync" />'s allow-list is
 ///         not what removes them; they were never there. The workspace is also deliberately more deterministic than the
 ///         operator's checkout — commands run with <c>HOME</c> pointed at a per-task runtime directory, so no user
 ///         <c>~/.gitconfig</c> applies. Both are intended, and together they are exactly why the engine has to DERIVE
@@ -109,7 +109,7 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
             return;
         }
 
-        Write(gitDirectory, Render(result.StandardOutput));
+        await WriteAsync(gitDirectory, Render(result.StandardOutput), cancellationToken).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -212,13 +212,13 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
     ///     Replaces the attributes file, or removes it when the repository has nothing to grant.
     ///     <para>
     ///         Deleted rather than overwritten in place, and rewritten on every preparation, for the same two reasons
-    ///         <see cref="DevelopmentWorkspaceGitConfig.RestoreMinimal" /> does it: a command from a previous attempt
+    ///         <see cref="DevelopmentWorkspaceGitConfig.RestoreMinimalAsync" /> does it: a command from a previous attempt
     ///         can have replaced the file with a symbolic link, and an ordinary write would then follow it out of the
     ///         workspace; and a file left over from a previous attempt is a policy nobody derived from the current
     ///         index.
     ///     </para>
     /// </summary>
-    private static void Write(string gitDirectory, string? body)
+    private static async Task WriteAsync(string gitDirectory, string? body, CancellationToken cancellationToken)
     {
         var infoDirectory = Path.Combine(gitDirectory, "info");
         var attributesPath = Path.Combine(infoDirectory, "attributes");
@@ -235,6 +235,6 @@ internal static class DevelopmentWorkspaceWhitespacePolicy
         }
 
         _ = Directory.CreateDirectory(infoDirectory);
-        File.WriteAllText(attributesPath, body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+        await File.WriteAllTextAsync(attributesPath, body, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false), cancellationToken).ConfigureAwait(false);
     }
 }

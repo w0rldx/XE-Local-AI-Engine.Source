@@ -107,7 +107,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
         }
 
         // Startup-edge safety: clear a stale work dir from a prior crash/kill before allowing a new build. [archLOW-1]
-        RecoverStaleWorkDirectory();
+        await RecoverStaleWorkDirectoryAsync(ct).ConfigureAwait(false);
 
         // Re-check Linux + every prerequisite + free disk BEFORE spawning anything. A failed re-check throws WITHOUT
         // spawning a clone/cmake. [secMED-5] The endpoint enforces the same gates; this is the defense-in-depth re-check.
@@ -199,7 +199,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
     }
 
     /// <inheritdoc />
-    public void RecoverStaleWorkDirectory()
+    public Task RecoverStaleWorkDirectoryAsync(CancellationToken cancellationToken)
     {
         try
         {
@@ -212,6 +212,10 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
         {
             _logger.LogWarning(exception, "Failed to clean a stale CUDA build work directory at startup.");
         }
+
+        // Synchronous directory removal, kept synchronous: the async shape exists for the adapter, whose recovery is a
+        // genuinely awaitable call on the source-build service.
+        return Task.CompletedTask;
     }
 
     [SupportedOSPlatform("linux")]

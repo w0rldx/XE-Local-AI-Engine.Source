@@ -195,7 +195,7 @@ public sealed class LlamaServerLaunchFallbackStore : ILlamaServerLaunchFallbackS
         // ponytail: a lock this process could not acquire (a sibling holding it past the retry budget, or an unwritable
         // cache root) degrades to the in-process lock alone, which is the old ceiling — a sibling write landing inside
         // that window is lost. Accepted: it costs one failed spawn that re-records the verdict.
-        using var crossProcessLock = await TryAcquireWriteLockAsync(ct).ConfigureAwait(false);
+        await using var crossProcessLock = await TryAcquireWriteLockAsync(ct).ConfigureAwait(false);
         var (onDisk, _) = await LoadAsync(ct).ConfigureAwait(false);
         disabled.UnionWith(onDisk);
 

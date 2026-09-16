@@ -429,7 +429,9 @@ public sealed class GgufImportTransactionCoordinator : IGgufImportTransactionCoo
     {
         try
         {
-            await _eventPublisher.PublishStatusAsync(statusEvent).ConfigureAwait(false);
+            // Fire-and-forget status push with no request token in scope; cancellation is intentionally not
+            // propagated (MA0032/CA2016 opt-out).
+            await _eventPublisher.PublishStatusAsync(statusEvent, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

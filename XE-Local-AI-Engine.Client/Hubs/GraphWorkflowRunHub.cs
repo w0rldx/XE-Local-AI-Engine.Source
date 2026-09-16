@@ -107,7 +107,7 @@ public sealed class GraphWorkflowRunHub(IGraphWorkflowStore store, IGraphWorkflo
     }
 
     public Task UnsubscribeRun(Guid runId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, GraphWorkflowHubGroups.Run(runId), Context.ConnectionAborted);
 }
 
 internal static class GraphWorkflowHubGroups

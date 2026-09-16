@@ -43,8 +43,8 @@ internal sealed class LegacyCudaBuildServiceAdapter(ILlamaCppSourceBuildService 
         return sourceBuildService.CancelLegacyPinnedCuda();
     }
 
-    public void RecoverStaleWorkDirectory()
+    public async Task RecoverStaleWorkDirectoryAsync(CancellationToken cancellationToken)
     {
-        sourceBuildService.RecoverAsync(CancellationToken.None).GetAwaiter().GetResult();
+        await sourceBuildService.RecoverAsync(cancellationToken).ConfigureAwait(false);
     }
 }

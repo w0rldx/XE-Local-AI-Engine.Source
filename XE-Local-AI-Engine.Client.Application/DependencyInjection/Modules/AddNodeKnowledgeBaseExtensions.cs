@@ -25,7 +25,9 @@ internal static class AddNodeKnowledgeBaseExtensions
                    .Bind(configuration.GetSection(KnowledgeBaseOptions.Section))
                    .PostConfigure<INodeRuntimeSettings>(static (options, runtimeSettings) =>
                    {
+#pragma warning disable MA0045 // Options PostConfigure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
                        var storedRerankerModel = runtimeSettings.GetRerankerModelName();
+#pragma warning restore MA0045
                        if (!string.IsNullOrWhiteSpace(storedRerankerModel))
                        {
                            options.RerankerModelName = storedRerankerModel;

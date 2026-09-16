@@ -16,6 +16,8 @@ internal static class Program
     {
         VelopackApp.Build().Run();
 
+#pragma warning disable MA0045 // Velopack requires a synchronous Main (see above); the async work is awaited here by design.
         return WindowsLauncherApplication.RunAsync(args).GetAwaiter().GetResult();
+#pragma warning restore MA0045
     }
 }

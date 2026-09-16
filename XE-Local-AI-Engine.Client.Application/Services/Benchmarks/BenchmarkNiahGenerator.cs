@@ -368,7 +368,9 @@ public static class BenchmarkNiahGenerator
     private static HaystackCorpus LoadCorpus()
     {
         var file = BenchmarkFidelityCorpus.Require();
+#pragma warning disable MA0045 // Lazy<HaystackCorpus> value factory: Lazy<T> takes a synchronous Func<T>, and the corpus is read once per process.
         var text = File.ReadAllText(file.Path);
+#pragma warning restore MA0045
         var sentences = new List<string>(1 << 15);
         foreach (var line in text.Split('\n', StringSplitOptions.TrimEntries | StringSplitOptions.RemoveEmptyEntries))
         {

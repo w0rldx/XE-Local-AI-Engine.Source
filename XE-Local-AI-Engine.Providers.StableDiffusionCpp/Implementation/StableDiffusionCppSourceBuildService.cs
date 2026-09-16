@@ -244,7 +244,7 @@ public sealed class StableDiffusionCppSourceBuildService : IStableDiffusionCppSo
                 }
             }
 
-            using var mutation = _activityGate.TryAcquireMutationReservation();
+            await using var mutation = _activityGate.TryAcquireMutationReservation();
             if (mutation is null)
             {
                 return new StableDiffusionCppSourceBuildRemoveResult(StableDiffusionCppSourceBuildRemoveOutcome.RuntimeBusy,

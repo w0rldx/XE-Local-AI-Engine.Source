@@ -53,7 +53,7 @@ internal static class WindowsLauncherApplication
         Version requiredRuntime;
         try
         {
-            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(Path.Combine(baseDirectory, RuntimeConfig)).ConfigureAwait(false));
+            requiredRuntime = ResolveRequiredAspNetCoreRuntime(await File.ReadAllTextAsync(Path.Combine(baseDirectory, RuntimeConfig), CancellationToken.None).ConfigureAwait(false));
         }
         catch (Exception exception) when (exception is IOException or JsonException or InvalidDataException)
         {
@@ -102,7 +102,7 @@ internal static class WindowsLauncherApplication
                 return Fail("Windows did not start the managed application.", LaunchFailureExitCode);
             }
 
-            await process.WaitForExitAsync().ConfigureAwait(false);
+            await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
 
             // The managed host inherits this console, so a non-zero exit whose cause never reached disk (a crash before
             // its Serilog file sink is built) would otherwise leave only a vanished console. Record the code so the
@@ -210,9 +210,11 @@ internal static class WindowsLauncherApplication
             throw new InvalidOperationException("dotnet --list-runtimes did not start.");
         }
 
-        var standardOutput = process.StandardOutput.ReadToEndAsync();
-        var standardError = process.StandardError.ReadToEndAsync();
-        await process.WaitForExitAsync().ConfigureAwait(false);
+        // The launcher owns no cancellation source: it runs to the child's exit and is itself killed by the OS, so the
+        // token is not propagated, explicitly.
+        var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
+        await process.WaitForExitAsync(CancellationToken.None).ConfigureAwait(false);
         if (process.ExitCode != 0)
         {
             throw new InvalidOperationException(await standardError.ConfigureAwait(false));

@@ -62,5 +62,5 @@ public sealed class DatasetGenerationHub(ITrainingDatasetStore store, IDatasetGe
     }
 
     public Task Unsubscribe(Guid datasetId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, DatasetGroup(datasetId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, DatasetGroup(datasetId), Context.ConnectionAborted);
 }

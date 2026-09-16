@@ -44,11 +44,13 @@ internal sealed class AgentTemplateCatalog : IAgentTemplateCatalog
                                    .FirstOrDefault(name => name.EndsWith(ResourceNameSuffix, StringComparison.Ordinal))
                            ?? throw new InvalidOperationException($"Embedded resource '{ResourceNameSuffix}' was not found in assembly '{assembly.GetName().Name}'.");
 
+#pragma warning disable MA0045 // Runs from the constructor, which cannot await; IAgentTemplateCatalog.List/TryGet are synchronous reads of the cache it fills.
         using var stream = assembly.GetManifestResourceStream(resourceName)
                            ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' could not be opened.");
 
         var document = JsonSerializer.Deserialize<AgentTemplateSeedDocument>(stream, SerializerOptions)
                        ?? throw new InvalidOperationException($"Embedded resource '{resourceName}' deserialized to null.");
+#pragma warning restore MA0045
 
         return [.. document.Templates];
     }

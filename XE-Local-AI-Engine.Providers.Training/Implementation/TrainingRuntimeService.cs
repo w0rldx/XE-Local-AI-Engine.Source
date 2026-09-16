@@ -101,7 +101,11 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         _scriptsDirectory = scriptsDirectory;
         _stateStore = new InstalledTrainingRuntimeStore(TrainingRuntimeLayout.StatePath(cacheRoot));
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
+        // Forced sync: a constructor cannot await, and the installed state must be present before the synchronous
+        // public GetStatus() read can answer; there is no async initialisation seam on this service.
+#pragma warning disable MA0045
         _installed = _stateStore.ReadAsync(CancellationToken.None).GetAwaiter().GetResult();
+#pragma warning restore MA0045
         _phase = _installed is not null ? TrainingRuntimePhase.Ready : TrainingRuntimePhase.Idle;
     }
 

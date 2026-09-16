@@ -180,7 +180,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
             snapshot.TaskId.ToString("N"));
         Directory.CreateDirectory(Path.GetDirectoryName(worktreePath)!);
         Directory.CreateDirectory(runtimePath);
-        EnsureBuildConfigurationBarrier(Path.GetDirectoryName(worktreePath)!);
+        await EnsureBuildConfigurationBarrierAsync(Path.GetDirectoryName(worktreePath)!, cancellationToken).ConfigureAwait(false);
 
         // Created HERE and not only in DevelopmentWorkspaceTools, which runs after this method returns. A provider with
         // a mount layer binds these directories at create time, and a bind source the daemon has to invent is created
@@ -240,7 +240,7 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
         // directory, so a repository-local exec-bearing key would be executing here, not in the sandbox. Also covers
         // the freshly cloned case, where it is a cheap no-op — the clone's own config already contains nothing but the
         // preserved keys once `origin` has been removed.
-        DevelopmentWorkspaceGitConfig.RestoreMinimal(worktreePath);
+        await DevelopmentWorkspaceGitConfig.RestoreMinimalAsync(worktreePath, cancellationToken).ConfigureAwait(false);
 
         await ValidatePreservedWorktreeAsync(git,
             worktreePath,
@@ -667,17 +667,18 @@ internal sealed class DevelopmentWorkspaceProvider : IDevelopmentWorkspaceProvid
     ///         file that already holds the expected content is left alone.
     ///     </para>
     /// </summary>
-    private static void EnsureBuildConfigurationBarrier(string workspaceParentPath)
+    private static async Task EnsureBuildConfigurationBarrierAsync(string workspaceParentPath, CancellationToken cancellationToken)
     {
         foreach (var (fileName, content) in BuildConfigurationBarrier)
         {
             var path = Path.Combine(workspaceParentPath, fileName);
-            if (File.Exists(path) && string.Equals(File.ReadAllText(path), content, StringComparison.Ordinal))
+            if (File.Exists(path)
+                && string.Equals(await File.ReadAllTextAsync(path, cancellationToken).ConfigureAwait(false), content, StringComparison.Ordinal))
             {
                 continue;
             }
 
-            File.WriteAllText(path, content);
+            await File.WriteAllTextAsync(path, content, cancellationToken).ConfigureAwait(false);
         }
     }
 

@@ -161,7 +161,7 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         var venvRoot = Path.Combine(venvDirectory, ".venv");
         var interpreter = Path.Combine(venvRoot, "bin", "python");
         var statePath = Path.Combine(_cacheRoot, StateFileName);
-        if (File.Exists(interpreter) && MatchesInstalledLock(statePath, lockfileSha))
+        if (File.Exists(interpreter) && await MatchesInstalledLockAsync(statePath, lockfileSha, cancellationToken).ConfigureAwait(false))
         {
             // Re-applied on the warm path too: a venv provisioned by an older build (or left writable by an
             // interrupted run) would otherwise stay writable for the life of the process. This runs at most once per
@@ -312,12 +312,14 @@ internal sealed class ComputePythonEnvironment : IComputePythonEnvironment, IDis
         _logger.LogDebug("compute runtime provision: {Line}", line);
     }
 
-    private static bool MatchesInstalledLock(string statePath, string lockfileSha)
+    private static async Task<bool> MatchesInstalledLockAsync(string statePath, string lockfileSha, CancellationToken cancellationToken)
     {
         try
         {
             return File.Exists(statePath)
-                   && string.Equals(File.ReadAllText(statePath).Trim(), lockfileSha, StringComparison.OrdinalIgnoreCase);
+                   && string.Equals((await File.ReadAllTextAsync(statePath, cancellationToken).ConfigureAwait(false)).Trim(),
+                       lockfileSha,
+                       StringComparison.OrdinalIgnoreCase);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {

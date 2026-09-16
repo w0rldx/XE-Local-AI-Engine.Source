@@ -10,7 +10,7 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class DesktopLifecycleReadyTests
 {
     [Test]
-    public void ApplicationStarted_EmitsAndPersistsExactReadyContract_ThenDisposeDeletesIt()
+    public async Task ApplicationStarted_EmitsAndPersistsExactReadyContract_ThenDisposeDeletesIt()
     {
         var dataDirectory = Path.Combine(Path.GetTempPath(), "xe-ready-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dataDirectory);
@@ -34,12 +34,12 @@ public sealed class DesktopLifecycleReadyTests
 
                 AssertEx.Equal($"XE_READY=1 XE_VERSION=1.2.3 XE_URL=http://127.0.0.1:41234 XE_MCP_URL=http://127.0.0.1:41234/api/local/v1/mcp/server XE_DATA_DIR={dataDirectory}{Environment.NewLine}",
                     output.ToString());
-                var ready = AssertEx.NotNull(DesktopPortStore.ReadReady(dataDirectory));
+                var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(dataDirectory).ConfigureAwait(false));
                 AssertEx.Equal("1.2.3", ready.Version);
                 AssertEx.Equal(Environment.ProcessId, ready.Pid);
             }
 
-            AssertEx.Null(DesktopPortStore.ReadReady(dataDirectory));
+            AssertEx.Null(await DesktopPortStore.ReadReadyAsync(dataDirectory).ConfigureAwait(false));
         }
         finally
         {

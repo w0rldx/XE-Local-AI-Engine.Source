@@ -85,6 +85,9 @@ internal static class DockerSeccompProfile
                            ?? throw new DockerRuntimeException(DockerDaemonPreflightStatus.NotConfigured,
                                $"This build carries no embedded seccomp profile (expected a manifest resource ending in '{ResourceNameSuffix}').");
 
+        // Forced sync: BuildOption is the factory delegate of the process-lifetime Lazy<string> above, a Func<string>
+        // by contract, reading a resource embedded in this assembly.
+#pragma warning disable MA0045 // forced sync: Lazy<T> factory delegate (see comment above)
         using var stream = assembly.GetManifestResourceStream(resourceName)
                            ?? throw new DockerRuntimeException(DockerDaemonPreflightStatus.NotConfigured,
                                $"The embedded seccomp profile '{resourceName}' could not be opened.");
@@ -93,6 +96,7 @@ internal static class DockerSeccompProfile
         {
             using var document = JsonDocument.Parse(stream);
             return OptionPrefix + JsonSerializer.Serialize(document.RootElement);
+#pragma warning restore MA0045
         }
         catch (JsonException exception)
         {

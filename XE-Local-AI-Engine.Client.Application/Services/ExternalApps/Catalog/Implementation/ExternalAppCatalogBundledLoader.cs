@@ -40,6 +40,11 @@ internal static class ExternalAppCatalogBundledLoader
             return EmptyDocument();
         }
 
+        // Forced sync: the only production caller is the ApplicationCatalogProvider constructor, which publishes
+        // the loaded document through synchronous reads, so there is no async initialisation seam to move this to;
+        // the tests add a static field initializer (ShippedCatalogSeedTests.Seed), which cannot await either. The
+        // resource is embedded in this assembly, so the read never touches the filesystem.
+#pragma warning disable MA0045 // forced sync: constructor-time embedded-resource read (see comment above)
         using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
         {
@@ -49,6 +54,7 @@ internal static class ExternalAppCatalogBundledLoader
 
         using var reader = new StreamReader(stream);
         var raw = reader.ReadToEnd();
+#pragma warning restore MA0045
 
         var validation = ExternalAppCatalogValidator.Validate(raw);
         if (!validation.IsValid)

@@ -121,7 +121,7 @@ public sealed class ExternalAppHub(IExternalAppService apps, IExternalAppInstanc
     }
 
     public Task Unsubscribe(Guid instanceId) =>
-        Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId));
+        Groups.RemoveFromGroupAsync(Context.ConnectionId, ExternalAppHubGroups.Instance(instanceId), Context.ConnectionAborted);
 }
 
 internal static class ExternalAppHubGroups

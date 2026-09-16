@@ -6,15 +6,15 @@ using XE_Local_AI_Engine.Tests.Testing;
 public sealed class StartupCrashLogTests
 {
     [Test]
-    public void RecordTo_CreatesTheDirectoryAndAppendsTimestampedLines()
+    public async Task RecordToAsync_CreatesTheDirectoryAndAppendsTimestampedLines()
     {
         var directory = Path.Combine(Path.GetTempPath(), $"xe-startup-crash-{Guid.NewGuid():N}");
         try
         {
-            StartupCrashLog.RecordTo(directory, "first");
-            StartupCrashLog.RecordTo(directory, "second");
+            await StartupCrashLog.RecordToAsync(directory, "first").ConfigureAwait(false);
+            await StartupCrashLog.RecordToAsync(directory, "second").ConfigureAwait(false);
 
-            var lines = File.ReadAllLines(Path.Combine(directory, "startup-crash.log"));
+            var lines = await File.ReadAllLinesAsync(Path.Combine(directory, "startup-crash.log")).ConfigureAwait(false);
             AssertEx.Equal(expected: 2, lines.Length);
             AssertEx.Contains(lines[0], "first");
             AssertEx.Contains(lines[1], "second");
@@ -26,13 +26,13 @@ public sealed class StartupCrashLogTests
     }
 
     [Test]
-    public void RecordTo_NeverThrows_OnAnUnusablePath()
+    public async Task RecordToAsync_NeverThrows_OnAnUnusablePath()
     {
         var file = Path.Combine(Path.GetTempPath(), $"xe-startup-crash-{Guid.NewGuid():N}.tmp");
-        File.WriteAllText(file, "not a directory");
+        await File.WriteAllTextAsync(file, "not a directory").ConfigureAwait(false);
         try
         {
-            StartupCrashLog.RecordTo(Path.Combine(file, "logs"), "ignored");
+            await StartupCrashLog.RecordToAsync(Path.Combine(file, "logs"), "ignored").ConfigureAwait(false);
         }
         finally
         {

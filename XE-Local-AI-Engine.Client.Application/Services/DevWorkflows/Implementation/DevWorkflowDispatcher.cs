@@ -1047,7 +1047,9 @@ internal sealed class DevWorkflowDispatcher : IDevWorkflowDispatcherSignal, IHos
                           ?.To;
 
         using var buffer = new MemoryStream();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(buffer))
+#pragma warning restore MA0045
         {
             writer.WriteStartObject();
             if (document is not null)

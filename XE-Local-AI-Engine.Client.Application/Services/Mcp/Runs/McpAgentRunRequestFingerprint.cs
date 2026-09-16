@@ -15,6 +15,7 @@ internal sealed class McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector 
         ArgumentNullException.ThrowIfNull(request);
 
         var canonical = new ArrayBufferWriter<byte>();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(canonical))
         {
             writer.WriteStartObject();
@@ -42,6 +43,7 @@ internal sealed class McpAgentRunRequestFingerprint(McpAgentRunPayloadProtector 
 
             writer.WriteEndObject();
         }
+#pragma warning restore MA0045
 
         return _protector.ComputeRequestFingerprint(canonical.WrittenSpan);
     }

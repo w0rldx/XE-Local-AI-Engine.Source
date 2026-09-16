@@ -54,7 +54,7 @@ public sealed class DefaultAgentSeeder : IHostedService
                 return;
             }
 
-            var input = BuildSeedInput();
+            var input = await BuildSeedInputAsync(cancellationToken).ConfigureAwait(false);
             var seeded = await store.AddSeededAsync(input, AgentDefaults.DefaultAgentSeedSlug, cancellationToken).ConfigureAwait(false);
 
             _logger.LogInformation("Seeded the Default Assistant agent definition {AgentDefinitionId} (slug {SeedSlug}).",
@@ -84,11 +84,11 @@ public sealed class DefaultAgentSeeder : IHostedService
     ///     byte-identical to today's default send), a single-agent kind, no pinned model/reasoning, an empty allowed-tool
     ///     set (the resolver grants this slug the full offer regardless), and the playbook disabled.
     /// </summary>
-    private AgentDefinitionInput BuildSeedInput()
+    private async Task<AgentDefinitionInput> BuildSeedInputAsync(CancellationToken cancellationToken)
     {
         return new AgentDefinitionInput(AgentDefaults.DefaultAgentName,
             Description: null,
-            LoadEmbeddedInstructions(),
+            await LoadEmbeddedInstructionsAsync(cancellationToken).ConfigureAwait(false),
             ModelProfile: null,
             ReasoningEffort: null,
             AgentDefinitionKind.Single,
@@ -101,7 +101,7 @@ public sealed class DefaultAgentSeeder : IHostedService
     ///     Reads the embedded chat prompt from <see cref="LocalChatAgentOptions.InstructionsResource" /> — the SAME
     ///     resource the default send path loads — so the seeded instructions never drift from today's prompt.
     /// </summary>
-    private string LoadEmbeddedInstructions()
+    private async Task<string> LoadEmbeddedInstructionsAsync(CancellationToken cancellationToken)
     {
         if (string.IsNullOrWhiteSpace(_options.InstructionsResource))
         {
@@ -109,9 +109,9 @@ public sealed class DefaultAgentSeeder : IHostedService
         }
 
         var assembly = typeof(LocalChatAgentOptions).Assembly;
-        using var stream = assembly.GetManifestResourceStream(_options.InstructionsResource)
-                           ?? throw new InvalidOperationException($"Embedded instructions resource '{_options.InstructionsResource}' was not found.");
+        await using var stream = assembly.GetManifestResourceStream(_options.InstructionsResource)
+                                 ?? throw new InvalidOperationException($"Embedded instructions resource '{_options.InstructionsResource}' was not found.");
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        return await reader.ReadToEndAsync(cancellationToken).ConfigureAwait(false);
     }
 }

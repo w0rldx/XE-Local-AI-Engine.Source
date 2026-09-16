@@ -160,7 +160,7 @@ public sealed class CodexAuthService : ICodexAuthService
             throw new CodexAuthException($"Codex token endpoint returned {(int)response.StatusCode} ({response.StatusCode}).");
         }
 
-        using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var document = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken).ConfigureAwait(false);
         var root = document.RootElement;
 
@@ -199,7 +199,7 @@ public sealed class CodexAuthService : ICodexAuthService
         {
             if (!string.IsNullOrEmpty(error))
             {
-                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.").ConfigureAwait(false);
+                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.", cancellationToken).ConfigureAwait(false);
                 throw new CodexAuthException($"Codex authorization returned an error: {error}.");
             }
 
@@ -207,17 +207,17 @@ public sealed class CodexAuthService : ICodexAuthService
             if (!CryptographicOperations.FixedTimeEquals(Encoding.UTF8.GetBytes(returnedState ?? string.Empty),
                     Encoding.UTF8.GetBytes(expectedState)))
             {
-                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.").ConfigureAwait(false);
+                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.", cancellationToken).ConfigureAwait(false);
                 throw new CodexAuthException("Codex authorization callback state did not match.");
             }
 
             if (string.IsNullOrEmpty(code))
             {
-                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.").ConfigureAwait(false);
+                await WriteCallbackResponseAsync(context.Response, "Codex login failed. You can close this window.", cancellationToken).ConfigureAwait(false);
                 throw new CodexAuthException("Codex authorization callback did not include a code.");
             }
 
-            await WriteCallbackResponseAsync(context.Response, "Codex login complete. You can close this window.").ConfigureAwait(false);
+            await WriteCallbackResponseAsync(context.Response, "Codex login complete. You can close this window.", cancellationToken).ConfigureAwait(false);
             return code;
         }
         finally
@@ -253,7 +253,7 @@ public sealed class CodexAuthService : ICodexAuthService
         return builder.Uri;
     }
 
-    private static async Task WriteCallbackResponseAsync(HttpListenerResponse response, string message)
+    private static async Task WriteCallbackResponseAsync(HttpListenerResponse response, string message, CancellationToken cancellationToken)
     {
         var body = Encoding.UTF8.GetBytes($"<html><body><p>{message}</p></body></html>");
         response.ContentType = "text/html";
@@ -265,7 +265,7 @@ public sealed class CodexAuthService : ICodexAuthService
         response.Headers["Referrer-Policy"] = "no-referrer";
 
         response.ContentLength64 = body.Length;
-        await response.OutputStream.WriteAsync(body).ConfigureAwait(false);
+        await response.OutputStream.WriteAsync(body, cancellationToken).ConfigureAwait(false);
     }
 
     private static string CreateCodeVerifier()

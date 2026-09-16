@@ -88,5 +88,5 @@ public interface ICudaBuildService
     ///     Startup recovery: deletes a stale build work directory left by a host crash/kill mid-build (detected by its
     ///     marker file). Best-effort; never throws. Called once at startup before any new build is allowed.
     /// </summary>
-    void RecoverStaleWorkDirectory();
+    Task RecoverStaleWorkDirectoryAsync(CancellationToken cancellationToken);
 }

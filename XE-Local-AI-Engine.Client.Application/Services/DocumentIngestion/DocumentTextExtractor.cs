@@ -275,7 +275,9 @@ public sealed class DocumentTextExtractor : IDocumentTextExtractor
         }
         finally
         {
+#pragma warning disable MA0045 // ZipArchive over an in-memory buffer: no I/O to await; synchronous preflight function.
             archive?.Dispose();
+#pragma warning restore MA0045
         }
     }
 

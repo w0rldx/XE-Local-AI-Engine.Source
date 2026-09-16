@@ -324,7 +324,9 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     {
         try
         {
-            await _eventPublisher.PublishStatusAsync(hubEvent).ConfigureAwait(false);
+            // Fire-and-forget from a synchronous Progress<T> callback: there is no request token here, and the push
+            // must outlive the caller, so cancellation is intentionally not propagated (MA0032/CA2016 opt-out).
+            await _eventPublisher.PublishStatusAsync(hubEvent, CancellationToken.None).ConfigureAwait(false);
         }
         catch (Exception exception)
         {

@@ -70,6 +70,10 @@ internal static class DevelopmentCommandProfileImport
         return File.Exists(path) ? ComputeDigest(ReadBounded(path)) : null;
     }
 
+    // Synchronous by necessity: TryComputeDigest is called from the DevelopmentWorkspaceTools constructor (which
+    // captures the baseline digest) and from its synchronous EnsureCommandProfileImportUnchanged invariant check.
+    // Neither has an async seam to convert to.
+#pragma warning disable MA0045 // Reached from a constructor and a synchronous invariant check; see the comment above.
     private static byte[] ReadBounded(string path)
     {
         using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -82,6 +86,7 @@ internal static class DevelopmentCommandProfileImport
         stream.CopyTo(buffer);
         return buffer.ToArray();
     }
+#pragma warning restore MA0045
 
     private static string ComputeDigest(byte[] bytes) =>
         Convert.ToHexStringLower(SHA256.HashData(bytes));

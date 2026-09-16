@@ -312,8 +312,9 @@ internal static class HostSandboxFilesystemIsolationProbe
         using var process = Process.Start(startInfo)
                             ?? throw new SandboxIsolationUnavailableException("the isolated chain could not be started");
 
-        var standardOutput = process.StandardOutput.ReadToEndAsync();
-        var standardError = process.StandardError.ReadToEndAsync();
+        // Explicitly not propagating: the probe is bounded by ProbeTimeout below and kills the chain itself.
+        var standardOutput = process.StandardOutput.ReadToEndAsync(CancellationToken.None);
+        var standardError = process.StandardError.ReadToEndAsync(CancellationToken.None);
         if (!process.WaitForExit(ProbeTimeout))
         {
             try
@@ -328,7 +329,11 @@ internal static class HostSandboxFilesystemIsolationProbe
             throw new SandboxIsolationUnavailableException("the isolated chain did not finish within the probe timeout");
         }
 
+        // Forced sync: RunChain sits behind HostSandboxContainmentProbe's process-lifetime Lazy<SandboxContainment>,
+        // whose factory is a Func<T>; the containment answer is read synchronously from every launch path.
+#pragma warning disable MA0045 // forced sync: process-lifetime Lazy<T> probe (see comment above)
         var output = string.Concat(standardOutput.GetAwaiter().GetResult(), "\n", standardError.GetAwaiter().GetResult());
+#pragma warning restore MA0045
 
         return (process.ExitCode, output);
     }
@@ -382,6 +387,8 @@ internal static class HostSandboxFilesystemIsolationProbe
             }
 
             SiblingCanaryPath = Path.Combine(_root, $"canary-{identifier}");
+            // Forced sync: a constructor cannot await, and this type is built inside the process-lifetime probe.
+#pragma warning disable MA0045 // forced sync: constructor (see comment above)
             File.WriteAllText(SiblingCanaryPath, "xe-isolation-probe");
 
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
@@ -392,6 +399,7 @@ internal static class HostSandboxFilesystemIsolationProbe
             {
                 File.WriteAllText(HomeCanaryPath, "xe-isolation-probe");
             }
+#pragma warning restore MA0045
         }
 
         public string JailPath { get; }
@@ -453,7 +461,10 @@ internal static class HostSandboxFilesystemIsolationProbe
             try
             {
                 using var client = new TcpClient();
+                // Forced sync: a synchronous bool read on the process-lifetime containment probe.
+#pragma warning disable MA0045 // forced sync: process-lifetime probe (see comment above)
                 client.Connect(IPAddress.Loopback, Port);
+#pragma warning restore MA0045
 
                 return client.Connected;
             }

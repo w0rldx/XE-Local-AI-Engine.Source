@@ -285,7 +285,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                 }
             }
 
-            using var mutation = _activityGate.TryAcquireMutationReservation();
+            await using var mutation = _activityGate.TryAcquireMutationReservation();
             if (mutation is null)
             {
                 return new WhisperCppSourceBuildRemoveResult(WhisperCppSourceBuildRemoveOutcome.RuntimeBusy,
@@ -605,7 +605,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             var serverPath = FindServer(buildDir)
                              ?? throw new WhisperRuntimeException("The whisper.cpp build did not produce whisper-server.");
             EnsureExecutable(serverPath);
-            await ValidateRelocatableRunpathAsync(serverPath, ct).ConfigureAwait(false);
+            await ValidateServerRunpathAsync(serverPath, ct).ConfigureAwait(false);
             ValidateRequestedBackendArtifacts(buildDir, descriptor.Backend);
 
             SetPhase(WhisperCppSourceBuildPhase.SmokeTesting);
@@ -638,7 +638,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         }
     }
 
-    private async Task ValidateRelocatableRunpathAsync(string serverPath, CancellationToken ct)
+    private async Task ValidateServerRunpathAsync(string serverPath, CancellationToken ct)
     {
         var result = await RunRequiredAsync("readelf",
                 ["-d", serverPath],

@@ -72,7 +72,12 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
         try
         {
             Directory.CreateDirectory(_markersRoot);
+            // Forced sync: ISandboxMarkerStore is a synchronous contract (Write/Update/Delete/ReadAll) called from
+            // the launch and teardown paths, including ones that run under a lock; the marker write must land before
+            // the child it describes is started.
+#pragma warning disable MA0045 // forced sync: synchronous ISandboxMarkerStore contract (see comment above)
             File.WriteAllText(Path.Combine(_markersRoot, markerId + ".json"), JsonSerializer.Serialize(marker, SerializerOptions));
+#pragma warning restore MA0045
             return true;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -139,7 +144,10 @@ public sealed class FileSandboxMarkerStore : ISandboxMarkerStore
     {
         try
         {
+            // Forced sync: read side of the same synchronous ISandboxMarkerStore contract (see TryPersist).
+#pragma warning disable MA0045 // forced sync: synchronous ISandboxMarkerStore contract (see comment above)
             return JsonSerializer.Deserialize<SandboxProcessMarker>(File.ReadAllText(path), SerializerOptions);
+#pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
         {

@@ -38,7 +38,9 @@ internal sealed class DraftAdmissionGate : IDisposable
     public bool TryAcquire([NotNullWhen(true)] out IDisposable? lease)
     {
         lease = null;
+#pragma warning disable MA0032 // zero-timeout poll is a TryEnter, not a blocking wait: a token would change nothing
         if (!_slot.Wait(0))
+#pragma warning restore MA0032
         {
             return false;
         }

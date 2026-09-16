@@ -204,6 +204,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
     {
         IReadOnlyList<AllowedToolDto> immutableAllowedTools = Array.AsReadOnly(allowedTools.ToArray());
         var canonical = new ArrayBufferWriter<byte>();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(canonical))
         {
             writer.WriteStartObject();
@@ -252,6 +253,7 @@ internal sealed class McpExecutionBindingResolver : IMcpExecutionBindingResolver
             writer.WriteEndArray();
             writer.WriteEndObject();
         }
+#pragma warning restore MA0045
 
         var fingerprint = Convert.ToHexString(HMACSHA256.HashData(_nodeKey.Key.Span, canonical.WrittenSpan));
         return new McpExecutionBinding(fingerprint,

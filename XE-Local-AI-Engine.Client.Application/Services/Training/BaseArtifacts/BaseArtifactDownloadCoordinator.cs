@@ -39,7 +39,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
         return _inFlight.TryGetValue(artifactId, out var download) ? download.Progress : null;
     }
 
-    public bool Cancel(Guid artifactId)
+    public async Task<bool> CancelAsync(Guid artifactId)
     {
         if (!_inFlight.TryGetValue(artifactId, out var download))
         {
@@ -48,7 +48,7 @@ internal sealed class BaseArtifactDownloadCoordinator(
 
         try
         {
-            download.Cancellation.Cancel();
+            await download.Cancellation.CancelAsync().ConfigureAwait(false);
             return true;
         }
         catch (ObjectDisposedException)

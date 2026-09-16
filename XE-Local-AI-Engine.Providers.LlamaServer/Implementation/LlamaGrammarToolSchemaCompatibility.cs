@@ -58,10 +58,13 @@ internal static partial class LlamaGrammarToolSchemaCompatibility
         }
 
         var buffer = new ArrayBufferWriter<byte>();
+
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(buffer))
         {
             WriteSanitized(schema, writer);
         }
+#pragma warning restore MA0045
 
         using var document = JsonDocument.Parse(buffer.WrittenMemory);
 

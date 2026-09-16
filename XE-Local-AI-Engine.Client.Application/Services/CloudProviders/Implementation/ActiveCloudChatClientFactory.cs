@@ -210,9 +210,14 @@ public sealed class ActiveCloudChatClientFactory : IActiveCloudChatClientFactory
             }
         }
 
+        // Forced synchronous: this chain is reached from Microsoft.Extensions.AI IChatClient.GetService via
+        // RuntimeChatClient.ResolveActiveClient, and GetService has no async overload on that interface. See
+        // docs/wiki/16-code-conventions.md ("Blocking calls and cancellation forwarding").
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see comment above)
         var session = _codexTokenStore.LoadAsync().GetAwaiter().GetResult();
         var config = _credentialStore.LoadConfigAsync().GetAwaiter().GetResult();
         var nodeSettings = _nodeSettingsStore.LoadAsync().GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
         var snapshot = new StoreSnapshot(session, config?.AzureFoundry, nodeSettings);
 
         lock (_cacheGate)

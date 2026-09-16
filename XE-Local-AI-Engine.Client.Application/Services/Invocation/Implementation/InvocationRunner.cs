@@ -960,7 +960,7 @@ public sealed partial class InvocationRunner : IInvocationRunner
                 ? _providerStreamResilience.ExecuteStreamingAsync(resolvedModel, ProviderSend, invocationToken)
                 : ProviderSend(invocationToken);
 
-            await foreach (var update in segmentStream.ConfigureAwait(false))
+            await foreach (var update in segmentStream.WithCancellation(invocationToken).ConfigureAwait(false))
             {
                 if (approvalPossible)
                 {

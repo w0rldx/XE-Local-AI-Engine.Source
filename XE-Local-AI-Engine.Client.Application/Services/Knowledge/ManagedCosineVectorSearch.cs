@@ -270,9 +270,14 @@ public sealed class ManagedCosineVectorSearch : IVectorSearch
     // Reads the embedding BLOB (ordinal 2) into the reused pooled buffer via the reader's blob stream — no per-row byte[]
     // allocation — and returns it reinterpreted as float32 in native byte order (the layout the embedder wrote). The buffer
     // grows only when a row is wider than any seen so far; all rows for one model share a width, so it is rented once.
+    // Cannot be async: C# forbids both a ref parameter and a ByRefLike return in an async method, and this signature
+    // is what keeps the scan allocation-free — the pooled buffer is threaded by ref and the row is handed back as a
+    // span over it. The caller ScanAsync already observes cancellation between rows.
     private static ReadOnlySpan<float> ReadCandidateVector(DbDataReader reader, ref byte[]? buffer)
     {
+#pragma warning disable MA0045 // ref parameter and ReadOnlySpan<float> return are both illegal in an async method; see the comment above.
         using var blob = reader.GetStream(2);
+#pragma warning restore MA0045
         var length = checked((int)blob.Length);
         if (buffer is null || buffer.Length < length)
         {

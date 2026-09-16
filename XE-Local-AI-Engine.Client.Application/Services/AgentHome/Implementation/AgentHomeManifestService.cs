@@ -131,7 +131,7 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         CancellationToken cancellationToken)
     {
         Directory.CreateDirectory(agentHomeRoot);
-        WriteLockFile(agentHomeRoot);
+        await WriteLockFileAsync(agentHomeRoot, cancellationToken).ConfigureAwait(false);
 
         var now = _timeProvider.GetUtcNow();
         var effectiveCreatedAt = createdAt ?? now;
@@ -381,12 +381,12 @@ internal sealed class AgentHomeManifestService : IAgentHomeManifestService, IDis
         StandaloneGitClone.Delete(agentHomeRoot);
     }
 
-    private void WriteLockFile(string agentHomeRoot)
+    private async Task WriteLockFileAsync(string agentHomeRoot, CancellationToken cancellationToken)
     {
         try
         {
             var path = Path.Combine(agentHomeRoot, LockFileName);
-            File.WriteAllText(path, _timeProvider.GetUtcNow().ToString("O", CultureInfo.InvariantCulture));
+            await File.WriteAllTextAsync(path, _timeProvider.GetUtcNow().ToString("O", CultureInfo.InvariantCulture), cancellationToken).ConfigureAwait(false);
         }
         catch (IOException exception)
         {

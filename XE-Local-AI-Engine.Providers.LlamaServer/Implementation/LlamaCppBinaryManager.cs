@@ -832,7 +832,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             }
 
             reporter?.Report(RuntimeAcquisitionPhase.Extracting, stepIndex);
-            ExtractArchive(tempArchive, assetName, variantDir);
+            await ExtractArchiveAsync(tempArchive, assetName, variantDir, ct).ConfigureAwait(false);
             return null;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -905,7 +905,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         return string.Equals(actual, expectedSha256, StringComparison.OrdinalIgnoreCase);
     }
 
-    private static void ExtractArchive(string archivePath, string assetName, string variantDir)
+    private static async Task ExtractArchiveAsync(string archivePath, string assetName, string variantDir, CancellationToken ct)
     {
         // Extract into a temp sibling then atomically move into place so a partial extract can't masquerade as cached.
         var stagingDir = $"{variantDir}.{Guid.NewGuid():N}.tmp";
@@ -914,11 +914,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         {
             if (assetName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
-                ZipFile.ExtractToDirectory(archivePath, stagingDir);
+                await ZipFile.ExtractToDirectoryAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
             }
             else if (assetName.EndsWith(".tar.gz", StringComparison.OrdinalIgnoreCase))
             {
-                ExtractTarGz(archivePath, stagingDir);
+                await ExtractTarGzAsync(archivePath, stagingDir, ct).ConfigureAwait(false);
             }
             else
             {
@@ -942,11 +942,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         }
     }
 
-    private static void ExtractTarGz(string archivePath, string destination)
+    private static async Task ExtractTarGzAsync(string archivePath, string destination, CancellationToken ct)
     {
-        using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
-        using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
-        TarFile.ExtractToDirectory(gzip, destination, overwriteFiles: true);
+        await using var fileStream = new FileStream(archivePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        await using var gzip = new GZipStream(fileStream, CompressionMode.Decompress);
+        await TarFile.ExtractToDirectoryAsync(gzip, destination, overwriteFiles: true, ct).ConfigureAwait(false);
     }
 
     private static void TryDeleteFile(string path)

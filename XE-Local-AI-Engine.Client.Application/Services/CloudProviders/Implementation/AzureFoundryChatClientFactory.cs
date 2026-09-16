@@ -345,7 +345,14 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
             return liveCredential;
         }
 
+        // Forced synchronous: every credential-building path below is reached from the synchronous
+        // IAzureFoundryChatClientFactory.Create, which RuntimeChatClient.ResolveActiveClient calls from
+        // Microsoft.Extensions.AI IChatClient.GetService — an interface member with no async overload. The same
+        // reason applies to each pragma span in this file. See docs/wiki/16-code-conventions.md
+        // ("Blocking calls and cancellation forwarding").
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see comment above)
         var homeAccountId = _entraAuthCodeAccountStore?.LoadHomeAccountIdAsync().GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
         if (string.IsNullOrWhiteSpace(homeAccountId))
         {
             throw AuthCodeAuthRequired();
@@ -356,12 +363,16 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
         if (_nodeDataDirectory is not null)
         {
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see BuildDelegatedAuthCodeCredential)
             EntraAuthCodeConfidentialClientFactory.TryRegisterPersistentCacheAsync(app, _nodeDataDirectory, _logger).GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
         }
 
         // GetAccountAsync(identifier) looks the account up directly by the persisted home-account-id, rather than
         // the obsolete GetAccountsAsync() + linear scan (MSAL guidance: better perf with a token-cache serializer).
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see BuildDelegatedAuthCodeCredential)
         var account = app.GetAccountAsync(homeAccountId).GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
         if (account is null)
         {
             throw AuthCodeAuthRequired();
@@ -482,7 +493,9 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
         AuthenticationRecord record;
         try
         {
+#pragma warning disable MA0045 // forced sync by IChatClient.GetService (see BuildDelegatedAuthCodeCredential)
             record = credential.Authenticate(timeout.Token);
+#pragma warning restore MA0045
         }
         catch (OperationCanceledException exception)
         {
@@ -533,7 +546,9 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
     private AuthenticationRecord? LoadCachedAuthenticationRecord()
     {
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see BuildDelegatedAuthCodeCredential)
         return _entraTokenCacheStore?.LoadRecordAsync().GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
     }
 
     private void PersistAuthenticationRecord(AuthenticationRecord record)
@@ -545,7 +560,9 @@ public sealed class AzureFoundryChatClientFactory : IAzureFoundryChatClientFacto
 
         try
         {
+#pragma warning disable MA0045, MA0032 // forced sync by IChatClient.GetService (see BuildDelegatedAuthCodeCredential)
             _entraTokenCacheStore.SaveRecordAsync(record).GetAwaiter().GetResult();
+#pragma warning restore MA0045, MA0032
         }
         catch (IOException exception)
         {

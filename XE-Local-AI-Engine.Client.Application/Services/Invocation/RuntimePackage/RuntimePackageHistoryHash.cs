@@ -31,12 +31,14 @@ public static class RuntimePackageHistoryHash
     private static string ComputeCanonical(List<EncryptedConversationMessageDto> orderedEntries)
     {
         var bufferWriter = new ArrayBufferWriter<byte>(4096);
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using var writer = new Utf8JsonWriter(bufferWriter, new JsonWriterOptions
         {
             Indented = false,
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
             SkipValidation = false
         });
+#pragma warning restore MA0045
 
         writer.WriteStartArray();
         foreach (var entry in orderedEntries)
@@ -45,7 +47,9 @@ public static class RuntimePackageHistoryHash
         }
 
         writer.WriteEndArray();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         writer.Flush();
+#pragma warning restore MA0045
 
         return FormatLowercaseHex(SHA256.HashData(bufferWriter.WrittenSpan));
     }

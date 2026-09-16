@@ -39,7 +39,9 @@ internal static class DevWorkflowNodeInputs
     public static string Merge(string? inputJson, Action<Utf8JsonWriter>? write, params string[] drop)
     {
         using var buffer = new MemoryStream();
+#pragma warning disable MA0045 // Utf8JsonWriter over an in-memory buffer: no I/O to await; synchronous canonical-bytes function.
         using (var writer = new Utf8JsonWriter(buffer))
+#pragma warning restore MA0045
         {
             writer.WriteStartObject();
             using (var existing = Parse(inputJson))

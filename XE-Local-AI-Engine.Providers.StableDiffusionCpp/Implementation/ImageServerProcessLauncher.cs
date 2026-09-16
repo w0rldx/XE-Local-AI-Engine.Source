@@ -155,7 +155,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
     /// </summary>
     private void StartDrain(StreamReader reader, string label)
     {
-        _ = Task.Run(() => DrainAsync(reader, label));
+        _ = Task.Run(() => DrainAsync(reader, label), CancellationToken.None);
     }
 
     /// <summary>
@@ -172,7 +172,7 @@ internal sealed class ImageServerProcessLauncher : IImageServerProcessLauncher
         {
             while (true)
             {
-                var read = await reader.ReadAsync(buffer).ConfigureAwait(false);
+                var read = await reader.ReadAsync(buffer, CancellationToken.None).ConfigureAwait(false);
                 if (read == 0)
                 {
                     break;

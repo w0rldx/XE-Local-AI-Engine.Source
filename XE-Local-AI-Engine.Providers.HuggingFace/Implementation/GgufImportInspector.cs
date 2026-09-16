@@ -45,7 +45,7 @@ internal sealed class GgufImportInspector(HuggingFaceOptions options) : IGgufImp
         var displayName = Path.GetFileName(source.AbsolutePath) ?? string.Empty;
         try
         {
-            await using var opened = ValidatedGgufImportSource.Open(source.AbsolutePath, options.ModelsDirectory);
+            await using var opened = await ValidatedGgufImportSource.OpenAsync(source.AbsolutePath, options.ModelsDirectory, cancellationToken).ConfigureAwait(false);
             return await InspectOpenedAsync(opened, mode, cancellationToken).ConfigureAwait(false);
         }
         catch (GgufImportException)

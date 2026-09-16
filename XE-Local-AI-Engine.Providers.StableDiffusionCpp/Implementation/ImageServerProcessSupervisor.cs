@@ -117,8 +117,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        using var activityLease = _runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                                  ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
+        await using var activityLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
+                                         ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation."))
+            .ConfigureAwait(false);
 
         // Fast path: an already-running, live daemon is reused without taking the spawn gate — subject to a rate-limited
         // liveness probe so a wedged (alive but unresponsive) daemon is respawned instead of handed out.
@@ -139,8 +140,9 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(modelName);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
-        using var activityLease = _runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                                  ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation.");
+        await using var activityLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
+                                         ?? throw new StableDiffusionRuntimeException("The image runtime is busy with an exclusive operation."))
+            .ConfigureAwait(false);
 
         // Abort path: tear down the running daemon (dropping its one in-flight job) and spawn a fresh one.
         return await SpawnUnderGateAsync(modelName, evictFirst: true, ct).ConfigureAwait(false);
@@ -165,7 +167,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
             return new ImageServerEvictAllResult(false, _runtimeActivityGate.GetSnapshot());
         }
 
-        using (reservation)
+        await using (reservation.ConfigureAwait(false))
         {
             // Daemons detached from the table under the gate, tree-killed after it is released (see KillDetachedProcesses).
             var detached = new List<RunningServer>();
@@ -549,7 +551,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
                 throw CapReached();
             }
 
-            return AllocatePort();
+            return ReserveFreePort();
         }
         finally
         {
@@ -691,7 +693,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
     ///     <para>
     ///         INVARIANT: the port reservation is dropped here, before the child is killed, so the reservation set
     ///         (which is what bounds the loaded-model CAP) never counts a daemon that is on its way out. That does not
-    ///         hand the next spawn a port the dying child still holds: <see cref="AllocatePort" /> bind-probes every
+    ///         hand the next spawn a port the dying child still holds: <see cref="ReserveFreePort" /> bind-probes every
     ///         candidate (<see cref="IsPortFree" />) and skips one that is still bound. The bind probe was always the
     ///         real guard — <c>TreeKill</c> returns before the OS reclaims the socket, so releasing the port after the
     ///         kill never proved availability either.
@@ -753,7 +755,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         }
     }
 
-    private int AllocatePort()
+    private int ReserveFreePort()
     {
         for (var port = _options.PortRangeStart; port <= _options.PortRangeEnd; port++)
         {

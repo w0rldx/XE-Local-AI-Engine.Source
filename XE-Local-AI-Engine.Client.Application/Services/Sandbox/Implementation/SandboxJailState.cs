@@ -202,7 +202,12 @@ internal sealed class InFlightExecution
     {
         try
         {
+            // Forced sync: RequestCancel is the kill path, called from SandboxLifecycleRegistry.TerminateState (which
+            // runs under state.Sync and deletes the jail directory immediately afterwards) and from the runtime's
+            // teardown. CancelAsync would move the callbacks off this thread and break that ordering.
+#pragma warning disable MA0045 // forced sync: synchronous kill path (see comment above)
             _cancelSource.Cancel();
+#pragma warning restore MA0045
         }
         catch (ObjectDisposedException)
         {

@@ -208,7 +208,7 @@ public sealed class BenchmarkFidelityExecutor(
             kld?.BaseModelName,
             kld?.BaseFingerprint,
             kld?.Key.Digest,
-            BuildReceipt(executable, snapshot, arguments, corpus, chunks, environment));
+            await BuildReceiptAsync(executable, snapshot, arguments, corpus, chunks, environment).ConfigureAwait(false));
     }
 
     /// <summary>
@@ -246,7 +246,7 @@ public sealed class BenchmarkFidelityExecutor(
 
         // The lease is the crash-safe half: DeleteOnClose means a killed writer's lock is released by the OS, so a
         // later run takes over instead of waiting on a lock nobody will release.
-        using var lease = cache.TryAcquireLease(key);
+        await using var lease = cache.TryAcquireLease(key);
         if (lease is null)
         {
             // Another writer holds it, so this process must not write a second multi-gigabyte copy. Wait for theirs on
@@ -431,7 +431,7 @@ public sealed class BenchmarkFidelityExecutor(
     ///     launch receipt to be had; storing this under the receipt's own shape would let a UI present partial
     ///     evidence as complete evidence.
     /// </summary>
-    private static ReadOnlyMemory<byte> BuildReceipt(string executable,
+    private static async Task<ReadOnlyMemory<byte>> BuildReceiptAsync(string executable,
         BenchmarkRuntimeSnapshotV1 snapshot,
         IReadOnlyList<string> arguments,
         BenchmarkFidelityCorpusFile corpus,
@@ -442,7 +442,7 @@ public sealed class BenchmarkFidelityExecutor(
             schemaVersion = 1,
             kind = "fidelity-evidence",
             executablePath = executable,
-            executableSha256 = TryHashFile(executable),
+            executableSha256 = await TryHashFileAsync(executable).ConfigureAwait(false),
             variant = snapshot.PrimaryRuntime.Variant,
             argv = arguments,
             corpusId = corpus.CorpusId,
@@ -451,12 +451,14 @@ public sealed class BenchmarkFidelityExecutor(
             environmentFacts = environment
         }));
 
-    private static string? TryHashFile(string path)
+    private static async Task<string?> TryHashFileAsync(string path)
     {
         try
         {
-            using var stream = File.OpenRead(path);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it
+            // would turn recorded evidence into a failure. Matches the pre-S4 synchronous read.
+            await using var stream = File.OpenRead(path);
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None).ConfigureAwait(false));
         }
         catch (IOException)
         {

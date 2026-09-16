@@ -167,10 +167,12 @@ internal static class BenchmarkPythonTestsHarness
         var assembly = Assembly.GetExecutingAssembly();
         var name = assembly.GetManifestResourceNames().FirstOrDefault(candidate => candidate.EndsWith(suffix, StringComparison.Ordinal))
                    ?? throw new InvalidOperationException($"The embedded pythonTests harness resource '{suffix}' is missing from this build.");
+#pragma warning disable MA0045 // Feeds ChildTemplate/ParentTemplate static field initializers; a type initializer cannot await.
         using var stream = assembly.GetManifestResourceStream(name)
                            ?? throw new InvalidOperationException($"The embedded pythonTests harness resource '{name}' could not be opened.");
         using var reader = new StreamReader(stream, Encoding.UTF8);
         return reader.ReadToEnd().ReplaceLineEndings("\n");
+#pragma warning restore MA0045
     }
 
     /// <summary>

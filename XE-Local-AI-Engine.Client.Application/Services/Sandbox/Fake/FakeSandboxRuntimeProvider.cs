@@ -151,8 +151,10 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
             return BuildResult(request, scripted, completed: true, startedAt);
         }
 
-        using var registration = cancellationToken.Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
-            inFlight);
+        await using var registration = cancellationToken
+                                       .Register(static state => ((InFlightExecution)state!).Completion.TrySetCanceled(CancellationToken.None),
+                                           inFlight)
+                                       .ConfigureAwait(false);
 
         bool completedNormally;
         try
@@ -482,7 +484,11 @@ public sealed class FakeSandboxRuntimeProvider : IAgentSandboxRuntimeProvider, I
 
         if (File.Exists(sourcePath))
         {
+            // Forced sync: the sole caller reads this inside lock (_sync) in CopyIntoAsync, and no await may cross a
+            // lock. The fake's copy semantics are the contract the sandbox tests assert on.
+#pragma warning disable MA0045 // forced sync: called under a lock (see comment above)
             return File.ReadAllText(sourcePath);
+#pragma warning restore MA0045
         }
 
         throw new FileNotFoundException($"Host source path '{sourcePath}' has no seeded content and does not exist on disk.", sourcePath);

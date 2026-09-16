@@ -35,6 +35,11 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
     private static string LoadEmbeddedResource(string resourceName)
     {
         var assembly = Assembly.GetExecutingAssembly();
+
+        // Forced sync: IAgentInstructionProvider is a synchronous contract read from synchronous composition paths
+        // (AgentDefinitionResolver, OrchestrationResolver, GraphWorkflowAgentExecutor); the source is an embedded
+        // manifest resource in this assembly's own image, so there is no device I/O to await.
+#pragma warning disable MA0045
         using var stream = assembly.GetManifestResourceStream(resourceName);
 
         if (stream is null)
@@ -44,5 +49,6 @@ internal sealed class AgentInstructionProvider : IAgentInstructionProvider
 
         using var reader = new StreamReader(stream);
         return reader.ReadToEnd();
+#pragma warning restore MA0045
     }
 }

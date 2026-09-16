@@ -1,5 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Invocation.Orchestration.Implementation;
 
+using System.Runtime.CompilerServices;
+
 /// <summary>
 ///     Wraps a streamed <see cref="IAsyncEnumerator{T}" /> with a WALL-CLOCK idle bound a non-cooperative workflow /
 ///     provider cannot defeat — the AI.Agent-layer twin of the application layer's <c>StreamIdleWatchdog</c> (the two
@@ -53,11 +55,24 @@ internal static class IdleStreamGuard
             throw new ArgumentNullException(nameof(context), "The idle-guard context must supply both the idle-timeout and abandonment callbacks.");
         }
 
-        return IterateAsync(enumeratorFactory, context);
+        // CancellationToken.None: the iterator's [EnumeratorCancellation] parameter is filled in at enumeration time
+        // from GetAsyncEnumerator / WithCancellation, so a token supplied here would be the one that gets replaced.
+        return IterateAsync(enumeratorFactory, context, CancellationToken.None);
     }
 
-    private static async IAsyncEnumerable<T> IterateAsync<T>(Func<CancellationToken, IAsyncEnumerator<T>> enumeratorFactory, IdleGuardContext context)
+    private static async IAsyncEnumerable<T> IterateAsync<T>(Func<CancellationToken, IAsyncEnumerator<T>> enumeratorFactory,
+        IdleGuardContext callerContext,
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
     {
+        // `await foreach (… .WithCancellation(token))` flows its token here, and it is honoured by folding it into BOTH
+        // of the guard's own tokens rather than by adding a third stop condition: into the outer token so it cancels the
+        // provider and is reported as a cancellation (never as an idle timeout), and into the idle token so the per-pull
+        // race resolves on it instead of waiting out the idle deadline. With no enumeration token, or with the same token
+        // the caller already put in the context (the only call site today), both links are inert and nothing changes.
+        using var outerCts = CancellationTokenSource.CreateLinkedTokenSource(callerContext.OuterToken, cancellationToken);
+        using var idleCts = CancellationTokenSource.CreateLinkedTokenSource(callerContext.IdleToken, cancellationToken);
+        var context = callerContext with { OuterToken = outerCts.Token, IdleToken = idleCts.Token };
+
         // The enumerator binds cancellation to providerCts (linked to the OUTER token only); cancelling providerCts is
         // the cooperative signal to stop. Keeping it separate from the idle deadline makes the deadline race
         // deterministic — the deadline firing does not itself cancel the pull, so the idle signal reliably wins the race
@@ -79,7 +94,7 @@ internal static class IdleStreamGuard
                 // Fast path: a buffered event completes synchronously and successfully — take it without a Task/timer.
                 if (moveNext.IsCompletedSuccessfully)
                 {
-                    if (!moveNext.Result)
+                    if (!await moveNext.ConfigureAwait(false))
                     {
                         yield break;
                     }

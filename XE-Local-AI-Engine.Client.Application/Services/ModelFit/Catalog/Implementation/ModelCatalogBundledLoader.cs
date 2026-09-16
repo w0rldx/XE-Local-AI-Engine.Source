@@ -26,6 +26,7 @@ internal static class ModelCatalogBundledLoader
             return EmptyDocument();
         }
 
+#pragma warning disable MA0045 // Called from the ModelCatalogProvider constructor to seed the bundled fallback snapshot; a constructor cannot await.
         using var stream = assembly.GetManifestResourceStream(resourceName);
         if (stream is null)
         {
@@ -35,6 +36,7 @@ internal static class ModelCatalogBundledLoader
 
         using var reader = new StreamReader(stream);
         var raw = reader.ReadToEnd();
+#pragma warning restore MA0045
 
         var validation = ModelCatalogValidator.Validate(raw);
         if (!validation.IsValid)

@@ -190,7 +190,12 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
         try
         {
+            // Constructor-time load: IsPaired, IsTokenExpired, TokenExpiresAt, AutoConnectOnStart, BindingMethod and
+            // LastKnownNodeName are synchronous public reads over _credentials, so the field has to be populated
+            // before the instance is handed out. A ctor cannot await.
+#pragma warning disable MA0045 // forced sync: constructor, backing synchronous public property reads
             var protectedPayload = File.ReadAllBytes(_credentialsPath);
+#pragma warning restore MA0045
             return DeserializeCredentials(_protector.Unprotect(protectedPayload));
         }
         catch (CryptographicException exception)
@@ -213,7 +218,8 @@ public sealed class TokenStore : ITokenStore, IDisposable
             return;
         }
 
-        await _lock.WaitAsync().ConfigureAwait(false);
+        // No token is available: ITokenStore exposes no cancellable member on this path.
+        await _lock.WaitAsync(CancellationToken.None).ConfigureAwait(false);
         try
         {
             _credentials = await TryReadCredentialsLockedAsync(true).ConfigureAwait(false);
@@ -233,7 +239,8 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
         try
         {
-            var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath).ConfigureAwait(false);
+            // No token is available: ITokenStore exposes no cancellable member on this path.
+            var protectedPayload = await File.ReadAllBytesAsync(_credentialsPath, CancellationToken.None).ConfigureAwait(false);
             var payload = _protector.Unprotect(protectedPayload);
             return DeserializeCredentials(payload);
         }

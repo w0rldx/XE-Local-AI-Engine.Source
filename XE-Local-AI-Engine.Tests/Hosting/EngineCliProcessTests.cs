@@ -82,7 +82,7 @@ public sealed class EngineCliProcessTests : IDisposable
         await using var engine = serving.Engine;
         var port = serving.Port;
         var readyLine = serving.ReadyLine;
-        var ready = AssertEx.NotNull(DesktopPortStore.ReadReady(_root));
+        var ready = AssertEx.NotNull(await DesktopPortStore.ReadReadyAsync(_root).ConfigureAwait(false));
 
         AssertEx.Equal($"XE_READY=1 XE_VERSION={ready.Version} XE_URL={ready.Url} XE_MCP_URL={ready.McpUrl} XE_DATA_DIR={ready.DataDir}", readyLine);
         AssertEx.Equal($"http://127.0.0.1:{port.ToString(CultureInfo.InvariantCulture)}", ready.Url);

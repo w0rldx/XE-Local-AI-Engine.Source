@@ -83,9 +83,9 @@ internal sealed class BaseArtifactService(
     }
 
     /// <inheritdoc />
-    public bool Cancel(Guid artifactId)
+    public Task<bool> CancelAsync(Guid artifactId)
     {
-        return _coordinator.Cancel(artifactId);
+        return _coordinator.CancelAsync(artifactId);
     }
 
     /// <inheritdoc />

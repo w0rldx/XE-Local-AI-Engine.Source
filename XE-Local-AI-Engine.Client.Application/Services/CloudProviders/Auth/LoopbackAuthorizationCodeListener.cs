@@ -141,7 +141,7 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         var error = query["error"];
         var errorDescription = query["error_description"];
 
-        await WriteStaticResponseAsync(context.Response).ConfigureAwait(false);
+        await WriteStaticResponseAsync(context.Response, cancellationToken).ConfigureAwait(false);
 
         if (!string.Equals(state, expectedState, StringComparison.Ordinal))
         {
@@ -156,14 +156,14 @@ internal sealed class LoopbackAuthorizationCodeListener : IDisposable
         return string.IsNullOrEmpty(code) ? LoopbackCallbackResult.MissingCode : LoopbackCallbackResult.Success(code);
     }
 
-    private static async Task WriteStaticResponseAsync(HttpListenerResponse response)
+    private static async Task WriteStaticResponseAsync(HttpListenerResponse response, CancellationToken cancellationToken)
     {
         var buffer = Encoding.UTF8.GetBytes(CallbackPageHtml);
         response.ContentType = "text/html; charset=utf-8";
         response.ContentLength64 = buffer.Length;
         try
         {
-            await response.OutputStream.WriteAsync(buffer).ConfigureAwait(false);
+            await response.OutputStream.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
         }
         finally
         {

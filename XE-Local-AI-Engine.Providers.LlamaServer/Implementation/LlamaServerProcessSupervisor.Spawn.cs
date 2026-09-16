@@ -509,7 +509,7 @@ public sealed partial class LlamaServerProcessSupervisor
                 // back to the intended shape — a describable launch is worth more than no receipt at all.
                 var launchReceipt = benchmarkPolicy is null
                     ? null
-                    : BuildBenchmarkLaunchReceipt(variant,
+                    : await BuildBenchmarkLaunchReceiptAsync(variant,
                         capabilityManifest.Version ?? binary.Version,
                         capabilityManifest.ExecutableSha256,
                         LlamaServerLaunchProjection.TryFromArguments(spec.Arguments)
@@ -526,7 +526,7 @@ public sealed partial class LlamaServerProcessSupervisor
                         effectiveContext,
                         benchmarkPolicy,
                         handle.ProcessId,
-                        capabilityDecision.OmittedOptions);
+                        capabilityDecision.OmittedOptions).ConfigureAwait(false);
 
                 var endpoint = new LlamaServerEndpoint(key.ModelName, key.Role, spec.BaseAddress);
                 var running = new RunningProcess(handle, endpoint, port, _timeProvider.GetUtcNow())
@@ -737,10 +737,10 @@ public sealed partial class LlamaServerProcessSupervisor
 
     /// <summary>
     ///     Assembles the benchmark launch receipt. Non-throwing by construction: the only fact that can fail to be read
-    ///     is the running image digest, and <see cref="TryComputeRunningImageSha256" /> reports that failure as
+    ///     is the running image digest, and <see cref="TryComputeRunningImageSha256Async" /> reports that failure as
     ///     <see langword="null" /> rather than as an exception, so a receipt never costs a run its measurement.
     /// </summary>
-    internal static LlamaServerLaunchReceipt BuildBenchmarkLaunchReceipt(GpuVariant variant,
+    internal static async Task<LlamaServerLaunchReceipt> BuildBenchmarkLaunchReceiptAsync(GpuVariant variant,
         string? executableVersion,
         string? manifestSha256,
         LlamaServerLaunchProjection launchProjection,
@@ -755,7 +755,7 @@ public sealed partial class LlamaServerProcessSupervisor
             variant,
             DescribeOperatingSystem(),
             executableVersion,
-            TryComputeRunningImageSha256(processId),
+            await TryComputeRunningImageSha256Async(processId).ConfigureAwait(false),
             manifestSha256,
             launchProjection,
             auxAssets,
@@ -773,7 +773,7 @@ public sealed partial class LlamaServerProcessSupervisor
     ///     Returns <see langword="null" /> whenever the running image cannot be read; an unreadable digest is a fact
     ///     worth recording as absent, never a reason to fail a benchmark.
     /// </summary>
-    internal static string? TryComputeRunningImageSha256(int processId)
+    internal static async Task<string?> TryComputeRunningImageSha256Async(int processId)
     {
         if (processId <= 0)
         {
@@ -800,8 +800,11 @@ public sealed partial class LlamaServerProcessSupervisor
                 return null;
             }
 
-            using var stream = File.OpenRead(imagePath);
-            return Convert.ToHexStringLower(SHA256.HashData(stream));
+            // CancellationToken.None: a bounded local-file hash the caller cannot usefully abandon, and cancelling it
+            // would turn recorded evidence into a failure. Matches BenchmarkFidelityExecutor.TryHashFileAsync, and
+            // means the catch below never has to absorb a cancellation it did not ask for.
+            await using var stream = File.OpenRead(imagePath);
+            return Convert.ToHexStringLower(await SHA256.HashDataAsync(stream, CancellationToken.None).ConfigureAwait(false));
         }
         catch (Exception)
         {

@@ -786,6 +786,32 @@ outside the plan" claim that the first Release build disproves — the S3 migrat
 
 ---
 
+### PROPOSED (awaiting operator approval): `.Result` false-positives are why MA0042/MA0045 replace a `BannedSymbols` line
+
+**Rule:** sync-over-async is enforced by Meziantou MA0042/MA0045 (type-aware: they inspect the awaited expression's
+type), never by a `BannedSymbols.txt` / text ban on `.Result`, `.Wait(` or `GetAwaiter().GetResult()`. The repo has
+dozens of DTO properties literally named `Result` and four zero-timeout `Wait(0)` admission polls that a text ban
+would red; the analyzers also catch the shape a grep cannot — a sync `File.WriteAllText` / `Stream.Read` /
+`Process.WaitForExit` with an async twin inside an async method. **Prevents:** a `BannedSymbols.txt` entry that reds
+every `Result`-named DTO property, and a "23 known sites" census being mistaken for the population (the Release
+measurement found 26 MA0042 + 150 MA0045 sites). **Authority:** `Plans/static-quality-enforcement-2026-09-15/S4-blocking-and-cancellation-rules-plan.md`
+§3a/§4, `progress/S4-report.md`; `.editorconfig` Meziantou block.
+
+---
+
+### PROPOSED (awaiting operator approval): `RuntimeChatClient.GetService` forces the three cloud chat-client factories synchronous
+
+**Rule:** `ActiveCloudChatClientFactory.ResolveSnapshot`, `AzureFoundryChatClientFactory` and
+`CodexOAuthChatClientFactory.Create` block on `GetAwaiter().GetResult()` because they are reachable from
+`RuntimeChatClient.GetService(Type, object?)` — a `Microsoft.Extensions.AI.IChatClient` member with no async overload
+— through the same `ResolveActiveClient` path the two async chat calls use. Those sites carry a `#pragma warning disable
+MA0045` with that reason; do not "just make `Create` async" without first moving `GetService` off the shared path.
+**Prevents:** a half-async factory chain that still blocks under `GetService`, or a behaviour change on a
+credential/token path that this static-analysis slice is not authorised to make. **Authority:** the S4 plan §3c,
+`RuntimeChatClient.cs` (`GetResponseAsync`, `GetStreamingResponseAsync`, `GetService` → `ResolveActiveClient`).
+
+---
+
 ## 2. Dev environment & local runtime
 
 ### The dev environment has a CUDA GPU — probe it, never infer it
@@ -2158,6 +2184,12 @@ Do not assume these exist or “restore” retired designs.
 - **Scheduler can run a saved local single agent.** It strips approval-required tools, uses capacity/GPU admission, and writes a content-safe history summary. It does not write a chat conversation or compile orchestration.
 - **Sandbox providers:** fake, process, and opt-in Development Docker exist. OpenSandbox is not built; consult ADR 0004 and `docs/roadmaps/development-mode-container-status.md` for current provider coverage.
 - **Playbook retrieval defaults to embeddings**, with lexical fallback. Adaptive memory is per-agent; no node-wide/cross-agent sharing.
+- **No background-refresh cache for the cloud chat-client selection snapshot.** `ActiveCloudChatClientFactory` keeps a
+  TTL snapshot (`SelectionCacheTtl`, invalidated on sign-in/out) and fills it synchronously on a miss because
+  `RuntimeChatClient.GetService` is a sync `IChatClient` member; a background refresher that keeps the sync path a
+  cache hit was designed in `Plans/static-quality-enforcement-2026-09-15/S4-blocking-and-cancellation-rules-plan.md`
+  §3c and deliberately not built — it changes the runtime behaviour of a credential/token path and needs a live
+  Aspire round. The `MA0045` pragmas on those sites are the marker.
 - **No RAG over chat attachments.** V1 uses file tools or capped inline text; no image/OCR ingestion.
 - **STT ships; Kokoro does not.** Speech-to-text is whisper.cpp behind `IWhisperTranscriber`, with batch upload, live sessions and browser capture (`docs/wiki/24-audio-transcription.md`). TTS is still browser Web Speech, and Kokoro is not shipped.
 - Desktop-only ThemeConfigurator is outside the mobile-responsive scope. Open Canvas used to carry the same exclusion and is gone — see the stale-beliefs table.

@@ -51,7 +51,8 @@ internal sealed class ExternalAppInstanceGate
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
 
         var gate = _gates.GetOrAdd(key, static _ => new SemaphoreSlim(initialCount: 1, maxCount: 1));
-        return await gate.WaitAsync(TimeSpan.Zero).ConfigureAwait(false) ? new Lease(gate) : null;
+        // Explicitly not propagating: a zero-timeout TryEnter never waits, so a token could not shorten it.
+        return await gate.WaitAsync(TimeSpan.Zero, CancellationToken.None).ConfigureAwait(false) ? new Lease(gate) : null;
     }
 
     /// <summary>

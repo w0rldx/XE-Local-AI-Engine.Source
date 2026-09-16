@@ -242,14 +242,16 @@ internal static class AddNodeModelRuntimeExtensions
         // above; last registration wins). The node-default policy is JSON in node settings, read ONCE synchronously at
         // singleton construction (the sync INodeSettingsStore.Load twin, like the tool-capable allow-list seed) so the
         // hot resolve path stays a dictionary lookup; an operator edit applies on the next node restart.
+#pragma warning disable MA0045 // DI factory delegate is synchronous by contract; INodeSettingsStore.Load is the documented sync twin of LoadAsync for the composition path.
         builder.Services.AddSingleton<IToolApprovalPolicy>(sp =>
-            NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.ToolApprovalPolicy));
+            NodeToolApprovalPolicy.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load(CancellationToken.None)?.ToolApprovalPolicy));
 
         // The usage-summary cost resolver. Scoped (NOT singleton, unlike the approval policy above) so each
         // usage-summary read reflects the CURRENT operator rate override — the cached node-settings store makes Load() a
         // sub-millisecond in-memory hit, so per-request construction is cheap and rate edits apply without a node restart.
         builder.Services.AddScoped<IUsageRateResolver>(sp =>
-            UsageRateResolver.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load()?.UsageRates));
+            UsageRateResolver.FromSettings(sp.GetRequiredService<INodeSettingsStore>().Load(CancellationToken.None)?.UsageRates));
+#pragma warning restore MA0045
 
         // OrchestrationAgentOptions lives in AI.Agent (no reference to Client.Application), so OrchestrationAgentFactory
         // cannot inject INodeRuntimeSettings. Seed the migrated IdleTimeoutSeconds from the accessor here at the
@@ -258,8 +260,10 @@ internal static class AddNodeModelRuntimeExtensions
         // on the next process restart); the blocking accessor read runs once during options materialization, not on any hot path. The
         // accessor is resolved from the real container (no second ServiceProvider build).
         builder.Services.AddOptions<OrchestrationAgentOptions>()
+#pragma warning disable MA0045 // Options Configure delegate is synchronous by contract; the INodeRuntimeSettings sync twin is the designated composition-path read.
                .Configure<INodeRuntimeSettings>((options, runtimeSettings) =>
                    options.IdleTimeoutSeconds = runtimeSettings.GetOrchestrationIdleTimeoutSeconds());
+#pragma warning restore MA0045
 
         AddExternalOpenAiRuntime(builder);
 
@@ -423,9 +427,11 @@ internal static class AddNodeModelRuntimeExtensions
         // next process restart. Ollama:ChatModel (an out-of-band runtime override, not a migrated setting)
         // still takes precedence over the migrated default model when configured.
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
+#pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         var fallbackEndpoint = runtimeSettings.GetOllamaEndpoint();
         var fallbackModel = configuration.GetValue<string>("Ollama:ChatModel")
                             ?? runtimeSettings.GetDefaultModelName();
+#pragma warning restore MA0045
 
         return new ChatConnectionSettings(new Uri(fallbackEndpoint, UriKind.Absolute), fallbackModel);
     }
@@ -447,8 +453,10 @@ internal static class AddNodeModelRuntimeExtensions
         }
 
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
+#pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         options.DefaultQuant = runtimeSettings.GetHuggingFaceDefaultQuant();
         options.DiskMarginBytes = runtimeSettings.GetHuggingFaceDiskMarginBytes();
+#pragma warning restore MA0045
 
         return options;
     }
@@ -463,6 +471,7 @@ internal static class AddNodeModelRuntimeExtensions
     private static LlamaServerSupervisorOptions BuildSeededLlamaServerSupervisorOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
+#pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         return new LlamaServerSupervisorOptions
         {
             MaxLoadedProcesses = runtimeSettings.GetLlamaMaxLoadedProcesses(),
@@ -479,6 +488,7 @@ internal static class AddNodeModelRuntimeExtensions
             SpeculativeDraftMaxTokens = runtimeSettings.GetSpeculativeDraftMaxTokens(),
             SpeculativeDraftGpuLayers = runtimeSettings.GetSpeculativeDraftGpuLayers()
         };
+#pragma warning restore MA0045
     }
 
     /// <summary>
@@ -493,7 +503,9 @@ internal static class AddNodeModelRuntimeExtensions
     internal static LlamaServerLaunchPolicyOptions BuildSeededLlamaServerLaunchPolicyOptions(IServiceProvider serviceProvider)
     {
         var runtimeSettings = serviceProvider.GetRequiredService<INodeRuntimeSettings>();
+#pragma warning disable MA0045 // The containing method is only ever reached from an AddSingleton(sp => …) DI factory delegate, which is synchronous by contract; the INodeRuntimeSettings sync twins are the designated composition-path reads.
         var kvCacheType = runtimeSettings.GetKvCacheType();
+#pragma warning restore MA0045
         return new LlamaServerLaunchPolicyOptions
         {
             KvCacheType = kvCacheType,

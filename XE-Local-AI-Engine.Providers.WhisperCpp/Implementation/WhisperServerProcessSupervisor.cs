@@ -115,8 +115,9 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         ArgumentException.ThrowIfNullOrWhiteSpace(modelId);
         ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
-        using var spawnLease = _runtimeActivityGate.TryAcquireSpawnReadinessLease()
-                               ?? throw new WhisperRuntimeException("The transcription runtime is busy with an exclusive operation.");
+        await using var spawnLease = (_runtimeActivityGate.TryAcquireSpawnReadinessLease()
+                                      ?? throw new WhisperRuntimeException("The transcription runtime is busy with an exclusive operation."))
+            .ConfigureAwait(false);
 
         // Fast path: a live daemon already serving this model is reused without taking the ensure gate, subject to a
         // rate-limited liveness probe so a wedged daemon is respawned rather than handed out forever.
@@ -169,17 +170,17 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
     }
 
     /// <inheritdoc />
-    public Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct)
+    public async Task<WhisperServerEvictResult> EvictAsync(CancellationToken ct)
     {
         var reservation = _runtimeActivityGate.TryAcquireEvictionReservation();
         if (reservation is null)
         {
             // A transcription or a spawn is in flight. This is the 409 the endpoint reports, with the snapshot that
             // tells the operator what to wait for.
-            return Task.FromResult(new WhisperServerEvictResult(false, _runtimeActivityGate.GetSnapshot()));
+            return new WhisperServerEvictResult(false, _runtimeActivityGate.GetSnapshot());
         }
 
-        using (reservation)
+        await using (reservation.ConfigureAwait(false))
         {
             // Detached under the state lock, tree-killed outside it: a kill is slow and holds nothing useful.
             if (Detach() is { } detached)
@@ -188,7 +189,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
             }
         }
 
-        return Task.FromResult(new WhisperServerEvictResult(true, _runtimeActivityGate.GetSnapshot()));
+        return new WhisperServerEvictResult(true, _runtimeActivityGate.GetSnapshot());
     }
 
     /// <inheritdoc />

@@ -101,7 +101,7 @@ internal static class StreamIdleWatchdog
                 // is rethrown when awaited (consuming the ValueTask exactly once on that path).
                 if (moveNext.IsCompletedSuccessfully)
                 {
-                    if (!moveNext.Result)
+                    if (!await moveNext.ConfigureAwait(false))
                     {
                         yield break;
                     }

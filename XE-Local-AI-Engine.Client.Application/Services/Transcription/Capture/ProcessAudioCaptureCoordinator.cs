@@ -277,7 +277,11 @@ public sealed class ProcessAudioCaptureCoordinator : IAsyncDisposable
             _cleaned = true;
             try
             {
+                // Forced sync: CleanUpLocked runs under lock (_gate) and no await may cross a lock; the cancel must
+                // also be observed before _detach is disposed on this same thread.
+#pragma warning disable MA0045 // forced sync: called under a lock (see comment above)
                 _cancellation.Cancel();
+#pragma warning restore MA0045
                 _detach?.Dispose();
             }
 #pragma warning disable CA1031 // A producer that throws during EndAsync would strand the flush; nothing may escape.

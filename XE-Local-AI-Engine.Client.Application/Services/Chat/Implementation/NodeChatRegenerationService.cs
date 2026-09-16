@@ -148,7 +148,9 @@ public sealed class NodeChatRegenerationService(
         using var registration = cancellationRegistry.Register(correlation, () =>
         {
             invocationRunner.Cancel(requestId);
+#pragma warning disable MA0045 // INodeChatStreamCancellationRegistry.Register takes a synchronous Action; a cancel callback has no async form to convert to.
             runCancellation.Cancel();
+#pragma warning restore MA0045
         });
 
         var stateChannel = Channel.CreateUnbounded<InvocationState>(new UnboundedChannelOptions
@@ -231,7 +233,7 @@ public sealed class NodeChatRegenerationService(
 
             var package = runtimePackageBuilder.Build(new LocalChatRuntimePackageRequest(requestId,
                 conversationId,
-                resolved?.ResolvedSystemPrompt ?? LoadResolvedSystemPrompt(localChatOptions.Value),
+                resolved?.ResolvedSystemPrompt ?? await LoadResolvedSystemPromptAsync(localChatOptions.Value).ConfigureAwait(false),
                 BuildRegenerationContext(conversation, original, selectedPath, knowledge?.Message),
                 resolution.EffectiveModel,
                 resolved?.AgentDefinitionVersion ?? AgentDefinitionVersion,
@@ -696,7 +698,7 @@ public sealed class NodeChatRegenerationService(
     ///     the same versioned base scaffold a resolved, non-opted-out agent definition gets, so an unbound regenerate
     ///     is covered identically to a bound one.
     /// </summary>
-    private static string LoadResolvedSystemPrompt(LocalChatAgentOptions options)
+    private static async Task<string> LoadResolvedSystemPromptAsync(LocalChatAgentOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (string.IsNullOrWhiteSpace(options.InstructionsResource))
@@ -704,18 +706,21 @@ public sealed class NodeChatRegenerationService(
             throw new ArgumentException("Instructions resource must be provided.", nameof(options));
         }
 
-        var persona = LoadEmbeddedResource(options.InstructionsResource);
-        var scaffold = LoadEmbeddedResource(BaseScaffoldResourceName);
+        var persona = await LoadEmbeddedResourceAsync(options.InstructionsResource).ConfigureAwait(false);
+        var scaffold = await LoadEmbeddedResourceAsync(BaseScaffoldResourceName).ConfigureAwait(false);
         return string.IsNullOrWhiteSpace(scaffold) ? persona : $"{scaffold.TrimEnd()}\n\n{persona}";
     }
 
-    private static string LoadEmbeddedResource(string resourceName)
+    // Reads an embedded manifest resource: the bytes are already in the loaded assembly image, so there is no I/O a
+    // caller could usefully abandon and nothing a token would shorten. CancellationToken.None is the analyzers'
+    // documented "intentionally not propagating" opt-out, not a claim about who may cancel the enclosing turn.
+    private static async Task<string> LoadEmbeddedResourceAsync(string resourceName)
     {
         var assembly = typeof(LocalChatAgentOptions).Assembly;
-        using var stream = assembly.GetManifestResourceStream(resourceName)
-                           ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
+        await using var stream = assembly.GetManifestResourceStream(resourceName)
+                                 ?? throw new InvalidOperationException($"Embedded instructions resource '{resourceName}' was not found.");
         using var reader = new StreamReader(stream);
-        return reader.ReadToEnd();
+        return await reader.ReadToEndAsync(CancellationToken.None).ConfigureAwait(false);
     }
 
     /// <summary>

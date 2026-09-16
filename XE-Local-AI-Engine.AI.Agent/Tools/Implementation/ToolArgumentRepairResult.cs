@@ -1,7 +1,7 @@
 namespace XE_Local_AI_Engine.AI.Agent.Tools.Implementation;
 
-using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 /// <summary>
 ///     Builds the structured, model-actionable results a tool returns instead of throwing when a call cannot proceed.
@@ -21,28 +21,15 @@ internal static class ToolArgumentRepairResult
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(reason);
 
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        return new JsonObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("error", "invalid_arguments");
-            writer.WriteString("reason", reason);
-            writer.WritePropertyName("expected_schema");
-            if (expectedSchema.ValueKind == JsonValueKind.Undefined)
-            {
-                writer.WriteStartObject();
-                writer.WriteEndObject();
-            }
-            else
-            {
-                expectedSchema.WriteTo(writer);
-            }
-
-            writer.WriteString("hint", "Correct the arguments to match expected_schema and call the tool again.");
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
+            ["error"] = "invalid_arguments",
+            ["reason"] = reason,
+            ["expected_schema"] = expectedSchema.ValueKind == JsonValueKind.Undefined
+                ? new JsonObject()
+                : JsonNode.Parse(expectedSchema.GetRawText()),
+            ["hint"] = "Correct the arguments to match expected_schema and call the tool again."
+        }.ToJsonString();
     }
 
     /// <summary>
@@ -53,16 +40,11 @@ internal static class ToolArgumentRepairResult
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(toolName);
 
-        using var stream = new MemoryStream();
-        using (var writer = new Utf8JsonWriter(stream))
+        return new JsonObject
         {
-            writer.WriteStartObject();
-            writer.WriteString("error", "tool_disabled");
-            writer.WriteString("reason", $"Tool '{toolName}' was disabled for this run after repeated invalid-argument calls.");
-            writer.WriteString("hint", "Do not call this tool again during this run; continue without it.");
-            writer.WriteEndObject();
-        }
-
-        return Encoding.UTF8.GetString(stream.ToArray());
+            ["error"] = "tool_disabled",
+            ["reason"] = $"Tool '{toolName}' was disabled for this run after repeated invalid-argument calls.",
+            ["hint"] = "Do not call this tool again during this run; continue without it."
+        }.ToJsonString();
     }
 }

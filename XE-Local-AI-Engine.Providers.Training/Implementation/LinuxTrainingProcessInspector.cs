@@ -71,7 +71,11 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider timePro
         string raw;
         try
         {
+            // Forced sync: reached from the synchronous ITrainingProcessSpawner.Inspect contract and from the spawner's
+            // post-start identity read; the source is procfs, which never blocks on a device.
+#pragma warning disable MA0045
             raw = File.ReadAllText(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/stat"));
+#pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -117,7 +121,10 @@ internal sealed partial class LinuxTrainingProcessInspector(TimeProvider timePro
         byte[] raw;
         try
         {
+            // Forced sync: same synchronous ITrainingProcessSpawner.Inspect contract as TryReadStat; procfs source.
+#pragma warning disable MA0045
             raw = File.ReadAllBytes(string.Create(CultureInfo.InvariantCulture, $"/proc/{processId}/environ"));
+#pragma warning restore MA0045
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
