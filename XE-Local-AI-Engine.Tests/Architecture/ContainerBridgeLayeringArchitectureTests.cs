@@ -1,6 +1,6 @@
 namespace XE_Local_AI_Engine.Tests.Architecture;
 
-using System.Text.RegularExpressions;
+using XE_Local_AI_Engine.Tests.Architecture.Support;
 using XE_Local_AI_Engine.Tests.Testing;
 
 /// <summary>
@@ -19,10 +19,13 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         so a scan catches a using directive, a fully-qualified reference and a bare type name alike.
 ///     </para>
 ///     <para>
-///         Comments are stripped first, and deliberately. A bridge doc comment naming <c>ExternalApps:Enabled</c> —
-///         the other flag the listener is gated on — or explaining which feature is its first user documents the
-///         seam rather than crossing it, and a guard that banned the prose too would be answered by deleting the
-///         explanation instead of the dependency.
+///         Comments are stripped first, and deliberately, through the shared <see cref="SourceCommentStripper" />.
+///         A bridge doc comment naming <c>ExternalApps:Enabled</c> — the other flag the listener is gated on — or
+///         explaining which feature is its first user documents the seam rather than crossing it, and a guard that
+///         banned the prose too would be answered by deleting the explanation instead of the dependency. String
+///         literals stay visible: a banned name in one still describes a coupling, and the shared stripper is what
+///         makes that distinction safe — the regex this file used to carry read a <c>//</c> inside a URL literal as
+///         a comment start and erased every reference that followed it on that line.
 ///     </para>
 /// </summary>
 public sealed class ContainerBridgeLayeringArchitectureTests
@@ -35,6 +38,27 @@ public sealed class ContainerBridgeLayeringArchitectureTests
     [
         "Services.ExternalApps",
         "ExternalApp"
+    ];
+
+    /// <summary>
+    ///     Constructs whose content only LOOKS like a comment, each followed on the same line by a real reference.
+    ///     These are the cases the old private regex stripper got wrong: it erased the rest of the line after the
+    ///     <c>//</c> in a URL, so the reference behind it passed a guard that never saw it.
+    /// </summary>
+    private static readonly (string Case, string Source, string Symbol)[] StringShapedReferences =
+    [
+        ("URL in a regular string, then a real reference",
+            """var docs = "https://localhost/bridge"; var store = services.GetRequiredService<IExternalAppInstanceStore>();""",
+            "ExternalApp"),
+        ("double slash in a verbatim string, then a real reference",
+            """var socket = @"npipe://./pipe/bridge//engine"; using XE_Local_AI_Engine.Client.Application.Services.ExternalApps;""",
+            "Services.ExternalApps"),
+        ("URL in a raw string, then a real reference",
+            """"var docs = """see https://learn.microsoft.com/dotnet"""; var plan = ExternalAppDeploymentPlan.Empty;"""",
+            "ExternalApp"),
+        ("interpolation hole either side of a double slash, then a real reference",
+            """var origin = $"{scheme}://{authority}"; var manifest = ExternalAppManifest.Parse(text);""",
+            "ExternalApp")
     ];
 
     [Test]
@@ -78,6 +102,13 @@ public sealed class ContainerBridgeLayeringArchitectureTests
                 $"A block comment naming '{symbol}' documents the seam; it does not cross it.");
         }
 
+        foreach (var (name, source, symbol) in StringShapedReferences)
+        {
+            AssertEx.Contains(FindBannedSymbols(source), symbol,
+                $"The '{name}' case lost its '{symbol}' reference. A comment delimiter inside a string literal was "
+                + "read as a real comment, and every reference that followed it on the line went unseen.");
+        }
+
         AssertEx.Empty(FindBannedSymbols("""
                                              var caller = await _verifier.VerifyAsync(presented, context.RequestAborted);
                                              var endpoint = ContainerBridgeEndpointResolver.Resolve(options, desktop);
@@ -89,19 +120,8 @@ public sealed class ContainerBridgeLayeringArchitectureTests
 
     private static IReadOnlyList<string> FindBannedSymbols(string text)
     {
-        var code = StripComments(text);
+        var code = SourceCommentStripper.StripComments(text);
         return [.. BannedSymbols.Where(symbol => code.Contains(symbol, StringComparison.Ordinal))];
-    }
-
-    /// <summary>
-    ///     Removes line and block comments so only code is scanned. Deliberately simple — it does not model string
-    ///     literals, because a banned name inside one is not a dependency either, and erring toward scanning LESS
-    ///     never turns a real reference into a pass: a reference that compiles is code, and code is what remains.
-    /// </summary>
-    private static string StripComments(string text)
-    {
-        var withoutBlocks = Regex.Replace(text, @"/\*.*?\*/", " ", RegexOptions.Singleline, TimeSpan.FromSeconds(5));
-        return Regex.Replace(withoutBlocks, @"//[^\r\n]*", " ", RegexOptions.None, TimeSpan.FromSeconds(5));
     }
 
     private static string GuardedDirectory()

@@ -463,6 +463,13 @@ dotnet_diagnostic.CA2208.severity = warning
 # Unused parameters.
 dotnet_diagnostic.IDE0060.severity = warning
 
+# LoggerMessage template must be a static expression — already error via TreatWarningsAsErrors; explicit so an
+# SDK default change cannot silently relax it.
+dotnet_diagnostic.CA2254.severity = warning
+
+# Rethrow with `throw;` not `throw ex;` — already error via TreatWarningsAsErrors; explicit for the same reason.
+dotnet_diagnostic.CA2200.severity = warning
+
 # S1135: bare TODO/FIXME/HACK/XXX markers fail Release under TreatWarningsAsErrors — SonarSource's own
 # default severity for this rule is warning; made explicit so a reader grepping this file finds it
 # instead of only docs/agent-knowledge.md. See docs/agent-knowledge.md ("A bare TODO in a C# comment

@@ -38,6 +38,18 @@ endpoint injects and calls `Client.Application` services directly and stays **or
 Canonical shape: `Endpoints/LocalChat/V1/DeleteNodeChatConversationEndpoint.cs` (sealed, primary-ctor
 null-guards, `ct` + `ConfigureAwait(false)`, DTO return).
 
+Both halves of that shape are now regression guards rather than review habits.
+`EndpointConventionTests` freezes the file and type conventions: one endpoint per `*Endpoint.cs` file named
+after the type it declares, the plural `*Endpoints.cs` groupings named in an allowlist and nothing else plural,
+every endpoint `sealed`, and every route derived from `LocalApiRoutes` rather than written as a string literal.
+`EndpointDependencyTests` enforces the dependency rule above the same way, with a ratchet allowlist keyed by
+fully-qualified endpoint-and-parameter pairs, measured 2026-09-16 at 117 pairs across 98 endpoints, covering
+today's persistence-store and concrete-provider injections including the ones wrapped in a generic. The list
+only shrinks: an entry whose dependency is gone fails the guard as loudly as a new pair does. One of those
+pairs reaches `AI.Agent` (`GetToolCatalogEndpoint`'s approval policy) and is an open question. Either the
+allowed set gains that project deliberately, or the site migrates behind an application-layer service with the
+rest.
+
 ### A service's own model types live in `*ServiceModels.cs`
 
 Gold standard: `Services/AgentHome/` in `Client.Application` — interfaces in `IAgentHome*.cs`, shared
@@ -131,6 +143,13 @@ launch. Secret configuration belongs in encrypted `config_json`; DTOs expose onl
 The provider layering rule is in [02-project-layout.md](02-project-layout.md). A distinct, self-contained
 collaborator (its own interface + result + class) that has accreted at the tail of a large provider
 service belongs in its own file (same folder/namespace).
+
+The reverse direction is fenced too: a third-party runtime SDK belongs to the provider that owns it, and
+`ThirdPartySdkBoundaryTests` keeps `OllamaSharp`, `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` out
+of the host, application, persistence, agent and contracts layers. Nothing in the project graph says so on its
+own, because those packages are referenced by `Client.Application` itself, so every such reference compiles.
+That is why the rule is a source scan with its own shrink-only allowlist per SDK. The Docker entries are the two
+`ADR 0004` sanctions; the `OllamaSharp` entries are what the Ollama seam still owes.
 
 ### Placement is pinned by architecture tests, not by review
 

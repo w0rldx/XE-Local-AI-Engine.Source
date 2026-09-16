@@ -181,6 +181,9 @@ public sealed partial class Program
             try
             {
                 using var injectedClient = httpClientFactory?.Invoke();
+                // Pre-DI: this command runs before the host is built so a status check never takes the instance lease
+                // (see the call site's own comment in Program.cs); no IHttpClientFactory exists yet, and the process
+                // exits right after, so a raw client here is not a pooling concern.
                 using var fallbackClient = injectedClient is null ? new HttpClient() : null;
                 var client = injectedClient ?? fallbackClient!;
                 client.Timeout = TimeSpan.FromSeconds(2);

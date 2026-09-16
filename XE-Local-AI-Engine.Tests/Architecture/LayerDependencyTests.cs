@@ -34,6 +34,13 @@ public sealed class LayerDependencyTests
     // (Client.Application) assemblies share the same "XE_Local_AI_Engine.Client"
     // root namespace, so that single prefix covers both. Persistence lives under
     // the distinct "...Client.Persistence" sub-namespace.
+    // Non-vacuity floors for the two build-file scans below, set under the counts measured on 2026-09-16 (6
+    // repository .props/.targets files, 20 production projects) so a planned addition or removal is not brittle.
+    // A floor equal to its measurement is not rounded down: deleting one .props file would turn a real regression
+    // into a red herring about the floor.
+    private const int RepositoryBuildCustomizationFileFloor = 5;
+    private const int ApprovedProjectReferencesFloor = 15;
+
     private const string ClientNamespace = "XE_Local_AI_Engine.Client";
     private const string PersistenceNamespace = "XE_Local_AI_Engine.Client.Persistence";
     private const string ApplicationNamespace = "XE_Local_AI_Engine.Client.Application";
@@ -154,6 +161,71 @@ public sealed class LayerDependencyTests
             ["XE-Local-AI-Engine.Providers.WhisperCpp"] = ["XE-Local-AI-Engine.Providers.Abstractions"]
         };
 
+    // Test and support projects, keyed by REPOSITORY-RELATIVE CSPROJ PATH rather than by project name: the negative-fence
+    // probe below lives nested inside its parent test project's directory, so the "<name>/<name>.csproj" convention the
+    // production dictionary relies on cannot address it.
+    //
+    // This is a second, parallel dictionary rather than more keys in ApprovedProjectReferences: that one is cross-checked
+    // 1:1 against the solution's /Src folder membership, so a non-/Src key would fail that check on its first run.
+    // XE-Local-AI-Engine.Client.Testing is a /Src member and is therefore pinned there, not here — pinning it twice would
+    // let the two copies disagree.
+    private const string NegativeFenceProbeProject = "XE-Local-AI-Engine.Client.Persistence.NegativeFence";
+
+    private static readonly IReadOnlyDictionary<string, string[]> ApprovedTestProjectReferences =
+        new Dictionary<string, string[]>(StringComparer.Ordinal)
+        {
+            ["XE-Local-AI-Engine.AI.Agent.Tests/XE-Local-AI-Engine.AI.Agent.Tests.csproj"] =
+            [
+                "XE-Local-AI-Engine.AI.Agent",
+                "XE-Local-AI-Engine.Providers.Abstractions"
+            ],
+            ["XE-Local-AI-Engine.Client.Persistence.Tests/XE-Local-AI-Engine.Client.Persistence.Tests.csproj"] =
+            [
+                "XE-Local-AI-Engine.Client",
+                "XE-Local-AI-Engine.Client.Application",
+                "XE-Local-AI-Engine.Client.Persistence"
+            ],
+            // Built on demand by PersistenceEncryptionTests to prove that persistence entities stay internal, so it is
+            // deliberately not a solution member and nothing references it. Its single reference is the point of the probe.
+            ["XE-Local-AI-Engine.Client.Persistence.Tests/NegativeFence/XE-Local-AI-Engine.Client.Persistence.NegativeFence.csproj"] =
+            [
+                "XE-Local-AI-Engine.Client.Persistence"
+            ],
+            ["XE-Local-AI-Engine.Tests.E2ETests/XE-Local-AI-Engine.Tests.E2ETests.csproj"] =
+            [
+                "XE-Local-AI-Engine.Client",
+                "XE-Local-AI-Engine.Client.Application",
+                "XE-Local-AI-Engine.Client.Persistence",
+                "XE-Local-AI-Engine.Client.Testing",
+                "XE-Local-AI-Engine.Providers.Abstractions",
+                "XE-Local-AI-Engine.Providers.Ollama",
+                "XE-Local-AI-Engine.Testing.FakeOllama"
+            ],
+            // Both fakes are deliberately reference-free: a fake that reaches into the code under test stops being a fake.
+            ["XE-Local-AI-Engine.Testing.FakeOllama/XE-Local-AI-Engine.Testing.FakeOllama.csproj"] = [],
+            ["XE-Local-AI-Engine.Testing.FakeDocker/XE-Local-AI-Engine.Testing.FakeDocker.csproj"] = [],
+            ["XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj"] =
+            [
+                "XE-Local-AI-Engine.Client",
+                "XE-Local-AI-Engine.Client.Application",
+                "XE-Local-AI-Engine.Client.Testing",
+                "XE-Local-AI-Engine.Providers.Capabilities",
+                "XE-Local-AI-Engine.Providers.CodexOAuth",
+                "XE-Local-AI-Engine.Providers.HuggingFace",
+                "XE-Local-AI-Engine.Providers.LlamaServer",
+                "XE-Local-AI-Engine.Providers.Ollama",
+                "XE-Local-AI-Engine.Providers.OpenAICompat",
+                "XE-Local-AI-Engine.Providers.OpenAICompatible.Core",
+                "XE-Local-AI-Engine.Providers.StableDiffusionCpp",
+                "XE-Local-AI-Engine.Providers.Training",
+                "XE-Local-AI-Engine.Providers.WhisperCpp",
+                "XE-Local-AI-Engine.ServiceDefaults",
+                "XE-Local-AI-Engine.Testing.FakeDocker",
+                "XE-Local-AI-Engine.Testing.FakeOllama",
+                "XE-Local-AI-Engine.WindowsLauncher"
+            ]
+        };
+
     private static readonly IReadOnlyDictionary<Assembly, string[]> ApprovedInternalAssemblyReferences =
         new Dictionary<Assembly, string[]>
         {
@@ -260,6 +332,43 @@ public sealed class LayerDependencyTests
     }
 
     [Test]
+    public void TestAndSupportProjects_HaveOnlyTheApprovedDirectProjectReferences()
+    {
+        var solution = XDocument.Load(RepositoryPaths.Combine("XE-Local-AI-Engine.slnx"));
+        var solutionTestProjects = solution.Descendants("Project")
+                                           .Where(project => project.Ancestors("Folder")
+                                                                    .Select(folder => (string?)folder.Attribute("Name"))
+                                                                    .Any(name => name is not null && name.StartsWith("/Tests/", StringComparison.Ordinal)))
+                                           .Select(project => (string?)project.Attribute("Path"))
+                                           .Where(path => path is not null)
+                                           .Select(path => Path.GetFileNameWithoutExtension(path!.Replace('\\', '/')))
+                                           .Append(NegativeFenceProbeProject)
+                                           .Order(StringComparer.Ordinal)
+                                           .ToArray();
+        var approvedProjects = ApprovedTestProjectReferences.Keys
+                                                            .Select(path => Path.GetFileNameWithoutExtension(path))
+                                                            .Order(StringComparer.Ordinal)
+                                                            .ToArray();
+
+        // Catches a new test or fixture project that ships unpinned, which is what makes the per-project loop below
+        // worth anything: without this, an unlisted project is simply never scanned.
+        AssertExactReferences("Test and support projects in XE-Local-AI-Engine.slnx", approvedProjects, solutionTestProjects);
+
+        foreach (var (projectPath, approvedReferences) in ApprovedTestProjectReferences)
+        {
+            var project = XDocument.Load(RepositoryPaths.Combine(projectPath.Split('/')));
+            var actualReferences = project.Descendants("ProjectReference")
+                                          .Select(reference => (string?)reference.Attribute("Include"))
+                                          .Where(include => !string.IsNullOrWhiteSpace(include))
+                                          .Select(include => Path.GetFileNameWithoutExtension(include!.Replace('\\', '/')))
+                                          .Order(StringComparer.Ordinal)
+                                          .ToArray();
+
+            AssertExactReferences(Path.GetFileNameWithoutExtension(projectPath), approvedReferences, actualReferences);
+        }
+    }
+
+    [Test]
     public void ProductionAssemblies_HaveOnlyTheApprovedInternalAssemblyReferences()
     {
         foreach (var (assembly, approvedReferences) in ApprovedInternalAssemblyReferences)
@@ -278,7 +387,14 @@ public sealed class LayerDependencyTests
     [Test]
     public void RepositoryBuildCustomization_DoesNotInjectProjectReferences()
     {
-        var declarations = EnumerateRepositoryBuildCustomizationFiles(RepositoryPaths.Root)
+        var scannedFiles = EnumerateRepositoryBuildCustomizationFiles(RepositoryPaths.Root).ToArray();
+
+        AssertEx.True(scannedFiles.Length >= RepositoryBuildCustomizationFileFloor,
+            $"Scanned {scannedFiles.Length} repository-controlled .props/.targets files below '{RepositoryPaths.Root}', "
+            + $"below the non-vacuity floor of {RepositoryBuildCustomizationFileFloor}. A scan that walked nothing "
+            + "would report no injected ProjectReference for the wrong reason.");
+
+        var declarations = scannedFiles
                            .SelectMany(path => XDocument.Load(path)
                                                         .Descendants()
                                                         .Where(element => element.Name.LocalName == "ProjectReference")
@@ -296,6 +412,11 @@ public sealed class LayerDependencyTests
     [Test]
     public void ProductionProjects_DoNotUseExplicitCustomImports()
     {
+        AssertEx.True(ApprovedProjectReferences.Count >= ApprovedProjectReferencesFloor,
+            $"Scanned {ApprovedProjectReferences.Count} production csproj files named by ApprovedProjectReferences, "
+            + $"below the non-vacuity floor of {ApprovedProjectReferencesFloor}. An emptied allow-list would report "
+            + "no custom Imports for the wrong reason.");
+
         var imports = ApprovedProjectReferences.Keys
                                                .Select(projectName => RepositoryPaths.Combine(projectName, $"{projectName}.csproj"))
                                                .SelectMany(path => XDocument.Load(path)
@@ -316,6 +437,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void OllamaProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(OllamaAssembly, OllamaNamespace, 8);
+
         AssertNoDependency(OllamaAssembly,
             OllamaNamespace,
             ClientNamespace,
@@ -329,6 +452,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void LlamaServerProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(LlamaServerAssembly, LlamaServerNamespace, 220);
+
         AssertNoDependency(LlamaServerAssembly,
             LlamaServerNamespace,
             ClientNamespace,
@@ -343,6 +468,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void HuggingFaceProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(HuggingFaceAssembly, HuggingFaceNamespace, 70);
+
         AssertNoDependency(HuggingFaceAssembly,
             HuggingFaceNamespace,
             ClientNamespace,
@@ -357,6 +484,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void CodexOAuthProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(CodexOAuthAssembly, CodexOAuthNamespace, 20);
+
         AssertNoDependency(CodexOAuthAssembly,
             CodexOAuthNamespace,
             ClientNamespace,
@@ -370,6 +499,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void StableDiffusionCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(StableDiffusionCppAssembly, StableDiffusionCppNamespace, 100);
+
         AssertNoDependency(StableDiffusionCppAssembly,
             StableDiffusionCppNamespace,
             ClientNamespace,
@@ -385,6 +516,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void WhisperCppProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(WhisperCppAssembly, WhisperCppNamespace, 90);
+
         AssertNoDependency(WhisperCppAssembly,
             WhisperCppNamespace,
             ClientNamespace,
@@ -400,6 +533,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void CapabilitiesProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(CapabilitiesAssembly, CapabilitiesNamespace, 8);
+
         AssertNoDependency(CapabilitiesAssembly,
             CapabilitiesNamespace,
             ClientNamespace,
@@ -413,6 +548,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void AiContracts_DoesNotDependOnApplicationProvidersPersistenceOrHost()
     {
+        AssertTypesScanned(ContractsAssembly, "XE_Local_AI_Engine.AI.Contracts", 6);
+
         AssertNoDependency(ContractsAssembly,
             "XE_Local_AI_Engine.AI.Contracts",
             ClientNamespace,
@@ -424,6 +561,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void ExternalOpenAiProvider_DoesNotDependOnApplicationPersistenceHostOrSiblingProviders()
     {
+        AssertTypesScanned(OpenAICompatAssembly, OpenAICompatNamespace, 10);
+
         // The shared transport core is deliberately absent from the forbidden list — it is this provider's approved
         // downward dependency, not a sibling. See the OpenAICompatNamespace prefix caution above.
         AssertNoDependency(OpenAICompatAssembly,
@@ -441,6 +580,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void ProvidersAbstractions_DoesNotDependOnConcreteProvidersApplicationPersistenceOrHost()
     {
+        AssertTypesScanned(AbstractionsAssembly, AbstractionsNamespace, 130);
+
         // OpenAICompatNamespace covers BOTH the external provider and the shared transport core by namespace prefix,
         // which is exactly right here: the seam layer must be a leaf and depend on neither.
         AssertNoDependency(AbstractionsAssembly,
@@ -460,6 +601,8 @@ public sealed class LayerDependencyTests
     [Test]
     public void AiAgent_DoesNotDependOnApplicationPersistenceHostOrConcreteProviders()
     {
+        AssertTypesScanned(AiAgentAssembly, AiAgentNamespace, 100);
+
         AssertNoDependency(AiAgentAssembly,
             AiAgentNamespace,
             ClientNamespace,
@@ -471,6 +614,27 @@ public sealed class LayerDependencyTests
             CapabilitiesNamespace,
             StableDiffusionCppNamespace,
             WhisperCppNamespace);
+    }
+
+    /// <summary>
+    /// Non-vacuity floor for the dependency rules: proves the scan still sees a real, populated assembly. A marker
+    /// type that starts resolving to a different or near-empty assembly would otherwise let
+    /// <see cref="AssertNoDependency"/> pass over an empty type set and report green for the wrong reason. Floors are
+    /// set below the counts measured on 2026-09-16 so a planned addition or deletion does not make them brittle.
+    /// </summary>
+    private static void AssertTypesScanned(Assembly assembly, string sourceNamespace, int floor)
+    {
+        var scanned = Types
+                      .InAssembly(assembly)
+                      .That()
+                      .ResideInNamespaceStartingWith(sourceNamespace)
+                      .GetTypes()
+                      .Count();
+
+        AssertEx.True(scanned >= floor,
+            $"Scanned {scanned} types in namespace '{sourceNamespace}' of assembly '{assembly.GetName().Name}', "
+            + $"below the non-vacuity floor of {floor}. The dependency rule that follows would assert over an empty "
+            + "type set.");
     }
 
     /// <summary>

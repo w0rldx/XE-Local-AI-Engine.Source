@@ -4,6 +4,10 @@ using XE_Local_AI_Engine.Tests.Testing;
 
 public sealed class ProviderMapCoordinationArchitectureTests
 {
+    // Non-vacuity floor for the source scan below, set under today's measured 2045 .cs files across the two
+    // production projects so ordinary file churn does not make it brittle.
+    private const int ScannedProductionFileFloor = 1500;
+
     [Test]
     public void ProductionComposition_RegistersSharedCoordinationDomainAndFacades()
     {
@@ -40,6 +44,7 @@ public sealed class ProviderMapCoordinationArchitectureTests
             "XE-Local-AI-Engine.Client.Application/Services/Models/CoordinatedModelProviderMapStore.cs"
         };
         var violations = new List<string>();
+        var scannedFiles = 0;
         foreach (var project in new[]
                  {
                      "XE-Local-AI-Engine.Client.Application",
@@ -51,6 +56,7 @@ public sealed class ProviderMapCoordinationArchitectureTests
                                           .Where(static path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal)
                                                                 && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal)))
             {
+                scannedFiles++;
                 var relative = Path.GetRelativePath(RepositoryPaths.Root, path).Replace('\\', '/');
                 if (allowed.Contains(relative))
                 {
@@ -65,6 +71,11 @@ public sealed class ProviderMapCoordinationArchitectureTests
                 }
             }
         }
+
+        AssertEx.True(scannedFiles >= ScannedProductionFileFloor,
+            $"Scanned {scannedFiles} .cs files across XE-Local-AI-Engine.Client.Application and XE-Local-AI-Engine.Client, "
+            + $"below the non-vacuity floor of {ScannedProductionFileFloor}. A scan that walked nothing would report no "
+            + "facade bypass for the wrong reason.");
 
         AssertEx.Empty(violations,
             $"Provider-map persistence must be accessed only through ICoordinatedModelProviderMapStore: {string.Join(", ", violations)}");

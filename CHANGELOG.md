@@ -202,6 +202,8 @@ published.
   container's width rather than the viewport's.
 - `fast-uri` is overridden to `>=3.1.6` (GHSA-5jgf-p345-68v8 and siblings), and a path-traversing `chat_template`
   name is rejected before `save_pretrained` (CVE-2026-9856).
+- Seven endpoint files were named after something other than the single endpoint they declare, so the type name was
+  not enough to find the file. Each is now named after its type; no behaviour, route or namespace changed.
 
 ### Internal
 
@@ -220,6 +222,20 @@ published.
 - `.editorconfig` cleaned and calibrated: a naming rule that pointed at the wrong symbol kind corrected, duplicate
   rules removed, the bare-`TODO` severity made explicit, and every rule in the disabled block measured — five with no
   violations promoted to warnings, the rest keeping their measured count on the line.
+- Three new architecture guards under `XE-Local-AI-Engine.Tests/Architecture/`, each shipping a shrink-only
+  allowlist of what exists today so no new violation can land: `EndpointConventionTests` (file naming, one endpoint
+  per file outside the named groupings, sealed endpoints, routes only from `LocalApiRoutes`),
+  `EndpointDependencyTests` (what an endpoint may inject, walked recursively through generics) and
+  `ThirdPartySdkBoundaryTests` (`OllamaSharp`, `Docker.DotNet`, `Azure.*` and `Microsoft.Identity.Client` fenced out
+  of the host, application, persistence, agent and contracts layers). Each list has a second test that fails on an
+  entry that no longer violates, so an exemption cannot outlive what it excused.
+- The source-scanning architecture guards share one string-aware comment stripper instead of a regex that also
+  erased code after a `//` inside a string literal, and every scan-shaped guard now asserts a minimum scanned count
+  before its rule runs, so an empty scan can no longer report green. `LayerDependencyTests` additionally pins the
+  test and support projects' `ProjectReference` sets, cross-checked against the solution's own `/Tests` membership.
+- `CA2254` (varying log message template) and `CA2200` (rethrow that destroys the stack trace) are stated explicitly
+  in `.editorconfig`. Both are already error-equivalent under `TreatWarningsAsErrors`; the lines exist so an SDK
+  default this repository does not control cannot quietly relax either one.
 
 ## [1.0.0-rc.2] — 2026-08-24
 
