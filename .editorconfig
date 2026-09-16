@@ -380,7 +380,7 @@ dotnet_naming_symbols.non_field_members.applicable_kinds = property, event, meth
 dotnet_naming_symbols.non_field_members.applicable_accessibilities = public, internal, private, protected, protected_internal, private_protected
 dotnet_naming_symbols.non_field_members.required_modifiers =
 
-dotnet_naming_symbols.type_parameters.applicable_kinds = namespace
+dotnet_naming_symbols.type_parameters.applicable_kinds = type_parameter
 dotnet_naming_symbols.type_parameters.applicable_accessibilities = *
 dotnet_naming_symbols.type_parameters.required_modifiers =
 
@@ -463,45 +463,46 @@ dotnet_diagnostic.CA2208.severity = warning
 # Unused parameters.
 dotnet_diagnostic.IDE0060.severity = warning
 
-dotnet_naming_style.camel_case.capitalization = camel_case
+# S1135: bare TODO/FIXME/HACK/XXX markers fail Release under TreatWarningsAsErrors — SonarSource's own
+# default severity for this rule is warning; made explicit so a reader grepping this file finds it
+# instead of only docs/agent-knowledge.md. See docs/agent-knowledge.md ("A bare TODO in a C# comment
+# fails the build — in Release").
+dotnet_diagnostic.S1135.severity = warning
 
-dotnet_naming_rule.parameters_should_be_camel_case.symbols = parameters
-dotnet_naming_rule.parameters_should_be_camel_case.style = camel_case
-dotnet_naming_rule.parameters_should_be_camel_case.severity = warning
-
-# Application-wide analyzer calibration. These disabled CA/Sonar rules are library-design prescriptions, duplicate
+# Application-wide analyzer calibration. The none entries below are library-design prescriptions, duplicate
 # another enforced project rule, or produce reflection/DI/serializer false positives in this application. Code-specific
 # exceptions (ownership transfer, fixed SQL, experimental SDKs) stay locally scoped and justified instead of being added
 # to this list. Re-enable entries only as a separate rule-by-rule cleanup with the full solution build and tests.
-dotnet_diagnostic.CA1707.severity = none
-dotnet_diagnostic.CA2217.severity = none
-dotnet_diagnostic.CA1724.severity = none
-dotnet_diagnostic.CA1040.severity = none
-dotnet_diagnostic.CA1034.severity = none
-dotnet_diagnostic.CA1861.severity = none
-dotnet_diagnostic.CA2007.severity = none
-dotnet_diagnostic.CA1032.severity = none
-dotnet_diagnostic.S2326.severity = none
-dotnet_diagnostic.S3427.severity = none
-dotnet_diagnostic.CA1062.severity = none
-dotnet_diagnostic.S2139.severity = none
-dotnet_diagnostic.CA1848.severity = none
-dotnet_diagnostic.S6580.severity = none
-dotnet_diagnostic.CA1056.severity = none
-dotnet_diagnostic.CA1054.severity = none
-dotnet_diagnostic.CA1002.severity = none
-dotnet_diagnostic.S2955.severity = none
+# Entries measured at zero violations by the S0 config-hygiene pass are promoted to warning in place and carry
+# their own inline reason; entries that stay none carry their measured violation count.
+dotnet_diagnostic.CA1707.severity = none  # 11731 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA2217.severity = warning  # 8 files declare [Flags] enums here and none has a non-power-of-two member; a wrong flag value silently corrupts every bitwise combination
+dotnet_diagnostic.CA1724.severity = none  # 38 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1040.severity = none  # 2 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1034.severity = none  # 81 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1861.severity = none  # 87 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA2007.severity = none  # 16744 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.S2326.severity = warning  # an unused type parameter is always refactor residue, and generics are pervasive in this codebase
+dotnet_diagnostic.S3427.severity = warning  # overlapping default-argument overloads resolve silently and not the way the author expects; no overload set here relies on that
+dotnet_diagnostic.CA1062.severity = none  # 275 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.S2139.severity = none  # 17 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1848.severity = none  # 1170 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.S6580.severity = none  # 1 violation (distinct source line) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1056.severity = none  # 55 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1054.severity = none  # 25 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1002.severity = none  # 22 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.S2955.severity = warning  # comparing an unconstrained T to null is always false for value types; constrain the parameter or use EqualityComparer
 dotnet_diagnostic.CA5394.severity = suggestion
-dotnet_diagnostic.CA1305.severity = none
-dotnet_diagnostic.CA1515.severity = none
-dotnet_diagnostic.S2094.severity = none
-dotnet_diagnostic.CA1019.severity = none
-dotnet_diagnostic.CA1031.severity = none
+dotnet_diagnostic.CA1305.severity = none  # 25 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1515.severity = none  # 2794 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.S2094.severity = none  # 2 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
+dotnet_diagnostic.CA1019.severity = warning  # no custom attribute types exist here yet; an attribute is only ever read back by reflection, so a positional argument with no accessor would be unreadable
+dotnet_diagnostic.CA1031.severity = none  # 292 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
 dotnet_diagnostic.CA5404.severity = suggestion
-dotnet_diagnostic.CA2234.severity = none
+dotnet_diagnostic.CA2234.severity = none  # 79 violations (distinct source lines) measured 2026-09-16 by the S0 config-hygiene pass
 dotnet_diagnostic.CA1859.severity = suggestion
 dotnet_diagnostic.CA2213.severity = suggestion
-dotnet_diagnostic.CA1303.severity = none
+dotnet_diagnostic.CA1303.severity = none  # 1 violation (distinct source line) measured 2026-09-16 by the S0 config-hygiene pass
 dotnet_diagnostic.S2068.severity = suggestion
 dotnet_diagnostic.CA1873.severity = suggestion
 dotnet_diagnostic.S4487.severity = suggestion

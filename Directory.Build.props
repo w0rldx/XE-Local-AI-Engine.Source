@@ -11,6 +11,13 @@
     <AnalysisMode>All</AnalysisMode>
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
     <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+    <!-- D8: NuGetAudit is on by default in the .NET 10 SDK (NuGetAuditMode=all for net10.0+ targets);
+         made explicit so the policy is visible in this file rather than an invisible SDK default.
+         TreatWarningsAsErrors above means a newly-disclosed advisory at NuGetAuditLevel or above fails
+         the build the day it is disclosed - deliberate, see docs/agent-knowledge.md section 1. -->
+    <NuGetAudit>true</NuGetAudit>
+    <NuGetAuditMode>all</NuGetAuditMode>
+    <NuGetAuditLevel>low</NuGetAuditLevel>
   </PropertyGroup>
 
   <!-- Test/tooling projects are exempt from the extra banned-API + Meziantou guardrails: they

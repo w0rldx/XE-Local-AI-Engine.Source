@@ -1,7 +1,7 @@
 <Project>
 
   <!--
-    Local Debug builds skip analyzer EXECUTION. Release does not.
+    Local Debug builds skip BUILD-TIME analyzer execution. Release does not, and the IDE keeps its squiggles.
 
     Directory.Build.props sets AnalysisMode=All + EnforceCodeStyleInBuild=true and adds Analyzer to every
     project (Meziantou + BannedApiAnalyzers to production ones). That rule density is applied to ~350k lines
@@ -18,15 +18,20 @@
     an empty string and silently misfires in both directions.
 
     Safety notes:
-      - RunAnalyzers=false maps to csc -skipanalyzers, which skips diagnostic analyzers only. Source generators
-        still run, so TUnit test discovery is unaffected (a silent zero-test run is the failure mode this repo
-        has already paid for once — see docs/agent-knowledge.md).
+      - RunAnalyzersDuringBuild=false is the build-time-only knob: it makes the build pass csc -skipanalyzers,
+        which skips diagnostic analyzers only. Source generators still run, so TUnit test discovery is
+        unaffected (a silent zero-test run is the failure mode this repo has already paid for once — see
+        docs/agent-knowledge.md). RunAnalyzers=false, which this property replaced, was the master switch: it
+        also disabled RunAnalyzersDuringLiveAnalysis, so Rider and Visual Studio showed no analyzer squiggles
+        at all while editing. That side effect was never wanted. RunAnalyzersDuringLiveAnalysis is left unset
+        and therefore stays at its default of true. Property table: Microsoft Learn, "Disable source code
+        analysis for .NET" (https://learn.microsoft.com/visualstudio/code-quality/disable-code-analysis).
       - TreatWarningsAsErrors stays on, so genuine compiler warnings still fail a Debug build.
       - Set XE_FULL_ANALYSIS=1 to force the full analyzer pass in Debug, and $(CI) is honoured so any automated
         build gets it regardless of configuration.
   -->
   <PropertyGroup Condition="'$(Configuration)' == 'Debug' And '$(CI)' == '' And '$(XE_FULL_ANALYSIS)' == ''">
-    <RunAnalyzers>false</RunAnalyzers>
+    <RunAnalyzersDuringBuild>false</RunAnalyzersDuringBuild>
   </PropertyGroup>
 
 </Project>

@@ -57,12 +57,32 @@ Hard-won rules, invariants, and traps for this repository. `docs/wiki/` explains
   ```
 
 - `dotnet run --no-build` defaults to Debug. Pass `--configuration Release`, and inspect the `total:` line; **zero tests is never a pass**.
-- Keep the analyzer gate in `Directory.Build.targets`, not `.props`: `Configuration` is not defaulted when `.props` is imported. Verify with `dotnet msbuild <proj> -getProperty:RunAnalyzers -p:Configuration=…`.
-- `RunAnalyzers=false` skips diagnostics, not source generators; do not treat it as a TUnit-discovery switch.
+- Keep the analyzer gate in `Directory.Build.targets`, not `.props`: `Configuration` is not defaulted when `.props` is imported. Verify with `dotnet msbuild <proj> -getProperty:RunAnalyzersDuringBuild -p:Configuration=…`.
+- `RunAnalyzersDuringBuild=false` skips diagnostics, not source generators; do not treat it as a TUnit-discovery switch.
 - **Four analyzer rules are silent in Debug and `error` in Release, and each one rejects a shape a reviewer would call correct.** `S3267` refuses a `foreach` that could be a `Where`, including a character scan written as a loop on purpose; `MA0022`/`S4586` refuse a method returning a bare `null` `Task`; `S1117` refuses a local that shadows a field of the same class. There is no Debug signal for any of them, so a branch that built clean all day fails at the gate. Fix the shape or suppress it in the source with the reason — never "code around it" silently. Authority: the External Apps slices S0–S3, once each.
 
 
-An incremental Release result is evidence only when projects actually compiled. Analyzer diagnostics are not replayed for skipped projects. Keep `TreatWarningsAsErrors` in Debug for compiler warnings, but do not confuse that with the analyzer wall. `XE_FULL_ANALYSIS=1` is the explicit analyzer-sensitive Debug loop. `RunAnalyzers=false` maps to csc `-skipanalyzers`; source generators still execute, so a zero-test run points to build/config/discovery, not this gate.
+An incremental Release result is evidence only when projects actually compiled. Analyzer diagnostics are not replayed for skipped projects. Keep `TreatWarningsAsErrors` in Debug for compiler warnings, but do not confuse that with the analyzer wall. `XE_FULL_ANALYSIS=1` is the explicit analyzer-sensitive Debug loop. `RunAnalyzersDuringBuild=false` maps to csc `-skipanalyzers`; source generators still execute, so a zero-test run points to build/config/discovery, not this gate.
+
+### `dotnet_naming_rule.*.severity` is IDE-only — the build-time lever is the single `IDE1006` diagnostic
+
+**Rule:** a `severity` written inside a `dotnet_naming_rule` block changes nothing at build time. The one build-time lever for naming is `dotnet_diagnostic.IDE1006.severity`, and it is all-or-nothing across every naming rule `.editorconfig` declares. **Failure prevented:** "promoting" one naming rule and believing Release now enforces it, when the build never reads that severity. **Authority:** Microsoft Learn's naming-rules page, "Severity specification within a naming rule is only respected inside development IDEs … not respected during build". The S0 config-hygiene slice measured `IDE1006` at 225 violations on 2026-09-16 and did **not** promote it, so `.editorconfig` carries no `IDE1006` line and naming stays advisory. 221 of those 225 are a single style disagreement, local constants written PascalCase against a declared camelCase style, so settling that one question is the prerequisite for ever promoting the rule.
+
+### `global.json` pins an SDK feature band, and CI resolves from the same file
+
+**Rule:** `global.json` pins `10.0.401` with `rollForward: latestPatch`, so only the patch digit may move inside the `10.0.4xx` band. `actions/setup-dotnet` reads `global.json` and honours `rollForward`, so a local machine and CI land on the same feature band and therefore the same analyzer set. Working on this repository needs a `10.0.4xx` SDK installed; `dotnet --list-sdks` must show one. **Failure prevented:** the earlier `10.0.100` baseline with `rollForward: latestFeature`, under which local and CI could evaluate different feature bands and so different analyzer behaviour, with no signal that they had diverged. **Diagnosis tell:** an unmatched band fails every `dotnet` command with "A compatible .NET SDK was not found", naming the requested version and the `global.json` that asked for it. **Authority:** S0 config-hygiene slice, 2026-09-16.
+
+### `RunAnalyzersDuringBuild=false` keeps IDE squiggles; `RunAnalyzers=false` kills them too
+
+**Rule:** for any Debug/Release analyzer split, reach for `RunAnalyzersDuringBuild`. (`tools/AgentTemplateGenerator` keeps `RunAnalyzers=false` on purpose: a standalone tool with no product analyzer wall and no IDE loop to protect.) `RunAnalyzers` is the master switch: it additionally clears `RunAnalyzersDuringLiveAnalysis`, so Rider and Visual Studio stop showing analyzer diagnostics while you edit. **Failure prevented:** buying a fast Debug build by blinding the editor, which is where those diagnostics are cheapest to act on. **Authority:** the analyzer `PropertyGroup` in `Directory.Build.targets`, changed 2026-09-16. `dotnet msbuild <proj> -getProperty:RunAnalyzersDuringBuild -p:Configuration=Debug` prints `false`; the same query for `RunAnalyzersDuringLiveAnalysis` prints an **empty** line, which is the correct observable for a property nothing in the build sets, the `true` default being applied downstream rather than by MSBuild.
+
+### NuGet audit is stated explicitly, and a new advisory is meant to break the build
+
+**Rule:** `Directory.Build.props` states `NuGetAudit`, `NuGetAuditMode` (`all`, direct and transitive) and `NuGetAuditLevel` (`low`). All three match the SDK defaults, so the change was legibility, not policy — but under `TreatWarningsAsErrors` a newly disclosed advisory of any severity turns restore or build red with no source change on the branch. That is the design, not a regression. **When it fires:** bump the package, or add a reviewed override for that one advisory. Never lower `NuGetAuditLevel`, and never narrow `NuGetAuditMode` to `direct`, to make the red go away. **Authority:** S0 config-hygiene slice, 2026-09-16.
+
+### Measuring an analyzer rule: drop warnings-as-errors for that build, and flip the rule under `[*.cs]`
+
+**Rule:** to count a rule's violations, set it to `warning` and build Release once with `-p:TreatWarningsAsErrors=false`, then confirm every solution project produced a `-> *.dll` line before trusting the number. Under real warnings-as-errors the first violating upstream project stops every downstream project from compiling, so the count silently covers only part of the solution. **Second rule:** put the flip inside the `[*.cs]` section. `.editorconfig` ends with narrow glob sections, the last of them an endpoint-DTO glob, so a line appended to the end of the file is scoped to those files alone. **Failure prevented:** an `IDE1006` measurement that reported zero violations and would have promoted the rule on false evidence; re-run under `[*.cs]` the same flip reported 225. **Authority:** S0 config-hygiene slice, 2026-09-16. Install the scratch flip behind a shell `trap … EXIT` that restores the file, and remember that a measurement or deliberate-break build proves nothing unless it reported `0 Error(s)` for the reason you expected.
 
 ### Host filtering runs from an `IStartupFilter`, ahead of every middleware the composition root registers
 
@@ -2111,7 +2131,7 @@ These are intentionally terse. Follow the linked/current section for the active 
 | Inbound MCP key is recoverable. | Only a SHA-256 digest is stored; plaintext is returned once on generation (§2). |
 | `dotnet test` cannot discover MTP tests. | `global.json` pins MTP; `dotnet test` works (§1). |
 | Any build runs analyzers. | Analyzer wall is Release-only locally (§1). |
-| `RunAnalyzers=false` disables generators. | It skips diagnostic analyzers only (§1). |
+| `RunAnalyzers=false` disables generators, and is the Debug gate. | The gate is `RunAnalyzersDuringBuild=false` (since 2026-09-16). It skips diagnostic analyzers only: source generators still run, and IDE live analysis stays on (§1). |
 | `if (!OperatingSystem.IsX()) return;` is an acceptable platform guard. | It reports a green pass on every platform that cannot run the test; use TUnit's `[RunOn(OS.Linux)]` / `[ExcludeOn(OS.Windows)]` or `Skip.Test` (§1). |
 | Green E2E proves frontend typecheck. | E2E uses Vite-only `build:e2e`; run `pnpm run lint` (§1). |
 | Browser E2E is entirely sequential. | It uses disjoint serial and pooled phases (§1). |

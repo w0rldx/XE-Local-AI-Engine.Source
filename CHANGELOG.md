@@ -213,6 +213,13 @@ published.
 - Dependency waves across NuGet, the frontend runtime and development tooling, and the Python training extras, with
   the reason for each pin-locked alert recorded.
 - ADRs 0007 through 0012 and new architecture pages for the modules above.
+- Build configuration hygiene: `global.json` pins the `10.0.4xx` SDK band (`10.0.401`, `rollForward: latestPatch`) so
+  local and CI evaluate the same analyzer set; Debug skips analyzers through `RunAnalyzersDuringBuild` instead of
+  `RunAnalyzers`, so editor squiggles survive the fast loop; the NuGet audit policy is stated explicitly in
+  `Directory.Build.props`.
+- `.editorconfig` cleaned and calibrated: a naming rule that pointed at the wrong symbol kind corrected, duplicate
+  rules removed, the bare-`TODO` severity made explicit, and every rule in the disabled block measured — five with no
+  violations promoted to warnings, the rest keeping their measured count on the line.
 
 ## [1.0.0-rc.2] — 2026-08-24
 
