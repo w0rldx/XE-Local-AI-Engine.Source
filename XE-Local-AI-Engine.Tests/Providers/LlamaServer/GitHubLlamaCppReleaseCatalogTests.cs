@@ -28,7 +28,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag,
             (AssetName(GpuVariant.Cpu, OSPlatform.Linux), $"sha256:{digest}", 123L)));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu, CancellationToken.None);
 
@@ -59,7 +59,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
             return response;
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var first = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu, CancellationToken.None);
         var second = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu, CancellationToken.None);
@@ -76,7 +76,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
     {
         using var handler = new ScriptedHandler(_ => throw new HttpRequestException("Simulated network failure."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveRecommendedAsync(Tag, CancellationToken.None);
 
@@ -97,7 +97,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
             return response;
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveRecommendedAsync(Tag, CancellationToken.None);
 
@@ -126,7 +126,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
 
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag, (expectedName, $"sha256:{digest}", 9L)));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, os, arch, variant, CancellationToken.None);
 
@@ -141,7 +141,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         var digest = new string('d', 64);
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag, (driftedName, $"sha256:{digest}", 5L)));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Windows, Architecture.X64, GpuVariant.Cuda, CancellationToken.None);
 
@@ -158,7 +158,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
     {
         using var handler = new ScriptedHandler(_ => throw new InvalidOperationException("A malformed tag must never hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveRecommendedAsync(badTag, CancellationToken.None);
 
@@ -175,7 +175,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         var digest = new string('e', 64);
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag, (tamperedName, $"sha256:{digest}", 5L)));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu, CancellationToken.None);
 
@@ -189,7 +189,7 @@ public sealed class GitHubLlamaCppReleaseCatalogTests
         using var handler = new ScriptedHandler(_ => ReleaseResponse(Tag,
             (AssetName(GpuVariant.Cpu, OSPlatform.Linux), Digest: (string?)null, 1L)));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var catalog = new GitHubLlamaCppReleaseCatalog(http);
+        var catalog = new GitHubLlamaCppReleaseCatalog(http, TimeProvider.System);
 
         var result = await catalog.ResolveAssetAsync(Tag, OSPlatform.Linux, Architecture.X64, GpuVariant.Cpu, CancellationToken.None);
 

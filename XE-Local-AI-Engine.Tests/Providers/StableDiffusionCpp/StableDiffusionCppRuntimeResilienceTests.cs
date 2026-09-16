@@ -108,6 +108,7 @@ public sealed class StableDiffusionCppRuntimeResilienceTests
         }
 
         // The production registration path owns the POST-safe pipeline for the sdcpp-runtime client.
+        services.AddSingleton(TimeProvider.System);
         services.AddStableDiffusionCppImageRuntime();
 
         // Swap the primary handler for the counting handler so the assertions observe real attempt counts.

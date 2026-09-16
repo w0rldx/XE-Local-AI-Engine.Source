@@ -37,25 +37,26 @@ public sealed class ByteBudgetedCache<TKey, TValue>
     ///     Approximate retained size of one entry (key plus value). An approximation is the point — this bounds RAM, it
     ///     does not measure it.
     /// </param>
+    /// <param name="timeProvider">Clock, for TTL.</param>
     /// <param name="timeToLive">Entry lifetime; <see cref="TimeSpan.Zero" /> (the default) means entries never expire.</param>
-    /// <param name="timeProvider">Clock, for TTL. Defaults to <see cref="TimeProvider.System" />.</param>
     /// <param name="onEvictedBytes">Invoked with the bytes reclaimed by an eviction pass, for callers that meter it.</param>
     /// <param name="keyComparer">Key comparer; defaults to <typeparamref name="TKey" />'s own equality.</param>
     public ByteBudgetedCache(long maxBytes,
         int maxEntries,
         Func<TKey, TValue, long> costInBytes,
+        TimeProvider timeProvider,
         TimeSpan timeToLive = default,
-        TimeProvider? timeProvider = null,
         Action<long>? onEvictedBytes = null,
         IEqualityComparer<TKey>? keyComparer = null)
     {
         ArgumentNullException.ThrowIfNull(costInBytes);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _maxBytes = Math.Max(1, maxBytes);
         _maxEntries = Math.Max(1, maxEntries);
         _costInBytes = costInBytes;
         _timeToLive = timeToLive;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _onEvictedBytes = onEvictedBytes;
         _entries = new ConcurrentDictionary<TKey, Entry>(keyComparer);
         _inFlight = new ConcurrentDictionary<TKey, TaskCompletionSource<Resolution>>(keyComparer);

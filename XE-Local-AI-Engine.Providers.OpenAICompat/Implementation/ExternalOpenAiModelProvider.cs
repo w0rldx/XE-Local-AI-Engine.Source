@@ -37,16 +37,19 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
     private static readonly TimeSpan HealthProbeTimeout = TimeSpan.FromSeconds(3);
 
     private readonly IExternalProviderRegistry _registry;
+    private readonly TimeProvider _timeProvider;
     private readonly Func<HttpMessageHandler>? _transportHandlerFactory;
 
     /// <param name="registry">The read-only registry of connections and their registered models.</param>
+    /// <param name="timeProvider">The clock behind every timestamp the provider records.</param>
     /// <param name="transportHandlerFactory">
     ///     Test seam supplying the innermost HTTP handler so the assembled stack (endpoint guard included) can be driven
     ///     without live network I/O. <see langword="null" /> in production.
     /// </param>
-    public ExternalOpenAiModelProvider(IExternalProviderRegistry registry, Func<HttpMessageHandler>? transportHandlerFactory = null)
+    public ExternalOpenAiModelProvider(IExternalProviderRegistry registry, TimeProvider timeProvider, Func<HttpMessageHandler>? transportHandlerFactory = null)
     {
         _registry = registry ?? throw new ArgumentNullException(nameof(registry));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _transportHandlerFactory = transportHandlerFactory;
     }
 
@@ -271,7 +274,7 @@ public sealed class ExternalOpenAiModelProvider : ILocalModelProvider
         {
             ProviderName = ProviderName,
             IsHealthy = isHealthy,
-            ObservedAt = DateTimeOffset.UtcNow,
+            ObservedAt = _timeProvider.GetUtcNow(),
             Diagnostics = diagnostics
         };
     }

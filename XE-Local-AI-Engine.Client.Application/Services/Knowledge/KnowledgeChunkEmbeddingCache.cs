@@ -37,8 +37,8 @@ public sealed class KnowledgeChunkEmbeddingCache : IKnowledgeChunkEmbeddingCache
                                         + key.ChunkerVersion.Length
                                         + key.VectorIdentity.Length) * sizeof(char))
                                     + EntryOverheadBytes,
-            _ttl,
-            timeProvider);
+            timeProvider,
+            _ttl);
     }
 
     public async Task<IReadOnlyList<byte[]>> GetOrCreateManyAsync(IReadOnlyList<KnowledgeChunkEmbeddingCacheKey> keys,

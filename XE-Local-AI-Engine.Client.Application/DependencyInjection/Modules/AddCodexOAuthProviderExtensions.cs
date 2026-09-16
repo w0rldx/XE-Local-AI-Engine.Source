@@ -45,7 +45,8 @@ internal static class AddCodexOAuthProviderExtensions
             return new CodexAuthService(serviceProvider.GetRequiredService<IOptions<CodexOptions>>(),
                 httpClient,
                 serviceProvider.GetRequiredService<ICodexTokenStore>(),
-                serviceProvider.GetRequiredService<ILogger<CodexAuthService>>());
+                serviceProvider.GetRequiredService<ILogger<CodexAuthService>>(),
+                serviceProvider.GetRequiredService<TimeProvider>());
         });
 
         // Decorates the Codex chat transport: injects the bearer + account headers and single-flights refresh on 401.

@@ -56,12 +56,14 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
     public EmbeddingToolRelevanceSelector(ILocalModelProviderResolver providerResolver,
         IOptions<ToolRelevanceOptions> options,
         LexicalToolRelevanceSelector lexical,
-        ILogger<EmbeddingToolRelevanceSelector> logger)
+        ILogger<EmbeddingToolRelevanceSelector> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(lexical);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _providerResolver = providerResolver;
         _options = options.Value;
@@ -71,7 +73,8 @@ public sealed class EmbeddingToolRelevanceSelector : IToolRelevanceSelector
             _options.EmbeddingCacheMaxEntries,
             static (key, vector) => (vector.Length * sizeof(float))
                                     + ((key.Model.Length + key.ToolName.Length + (key.Description?.Length ?? 0)) * sizeof(char))
-                                    + EntryOverheadBytes);
+                                    + EntryOverheadBytes,
+            timeProvider);
     }
 
     /// <inheritdoc />

@@ -235,7 +235,7 @@ public sealed class DesktopLaunchTests
     {
         using var lifetime = new FakeHostApplicationLifetime();
         using var server = new FakeServer(new FakeServerAddressesFeature());
-        using var lifecycle = new DesktopLifecycle(lifetime, server, NullLogger<DesktopLifecycle>.Instance);
+        using var lifecycle = new DesktopLifecycle(lifetime, server, NullLogger<DesktopLifecycle>.Instance, TimeProvider.System);
 
         // Drive the graceful-stop seam directly — no real SIGHUP / console-ctrl event.
         lifecycle.TriggerGracefulStop();

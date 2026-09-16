@@ -19,6 +19,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
     private readonly ILogger<EntraAuthCodeSignInCoordinator> _logger;
     private readonly Action? _onSignInSucceeded;
     private readonly IEntraAuthCodeRedeemer _redeemer;
+    private readonly TimeProvider _timeProvider;
 
     private CancellationTokenSource? _pendingCts;
     private LoopbackAuthorizationCodeListener? _pendingListener;
@@ -33,6 +34,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
     /// </param>
     /// <param name="redeemer">The (fakeable) MSAL authorization-code redemption seam. See <see cref="IEntraAuthCodeRedeemer" />.</param>
     /// <param name="logger">Never receives token material.</param>
+    /// <param name="timeProvider">Clock used to stamp the pending sign-in's callback deadline.</param>
     /// <param name="onSignInSucceeded">
     ///     Optional callback invoked once a sign-in completes and a credential is persisted. The host wires this to
     ///     invalidate the active-cloud selection snapshot so a sign-in takes effect on the very next send.
@@ -42,6 +44,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         IEntraLiveCredentialCache liveCredentialCache,
         IEntraAuthCodeRedeemer redeemer,
         ILogger<EntraAuthCodeSignInCoordinator> logger,
+        TimeProvider timeProvider,
         Action? onSignInSucceeded = null)
     {
         ArgumentNullException.ThrowIfNull(credentialStore);
@@ -49,12 +52,14 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         ArgumentNullException.ThrowIfNull(liveCredentialCache);
         ArgumentNullException.ThrowIfNull(redeemer);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _credentialStore = credentialStore;
         _accountStore = accountStore;
         _liveCredentialCache = liveCredentialCache;
         _redeemer = redeemer;
         _logger = logger;
+        _timeProvider = timeProvider;
         _onSignInSucceeded = onSignInSucceeded;
     }
 
@@ -92,7 +97,7 @@ public sealed class EntraAuthCodeSignInCoordinator : IEntraAuthCodeSignInCoordin
         var (codeVerifier, codeChallenge) = PkceGenerator.Create();
         var listener = StartListenerOrThrow(redirectUri, newCts);
         var authorizeUrl = BuildAuthorizeUrl(connection, redirectUriString, state, codeChallenge);
-        var expiresAtUtc = DateTimeOffset.UtcNow.Add(EntraAuthCodeDefaults.CallbackTimeout);
+        var expiresAtUtc = _timeProvider.GetUtcNow().Add(EntraAuthCodeDefaults.CallbackTimeout);
 
         lock (_gate)
         {

@@ -33,13 +33,14 @@ public static class TrainingServiceCollectionExtensions
         // Spawn-and-return launcher plus the /proc reader its receipts are validated against. Both are stateless
         // singletons; the run executor and the startup reaper are the only consumers.
         services.TryAddSingleton<ITrainingProcessSpawner>(static _ => new LinuxTrainingProcessSpawner());
-        services.TryAddSingleton<ITrainingProcessInspector>(static sp => new LinuxTrainingProcessInspector(sp.GetService<TimeProvider>()));
+        services.TryAddSingleton<ITrainingProcessInspector>(static sp => new LinuxTrainingProcessInspector(sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton<ITrainingRuntimeService>(static sp =>
             new TrainingRuntimeService(sp.GetRequiredService<ITrainingRuntimePrerequisiteProbe>(),
                 sp.GetRequiredService<ITrainingRuntimeEventPublisher>(),
                 sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(TrainingRuntimeService)),
-                sp.GetRequiredService<ILogger<TrainingRuntimeService>>()));
+                sp.GetRequiredService<ILogger<TrainingRuntimeService>>(),
+                sp.GetRequiredService<TimeProvider>()));
 
         return services;
     }

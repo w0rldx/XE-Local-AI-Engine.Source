@@ -286,9 +286,9 @@ public sealed class CudaBuildServiceTests
         var store = new InstalledRuntimeStore(cacheRoot);
         var signal = new CudaManagedBuildSignal();
         var manager = new LlamaCppBinaryManager(http, cacheRoot, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
         var probe = new AlwaysBuildableProbe();
-        var service = new CudaBuildService(probe, manager, new NullCudaBuildEventPublisher(), NullLogger<CudaBuildService>.Instance, cacheRoot);
+        var service = new CudaBuildService(probe, manager, new NullCudaBuildEventPublisher(), NullLogger<CudaBuildService>.Instance, TimeProvider.System, cacheRoot);
         return (service, store);
     }
 

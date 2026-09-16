@@ -143,7 +143,8 @@ public sealed class AskUserColdLoadResumeTests
             Substitute.For<INodeKeyRegistry>(),
             Substitute.For<IInvocationHistory>(),
             Substitute.For<INodeChatRemotePersistenceCoordinator>(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
     }
 
     private static InvocationResumeRegistry CreateRegistry(IWorkerEventDispatcher dispatcher)

@@ -16,6 +16,7 @@ public sealed class HeartbeatBackgroundService : BackgroundService
     private readonly IWorkerHubConnection _hubConnection;
     private readonly ILogger<HeartbeatBackgroundService> _logger;
     private readonly IOptions<CentralPlatformOptions> _options;
+    private readonly TimeProvider _timeProvider;
     private readonly ITokenStore _tokenStore;
     private DateTimeOffset? _lastCapabilityRefreshAt;
 
@@ -23,13 +24,15 @@ public sealed class HeartbeatBackgroundService : BackgroundService
         ITokenStore tokenStore,
         Lazy<ICapabilityReporter> capabilityReporter,
         IOptions<CentralPlatformOptions> options,
-        ILogger<HeartbeatBackgroundService> logger)
+        ILogger<HeartbeatBackgroundService> logger,
+        TimeProvider timeProvider)
     {
         _hubConnection = hubConnection ?? throw new ArgumentNullException(nameof(hubConnection));
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _capabilityReporter = capabilityReporter ?? throw new ArgumentNullException(nameof(capabilityReporter));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public static TimeSpan TestDelayOverride { get; set; } = TimeSpan.Zero;
@@ -81,7 +84,7 @@ public sealed class HeartbeatBackgroundService : BackgroundService
 
     private async Task RefreshCapabilitiesIfDueAsync(CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
+        var now = _timeProvider.GetUtcNow();
         var refreshInterval = TestCapabilityRefreshIntervalOverride > TimeSpan.Zero
             ? TestCapabilityRefreshIntervalOverride
             : DefaultCapabilityRefreshInterval;

@@ -50,18 +50,19 @@ public sealed class CodexAuthHandler : DelegatingHandler
         ICodexTokenStore tokenStore,
         ICodexAuthService authService,
         ILogger<CodexAuthHandler> logger,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(authService);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _options = options.Value;
         _tokenStore = tokenStore;
         _authService = authService;
         _logger = logger;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
     }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request,

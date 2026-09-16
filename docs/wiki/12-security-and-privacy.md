@@ -847,11 +847,11 @@ Current bans:
 
 | Banned | Use instead |
 |---|---|
-| `DateTime.Now` / `DateTime.UtcNow` / `DateTimeOffset.Now` | inject `TimeProvider`, call `GetUtcNow()` / `GetLocalNow()` |
+| `DateTime.Now` / `DateTime.UtcNow` / `DateTimeOffset.Now` / `DateTimeOffset.UtcNow` | inject `TimeProvider`, call `GetUtcNow()` / `GetLocalNow()` |
 | `Thread.Sleep(...)` | `await Task.Delay(..., cancellationToken)` |
 | `GC.Collect(...)` | let the runtime manage GC |
 
-The file documents its own scope: it is the "safe set" — APIs with zero current production usage — so the wall blocks *new* occurrences while keeping the build green. (`DateTimeOffset.UtcNow` and sync-over-async `.Result`/`.Wait()`/`.GetAwaiter().GetResult()` remain outside the safe set because production call sites still use them.) Separately, a literal `TODO`/`FIXME`/`HACK`/`XXX` in a comment fails the build (Sonar S1135 = error); describe the present limitation or rationale directly without task markers. Like every rule on this page, that one is **Release-only** per the note above: a bare `TODO` compiles cleanly in a local Debug build and fails the packaging script later.
+The file documents its own scope: it is the "safe set" — APIs with zero current production usage — so the wall blocks *new* occurrences while keeping the build green. (`DateTimeOffset.UtcNow` joined the set on 2026-09-16 after every production reader was migrated to an injected `TimeProvider`; sync-over-async `.Result`/`.Wait()`/`.GetAwaiter().GetResult()` remains outside it because production call sites still use it.) Separately, a literal `TODO`/`FIXME`/`HACK`/`XXX` in a comment fails the build (Sonar S1135 = error); describe the present limitation or rationale directly without task markers. Like every rule on this page, that one is **Release-only** per the note above: a bare `TODO` compiles cleanly in a local Debug build and fails the packaging script later.
 
 **Maintainer rule:** don't suppress RS0030 to land a banned call; fix the call site.
 

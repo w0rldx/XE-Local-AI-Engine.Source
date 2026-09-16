@@ -796,7 +796,7 @@ public sealed class CapacityServiceTests
         // Lock ordering: the capacity decision gate and the GPU-load admission gate are never nested — the
         // decision fully completes (releasing the ledger gate) BEFORE the supervisor spawn acquires the load gate. Prove
         // it composes deadlock-free: even while a GPU load holds the admission gate, a capacity decision still completes.
-        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         using var heldTicket = await admission.AcquireAsync(CancellationToken.None);
 
         var harness = new Harness

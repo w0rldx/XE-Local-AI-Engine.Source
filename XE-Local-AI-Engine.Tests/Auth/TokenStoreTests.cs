@@ -54,7 +54,8 @@ public sealed class TokenStoreTests : IDisposable
         {
             using var tokenStore = new TokenStore(new MockDataProtector(),
                 new FakeNodeDataDirectory(_contentRootPath),
-                NullLogger<TokenStore>.Instance);
+                NullLogger<TokenStore>.Instance,
+                TimeProvider.System);
 
             await tokenStore.StoreTokensAsync(PairClientResponseBuilder.Valid().Build());
 
@@ -242,7 +243,8 @@ public sealed class TokenStoreTests : IDisposable
 
         return new TokenStore(dataProtectionProvider ?? new MockDataProtector(),
             new FakeNodeDataDirectory(_contentRootPath),
-            NullLogger<TokenStore>.Instance);
+            NullLogger<TokenStore>.Instance,
+            TimeProvider.System);
     }
 
     private string GetCredentialsPath()

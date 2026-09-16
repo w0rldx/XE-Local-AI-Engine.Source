@@ -73,11 +73,12 @@ public sealed class WorkerHubConnectionTests
             {
                 BaseUrl = "https://test.example.com"
             }),
-            new ConnectionState(),
+            new ConnectionState(TimeProvider.System),
             new Lazy<ICapabilityReporter>(() => Substitute.For<ICapabilityReporter>()),
             flushService,
             Substitute.For<INodeKeyRegistry>(),
             NullLogger<WorkerHubConnection>.Instance,
+            TimeProvider.System,
             workerTokenRefreshService: refreshService);
     }
 }

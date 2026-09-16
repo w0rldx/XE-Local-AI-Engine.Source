@@ -241,7 +241,8 @@ public sealed class EmbeddingPlaybookRetrievalRankerTests
         return new EmbeddingPlaybookRetrievalRanker(resolver,
             options,
             new LexicalPlaybookRetrievalRanker(),
-            NullLogger<EmbeddingPlaybookRetrievalRanker>.Instance);
+            NullLogger<EmbeddingPlaybookRetrievalRanker>.Instance,
+            TimeProvider.System);
     }
 
     private static IReadOnlyList<PlaybookActionRecord> SampleCandidates()

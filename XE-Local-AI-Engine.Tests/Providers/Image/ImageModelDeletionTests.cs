@@ -156,7 +156,8 @@ public sealed class ImageModelDeletionTests
                 GgufStoreTestInfrastructure.Options(modelsDirectory)),
             registry,
             ImageOptions(modelsDirectory),
-            NullLogger<HuggingFaceImageModelStore>.Instance);
+            NullLogger<HuggingFaceImageModelStore>.Instance,
+            TimeProvider.System);
     }
 
     private static ImageModelStoreOptions ImageOptions(string modelsDirectory)

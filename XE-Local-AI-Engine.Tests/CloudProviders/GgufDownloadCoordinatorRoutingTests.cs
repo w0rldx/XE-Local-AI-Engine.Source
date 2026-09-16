@@ -392,7 +392,8 @@ public sealed class GgufDownloadCoordinatorRoutingTests
             scopeFactory,
             new GgufAcquisitionOperationRegistry(TimeProvider.System),
             publisher ?? new NullGgufDownloadEventPublisher(),
-            NullLogger<GgufDownloadCoordinator>.Instance);
+            NullLogger<GgufDownloadCoordinator>.Instance,
+            TimeProvider.System);
     }
 
     private static async Task WaitForPhaseAsync(IGgufDownloadCoordinator coordinator, string modelName, GgufDownloadPhase phase)

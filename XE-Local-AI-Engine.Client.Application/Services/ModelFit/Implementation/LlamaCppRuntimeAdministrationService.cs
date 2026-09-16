@@ -21,13 +21,15 @@ internal sealed class LlamaCppRuntimeAdministrationService(
     ILocalChatClientCacheInvalidator localChatClientCacheInvalidator,
     LlamaServerRuntimeOverrideOptions overrideOptions,
     IHostApplicationLifetime applicationLifetime,
-    ILogger<LlamaCppRuntimeAdministrationService> logger) : ILlamaCppRuntimeAdministrationService
+    ILogger<LlamaCppRuntimeAdministrationService> logger,
+    TimeProvider timeProvider) : ILlamaCppRuntimeAdministrationService
 {
     private const string KeepModelWarmBlockedMessage =
         "Disable Keep Model Warm before changing the llama.cpp runtime, then eject any running models and retry.";
 
     private static readonly TimeSpan MinRefreshInterval = TimeSpan.FromSeconds(60);
     private readonly Lock _taskGate = new();
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     private Task? _ownedAcquisitionTask;
 
     public async Task<LlamaCppRuntimeStatus> GetStatusAsync(bool refresh = false, CancellationToken cancellationToken = default)
@@ -35,7 +37,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
         var recommendedTag = await nodeRuntimeSettings.GetRecommendedLlamaCppTagAsync(cancellationToken).ConfigureAwait(false);
         var installed = await installedRuntimeStore.ReadAsync(cancellationToken).ConfigureAwait(false);
         var current = updateState.Current;
-        var snapshot = refresh && IsStale(current.CheckedAtUtc)
+        var snapshot = refresh && IsStale(current.CheckedAtUtc, _timeProvider.GetUtcNow())
             ? await ComputeFreshSnapshotAsync(recommendedTag, installed?.Tag, cancellationToken).ConfigureAwait(false)
             : current;
 
@@ -295,7 +297,7 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             upstreamResult.Tag,
             LlamaCppRuntimeTag.IsUpdateAvailable(installedTag, resolvedRecommended),
             recommendedResult.IsOffline || recommendedResult.IsRateLimited,
-            DateTimeOffset.UtcNow);
+            _timeProvider.GetUtcNow());
         updateState.Store(snapshot);
         return snapshot;
     }
@@ -311,11 +313,11 @@ internal sealed class LlamaCppRuntimeAdministrationService(
             previous.UpstreamLatestTag,
             LlamaCppRuntimeTag.IsUpdateAvailable(effectiveInstalledTag, recommendedTag),
             IsOffline: false,
-            DateTimeOffset.UtcNow));
+            _timeProvider.GetUtcNow()));
     }
 
-    private static bool IsStale(DateTimeOffset? checkedAtUtc) =>
-        checkedAtUtc is not { } checkedAt || DateTimeOffset.UtcNow - checkedAt >= MinRefreshInterval;
+    private static bool IsStale(DateTimeOffset? checkedAtUtc, DateTimeOffset now) =>
+        checkedAtUtc is not { } checkedAt || now - checkedAt >= MinRefreshInterval;
 
     private static OSPlatform CurrentOsPlatform()
     {

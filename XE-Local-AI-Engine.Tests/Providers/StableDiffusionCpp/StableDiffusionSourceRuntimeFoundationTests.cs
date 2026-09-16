@@ -857,6 +857,7 @@ public sealed class StableDiffusionSourceRuntimeFoundationTests
             NullLogger<StableDiffusionCppSourceBuildService>.Instance,
             cacheRoot,
             runner,
+            TimeProvider.System,
             isLinux: true);
     }
 

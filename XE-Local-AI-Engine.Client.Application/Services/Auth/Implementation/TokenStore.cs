@@ -20,19 +20,23 @@ public sealed class TokenStore : ITokenStore, IDisposable
     private readonly ILogger<TokenStore> _logger;
 
     private readonly IDataProtector _protector;
+    private readonly TimeProvider _timeProvider;
 
     private StoredWorkerCredentials? _credentials;
 
     public TokenStore(IDataProtectionProvider dataProtectionProvider,
         INodeDataDirectory dataDirectory,
-        ILogger<TokenStore> logger)
+        ILogger<TokenStore> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(dataProtectionProvider);
         ArgumentNullException.ThrowIfNull(dataDirectory);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _protector = dataProtectionProvider.CreateProtector("WorkerNode.TokenStore.v1");
         _logger = logger;
+        _timeProvider = timeProvider;
         _credentialsPath = Path.Combine(dataDirectory.Root, CredentialsFileName);
 
         _credentials = LoadCredentialsFromDisk();
@@ -47,12 +51,12 @@ public sealed class TokenStore : ITokenStore, IDisposable
 
     public bool IsPaired => _credentials is not null;
 
-    public bool IsTokenExpired => TokenExpiresAt is { } expiresAt && expiresAt <= DateTimeOffset.UtcNow;
+    public bool IsTokenExpired => TokenExpiresAt is { } expiresAt && expiresAt <= _timeProvider.GetUtcNow();
 
     public bool IsTokenExpiringSoon =>
         TokenExpiresAt is { } expiresAt &&
-        expiresAt > DateTimeOffset.UtcNow &&
-        expiresAt - DateTimeOffset.UtcNow <= ExpiringSoonThreshold;
+        expiresAt > _timeProvider.GetUtcNow() &&
+        expiresAt - _timeProvider.GetUtcNow() <= ExpiringSoonThreshold;
 
     public DateTimeOffset? TokenExpiresAt => _credentials?.ExpiresAt;
 

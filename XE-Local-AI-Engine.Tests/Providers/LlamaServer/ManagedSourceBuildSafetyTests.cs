@@ -263,7 +263,7 @@ public sealed class ManagedSourceBuildSafetyTests
     {
 #pragma warning disable CA2000 // Test-scoped manager retains these no-network HTTP resources for the manager lifetime.
         return new LlamaCppBinaryManager(new HttpClient(new ThrowingHandler()), root, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, installedRuntimeStore: store, managedCudaSignal: signal ?? new CudaManagedBuildSignal());
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, installedRuntimeStore: store, managedCudaSignal: signal ?? new CudaManagedBuildSignal());
 #pragma warning restore CA2000
     }
 

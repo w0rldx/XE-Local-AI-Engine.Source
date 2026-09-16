@@ -53,6 +53,7 @@ internal sealed class DesktopLifecycle : IDisposable
     private readonly IHostApplicationLifetime _lifetime;
     private readonly ILogger<DesktopLifecycle> _logger;
     private readonly IServer _server;
+    private readonly TimeProvider _timeProvider;
 
     // Rooted on the instance (which is itself rooted via the lifetime registration in Program.cs) so the GC cannot
     // collect the native callback delegate while Windows holds the function pointer.
@@ -64,6 +65,7 @@ internal sealed class DesktopLifecycle : IDisposable
     internal DesktopLifecycle(IHostApplicationLifetime lifetime,
         IServer server,
         ILogger<DesktopLifecycle> logger,
+        TimeProvider timeProvider,
         string? dataDirectory = null,
         Func<string?>? browserOpener = null,
         bool suppressBrowser = false,
@@ -73,6 +75,7 @@ internal sealed class DesktopLifecycle : IDisposable
         _lifetime = lifetime ?? throw new ArgumentNullException(nameof(lifetime));
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _dataDirectory = dataDirectory;
         _suppressBrowser = suppressBrowser;
         _version = version ?? "0.0.0";
@@ -215,7 +218,7 @@ internal sealed class DesktopLifecycle : IDisposable
                 var canonicalUrl = url.TrimEnd('/');
                 var mcpUrl = $"{canonicalUrl}/api/local/v1/mcp/server";
                 DesktopPortStore.PersistReady(_dataDirectory,
-                    new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, DateTimeOffset.UtcNow),
+                    new ReadyInfo(_version, canonicalUrl, mcpUrl, _dataDirectory, Environment.ProcessId, _timeProvider.GetUtcNow()),
                     _logger);
                 _standardOutput.WriteLine($"XE_READY=1 XE_VERSION={_version} XE_URL={canonicalUrl} XE_MCP_URL={mcpUrl} XE_DATA_DIR={_dataDirectory}");
             }

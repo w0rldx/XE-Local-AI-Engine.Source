@@ -9,7 +9,7 @@ public sealed class LocalAgentToolRegistryTests
     [Test]
     public void GetLocalChatTools_ReturnsTimeAndCalculatorFunctions()
     {
-        var registry = new LocalAgentToolRegistry();
+        var registry = new LocalAgentToolRegistry(TimeProvider.System);
 
         var tools = registry.GetLocalChatTools();
 
@@ -21,7 +21,7 @@ public sealed class LocalAgentToolRegistryTests
     [Test]
     public void GetLocalChatToolDescriptors_MirrorsToolsWithSchemaAndAutoExecute()
     {
-        var registry = new LocalAgentToolRegistry();
+        var registry = new LocalAgentToolRegistry(TimeProvider.System);
 
         var descriptors = registry.GetLocalChatToolDescriptors();
 
@@ -94,7 +94,7 @@ public sealed class LocalAgentToolRegistryTests
 
     private static AIFunction GetTool(string name)
     {
-        var registry = new LocalAgentToolRegistry();
+        var registry = new LocalAgentToolRegistry(TimeProvider.System);
         return registry.GetLocalChatTools()
                        .OfType<AIFunction>()
                        .Single(tool => string.Equals(tool.Name, name, StringComparison.Ordinal));

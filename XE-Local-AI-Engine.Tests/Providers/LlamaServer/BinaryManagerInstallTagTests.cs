@@ -36,7 +36,7 @@ public sealed class BinaryManagerInstallTagTests
             Path.Combine(cache.Path, "llama.cpp", "source-build", "active", "build", "bin"));
         await store.WriteAsync(source, CancellationToken.None);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag,
             AssetName,
@@ -63,7 +63,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store,
             managedCudaSignal: new CudaManagedBuildSignal());
 
         var install = manager.InstallTagAsync(Tag, AssetName, Sha256Hex(archive), archive.Length, GpuVariant.Cpu, CancellationToken.None);
@@ -112,7 +112,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         var install = manager.InstallTagAsync(Tag, AssetName, Sha256Hex(archive), archive.Length, GpuVariant.Cpu, CancellationToken.None);
         await handler.Entered.WaitAsync(TimeSpan.FromSeconds(5));
@@ -153,7 +153,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         var binary = await manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", archive.Length, GpuVariant.Cpu, CancellationToken.None);
 
@@ -182,7 +182,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         var digest = new string('f', 64);
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, digest, expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
@@ -203,7 +203,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync("../escape", AssetName, new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
@@ -218,7 +218,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, "../../etc/passwd", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, "sub/dir/asset.tar.gz", new string('a', 64), expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
@@ -234,7 +234,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         // 3 GiB > the 2 GiB absolute ceiling.
         var oversized = 3L * 1024 * 1024 * 1024;
@@ -259,7 +259,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
             manager.InstallTagAsync(Tag, uniqueAsset, new string('a', 64), expectedSize: 1024, GpuVariant.Cpu, CancellationToken.None));
@@ -285,7 +285,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         // Declare a size that does not equal the actual archive length → the post-download length check must fail.
         var wrongSize = archive.Length + 1;
@@ -315,7 +315,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         var variantDir = Path.Combine(cache.Path, "llama.cpp", Tag, "cpu");
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, $"sha256:{digest}", archive.Length, GpuVariant.Cpu, CancellationToken.None));
@@ -333,7 +333,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: store);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync(Tag, AssetName, digestSha256: "", expectedSize: 0, GpuVariant.Cpu, CancellationToken.None));
 
@@ -356,7 +356,7 @@ public sealed class BinaryManagerInstallTagTests
         using var store = new InstalledRuntimeStore(cache.Path);
         var catalog = new OfflineCatalog();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog, store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog, store);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -381,7 +381,7 @@ public sealed class BinaryManagerInstallTagTests
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new OfflineCatalog(), store);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -405,7 +405,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         using var store = new InstalledRuntimeStore(cache.Path);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new OfflineCatalog(), store);
 
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
 
@@ -436,7 +436,7 @@ public sealed class BinaryManagerInstallTagTests
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new OfflineCatalog(), store);
 
         await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -469,7 +469,7 @@ public sealed class BinaryManagerInstallTagTests
         using var http = new HttpClient(handler, disposeHandler: false);
         // A catalog that live-resolves the pinned floor (tier 1) → the resolved tag becomes the pinned floor.
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, new ResolvesPinnedFloorCatalog(), store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new ResolvesPinnedFloorCatalog(), store);
 
         await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -506,7 +506,7 @@ public sealed class BinaryManagerInstallTagTests
         using var handler = new ScriptedHandler(() => throw new InvalidOperationException("Cached reuse must not download."));
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, new OfflineCatalog(), store);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, new OfflineCatalog(), store);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 

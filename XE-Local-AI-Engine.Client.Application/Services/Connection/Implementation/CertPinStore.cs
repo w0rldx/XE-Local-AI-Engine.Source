@@ -15,11 +15,16 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
     private readonly SemaphoreSlim _lock = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<CertPinStore> _logger;
     private readonly string _pinPath;
+    private readonly TimeProvider _timeProvider;
 
-    public CertPinStore(IOptions<WorkerNodeOptions> workerOptions, ILogger<CertPinStore> logger, string? localApplicationDataRoot = null)
+    public CertPinStore(IOptions<WorkerNodeOptions> workerOptions,
+        ILogger<CertPinStore> logger,
+        TimeProvider timeProvider,
+        string? localApplicationDataRoot = null)
     {
         ArgumentNullException.ThrowIfNull(workerOptions);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         var root = string.IsNullOrWhiteSpace(localApplicationDataRoot)
             ? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData)
@@ -120,13 +125,13 @@ public sealed class CertPinStore : ICertPinStore, IDisposable
         }
     }
 
-    private static CertificatePin CreatePin(X509Certificate2 certificate)
+    private CertificatePin CreatePin(X509Certificate2 certificate)
     {
         var thumbprint = Convert.ToHexString(SHA256.HashData(certificate.RawData));
         var subjectCommonName = certificate.GetNameInfo(X509NameType.SimpleName, forIssuer: false);
 
         return new CertificatePin(thumbprint,
-            DateTimeOffset.UtcNow,
+            _timeProvider.GetUtcNow(),
             string.IsNullOrWhiteSpace(subjectCommonName) ? certificate.Subject : subjectCommonName);
     }
 

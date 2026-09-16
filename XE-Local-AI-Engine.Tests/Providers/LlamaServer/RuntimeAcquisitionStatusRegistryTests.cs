@@ -186,13 +186,14 @@ public sealed class RuntimeAcquisitionStatusRegistryTests
     [Test]
     public void ProviderRegistration_ResolvesTheRegistryAndTheBinaryManagerThatConsumesIt()
     {
-        // The registry ctor takes an OPTIONAL TimeProvider, so the type-based registration only works because the DI
-        // activator falls back to the parameter default. Resolve it — and the binary manager whose factory now passes
-        // it — rather than trusting that.
+        // The registry ctor takes a REQUIRED TimeProvider, so the type-based registration only resolves when the
+        // container carries one. Resolve it — and the binary manager whose factory now passes it — rather than
+        // trusting that.
         using var http = new HttpClient();
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(http);
+        services.AddSingleton(TimeProvider.System);
         services.AddLlamaServerLocalModelProvider();
 
         using var provider = services.BuildServiceProvider();

@@ -74,7 +74,7 @@ public sealed class CertPinStoreTests : IDisposable
         return new CertPinStore(Options.Create(new WorkerNodeOptions
         {
             NodeName = "worker-node-test"
-        }), NullLogger<CertPinStore>.Instance, _rootPath);
+        }), NullLogger<CertPinStore>.Instance, TimeProvider.System, _rootPath);
     }
 
     private static X509Certificate2 CreateCertificate(string subjectCommonName)

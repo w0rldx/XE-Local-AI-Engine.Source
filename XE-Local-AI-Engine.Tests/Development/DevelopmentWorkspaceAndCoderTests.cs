@@ -1068,7 +1068,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new WritingCoderModel(),
             new UnexpectedCloudContextService(),
             options,
-            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+            TimeProvider.System);
 
         var result = await runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)).ConfigureAwait(false);
         AssertEx.NotNullOrEmpty(result.SubjectHash);
@@ -1135,7 +1136,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new ScriptedCoderModel([("feature.txt", "implemented\n")], ["feature.txt", "README.md"]),
             new UnexpectedCloudContextService(),
             options,
-            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+            TimeProvider.System);
 
         var exception = await AssertEx.ThrowsAsync<DevelopmentAttemptEvidenceException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
                                       .ConfigureAwait(false);
@@ -1199,7 +1201,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new WritingCoderModel(),
             new UnexpectedCloudContextService(),
             options,
-            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+            TimeProvider.System);
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository), cancellation.Token))
                       .ConfigureAwait(false);
@@ -1245,7 +1248,8 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
             new TestDeletingCoderModel(),
             new UnexpectedCloudContextService(),
             options,
-            NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+            NullLogger<DevelopmentCoderAttemptRunner>.Instance,
+            TimeProvider.System);
 
         _ = await AssertEx.ThrowsAsync<DevelopmentWorkspaceSecurityException>(() => runner.RunAsync(snapshot.AttemptId, Binding(snapshot, repository)))
                           .ConfigureAwait(false);
@@ -1370,7 +1374,7 @@ public sealed class DevelopmentWorkspaceAndCoderTests : IDisposable
         var binding = Binding(firstAttempt, repository);
 
         DevelopmentCoderAttemptRunner Runner(IDevelopmentCoderModel model) =>
-            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance);
+            new(store, workspace, sandbox, new DevelopmentPatchEvidenceService(options), blob, model, new UnexpectedCloudContextService(), options, NullLogger<DevelopmentCoderAttemptRunner>.Instance, TimeProvider.System);
 
         _ = await Runner(first).RunAsync(firstAttempt.AttemptId, binding).ConfigureAwait(false);
         _ = await Runner(second).RunAsync(secondAttempt.AttemptId, binding).ConfigureAwait(false);

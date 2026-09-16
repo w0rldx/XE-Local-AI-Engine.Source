@@ -35,10 +35,13 @@ public sealed class ApiToolCallBridge
 
     private readonly TimeSpan _maxPendingToolCallAge;
 
+    private readonly TimeProvider _timeProvider;
+
     public ApiToolCallBridge(Lazy<IHubMessageSender> hubSender,
         Lazy<IWorkerEventDispatcher> eventDispatcher,
         PendingToolCallRegistry pendingToolCallRegistry,
-        INodeRuntimeSettings runtimeSettings)
+        INodeRuntimeSettings runtimeSettings,
+        TimeProvider timeProvider)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
@@ -46,6 +49,7 @@ public sealed class ApiToolCallBridge
         _pendingToolCalls = pendingToolCallRegistry.Calls;
         ArgumentNullException.ThrowIfNull(runtimeSettings);
         _maxPendingToolCallAge = TimeSpan.FromMinutes(runtimeSettings.GetMaxPendingToolCallAgeMinutes());
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public Task<string> ExecuteApiToolCallAsync(Guid invocationId,
@@ -70,7 +74,7 @@ public sealed class ApiToolCallBridge
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall(invocationId, DateTimeOffset.UtcNow, approvalCompletion, resultCompletion);
+        var pendingToolCall = new PendingToolCall(invocationId, _timeProvider.GetUtcNow(), approvalCompletion, resultCompletion);
         var sender = _hubSender.Value;
         var dispatcher = _eventDispatcher.Value;
 
@@ -191,7 +195,7 @@ public sealed class ApiToolCallBridge
 
     public void CleanupStaleToolCalls(TimeSpan maxAge)
     {
-        var cutoff = DateTimeOffset.UtcNow - maxAge;
+        var cutoff = _timeProvider.GetUtcNow() - maxAge;
 
         foreach (var pendingToolCall in _pendingToolCalls)
         {

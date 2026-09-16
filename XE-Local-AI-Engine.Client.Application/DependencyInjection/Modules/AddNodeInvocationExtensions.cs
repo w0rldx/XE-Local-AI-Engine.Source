@@ -47,7 +47,6 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton<INodeAeadCipher, AesGcmNodeAeadCipher>();
         builder.Services.AddSingleton<IEnvelopeCryptoService, EnvelopeCryptoService>();
         builder.Services.AddSingleton<IRuntimePackageEnvelopeAssembler, RuntimePackageEnvelopeAssembler>();
-        builder.Services.TryAddSingleton(TimeProvider.System);
         builder.Services.AddOptions<ProviderResilienceOptions>()
                .Bind(configuration.GetSection(ProviderResilienceOptions.SectionName))
                .Validate(static options => options.MaxRetries >= 0
@@ -70,7 +69,8 @@ internal static class AddNodeInvocationExtensions
         builder.Services.AddSingleton(static sp => new LlamaTokenEstimatorCalibrationService(new HttpClient(LlamaTokenEstimatorCalibrationService.CreateProductionHandler(), disposeHandler: true),
             sp.GetRequiredService<ITokenEstimatorCalibrationStore>(),
             sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
-            sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>()));
+            sp.GetRequiredService<ILogger<LlamaTokenEstimatorCalibrationService>>(),
+            sp.GetRequiredService<TimeProvider>()));
         builder.Services.AddSingleton<ITokenEstimatorCalibrationScheduler>(static sp =>
             sp.GetRequiredService<LlamaTokenEstimatorCalibrationService>());
         builder.Services.AddHostedService(static sp => sp.GetRequiredService<LlamaTokenEstimatorCalibrationService>());

@@ -16,7 +16,7 @@ public sealed class GpuModelLoadAdmissionTests
     [Test]
     public async Task Acquire_SecondCaller_WaitsUntilFirstReleases()
     {
-        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var secondTask = gate.AcquireAsync(CancellationToken.None);
@@ -31,7 +31,7 @@ public sealed class GpuModelLoadAdmissionTests
     [Test]
     public async Task Acquire_WaiterCancellation_ReleasesCleanly_AndDoesNotStealTheGate()
     {
-        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         using var waiterCts = new CancellationTokenSource();
@@ -53,9 +53,10 @@ public sealed class GpuModelLoadAdmissionTests
     public async Task Acquire_BoundedWaitElapses_ThrowsTypedTimeout_AndCountsIt()
     {
         using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions
-        {
-            MaxWait = TimeSpan.FromMilliseconds(50)
-        });
+            {
+                MaxWait = TimeSpan.FromMilliseconds(50)
+            },
+            TimeProvider.System);
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var timeouts = 0L;
@@ -71,7 +72,7 @@ public sealed class GpuModelLoadAdmissionTests
     [Test]
     public async Task Acquire_QueuedThenAdmitted_RecordsWaitDuration()
     {
-        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var gate = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         var first = await gate.AcquireAsync(CancellationToken.None);
 
         var waitSamples = 0L;

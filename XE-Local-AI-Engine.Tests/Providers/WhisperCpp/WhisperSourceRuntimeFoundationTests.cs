@@ -136,7 +136,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         using var inner = new WhisperInstalledRuntimeStore(cache.Path);
         var store = new FailingWriteStore(inner);
         var signal = new WhisperManagedSourceBuildSignal();
-        var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, NullLogger.Instance);
+        var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, TimeProvider.System, NullLogger.Instance);
 
         var previousCommit = new string(c: 'a', count: 40);
         var previousRoot = Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", previousCommit);
@@ -175,7 +175,7 @@ public sealed class WhisperSourceRuntimeFoundationTests
         using var cache = new TempDirectory();
         using var store = new WhisperInstalledRuntimeStore(cache.Path);
         var signal = new WhisperManagedSourceBuildSignal();
-        var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, NullLogger.Instance);
+        var adoption = new WhisperCppRuntimeAdoption(cache.Path, store, signal, TimeProvider.System, NullLogger.Instance);
 
         var previousCommit = new string(c: 'c', count: 40);
         var previousRoot = Path.Combine(cache.Path, "whisper.cpp", "managed", "cuda", previousCommit);

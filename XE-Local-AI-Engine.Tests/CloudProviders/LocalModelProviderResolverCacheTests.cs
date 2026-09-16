@@ -67,7 +67,7 @@ public sealed class LocalModelProviderResolverCacheTests
         services.AddScoped<ICoordinatedModelProviderMapStore>(_ => store);
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver([provider], scopeFactory, "llamacpp", maxLoadedProcesses: 3, mapCacheTtl: ttl);
+        return new LocalModelProviderResolver([provider], scopeFactory, "llamacpp", maxLoadedProcesses: 3, timeProvider: TimeProvider.System, mapCacheTtl: ttl);
     }
 
     private sealed class CountingMapStore : ICoordinatedModelProviderMapStore

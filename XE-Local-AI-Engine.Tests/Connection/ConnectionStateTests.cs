@@ -8,7 +8,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void Initial_StateIsDisconnected()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
 
         AssertEx.Equal(WorkerConnectionState.Disconnected, state.Current);
     }
@@ -16,7 +16,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void TransitionTo_Connected_UpdatesCurrent()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
 
         state.TransitionTo(WorkerConnectionState.Connected);
 
@@ -26,7 +26,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void TransitionTo_Error_SetsLastError()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
 
         state.TransitionTo(WorkerConnectionState.Error, "boom");
 
@@ -36,7 +36,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void TransitionTo_SameStateWithDifferentError_RaisesEvent()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
         var eventCount = 0;
         state.StateChanged += (_, _) => eventCount++;
 
@@ -49,7 +49,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void TransitionTo_SameStateAndSameError_DoesNotRaiseEvent()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
         var eventCount = 0;
         state.StateChanged += (_, _) => eventCount++;
 
@@ -62,7 +62,7 @@ public sealed class ConnectionStateTests
     [Test]
     public void TransitionTo_RaisesStateChangedEvent_WithCorrectArgs()
     {
-        var state = new ConnectionState();
+        var state = new ConnectionState(TimeProvider.System);
         WorkerConnectionStateChangedEventArgs? args = null;
         state.StateChanged += (_, eventArgs) => args = eventArgs;
 

@@ -106,7 +106,7 @@ public sealed class WhisperAdoptionLinkPolicyTests
         {
             _cacheRoot = cacheRoot;
             Store = new WhisperInstalledRuntimeStore(cacheRoot);
-            Adoption = new WhisperCppRuntimeAdoption(cacheRoot, Store, new WhisperManagedSourceBuildSignal(), NullLogger.Instance);
+            Adoption = new WhisperCppRuntimeAdoption(cacheRoot, Store, new WhisperManagedSourceBuildSignal(), TimeProvider.System, NullLogger.Instance);
             // Custom + ExplicitCommit: the runtime store requires an engine-pinned record to carry the pinned
             // release commit exactly, and this fixture's commit is arbitrary on purpose.
             var commit = Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes("commit")))[..40];

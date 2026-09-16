@@ -12,7 +12,7 @@ public sealed class ConnectionControlServiceTests
     public async Task GetStatusAsync_WhenPaired_ReturnsConnectionControlsWithoutSecrets()
     {
         var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         var service = CreateService(connectionState, tokenStore);
 
         var status = await service.GetStatusAsync();
@@ -29,7 +29,7 @@ public sealed class ConnectionControlServiceTests
     public async Task ConnectAsync_DelegatesToWorkerHubConnection()
     {
         var hubConnection = Substitute.For<IWorkerHubConnection>();
-        var service = CreateService(new ConnectionState(), MockTokenStore.PairedWithAutoConnectDisabled(), hubConnection);
+        var service = CreateService(new ConnectionState(TimeProvider.System), MockTokenStore.PairedWithAutoConnectDisabled(), hubConnection);
 
         await service.ConnectAsync();
 
@@ -40,7 +40,7 @@ public sealed class ConnectionControlServiceTests
     public async Task DisconnectAsync_DelegatesToWorkerHubConnection()
     {
         var hubConnection = Substitute.For<IWorkerHubConnection>();
-        var service = CreateService(new ConnectionState(), MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1)), hubConnection);
+        var service = CreateService(new ConnectionState(TimeProvider.System), MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1)), hubConnection);
 
         await service.DisconnectAsync();
 
@@ -52,7 +52,7 @@ public sealed class ConnectionControlServiceTests
     {
         var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
         var hubConnection = Substitute.For<IWorkerHubConnection>();
-        var service = CreateService(new ConnectionState(), tokenStore, hubConnection);
+        var service = CreateService(new ConnectionState(TimeProvider.System), tokenStore, hubConnection);
 
         var status = await service.SetAutoConnectAsync(true);
 
@@ -66,7 +66,7 @@ public sealed class ConnectionControlServiceTests
     public async Task SetAutoConnectAsync_WhenDisabledWhileReconnecting_DisconnectsAndPersistsPreference()
     {
         var tokenStore = MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1));
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         connectionState.TransitionTo(WorkerConnectionState.Reconnecting, "network drop");
         var hubConnection = Substitute.For<IWorkerHubConnection>();
         hubConnection.DisconnectAsync(Arg.Any<CancellationToken>()).Returns(_ =>

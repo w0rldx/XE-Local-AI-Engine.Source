@@ -63,7 +63,7 @@ public static class LlamaServerServiceCollectionExtensions
         // Dynamic-runtime resolution seams: the live GitHub Releases catalog (tier 1) and the on-disk installed-runtime
         // state (tier 2). The binary manager consults both, falling back to the pinned floor (tier 3) when both miss.
         services.TryAddSingleton<ILlamaCppReleaseCatalog>(static sp =>
-            new GitHubLlamaCppReleaseCatalog(sp.GetRequiredService<HttpClient>()));
+            new GitHubLlamaCppReleaseCatalog(sp.GetRequiredService<HttpClient>(), sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IInstalledRuntimeStore>(static _ => new InstalledRuntimeStore());
 
         // Shared "is there a newer runtime?" snapshot — written once by the startup check service and after a successful
@@ -79,6 +79,7 @@ public static class LlamaServerServiceCollectionExtensions
 
         services.TryAddSingleton<ILlamaCppBinaryManager>(static sp =>
             new LlamaCppBinaryManager(sp.GetRequiredService<HttpClient>(),
+                sp.GetRequiredService<TimeProvider>(),
                 cacheRoot: null,
                 activeTag: null,
                 sp.GetRequiredService<ILlamaCppReleaseCatalog>(),
@@ -205,8 +206,8 @@ public static class LlamaServerServiceCollectionExtensions
             sp.GetRequiredService<LlamaServerSupervisorOptions>(),
             sp.GetRequiredService<IInferenceProfileResolver>(),
             sp.GetRequiredService<ILlamaServerLaunchPolicy>(),
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<LlamaServerExternalEndpointOptions>(),
-            sp.GetService<TimeProvider>(),
             sp.GetRequiredService<ILogger<LlamaServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
@@ -234,7 +235,8 @@ public static class LlamaServerServiceCollectionExtensions
                 sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<ILlamaCppSourceBuildActivity>(),
                 sp.GetRequiredService<ILlamaCppSourceBuildEventPublisher>(),
-                sp.GetRequiredService<ILogger<LlamaCppSourceBuildService>>()));
+                sp.GetRequiredService<ILogger<LlamaCppSourceBuildService>>(),
+                sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<ICudaBuildService, LegacyCudaBuildServiceAdapter>();
         services.AddHostedService(static sp => new CudaBuildStartupService(sp.GetRequiredService<ILlamaCppSourceBuildService>(),
             sp.GetRequiredService<IInstalledRuntimeStore>(),
@@ -258,6 +260,7 @@ public static class LlamaServerServiceCollectionExtensions
         services.TryAddSingleton<LlamaServerLocalModelProvider>(static sp =>
             new LlamaServerLocalModelProvider(sp.GetRequiredService<ILlamaServerProcessSupervisor>(),
                 sp.GetRequiredService<IGgufModelStore>(),
+                sp.GetRequiredService<TimeProvider>(),
                 sp.GetRequiredService<LlamaServerSupervisorOptions>(),
                 sp.GetRequiredService<ITokenEstimatorCalibrationScheduler>(),
                 sp.GetRequiredService<ILlamaServerEndpointBinding>()));

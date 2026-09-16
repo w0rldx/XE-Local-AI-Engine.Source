@@ -49,6 +49,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     private readonly Lock _publishLock = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly Lock _stateLock = new();
+    private readonly TimeProvider _timeProvider;
 
     private Task? _activeTask;
     private CancellationTokenSource? _cts;
@@ -66,14 +67,16 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
     public TrainingRuntimeService(ITrainingRuntimePrerequisiteProbe prerequisiteProbe,
         ITrainingRuntimeEventPublisher publisher,
         HttpClient httpClient,
-        ILogger<TrainingRuntimeService> logger)
+        ILogger<TrainingRuntimeService> logger,
+        TimeProvider timeProvider)
         : this(prerequisiteProbe,
             publisher,
             new UvBinaryAcquirer(httpClient),
             new LinuxTrainingProcessRunner(),
             logger,
             TrainingRuntimeLayout.DefaultCacheRoot(),
-            TrainingRuntimeLayout.ResolveScriptsDirectory())
+            TrainingRuntimeLayout.ResolveScriptsDirectory(),
+            timeProvider)
     {
     }
 
@@ -83,13 +86,15 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
         ITrainingProcessRunner processRunner,
         ILogger<TrainingRuntimeService> logger,
         string cacheRoot,
-        string scriptsDirectory)
+        string scriptsDirectory,
+        TimeProvider timeProvider)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _acquirer = acquirer ?? throw new ArgumentNullException(nameof(acquirer));
         _processRunner = processRunner ?? throw new ArgumentNullException(nameof(processRunner));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         ArgumentException.ThrowIfNullOrWhiteSpace(scriptsDirectory);
         _cacheRoot = cacheRoot;
@@ -177,7 +182,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 _logStartSequence = 0;
                 _nextLogSequence = 0;
                 _sanitizedError = null;
-                _startedAtUtc = DateTimeOffset.UtcNow;
+                _startedAtUtc = _timeProvider.GetUtcNow();
                 _completedAtUtc = null;
                 _cts?.Dispose();
                 _cts = cts;
@@ -259,7 +264,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                 _installed = null;
                 _phase = TrainingRuntimePhase.Idle;
                 _sanitizedError = null;
-                _completedAtUtc = DateTimeOffset.UtcNow;
+                _completedAtUtc = _timeProvider.GetUtcNow();
             }
 
             await PublishPhaseAsync(TrainingRuntimePhase.Idle, terminal: true, sanitizedError: null).ConfigureAwait(false);
@@ -408,7 +413,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
                     probeReport.PythonVersion ?? "unknown",
                     lockfileSha,
                     probeReport.ContractVersion,
-                    DateTimeOffset.UtcNow,
+                    _timeProvider.GetUtcNow(),
                     probeReport.TorchVersion,
                     probeReport.UnslothVersion,
                     probeReport.DeviceName);
@@ -628,7 +633,7 @@ public sealed class TrainingRuntimeService : ITrainingRuntimeService, IDisposabl
             _phase = phase;
             _isRunning = false;
             _sanitizedError = sanitizedError;
-            _completedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = _timeProvider.GetUtcNow();
             _installed = installed;
 
             publish = QueuePublish(new TrainingRuntimeStatusHubEvent(phase.ToString(),

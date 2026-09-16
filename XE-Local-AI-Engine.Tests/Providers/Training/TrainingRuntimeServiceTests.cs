@@ -388,7 +388,8 @@ public sealed class TrainingRuntimeServiceTests
                 runner,
                 NullLogger<TrainingRuntimeService>.Instance,
                 CacheRoot,
-                ScriptsDirectory);
+                ScriptsDirectory,
+                TimeProvider.System);
         }
     }
 }

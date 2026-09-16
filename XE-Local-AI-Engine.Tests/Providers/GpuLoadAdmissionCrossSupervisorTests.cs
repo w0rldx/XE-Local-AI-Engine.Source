@@ -17,7 +17,7 @@ public sealed class GpuLoadAdmissionCrossSupervisorTests
     [Test]
     public async Task ImageAndLlmGpuLoads_SerializeAgainstEachOther_ViaSharedGate()
     {
-        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
 
         // LLM: a Vulkan (GPU) load whose readiness we hold, so it keeps the shared gate.
         var llmLauncher = new FakeProcessLauncher();

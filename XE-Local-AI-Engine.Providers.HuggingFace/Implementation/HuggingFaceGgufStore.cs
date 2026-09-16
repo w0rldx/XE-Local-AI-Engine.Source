@@ -47,13 +47,15 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
     private readonly ILogger<HuggingFaceGgufStore> _logger;
     private readonly HuggingFaceOptions _options;
     private readonly GgufModelRegistry _registry;
+    private readonly TimeProvider _timeProvider;
 
     public HuggingFaceGgufStore(HfDownloadClient downloadClient,
         IHuggingFaceGgufDiscovery discovery,
         GgufModelRegistry registry,
         GgufHeaderReader headerReader,
         HuggingFaceOptions options,
-        ILogger<HuggingFaceGgufStore> logger)
+        ILogger<HuggingFaceGgufStore> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(downloadClient);
         ArgumentNullException.ThrowIfNull(discovery);
@@ -61,6 +63,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         ArgumentNullException.ThrowIfNull(headerReader);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _downloadClient = downloadClient;
         _discovery = discovery;
@@ -68,6 +71,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
         _headerReader = headerReader;
         _options = options;
         _logger = logger;
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -257,7 +261,7 @@ internal sealed class HuggingFaceGgufStore : IGgufModelStore
             }
 
             var modelContentFingerprint = GgufModelContentFingerprint.ComputeV1(contentMembers);
-            var acquiredAt = DateTimeOffset.UtcNow;
+            var acquiredAt = _timeProvider.GetUtcNow();
 
             var role = request.Role == GgufRole.Unknown ? GgufRole.Chat : request.Role;
             if (GgufDraftModel.IsDraftQuant(quant))

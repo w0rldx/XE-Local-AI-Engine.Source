@@ -11,6 +11,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
     string cacheRoot,
     IStableDiffusionInstalledRuntimeStore runtimeStore,
     IStableDiffusionManagedSourceBuildSignal managedSignal,
+    TimeProvider timeProvider,
     ILogger logger)
 {
     private string BuildRoot => Path.Combine(cacheRoot, "stable-diffusion.cpp", "source-build");
@@ -110,7 +111,7 @@ internal sealed class StableDiffusionCppRuntimeAdoption(
                 descriptor.RequestedCommit,
                 Path.GetDirectoryName(finalServer),
                 digest,
-                DateTimeOffset.UtcNow);
+                timeProvider.GetUtcNow());
             var previousState = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             var journal = new StableDiffusionCppAdoptionJournal(descriptor.BuildId,
                 descriptor.Backend,

@@ -127,7 +127,7 @@ public sealed class BinaryManagerVariantSelectionTests
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var ex = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
             manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
@@ -145,7 +145,7 @@ public sealed class BinaryManagerVariantSelectionTests
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -165,7 +165,7 @@ public sealed class BinaryManagerVariantSelectionTests
 
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, "b9999", OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, "b9999", OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 

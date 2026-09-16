@@ -168,7 +168,8 @@ public sealed class ToolApprovalCoordinatorTests
         var bridge = new ApiToolCallBridge(new Lazy<IHubMessageSender>(() => sender),
             new Lazy<IWorkerEventDispatcher>(() => Substitute.For<IWorkerEventDispatcher>()),
             registry,
-            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build());
+            StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
+            TimeProvider.System);
 
         var call = bridge.ExecuteApiToolCallAsync(Guid.NewGuid(), "test-tool", "{}", requiresApproval: true, CancellationToken.None);
         await AssertEx.EventuallyAsync(() => sender.SentApprovals.Count == 1, TimeSpan.FromSeconds(5));
@@ -260,6 +261,7 @@ public sealed class ToolApprovalCoordinatorTests
             NodeToolApprovalPolicy.FromSettings(settings: null),
             new UserQuestionAnswerStash(TimeProvider.System),
             StubNodeRuntimeSettings.Create().WithMaxPendingToolCallAgeMinutes(5).Build(),
-            NullLogger<ToolApprovalCoordinator>.Instance);
+            NullLogger<ToolApprovalCoordinator>.Instance,
+            TimeProvider.System);
     }
 }

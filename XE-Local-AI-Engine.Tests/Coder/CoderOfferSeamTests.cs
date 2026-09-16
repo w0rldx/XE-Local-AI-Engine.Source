@@ -112,9 +112,9 @@ public sealed class CoderOfferSeamTests
 
     private static LocalToolOfferProvider CreateProvider(params string[] toolCapableModels)
     {
-        // The REAL registry: BuildTools() hardcodes GetCurrentTime + Calculate. The coder tools reach the offer ONLY
+        // The REAL registry: its constructor hardcodes GetCurrentTime + Calculate. The coder tools reach the offer ONLY
         // through the merge inside LocalToolOfferProvider, never through the registry.
-        var registry = new LocalAgentToolRegistry();
+        var registry = new LocalAgentToolRegistry(TimeProvider.System);
         var mcpRegistry = new McpToolRegistry(NullLogger<McpToolRegistry>.Instance);
         return new LocalToolOfferProvider(registry,
             mcpRegistry,

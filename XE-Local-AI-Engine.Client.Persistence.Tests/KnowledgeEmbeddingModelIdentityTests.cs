@@ -292,7 +292,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var service = CreateSearchService(context,
             vectorSearch,
             CreateProviderResolver(provider),
-            new KnowledgeQueryEmbeddingCache(options),
+            new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
         await service.SearchAsync(new KnowledgeSearchRequest("repeat native query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
@@ -326,7 +326,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         var service = CreateSearchService(context,
             vectorSearch,
             CreateProviderResolver(provider),
-            new KnowledgeQueryEmbeddingCache(options),
+            new KnowledgeQueryEmbeddingCache(options, TimeProvider.System),
             options);
 
         await service.SearchAsync(new KnowledgeSearchRequest("repeat non-nomic query", Limit: 5), CancellationToken.None).ConfigureAwait(false);
@@ -356,7 +356,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         });
         var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
-        var cache = new KnowledgeQueryEmbeddingCache(options);
+        var cache = new KnowledgeQueryEmbeddingCache(options, TimeProvider.System);
         cache.Store(cacheFamily,
             query,
             new KnowledgeQueryEmbeddingCacheEntry(new float[KnowledgeEmbeddingVectorPolicy.MatryoshkaWidth],
@@ -386,7 +386,7 @@ public sealed class KnowledgeEmbeddingModelIdentityTests : IDisposable
         });
         var resolution = new EmbeddingModelResolution(ResolvedGgufName, IsConfident: true, ResolvedRevisionFingerprint);
         var cacheFamily = KnowledgeEmbeddingVectorPolicy.CreateCacheFamilyIdentity(resolution, options.Value.EmbeddingVectorMode);
-        var cache = new KnowledgeQueryEmbeddingCache(options);
+        var cache = new KnowledgeQueryEmbeddingCache(options, TimeProvider.System);
         cache.Store(cacheFamily,
             query,
             new KnowledgeQueryEmbeddingCacheEntry(new float[Dimensions],

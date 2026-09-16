@@ -75,7 +75,7 @@ public static class StableDiffusionCppRuntimeServiceCollectionExtensions
             sp.GetRequiredService<IImageServerProcessLauncher>(),
             sp.GetRequiredService<IImageServerReadinessProbe>(),
             sp.GetRequiredService<StableDiffusionRuntimeOptions>(),
-            sp.GetService<TimeProvider>(),
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<ImageServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<IImageRuntimeActivityGate>()));

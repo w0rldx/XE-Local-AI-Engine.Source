@@ -869,7 +869,7 @@ public sealed class ProcessSandboxRuntimeProvider : IAgentSandboxRuntimeProvider
 
                 // The pid-reuse guard is only as good as the start time recorded alongside it; without one, record no
                 // pid at all rather than a group id the reaper could not verify before signalling.
-                if (new LinuxSandboxProcessGroupKiller().GetProcessStartTicks(processId) is { } startTicks)
+                if (new LinuxSandboxProcessGroupKiller(_timeProvider).GetProcessStartTicks(processId) is { } startTicks)
                 {
                     processGroupId = processId;
                     leaderStartTicks = startTicks;

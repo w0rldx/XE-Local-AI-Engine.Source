@@ -61,8 +61,8 @@ public sealed partial class WorkerEventDispatcher
                 InvocationId = runtimePackage.InvocationId,
                 ConversationId = runtimePackage.ConversationId,
                 Status = InvocationStatus.Assigned,
-                StartedAt = DateTimeOffset.UtcNow,
-                LastUpdatedAt = DateTimeOffset.UtcNow,
+                StartedAt = _timeProvider.GetUtcNow(),
+                LastUpdatedAt = _timeProvider.GetUtcNow(),
                 ModelUsed = runtimePackage.ModelProfile
             };
 
@@ -215,12 +215,12 @@ public sealed partial class WorkerEventDispatcher
             await _invocationRunner.RunAsync(context, CancellationToken.None).ConfigureAwait(false);
 
             UpdateInvocation(package.InvocationId,
-                static state =>
+                state =>
                 {
                     if (state.Status is InvocationStatus.Assigned or InvocationStatus.Running)
                     {
                         state.Status = InvocationStatus.Completed;
-                        state.CompletedAt = DateTimeOffset.UtcNow;
+                        state.CompletedAt = _timeProvider.GetUtcNow();
                     }
 
                     return state;
@@ -238,7 +238,7 @@ public sealed partial class WorkerEventDispatcher
                     state.Status = InvocationStatus.Failed;
                     state.Error = exception.Message;
                     state.FailureCategory = FailureCategory.Unexpected;
-                    state.CompletedAt = DateTimeOffset.UtcNow;
+                    state.CompletedAt = _timeProvider.GetUtcNow();
                     return state;
                 });
         }

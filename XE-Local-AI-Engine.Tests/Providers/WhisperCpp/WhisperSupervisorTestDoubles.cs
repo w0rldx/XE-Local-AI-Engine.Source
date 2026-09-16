@@ -231,7 +231,7 @@ internal sealed class WhisperSupervisorHarness : IAsyncDisposable
             ReadinessProbe,
             _httpClient,
             Options,
-            timeProvider,
+            timeProvider ?? TimeProvider.System,
             logger: null,
             loadAdmission,
             ActivityGate);

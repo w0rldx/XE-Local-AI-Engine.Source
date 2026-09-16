@@ -112,7 +112,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
                     UpstreamLatestTag: upstreamResult.Tag,
                     UpdateAvailable: false,
                     IsOffline: recommendedResult.IsOffline || recommendedResult.IsRateLimited,
-                    CheckedAtUtc: DateTimeOffset.UtcNow));
+                    CheckedAtUtc: _timeProvider.GetUtcNow()));
                 return;
             }
 
@@ -128,7 +128,7 @@ public sealed class LlamaCppUpdateCheckService : BackgroundService
                 UpstreamLatestTag: upstreamResult.Tag,
                 updateAvailable,
                 IsOffline: false,
-                CheckedAtUtc: DateTimeOffset.UtcNow));
+                CheckedAtUtc: _timeProvider.GetUtcNow()));
         }
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {

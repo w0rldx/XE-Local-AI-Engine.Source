@@ -34,6 +34,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
@@ -66,6 +67,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
@@ -95,6 +97,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
@@ -117,6 +120,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
@@ -139,6 +143,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<OperationCanceledException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, cts.Token));
@@ -161,7 +166,7 @@ public sealed class RuntimeAcquisitionProgressTests
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
@@ -186,6 +191,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
@@ -205,6 +211,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
@@ -231,6 +238,7 @@ public sealed class RuntimeAcquisitionProgressTests
         var registry = new RecordingRegistry();
         var catalog = new CompanionCatalog(UpgradeTag, cudartName, Sha256Hex(cudartArchive), cudartArchive.LongLength);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Windows, Architecture.X64,
+            TimeProvider.System,
             catalog,
             acquisitionStatus: registry);
 
@@ -276,6 +284,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         var binary = await manager.InstallTagAsync(UpgradeTag,
@@ -303,6 +312,7 @@ public sealed class RuntimeAcquisitionProgressTests
         using var http = new HttpClient(handler, disposeHandler: false);
         var registry = new RecordingRegistry();
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64,
+            TimeProvider.System,
             acquisitionStatus: registry);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.InstallTagAsync("../escape",

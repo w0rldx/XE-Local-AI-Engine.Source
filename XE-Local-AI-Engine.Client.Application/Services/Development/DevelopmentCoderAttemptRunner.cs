@@ -47,8 +47,8 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         IDevelopmentCloudAttemptContextService cloudContext,
         IOptions<DevelopmentOptions> options,
         ILogger<DevelopmentCoderAttemptRunner> logger,
-        IDevelopmentAttemptLiveBroker? liveBroker = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider,
+        IDevelopmentAttemptLiveBroker? liveBroker = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _store = store ?? throw new ArgumentNullException(nameof(store));
@@ -61,7 +61,7 @@ internal sealed class DevelopmentCoderAttemptRunner : IDevelopmentCoderAttemptRu
         ArgumentNullException.ThrowIfNull(options);
         _options = options.Value;
         _liveBroker = liveBroker;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<DevelopmentCoderAttemptResult> RunAsync(Guid attemptId,

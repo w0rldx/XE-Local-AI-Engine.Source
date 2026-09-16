@@ -294,7 +294,8 @@ public sealed class ImageModelSetDownloadTests
         return new HuggingFaceImageModelStore(downloadClient,
             registry,
             ImageOptions(modelsDirectory),
-            NullLogger<HuggingFaceImageModelStore>.Instance);
+            NullLogger<HuggingFaceImageModelStore>.Instance,
+            TimeProvider.System);
     }
 
     private sealed class RecordingProgress : IProgress<PullProgress>

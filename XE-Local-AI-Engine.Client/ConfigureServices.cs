@@ -13,6 +13,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
@@ -146,6 +147,12 @@ public static class ConfigureServices
         // differ is which failure counts as a ring failure and what the operator can do about it.
         _ = NodeDataProtectionKeyRingFailClosed.Decorate(dataProtection.Services,
             NodeDataProtectionKeyRingFailClosed.ResolverFactoryFor(isWindows));
+
+        // The one wall-clock seam. Every service that needs "now" takes TimeProvider in its constructor and calls
+        // GetUtcNow(); DateTimeOffset.UtcNow is banned in production code (BannedSymbols.txt, RS0030). Registered
+        // here, once, at the composition root; a test class that needs a controlled clock overrides it through
+        // TestServerWebAppFactory.ConfigureAdditionalTestServices.
+        builder.Services.TryAddSingleton(TimeProvider.System);
 
         // Application layer (services, options, persistence, runtime) lives in the
         // XE-Local-AI-Engine.Client.Application class library. The host only wires web-framework

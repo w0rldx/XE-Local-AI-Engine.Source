@@ -114,7 +114,7 @@ public sealed class ExternalModelContextBudgetTests
     {
         var cloudFactory = Substitute.For<IActiveCloudChatClientFactory>();
         _ = cloudFactory.IsCloudProviderSelected(Arg.Any<string?>()).Returns(false);
-        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, NullLogger<LocalRuntimeWarmer>.Instance);
+        return new LocalRuntimeWarmer(resolver, cloudFactory, trust, NullLogger<LocalRuntimeWarmer>.Instance, TimeProvider.System);
     }
 
     private static async Task<LocalRuntimePreparationResult> PrepareAsync(LocalRuntimeWarmer warmer)

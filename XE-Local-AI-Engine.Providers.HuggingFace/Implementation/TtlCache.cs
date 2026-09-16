@@ -27,10 +27,11 @@ internal sealed class TtlCache<TValue>
     private long _accessClock;
     private int _evicting;
 
-    public TtlCache(TimeProvider? timeProvider = null, int maxEntries = DefaultMaxEntries)
+    public TtlCache(TimeProvider timeProvider, int maxEntries = DefaultMaxEntries)
     {
+        ArgumentNullException.ThrowIfNull(timeProvider);
         ArgumentOutOfRangeException.ThrowIfLessThan(maxEntries, 1);
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _maxEntries = maxEntries;
     }
 

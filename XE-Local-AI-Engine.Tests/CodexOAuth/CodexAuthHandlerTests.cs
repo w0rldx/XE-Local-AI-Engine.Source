@@ -33,7 +33,8 @@ public sealed class CodexAuthHandlerTests
         using var handler = new CodexAuthHandler(Options.Create(new CodexOptions()),
             tokenStore,
             authService,
-            NullLogger<CodexAuthHandler>.Instance)
+            NullLogger<CodexAuthHandler>.Instance,
+            TimeProvider.System)
         {
             InnerHandler = inner
         };
@@ -71,7 +72,8 @@ public sealed class CodexAuthHandlerTests
         using var handler = new CodexAuthHandler(Options.Create(new CodexOptions()),
             tokenStore,
             authService,
-            NullLogger<CodexAuthHandler>.Instance)
+            NullLogger<CodexAuthHandler>.Instance,
+            TimeProvider.System)
         {
             InnerHandler = inner
         };
@@ -233,7 +235,8 @@ public sealed class CodexAuthHandlerTests
         using var handler = new CodexAuthHandler(Options.Create(new CodexOptions()),
             tokenStore,
             authService,
-            logger)
+            logger,
+            TimeProvider.System)
         {
             InnerHandler = inner
         };
@@ -259,7 +262,8 @@ public sealed class CodexAuthHandlerTests
         using var handler = new CodexAuthHandler(Options.Create(options),
             tokenStore,
             authService,
-            NullLogger<CodexAuthHandler>.Instance)
+            NullLogger<CodexAuthHandler>.Instance,
+            TimeProvider.System)
         {
             InnerHandler = inner
         };

@@ -20,9 +20,9 @@ public sealed class ConnectionState
 {
     private readonly TimeProvider _clock;
 
-    public ConnectionState(TimeProvider? clock = null)
+    public ConnectionState(TimeProvider clock)
     {
-        _clock = clock ?? TimeProvider.System;
+        _clock = clock ?? throw new ArgumentNullException(nameof(clock));
         LastUpdatedAt = _clock.GetUtcNow();
     }
 

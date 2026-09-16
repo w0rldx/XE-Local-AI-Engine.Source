@@ -137,6 +137,7 @@ public sealed class WhisperRuntimeHttpTimeoutTests
         // which the AppHost sets. Without it the container is not in the shape this test exists to check.
         builder.Configuration["ASPIRE_ENABLED"] = "true";
         builder.AddServiceDefaults();
+        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddWhisperCppRuntime();
 
         return builder.Services.BuildServiceProvider();

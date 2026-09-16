@@ -40,8 +40,9 @@ internal sealed class LlamaTokenEstimatorCalibrationService : BackgroundService,
     public LlamaTokenEstimatorCalibrationService(HttpClient httpClient,
         ITokenEstimatorCalibrationStore store,
         ILlamaServerProcessSupervisor supervisor,
-        ILogger<LlamaTokenEstimatorCalibrationService> logger)
-        : this(httpClient, store, supervisor, logger, DefaultInterval, TimeProvider.System, DefaultWorkCapacity)
+        ILogger<LlamaTokenEstimatorCalibrationService> logger,
+        TimeProvider timeProvider)
+        : this(httpClient, store, supervisor, logger, DefaultInterval, timeProvider, DefaultWorkCapacity)
     {
     }
 

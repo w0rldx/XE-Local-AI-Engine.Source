@@ -260,7 +260,7 @@ public sealed class OrchestrationResolverTests
 
         // REAL offer provider so the actual withholding is observed. BOTH participant models are tool-capable, so the
         // knowledge tools WOULD be offered but for the per-participant locality gate.
-        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(ToolCapableModel, CloudParticipantModel).Build(),
             NullCustomToolScopeFactory.Instance,

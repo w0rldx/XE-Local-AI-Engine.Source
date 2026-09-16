@@ -25,12 +25,12 @@ public sealed class LinuxSandboxProcessGroupKiller : ISandboxProcessGroupKiller
     private readonly TimeProvider _timeProvider;
 
     /// <summary>
-    ///     The time source is optional so the provider can construct a killer inline for its best-effort group kill,
-    ///     while ActivatorUtilities injects the registered one for the reaper.
+    ///     The time source is injected: the provider passes its own clock when it constructs a killer inline for its
+    ///     best-effort group kill, and ActivatorUtilities injects the registered one for the reaper.
     /// </summary>
-    public LinuxSandboxProcessGroupKiller(TimeProvider? timeProvider = null)
+    public LinuxSandboxProcessGroupKiller(TimeProvider timeProvider)
     {
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     /// <inheritdoc />

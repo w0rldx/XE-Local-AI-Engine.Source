@@ -235,6 +235,7 @@ public sealed class HeartbeatBackgroundServiceTests : IDisposable
                 BaseUrl = "https://test.example.com",
                 HeartbeatIntervalSeconds = 1
             }),
-            NullLogger<HeartbeatBackgroundService>.Instance);
+            NullLogger<HeartbeatBackgroundService>.Instance,
+            TimeProvider.System);
     }
 }

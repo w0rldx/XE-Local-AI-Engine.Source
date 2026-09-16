@@ -51,6 +51,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
     private readonly Lock _publishLock = new();
     private readonly SemaphoreSlim _startGate = new(1, 1);
     private readonly Lock _stateLock = new();
+    private readonly TimeProvider _timeProvider;
 
     private Task? _activeBuildTask;
     private CancellationTokenSource? _buildCts;
@@ -73,8 +74,9 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         ILlamaServerProcessSupervisor supervisor,
         ILlamaCppSourceBuildActivity buildActivity,
         ILlamaCppSourceBuildEventPublisher publisher,
-        ILogger<LlamaCppSourceBuildService> logger)
-        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, buildActivity, publisher, logger, DefaultCacheRoot())
+        ILogger<LlamaCppSourceBuildService> logger,
+        TimeProvider timeProvider)
+        : this(prerequisiteProbe, binaryManager, installedRuntimeStore, activeSignal, supervisor, buildActivity, publisher, logger, timeProvider, DefaultCacheRoot())
     {
     }
 
@@ -87,6 +89,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         ILlamaCppSourceBuildActivity buildActivity,
         ILlamaCppSourceBuildEventPublisher publisher,
         ILogger<LlamaCppSourceBuildService> logger,
+        TimeProvider timeProvider,
         string cacheRoot)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
@@ -97,6 +100,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
         _buildActivity = buildActivity ?? throw new ArgumentNullException(nameof(buildActivity));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
@@ -220,7 +224,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
                         _nextLogSequence = 0;
                         _sanitizedError = null;
                         _currentBuild = descriptor;
-                        _startedAtUtc = DateTimeOffset.UtcNow;
+                        _startedAtUtc = _timeProvider.GetUtcNow();
                         _completedAtUtc = null;
                         _buildCts?.Dispose();
                         _buildCts = buildCts;
@@ -363,7 +367,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             TryDeleteDirectory(backupTagDir);
             CreateOwnerOnlyDirectory(sourceCudaRoot);
             CreateOwnerOnlyDirectory(workDir);
-            await File.WriteAllTextAsync(MarkerPath, DateTimeOffset.UtcNow.ToString("O"), ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(MarkerPath, _timeProvider.GetUtcNow().ToString("O"), ct).ConfigureAwait(false);
 
             var isolatedHome = Path.Combine(workDir, ".home");
             var isolatedTmp = Path.Combine(workDir, ".tmp");
@@ -1084,7 +1088,7 @@ public sealed partial class LlamaCppSourceBuildService : ILlamaCppSourceBuildSer
             _phase = phase;
             _isRunning = false;
             _sanitizedError = sanitizedError;
-            _completedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = _timeProvider.GetUtcNow();
             publish = QueuePublish(new LlamaCppSourceBuildStatusHubEvent(phase.ToString(),
                 [],
                 _nextLogSequence,

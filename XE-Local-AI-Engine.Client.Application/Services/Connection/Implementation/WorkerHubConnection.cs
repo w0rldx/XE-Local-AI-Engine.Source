@@ -41,9 +41,9 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
         DeadLetterFlushService deadLetterFlushService,
         INodeKeyRegistry nodeKeyRegistry,
         ILogger<WorkerHubConnection> logger,
+        TimeProvider timeProvider,
         Action<HttpConnectionOptions>? configureHttpConnectionOptions = null,
-        IWorkerTokenRefreshService? workerTokenRefreshService = null,
-        TimeProvider? timeProvider = null)
+        IWorkerTokenRefreshService? workerTokenRefreshService = null)
     {
         _tokenStore = tokenStore ?? throw new ArgumentNullException(nameof(tokenStore));
         _platformOptions = platformOptions ?? throw new ArgumentNullException(nameof(platformOptions));
@@ -53,7 +53,7 @@ public sealed partial class WorkerHubConnection : IWorkerHubConnection
         _deadLetterFlushService = deadLetterFlushService ?? throw new ArgumentNullException(nameof(deadLetterFlushService));
         _nodeKeyRegistry = nodeKeyRegistry ?? throw new ArgumentNullException(nameof(nodeKeyRegistry));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _configureHttpConnectionOptions = configureHttpConnectionOptions;
 
         _connectionState.StateChanged += OnConnectionStateChanged;

@@ -80,7 +80,7 @@ public sealed class EmbeddingTelemetryHopTests
 #pragma warning restore CA2000
         using var clientFactory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
         using var baseClient = clientFactory.CreateClient(selectedModel: null);
-        using var provider = new OllamaLocalModelProvider(baseClient, clientFactory);
+        using var provider = new OllamaLocalModelProvider(baseClient, clientFactory, TimeProvider.System);
 
         using var generator = provider.CreateEmbeddingGenerator(new LocalModelSelection
         {

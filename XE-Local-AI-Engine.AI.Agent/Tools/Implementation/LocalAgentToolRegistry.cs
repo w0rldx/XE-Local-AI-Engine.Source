@@ -10,26 +10,31 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
     // property so the catalog and execution paths do not need to change when a tool requires approval.
     private const bool CatalogRequiresApproval = false;
 
-    private static readonly IReadOnlyList<AITool> Tools = BuildTools();
-    private static readonly IReadOnlyList<LocalChatToolDescriptor> Descriptors = BuildDescriptors(Tools);
+    private readonly IReadOnlyList<LocalChatToolDescriptor> _descriptors;
+    private readonly TimeProvider _timeProvider;
+    private readonly IReadOnlyList<AITool> _tools;
 
-    public IReadOnlyList<AITool> GetLocalChatTools()
+    public LocalAgentToolRegistry(TimeProvider timeProvider)
     {
-        return Tools;
-    }
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
-    public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
-    {
-        return Descriptors;
-    }
-
-    private static IReadOnlyList<AITool> BuildTools()
-    {
-        return
+        // Built here rather than in a helper so the GetCurrentTime method group binds to this instance's clock.
+        _tools =
         [
             AIFunctionFactory.Create(GetCurrentTime),
             AIFunctionFactory.Create(Calculate)
         ];
+        _descriptors = BuildDescriptors(_tools);
+    }
+
+    public IReadOnlyList<AITool> GetLocalChatTools()
+    {
+        return _tools;
+    }
+
+    public IReadOnlyList<LocalChatToolDescriptor> GetLocalChatToolDescriptors()
+    {
+        return _descriptors;
     }
 
     private static IReadOnlyList<LocalChatToolDescriptor> BuildDescriptors(IReadOnlyList<AITool> tools)
@@ -49,10 +54,10 @@ internal sealed class LocalAgentToolRegistry : IAgentToolRegistry
     }
 
     [Description("Returns the current UTC time, the local time, and today's date. Use it whenever the user asks what time or what day it is.")]
-    private static string GetCurrentTime(
+    private string GetCurrentTime(
         [Description("Optional IANA or Windows time-zone identifier (for example 'Europe/Berlin'). When omitted or unknown, the server's local time zone is used.")] string? timezone = null)
     {
-        var utcNow = DateTimeOffset.UtcNow;
+        var utcNow = _timeProvider.GetUtcNow();
         var (zone, zoneResolved) = ResolveTimeZone(timezone);
         var zonedNow = TimeZoneInfo.ConvertTime(utcNow, zone);
 

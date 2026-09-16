@@ -36,11 +36,13 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
 
     private readonly ConcurrentDictionary<string, CachedRelease> _cache = new(StringComparer.Ordinal);
     private readonly HttpClient _httpClient;
+    private readonly TimeProvider _timeProvider;
 
-    /// <summary>Creates the catalog over the injected download/API <see cref="HttpClient" />.</summary>
-    public GitHubLlamaCppReleaseCatalog(HttpClient httpClient)
+    /// <summary>Creates the catalog over the injected download/API <see cref="HttpClient" /> and the ambient clock.</summary>
+    public GitHubLlamaCppReleaseCatalog(HttpClient httpClient, TimeProvider timeProvider)
     {
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     /// <summary>
@@ -291,7 +293,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
 
             if (IsRateLimited(response))
             {
-                RateLimitResetUtc = ReadRateLimitReset(response);
+                RateLimitResetUtc = ReadRateLimitReset(response, _timeProvider.GetUtcNow());
                 return new ReleaseLookup(Release: null, LlamaCppReleaseResult.RateLimited());
             }
 
@@ -314,7 +316,7 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
             }
 
             var etag = response.Headers.ETag?.ToString();
-            _cache[requestUrl] = new CachedRelease(etag, release, DateTimeOffset.UtcNow);
+            _cache[requestUrl] = new CachedRelease(etag, release, _timeProvider.GetUtcNow());
             return new ReleaseLookup(release, Signal: null);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -354,13 +356,13 @@ public sealed partial class GitHubLlamaCppReleaseCatalog : ILlamaCppReleaseCatal
         return false;
     }
 
-    private static DateTimeOffset? ReadRateLimitReset(HttpResponseMessage response)
+    private static DateTimeOffset? ReadRateLimitReset(HttpResponseMessage response, DateTimeOffset now)
     {
         if (response.Headers.RetryAfter is { } retryAfter)
         {
             if (retryAfter.Delta is { } delta)
             {
-                return DateTimeOffset.UtcNow + delta;
+                return now + delta;
             }
 
             if (retryAfter.Date is { } date)

@@ -321,7 +321,8 @@ public sealed class ImageServerSupervisorTests
             {
                 IdleTimeToLive = TimeSpan.FromHours(1),
                 MaxLoadedProcesses = 2
-            });
+            },
+            TimeProvider.System);
 
         var ensure = supervisor.EnsureRunningAsync("sd15", CancellationToken.None);
         await probe.ReadinessEntered; // the handle is launched and the spawn is blocked in its readiness wait.

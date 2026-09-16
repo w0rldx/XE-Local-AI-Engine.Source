@@ -23,6 +23,6 @@ internal static class SingleProviderResolverFactory
         services.AddScoped<ICoordinatedModelProviderMapStore>(_ => new InMemoryCoordinatedModelProviderMapStore());
         var scopeFactory = services.BuildServiceProvider().GetRequiredService<IServiceScopeFactory>();
 
-        return new LocalModelProviderResolver([provider], scopeFactory, provider.ProviderName, maxLoadedProcesses);
+        return new LocalModelProviderResolver([provider], scopeFactory, provider.ProviderName, maxLoadedProcesses, TimeProvider.System);
     }
 }

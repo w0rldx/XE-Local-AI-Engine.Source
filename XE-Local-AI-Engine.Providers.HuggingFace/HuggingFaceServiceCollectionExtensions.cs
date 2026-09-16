@@ -66,12 +66,12 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton(static sp => new HfHubClient(sp.GetRequiredService<IHttpClientFactory>().CreateClient(HubHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<HfHubClient>>(),
-            sp.GetService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton(static sp => new GgufHeaderReader(sp.GetRequiredService<IHttpClientFactory>().CreateClient(DownloadHttpClientName),
             sp.GetRequiredService<HuggingFaceOptions>(),
             sp.GetRequiredService<ILogger<GgufHeaderReader>>(),
-            sp.GetService<TimeProvider>()));
+            sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton<IHuggingFaceGgufDiscovery>(static sp => new HuggingFaceGgufDiscovery(sp.GetRequiredService<HfHubClient>(),
             sp.GetRequiredService<GgufHeaderReader>(),
@@ -98,24 +98,25 @@ public static class HuggingFaceServiceCollectionExtensions
         services.TryAddSingleton<IGgufModelImporter>(static sp => new GgufModelImporter(sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<IFreeSpaceProbe>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            sp.GetRequiredService<TimeProvider>()));
         services.TryAddSingleton<IGgufDownloadTransaction>(static sp => new HuggingFaceGgufDownloadTransaction(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
             sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System));
+            sp.GetRequiredService<TimeProvider>()));
 
         services.TryAddSingleton<IGgufModelStore>(static sp => new HuggingFaceGgufStore(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<IHuggingFaceGgufDiscovery>(),
             sp.GetRequiredService<GgufModelRegistry>(),
             sp.GetRequiredService<GgufHeaderReader>(),
             sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetRequiredService<ILogger<HuggingFaceGgufStore>>()));
+            sp.GetRequiredService<ILogger<HuggingFaceGgufStore>>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         // Startup-only cleanup of stale acquisition artifacts (.part staging files, orphaned final sidecars) left
         // behind by a crashed import/download. See GgufAcquisitionArtifactStartupReaper for the exact rules.
         services.AddHostedService(static sp => new GgufAcquisitionArtifactStartupReaper(sp.GetRequiredService<HuggingFaceOptions>(),
-            sp.GetService<TimeProvider>() ?? TimeProvider.System,
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<GgufAcquisitionArtifactStartupReaper>>()));
 
         return services;

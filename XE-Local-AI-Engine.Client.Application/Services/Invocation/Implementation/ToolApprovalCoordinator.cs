@@ -103,6 +103,8 @@ public sealed class ToolApprovalCoordinator
 
     private readonly TimeSpan _maxPendingToolCallAge;
 
+    private readonly TimeProvider _timeProvider;
+
     private readonly UserQuestionAnswerStash _userQuestionAnswerStash;
 
     public ToolApprovalCoordinator(Lazy<IHubMessageSender> hubSender,
@@ -112,7 +114,8 @@ public sealed class ToolApprovalCoordinator
         IToolApprovalPolicy approvalPolicy,
         UserQuestionAnswerStash userQuestionAnswerStash,
         INodeRuntimeSettings runtimeSettings,
-        ILogger<ToolApprovalCoordinator> logger)
+        ILogger<ToolApprovalCoordinator> logger,
+        TimeProvider timeProvider)
     {
         _hubSender = hubSender ?? throw new ArgumentNullException(nameof(hubSender));
         _eventDispatcher = eventDispatcher ?? throw new ArgumentNullException(nameof(eventDispatcher));
@@ -121,6 +124,7 @@ public sealed class ToolApprovalCoordinator
         _approvalAuditRecorder = approvalAuditRecorder ?? throw new ArgumentNullException(nameof(approvalAuditRecorder));
         _userQuestionAnswerStash = userQuestionAnswerStash ?? throw new ArgumentNullException(nameof(userQuestionAnswerStash));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // The human-wait cap is read once at singleton construction from INodeRuntimeSettings, exactly as the runner and
         // the API tool-call bridge read it, so an operator edit applies on the next process restart and all three agree.
@@ -196,7 +200,7 @@ public sealed class ToolApprovalCoordinator
         var requestId = Guid.NewGuid().ToString("N");
         var approvalCompletion = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
         var resultCompletion = new TaskCompletionSource<ToolCallResultEvent>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var pendingToolCall = new PendingToolCall(package.InvocationId, DateTimeOffset.UtcNow, approvalCompletion, resultCompletion);
+        var pendingToolCall = new PendingToolCall(package.InvocationId, _timeProvider.GetUtcNow(), approvalCompletion, resultCompletion);
         var sender = _hubSender.Value;
         var dispatcher = _eventDispatcher.Value;
 

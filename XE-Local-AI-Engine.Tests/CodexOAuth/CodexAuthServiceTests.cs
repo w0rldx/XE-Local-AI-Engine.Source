@@ -203,7 +203,7 @@ public sealed class CodexAuthServiceTests : IDisposable
         // The test owns the handler (via `using`); this client must not dispose it.
         var httpClient = new HttpClient(handler, disposeHandler: false);
         _disposables.Add(httpClient);
-        return new CodexAuthService(Options.Create(options), httpClient, tokenStore, logger ?? NullLogger<CodexAuthService>.Instance);
+        return new CodexAuthService(Options.Create(options), httpClient, tokenStore, logger ?? NullLogger<CodexAuthService>.Instance, TimeProvider.System);
     }
 
     private static Dictionary<string, string> ParseQuery(string query)

@@ -26,17 +26,18 @@ public sealed class KnowledgeQueryEmbeddingCache : IKnowledgeQueryEmbeddingCache
     private readonly ByteBudgetedCache<string, KnowledgeQueryEmbeddingCacheEntry> _entries;
     private readonly TimeSpan _ttl;
 
-    public KnowledgeQueryEmbeddingCache(IOptions<KnowledgeBaseOptions> options, TimeProvider? timeProvider = null)
+    public KnowledgeQueryEmbeddingCache(IOptions<KnowledgeBaseOptions> options, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
+        ArgumentNullException.ThrowIfNull(timeProvider);
         _ttl = TimeSpan.FromSeconds(Math.Max(0, options.Value.QueryEmbeddingCacheTtlSeconds));
         _entries = new ByteBudgetedCache<string, KnowledgeQueryEmbeddingCacheEntry>(MaxBytes,
             options.Value.QueryEmbeddingCacheMaxEntries,
             static (key, entry) => ((key.Length + entry.VectorIdentity.Length) * sizeof(char))
                                    + (entry.Vector.Length * sizeof(float))
                                    + EntryOverheadBytes,
-            _ttl,
             timeProvider,
+            _ttl,
             RecordEvictedBytes,
             StringComparer.Ordinal);
     }

@@ -185,7 +185,11 @@ public sealed class ByteBudgetedCacheTests
         TimeSpan ttl = default,
         TimeProvider? timeProvider = null)
     {
-        return new ByteBudgetedCache<string, int>(maxBytes, maxEntries, static (_, value) => value, ttl, timeProvider);
+        return new ByteBudgetedCache<string, int>(maxBytes,
+            maxEntries,
+            static (_, value) => value,
+            timeProvider ?? TimeProvider.System,
+            ttl);
     }
 
     private sealed class MutableTimeProvider(DateTimeOffset start) : TimeProvider

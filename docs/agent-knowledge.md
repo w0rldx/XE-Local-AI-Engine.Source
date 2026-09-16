@@ -726,6 +726,35 @@ during silence. **Authority:** upstream `NAudio` 3.1.0 `src/NAudio.Wasapi/Wasapi
 
 ---
 
+### PROPOSED (awaiting operator approval): `TimeProvider` is registered once, in `Client/ConfigureServices.cs`
+
+**Rule:** the wall clock enters the container exactly once — `builder.Services.TryAddSingleton(TimeProvider.System)`
+in `XE-Local-AI-Engine.Client/ConfigureServices.cs`. Consumers take `TimeProvider` as a required constructor parameter
+and call `GetUtcNow()`; a `?? TimeProvider.System` default, a `sp.GetService<TimeProvider>()` in a factory lambda, or a
+second `AddSingleton(TimeProvider.System)` in a DI module is a regression, not a convenience — delete it on sight.
+`DateTimeOffset.UtcNow` is banned in production code (`BannedSymbols.txt`, RS0030). A test class that needs a frozen
+clock overrides it through `TestServerWebAppFactory.ConfigureAdditionalTestServices` (`RemoveAll<TimeProvider>()`, then
+`AddSingleton<TimeProvider>(fake)`); the shared fixture keeps the real
+clock because JWT lifetime validation does not read the DI clock. **Prevents:** a class silently falling back to the
+real clock in a test that installed a fake one, and the duplicate-registration drift research once missed because its
+grep covered `Program*.cs`/`Composition*`/top-level `DependencyInjection*` but not `DependencyInjection/Modules/*.cs`.
+**Authority:** `Plans/static-quality-enforcement-2026-09-15/S3-timeprovider-migration-plan.md` §3.2/§4 and
+`10-reconciliation.md` D5/P5; `XE-Local-AI-Engine.Client/ConfigureServices.cs`.
+
+---
+
+### PROPOSED (awaiting operator approval): a constructor-caller census by `grep "new X("` misses target-typed `new(...)` and NUL-bearing files
+
+**Rule:** when a constructor signature changes, derive the caller list from the compiler, not from grep: run the
+Release build and fix what fails. If a grep census is used first, run it as `grep -a` (two test files carry a literal
+NUL byte inside a string literal and plain GNU grep classifies them as binary, reporting no matches) and remember that
+target-typed `new(...)` locals and `=> new(...)` factories never contain the class name. **Prevents:** a "no callers
+outside the plan" claim that the first Release build disproves — the S3 migration hit both shapes (`SourceBuildRecoveryTests`,
+`DevelopmentWorkspaceAndCoderTests`, `LlamaGrammarToolOffer`, `EmbeddingToolRelevanceSelectorTests`). **Authority:**
+`Plans/static-quality-enforcement-2026-09-15/progress/S3-report.md`.
+
+---
+
 ## 2. Dev environment & local runtime
 
 ### The dev environment has a CUDA GPU — probe it, never infer it

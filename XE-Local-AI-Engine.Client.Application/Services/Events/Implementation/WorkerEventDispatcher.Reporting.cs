@@ -46,12 +46,11 @@ public sealed partial class WorkerEventDispatcher
             state =>
             {
                 // Stamped on a REAL transition only: the browser renders elapsed cold-load time from this value, so a
-                // re-report of the same phase must not restart its clock. DateTimeOffset.UtcNow matches
-                // UpdateInvocation's own LastUpdatedAt stamp in this partial class; no TimeProvider is threaded in for
-                // one field.
+                // re-report of the same phase must not restart its clock. The injected clock matches
+                // UpdateInvocation's own LastUpdatedAt stamp in this partial class.
                 if (state.RuntimePhase != phase)
                 {
-                    state.RuntimePhaseChangedAtUtc = DateTimeOffset.UtcNow;
+                    state.RuntimePhaseChangedAtUtc = _timeProvider.GetUtcNow();
                 }
 
                 state.RuntimePhase = phase;
@@ -68,7 +67,7 @@ public sealed partial class WorkerEventDispatcher
             state =>
             {
                 state.Status = InvocationStatus.Completed;
-                state.CompletedAt = DateTimeOffset.UtcNow;
+                state.CompletedAt = _timeProvider.GetUtcNow();
                 state.InputTokens = inputTokens;
                 state.OutputTokens = outputTokens;
                 state.TotalTokens = totalTokens;
@@ -166,7 +165,7 @@ public sealed partial class WorkerEventDispatcher
                 state.Status = failureCategory == FailureCategory.Cancelled ? InvocationStatus.Cancelled : InvocationStatus.Failed;
                 state.Error = failureMessage;
                 state.FailureCategory = failureCategory;
-                state.CompletedAt = DateTimeOffset.UtcNow;
+                state.CompletedAt = _timeProvider.GetUtcNow();
                 state.PendingApproval = null;
                 state.PendingQuestion = null;
                 state.PendingToolCalls = [];
@@ -186,7 +185,7 @@ public sealed partial class WorkerEventDispatcher
                 state.PendingToolCalls =
                 [
                     .. state.PendingToolCalls,
-                    new InvocationToolCallState(payload.RequestId, payload.ToolName, payload.Parameters, DateTimeOffset.UtcNow)
+                    new InvocationToolCallState(payload.RequestId, payload.ToolName, payload.Parameters, _timeProvider.GetUtcNow())
                 ];
                 return state;
             });
@@ -201,7 +200,7 @@ public sealed partial class WorkerEventDispatcher
         UpdateInvocation(payload.InvocationId,
             state =>
             {
-                state.PendingApproval = new InvocationApprovalState(payload.RequestId, payload.Description, DateTimeOffset.UtcNow);
+                state.PendingApproval = new InvocationApprovalState(payload.RequestId, payload.Description, _timeProvider.GetUtcNow());
                 return state;
             });
 
@@ -270,7 +269,7 @@ public sealed partial class WorkerEventDispatcher
                     payload.CallId,
                     payload.ToolName,
                     payload.Questions,
-                    DateTimeOffset.UtcNow);
+                    _timeProvider.GetUtcNow());
                 return state;
             });
 

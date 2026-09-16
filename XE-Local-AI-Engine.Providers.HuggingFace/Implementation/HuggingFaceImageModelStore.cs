@@ -35,21 +35,25 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
     private readonly ILogger<HuggingFaceImageModelStore> _logger;
     private readonly ImageModelStoreOptions _options;
     private readonly ImageModelRegistry _registry;
+    private readonly TimeProvider _timeProvider;
 
     public HuggingFaceImageModelStore(HfDownloadClient downloadClient,
         ImageModelRegistry registry,
         ImageModelStoreOptions options,
-        ILogger<HuggingFaceImageModelStore> logger)
+        ILogger<HuggingFaceImageModelStore> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(downloadClient);
         ArgumentNullException.ThrowIfNull(registry);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _downloadClient = downloadClient;
         _registry = registry;
         _options = options;
         _logger = logger;
+        _timeProvider = timeProvider;
     }
 
     /// <inheritdoc />
@@ -224,7 +228,7 @@ internal sealed class HuggingFaceImageModelStore : IImageModelStore
                 Parts = parts,
                 SizeBytes = totalBytes,
                 SourceRevision = resolvedRevision,
-                DownloadedAtUtc = DateTimeOffset.UtcNow
+                DownloadedAtUtc = _timeProvider.GetUtcNow()
             };
 
             await _registry.UpsertAsync(entry, ct).ConfigureAwait(false);

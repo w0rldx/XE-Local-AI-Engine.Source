@@ -44,7 +44,8 @@ public static class HuggingFaceImageServiceCollectionExtensions
         services.TryAddSingleton<IImageModelStore>(static sp => new HuggingFaceImageModelStore(sp.GetRequiredService<HfDownloadClient>(),
             sp.GetRequiredService<ImageModelRegistry>(),
             sp.GetRequiredService<ImageModelStoreOptions>(),
-            sp.GetRequiredService<ILogger<HuggingFaceImageModelStore>>()));
+            sp.GetRequiredService<ILogger<HuggingFaceImageModelStore>>(),
+            sp.GetRequiredService<TimeProvider>()));
 
         // Image-model discovery rides the SAME HfHubClient the GGUF lane registers (shared listing cache, one HttpClient).
         services.TryAddSingleton<IImageModelDiscovery>(static sp => new HuggingFaceImageModelDiscovery(sp.GetRequiredService<HfHubClient>(),

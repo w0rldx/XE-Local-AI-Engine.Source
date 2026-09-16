@@ -430,7 +430,7 @@ public sealed class SourceBuildRecoveryTests
         IActiveSourceBuildSignal signal,
         ILogger<LlamaCppSourceBuildService>? logger = null) =>
         new(new ReadyProbe(), new NoopManager(), store, signal, new LeaseSupervisor(), new LlamaCppSourceBuildActivity(),
-            new NullLlamaCppSourceBuildEventPublisher(), logger ?? NullLogger<LlamaCppSourceBuildService>.Instance, root);
+            new NullLlamaCppSourceBuildEventPublisher(), logger ?? NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, root);
 
     private sealed class ReadyProbe : ILlamaCppSourceBuildPrerequisiteProbe
     {

@@ -249,7 +249,8 @@ public sealed class LlamaCppRuntimeAdministrationServiceTests
             Substitute.For<ILocalChatClientCacheInvalidator>(),
             new LlamaServerRuntimeOverrideOptions(),
             lifetime,
-            NullLogger<LlamaCppRuntimeAdministrationService>.Instance);
+            NullLogger<LlamaCppRuntimeAdministrationService>.Instance,
+            TimeProvider.System);
     }
 
     private sealed class RecordingLease : ILlamaServerRuntimeMutationLease

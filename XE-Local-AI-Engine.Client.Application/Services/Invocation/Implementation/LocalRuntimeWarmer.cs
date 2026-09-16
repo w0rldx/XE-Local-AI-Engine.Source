@@ -22,12 +22,14 @@ public sealed class LocalRuntimeWarmer(
     ILocalModelProviderResolver providerResolver,
     IActiveCloudChatClientFactory activeCloudFactory,
     IModelTrustResolver modelTrustResolver,
-    ILogger<LocalRuntimeWarmer> logger)
+    ILogger<LocalRuntimeWarmer> logger,
+    TimeProvider timeProvider)
 {
     private readonly IActiveCloudChatClientFactory _activeCloudFactory = activeCloudFactory ?? throw new ArgumentNullException(nameof(activeCloudFactory));
     private readonly ILogger<LocalRuntimeWarmer> _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     private readonly IModelTrustResolver _modelTrustResolver = modelTrustResolver ?? throw new ArgumentNullException(nameof(modelTrustResolver));
     private readonly ILocalModelProviderResolver _providerResolver = providerResolver ?? throw new ArgumentNullException(nameof(providerResolver));
+    private readonly TimeProvider _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
     /// <summary>
     ///     Model-readiness phase: warms a LOCAL (llama.cpp) model to readiness BEFORE the stream-idle watchdog
@@ -90,7 +92,7 @@ public sealed class LocalRuntimeWarmer(
         _logger.LogInformation("Warming local model for invocation {InvocationId} before streaming (readiness decoupled from the stream-idle watchdog).", invocationId);
 
         using var readinessActivity = NodeActivitySource.Source.StartActivity("chat.invocation.model_readiness");
-        var startedUtc = DateTimeOffset.UtcNow;
+        var startedUtc = _timeProvider.GetUtcNow();
         try
         {
             await provider.WarmModelAsync(resolvedModel, cancellationToken).ConfigureAwait(false);
@@ -242,9 +244,9 @@ public sealed class LocalRuntimeWarmer(
     }
 
     /// <summary>Records the model-readiness duration + outcome on <see cref="NodeMetrics" /> and returns the elapsed milliseconds.</summary>
-    private static double RecordReadiness(DateTimeOffset startedUtc, string outcome)
+    private double RecordReadiness(DateTimeOffset startedUtc, string outcome)
     {
-        var durationMs = (DateTimeOffset.UtcNow - startedUtc).TotalMilliseconds;
+        var durationMs = (_timeProvider.GetUtcNow() - startedUtc).TotalMilliseconds;
         NodeMetrics.ModelReadinessDurationMs.Record(durationMs, new KeyValuePair<string, object?>("outcome", outcome));
         NodeMetrics.ModelReadinessTotal.Add(1, new KeyValuePair<string, object?>("outcome", outcome));
         return durationMs;

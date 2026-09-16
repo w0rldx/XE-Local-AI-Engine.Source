@@ -59,11 +59,12 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 BaseUrl = fixture.HubBaseUri.ToString(),
                 HubPath = fixture.HubPath
             }),
-            new ConnectionState(),
+            new ConnectionState(TimeProvider.System),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
             deadLetterFlushService,
             nodeKeyRegistry,
             NullLogger<WorkerHubConnection>.Instance,
+            TimeProvider.System,
             CreateFixtureHttpOptionsConfigurator(fixture));
 
         await connection.ConnectAsync();
@@ -147,11 +148,12 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 BaseUrl = fixture.HubBaseUri.ToString(),
                 HubPath = fixture.HubPath
             }),
-            new ConnectionState(),
+            new ConnectionState(TimeProvider.System),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
             deadLetterFlushService,
             nodeKeyRegistry,
             NullLogger<WorkerHubConnection>.Instance,
+            TimeProvider.System,
             CreateFixtureHttpOptionsConfigurator(fixture));
 
         var invocationAssigned = new TaskCompletionSource<EncryptedRuntimePackageDto>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -349,11 +351,12 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 BaseUrl = fixture.HubBaseUri.ToString(),
                 HubPath = fixture.HubPath
             }),
-            new ConnectionState(),
+            new ConnectionState(TimeProvider.System),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
             deadLetterFlushService,
             nodeKeyRegistry,
             NullLogger<WorkerHubConnection>.Instance,
+            TimeProvider.System,
             CreateFixtureHttpOptionsConfigurator(fixture));
 
         var invocationAssigned = new TaskCompletionSource<EncryptedRuntimePackageDto>(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -802,14 +805,14 @@ public sealed class WorkerHubConnectionSignalRIntegrationTests
                 BaseUrl = fixture.HubBaseUri.ToString(),
                 HubPath = fixture.HubPath
             }),
-            new ConnectionState(),
+            new ConnectionState(timeProvider ?? TimeProvider.System),
             new Lazy<ICapabilityReporter>(() => capabilityReporter),
             deadLetterFlushService,
             nodeKeyRegistry,
             NullLogger<WorkerHubConnection>.Instance,
+            timeProvider ?? TimeProvider.System,
             configureHttpOptions ?? CreateFixtureHttpOptionsConfigurator(fixture),
-            refreshService,
-            timeProvider);
+            refreshService);
     }
 
     private static Action<HttpConnectionOptions> CreateFixtureHttpOptionsConfigurator(FakeWorkerNodeFixture fixture)

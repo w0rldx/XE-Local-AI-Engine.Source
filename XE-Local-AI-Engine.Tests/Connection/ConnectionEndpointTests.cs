@@ -19,7 +19,7 @@ public sealed class ConnectionEndpointTests
     public async Task ConnectionActions_WhenInvoked_ReturnUpdatedStatusAndDelegateToWorkerConnection()
     {
         var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         var hubConnection = Substitute.For<IWorkerHubConnection>();
         hubConnection.ConnectAsync(Arg.Any<CancellationToken>()).Returns(_ =>
         {
@@ -67,7 +67,7 @@ public sealed class ConnectionEndpointTests
     public async Task DisableAutoConnect_WhenReconnecting_DisconnectsAndReturnsTerminalManualState()
     {
         var tokenStore = MockTokenStore.Paired("token", Guid.NewGuid(), DateTimeOffset.UtcNow.AddHours(1));
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         connectionState.TransitionTo(WorkerConnectionState.Reconnecting, "network drop");
         var hubConnection = Substitute.For<IWorkerHubConnection>();
         hubConnection.DisconnectAsync(Arg.Any<CancellationToken>()).Returns(_ =>
@@ -98,7 +98,7 @@ public sealed class ConnectionEndpointTests
         // 400 and leaked the raw message. A WorkerNotPairedException now flows to the global ConflictExceptionHandler,
         // which maps it to a 409 carrying the discriminating conflictType and the exception's user-safe message.
         var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         var hubConnection = Substitute.For<IWorkerHubConnection>();
         hubConnection.ConnectAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new WorkerNotPairedException());
         await using var factory = CreateFactory(tokenStore, connectionState, hubConnection);
@@ -116,7 +116,7 @@ public sealed class ConnectionEndpointTests
     public async Task Connect_WhenWorkerTokenExpired_ReturnsConflictFromGlobalHandler()
     {
         var tokenStore = MockTokenStore.PairedWithAutoConnectDisabled();
-        var connectionState = new ConnectionState();
+        var connectionState = new ConnectionState(TimeProvider.System);
         var hubConnection = Substitute.For<IWorkerHubConnection>();
         hubConnection.ConnectAsync(Arg.Any<CancellationToken>()).Returns<Task>(_ => throw new WorkerTokenExpiredException());
         await using var factory = CreateFactory(tokenStore, connectionState, hubConnection);

@@ -35,7 +35,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None);
 
@@ -62,7 +62,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         // No prebuilt Linux CUDA asset exists → after discarding the bad record the Cuda request fails loudly (no silent CPU).
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
@@ -86,7 +86,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
 
@@ -113,7 +113,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
         AssertEx.Null(await store.ReadAsync(CancellationToken.None));
@@ -150,7 +150,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Vulkan, CancellationToken.None);
 
@@ -213,7 +213,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         await manager.RemoveSourceBuildAsync(CancellationToken.None);
 
@@ -242,7 +242,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, signal);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, signal);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
             manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
@@ -293,7 +293,7 @@ public sealed class CudaManagedRuntimeTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, store, overrideOptions: null, new CudaManagedBuildSignal());
 
         await manager.RemoveCudaSourceBuildAsync(CancellationToken.None);
 

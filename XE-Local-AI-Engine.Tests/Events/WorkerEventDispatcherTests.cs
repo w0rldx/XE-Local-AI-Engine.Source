@@ -744,7 +744,8 @@ public sealed class WorkerEventDispatcherTests
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
             CreateRemotePersistenceCoordinator(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
 
@@ -776,7 +777,8 @@ public sealed class WorkerEventDispatcherTests
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
             CreateRemotePersistenceCoordinator(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
 
@@ -816,7 +818,8 @@ public sealed class WorkerEventDispatcherTests
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
             CreateRemotePersistenceCoordinator(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
     }
 
     private static INodeChatRemotePersistenceCoordinator CreateRemotePersistenceCoordinator()
@@ -855,7 +858,8 @@ public sealed class WorkerEventDispatcherTests
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
             CreateRemotePersistenceCoordinator(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
 
@@ -882,7 +886,8 @@ public sealed class WorkerEventDispatcherTests
             nodeKeyRegistry,
             Substitute.For<IInvocationHistory>(),
             CreateRemotePersistenceCoordinator(),
-            NullLogger<WorkerEventDispatcher>.Instance);
+            NullLogger<WorkerEventDispatcher>.Instance,
+            TimeProvider.System);
 
         await dispatcher.DispatchInvocationAssignedAsync(encryptedPackage);
 

@@ -14,16 +14,19 @@ public sealed class NodeChatMigrationRecoveryService
     private readonly ILogger<NodeChatMigrationRecoveryService> _logger;
     private readonly NodeChatMigrationRecoveryOptions _options;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TimeProvider _timeProvider;
 
     public NodeChatMigrationRecoveryService(IServiceScopeFactory scopeFactory,
         IConfiguration configuration,
         IOptions<NodeChatMigrationRecoveryOptions> options,
-        ILogger<NodeChatMigrationRecoveryService> logger)
+        ILogger<NodeChatMigrationRecoveryService> logger,
+        TimeProvider timeProvider)
     {
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _options = options?.Value ?? throw new ArgumentNullException(nameof(options));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task MigrateAsync(CancellationToken cancellationToken = default)
@@ -90,7 +93,7 @@ public sealed class NodeChatMigrationRecoveryService
 
         var timeout = ValidatePositive(_options.StartupLockTimeout, nameof(NodeChatMigrationRecoveryOptions.StartupLockTimeout));
         var pollInterval = ValidatePositive(_options.StartupLockPollInterval, nameof(NodeChatMigrationRecoveryOptions.StartupLockPollInterval));
-        var deadline = DateTimeOffset.UtcNow.Add(timeout);
+        var deadline = _timeProvider.GetUtcNow().Add(timeout);
 
         while (true)
         {
@@ -102,7 +105,7 @@ public sealed class NodeChatMigrationRecoveryService
                 return lockFile;
             }
 
-            if (DateTimeOffset.UtcNow >= deadline)
+            if (_timeProvider.GetUtcNow() >= deadline)
             {
                 throw new InvalidOperationException($"Could not acquire node SQLite migration startup lock '{lockPath}'. Another node process may be applying migrations.");
             }

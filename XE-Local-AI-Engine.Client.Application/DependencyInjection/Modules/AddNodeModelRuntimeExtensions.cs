@@ -80,7 +80,6 @@ internal static class AddNodeModelRuntimeExtensions
         builder.Services.AddSingleton<IHubMessageSender>(sp => sp.GetRequiredService<WorkerHubConnection>());
         // Pre-positioned by decision: complete and tested, with no production consumer. See ICertPinStore's remarks.
         builder.Services.AddSingleton<ICertPinStore, CertPinStore>();
-        builder.Services.AddSingleton(TimeProvider.System);
         builder.Services.AddSingleton<NodeChatMigrationRecoveryService>();
         builder.Services.AddSingleton<INodeDbBackupService, NodeDbBackupService>();
         builder.Services.AddSingleton<IKnowledgeDowngradeSafetyService, KnowledgeDowngradeSafetyService>();
@@ -206,7 +205,8 @@ internal static class AddNodeModelRuntimeExtensions
             return new LocalModelProviderResolver(sp.GetServices<ILocalModelProvider>(),
                 sp.GetRequiredService<IServiceScopeFactory>(),
                 LlamaServerProviderConstants.ProviderName,
-                supervisorOptions.MaxLoadedProcesses);
+                supervisorOptions.MaxLoadedProcesses,
+                sp.GetRequiredService<TimeProvider>());
         });
 
         // The local-branch router is registered as its own singleton so its (provider, model) chat-client cache can be

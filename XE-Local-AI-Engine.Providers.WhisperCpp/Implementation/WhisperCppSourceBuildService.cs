@@ -73,13 +73,15 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
     private WhisperCppSourceBuildPhase _phase;
     private string? _sanitizedError;
     private DateTimeOffset? _startedAtUtc;
+    private readonly TimeProvider _timeProvider;
 
     public WhisperCppSourceBuildService(IWhisperCppSourceBuildPrerequisiteProbe prerequisiteProbe,
         IWhisperInstalledRuntimeStore runtimeStore,
         IWhisperManagedSourceBuildSignal managedSignal,
         IWhisperRuntimeActivityGate activityGate,
         IWhisperCppSourceBuildEventPublisher publisher,
-        ILogger<WhisperCppSourceBuildService> logger)
+        ILogger<WhisperCppSourceBuildService> logger,
+        TimeProvider timeProvider)
         : this(prerequisiteProbe,
             runtimeStore,
             managedSignal,
@@ -87,7 +89,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             publisher,
             logger,
             DefaultCacheRoot(),
-            new WhisperSourceCommandRunner())
+            new WhisperSourceCommandRunner(),
+            timeProvider)
     {
     }
 
@@ -99,6 +102,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         ILogger<WhisperCppSourceBuildService> logger,
         string cacheRoot,
         IWhisperSourceCommandRunner runner,
+        TimeProvider timeProvider,
         bool? isLinux = null)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
@@ -119,7 +123,8 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
         _runner = runner ?? throw new ArgumentNullException(nameof(runner));
-        _adoption = new WhisperCppRuntimeAdoption(_cacheRoot, _runtimeStore, _managedSignal, _logger);
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
+        _adoption = new WhisperCppRuntimeAdoption(_cacheRoot, _runtimeStore, _managedSignal, _timeProvider, _logger);
         _isLinux = isLinux ?? OperatingSystem.IsLinux();
     }
 
@@ -243,7 +248,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
                     _nextLogSequence = 0;
                     _sanitizedError = null;
                     _currentBuild = descriptor;
-                    _startedAtUtc = DateTimeOffset.UtcNow;
+                    _startedAtUtc = _timeProvider.GetUtcNow();
                     _completedAtUtc = null;
                     _buildCts?.Dispose();
                     _buildCts = buildCts;
@@ -746,7 +751,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
         {
             _phase = phase;
             _sanitizedError = error;
-            _completedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = _timeProvider.GetUtcNow();
             statusEvent = CreateEventUnderLock([], _nextLogSequence);
         }
 
@@ -761,7 +766,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             _phase = completion.Phase;
             _isRunning = false;
             _sanitizedError = completion.Error;
-            _completedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = _timeProvider.GetUtcNow();
             _buildCts?.Dispose();
             _buildCts = null;
             statusEvent = CreateEventUnderLock([], _nextLogSequence);
@@ -824,7 +829,7 @@ public sealed partial class WhisperCppSourceBuildService : IWhisperCppSourceBuil
             {
                 _phase = WhisperCppSourceBuildPhase.Failed;
                 _sanitizedError = "A previously interrupted source build was recovered and its temporary files were removed.";
-                _completedAtUtc = DateTimeOffset.UtcNow;
+                _completedAtUtc = _timeProvider.GetUtcNow();
             }
         }
 

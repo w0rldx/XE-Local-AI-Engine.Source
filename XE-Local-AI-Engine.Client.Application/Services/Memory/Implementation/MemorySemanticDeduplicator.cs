@@ -44,12 +44,14 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
     public MemorySemanticDeduplicator(ILocalModelProviderResolver providerResolver,
         IEmbeddingModelResolver embeddingModelResolver,
         IOptions<MemoryExtractionOptions> options,
-        ILogger<MemorySemanticDeduplicator> logger)
+        ILogger<MemorySemanticDeduplicator> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(embeddingModelResolver);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _providerResolver = providerResolver;
         _embeddingModelResolver = embeddingModelResolver;
@@ -57,7 +59,8 @@ internal sealed class MemorySemanticDeduplicator : IMemorySemanticDeduplicator
         _logger = logger;
         _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
             _options.SemanticDedupEmbeddingCacheMaxEntries,
-            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes);
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes,
+            timeProvider);
     }
 
     /// <inheritdoc />

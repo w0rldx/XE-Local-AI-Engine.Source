@@ -137,8 +137,8 @@ public sealed class GgufDiscoveryDraftModelTests
             _hubHttp = new HttpClient(_handler, disposeHandler: false);
 
             var options = new HuggingFaceOptions();
-            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance);
-            var headerReader = new GgufHeaderReader(_hubHttp, options, NullLogger<GgufHeaderReader>.Instance);
+            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
+            var headerReader = new GgufHeaderReader(_hubHttp, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
             Discovery = new HuggingFaceGgufDiscovery(hubClient, headerReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 

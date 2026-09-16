@@ -44,12 +44,14 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
     public EmbeddingPlaybookRetrievalRanker(ILocalModelProviderResolver providerResolver,
         IOptions<PlaybookRetrievalOptions> options,
         LexicalPlaybookRetrievalRanker lexical,
-        ILogger<EmbeddingPlaybookRetrievalRanker> logger)
+        ILogger<EmbeddingPlaybookRetrievalRanker> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(providerResolver);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(lexical);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _providerResolver = providerResolver;
         _options = options.Value;
@@ -57,7 +59,8 @@ public sealed class EmbeddingPlaybookRetrievalRanker : IPlaybookRetrievalRanker
         _logger = logger;
         _cache = new ByteBudgetedCache<EmbeddingCacheKey, ReadOnlyMemory<float>>(EmbeddingCacheMaxBytes,
             _options.EmbeddingCacheMaxEntries,
-            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes);
+            static (key, vector) => (vector.Length * sizeof(float)) + (key.Model.Length * sizeof(char)) + EntryOverheadBytes,
+            timeProvider);
     }
 
     /// <inheritdoc />

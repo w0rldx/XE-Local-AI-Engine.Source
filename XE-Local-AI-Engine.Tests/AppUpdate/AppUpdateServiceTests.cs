@@ -391,6 +391,7 @@ public sealed class AppUpdateServiceTests
             state ?? new AppUpdateState(),
             options,
             new AppUpdateHostContext(isDesktop, RestartArgs: restartArgs ?? ["--desktop"]),
-            logger ?? NullLogger<AppUpdateService>.Instance);
+            logger ?? NullLogger<AppUpdateService>.Instance,
+            TimeProvider.System);
     }
 }

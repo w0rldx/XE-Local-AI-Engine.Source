@@ -198,7 +198,7 @@ public sealed partial class WorkerEventDispatcher
                 string.IsNullOrWhiteSpace(evt.Error),
                 evt.Result,
                 evt.Error,
-                DateTimeOffset.UtcNow);
+                _timeProvider.GetUtcNow());
         });
 
         _logger.LogDebug("Tool call result processing finished. RequestId={RequestId}", evt.RequestId);
@@ -232,7 +232,7 @@ public sealed partial class WorkerEventDispatcher
                 CurrentInvocation!.Status = InvocationStatus.Cancelled;
                 CurrentInvocation.Error = evt.Reason;
                 CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
-                CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
+                CurrentInvocation.CompletedAt = _timeProvider.GetUtcNow();
                 snapshot = CurrentInvocation.Clone();
             }
         }
@@ -289,7 +289,7 @@ public sealed partial class WorkerEventDispatcher
                 state.PendingApproval = null;
             }
 
-            state.LastApprovalResolution = new InvocationApprovalResolutionState(evt.RequestId, evt.Approved, DateTimeOffset.UtcNow);
+            state.LastApprovalResolution = new InvocationApprovalResolutionState(evt.RequestId, evt.Approved, _timeProvider.GetUtcNow());
         });
 
         _logger.LogDebug("Approval resolution processing finished. RequestId={RequestId}", evt.RequestId);
@@ -326,7 +326,7 @@ public sealed partial class WorkerEventDispatcher
             CurrentInvocation.Status = InvocationStatus.Cancelled;
             CurrentInvocation.Error = evt.Reason;
             CurrentInvocation.FailureCategory = FailureCategory.Cancelled;
-            CurrentInvocation.CompletedAt = DateTimeOffset.UtcNow;
+            CurrentInvocation.CompletedAt = _timeProvider.GetUtcNow();
             snapshot = CurrentInvocation.Clone();
         }
 

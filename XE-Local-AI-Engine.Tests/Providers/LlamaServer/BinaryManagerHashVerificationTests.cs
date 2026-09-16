@@ -22,7 +22,7 @@ public sealed class BinaryManagerHashVerificationTests
             Content = new ByteArrayContent("not-the-pinned-archive"u8.ToArray())
         });
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
@@ -46,7 +46,7 @@ public sealed class BinaryManagerHashVerificationTests
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -70,7 +70,7 @@ public sealed class BinaryManagerHashVerificationTests
         using var handler = new CountingHandler(() =>
             throw new InvalidOperationException("Offline reuse must not hit the network."));
         using var http = new HttpClient(handler, disposeHandler: false);
-        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64);
+        var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag, OSPlatform.Linux, Architecture.X64, TimeProvider.System);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 

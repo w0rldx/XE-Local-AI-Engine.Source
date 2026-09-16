@@ -125,7 +125,7 @@ public sealed class WhisperRuntimeLiveSmokeTests
             readinessProbe,
             httpClient,
             options,
-            timeProvider: null,
+            TimeProvider.System,
             NullLogger<WhisperServerProcessSupervisor>.Instance);
 
         var transcriber = new WhisperServerTranscriber(supervisor, httpClient, options, NullLogger<WhisperServerTranscriber>.Instance);

@@ -57,10 +57,11 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     private readonly OSPlatform _os;
     private readonly LlamaServerRuntimeOverrideOptions? _overrideOptions;
     private readonly SemaphoreSlim _sourceMutationGate = new(initialCount: 1, maxCount: 1);
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     ///     Creates a binary manager that downloads through <paramref name="httpClient" /> and caches under
-    ///     <paramref name="cacheRoot" />. <paramref name="activeTag" /> selects the recommended-pinned release by
+    ///     <paramref name="cacheRoot" />, reading the clock from <paramref name="timeProvider" />. <paramref name="activeTag" /> selects the recommended-pinned release by
     ///     default; pass a different tag to model a user-selected upgrade (the pinned tag's cache is never touched).
     ///     The optional <paramref name="catalog" /> + <paramref name="installedRuntimeStore" /> drive the 3-tier resolve
     ///     (live API → <c>installed-runtime.json</c> → pinned floor); when omitted (the test seam) only the pinned floor
@@ -72,6 +73,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
     ///     It is a TRAILING optional parameter precisely so every existing positional construction keeps compiling.
     /// </summary>
     public LlamaCppBinaryManager(HttpClient httpClient,
+        TimeProvider timeProvider,
         string? cacheRoot = null,
         string? activeTag = null,
         ILlamaCppReleaseCatalog? catalog = null,
@@ -84,6 +86,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
             activeTag ?? LlamaCppReleasePins.PinnedTag,
             CurrentOsPlatform(),
             RuntimeInformation.ProcessArchitecture,
+            timeProvider,
             catalog,
             installedRuntimeStore,
             overrideOptions,
@@ -98,6 +101,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         string activeTag,
         OSPlatform os,
         Architecture arch,
+        TimeProvider timeProvider,
         ILlamaCppReleaseCatalog? catalog = null,
         IInstalledRuntimeStore? installedRuntimeStore = null,
         LlamaServerRuntimeOverrideOptions? overrideOptions = null,
@@ -111,6 +115,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
         _activeTag = activeTag;
         _os = os;
         _arch = arch;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _catalog = catalog;
         _installedRuntimeStore = installedRuntimeStore;
         _overrideOptions = overrideOptions;
@@ -305,7 +310,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                 return;
             }
 
-            var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, DateTimeOffset.UtcNow);
+            var state = new InstalledRuntimeState(resolvedTag, pin.AssetName, pin.Sha256, variant, _timeProvider.GetUtcNow());
             await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
         }
         finally
@@ -452,7 +457,7 @@ public sealed partial class LlamaCppBinaryManager : ILlamaCppBinaryManager
                     throw new LlamaRuntimeException(SourceBuildInstalledMessage);
                 }
 
-                var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, DateTimeOffset.UtcNow);
+                var state = new InstalledRuntimeState(tag, assetName, expectedDigest, variant, _timeProvider.GetUtcNow());
                 await _installedRuntimeStore.WriteAsync(state, ct).ConfigureAwait(false);
             }
 

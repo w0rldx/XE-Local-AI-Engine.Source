@@ -391,7 +391,8 @@ public sealed class EmbeddingToolRelevanceSelectorTests
         var selector = new EmbeddingToolRelevanceSelector(SingleProviderResolverFactory.Create(provider),
             options,
             new LexicalToolRelevanceSelector(options),
-            logger);
+            logger,
+            TimeProvider.System);
         return (selector, logger);
     }
 

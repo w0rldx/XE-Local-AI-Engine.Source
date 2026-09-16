@@ -144,7 +144,7 @@ internal static class LlamaGrammarToolOffer
     /// </summary>
     private sealed class NodeCatalogAgentToolRegistry : IAgentToolRegistry
     {
-        private static readonly LocalAgentToolRegistry Catalog = new();
+        private static readonly LocalAgentToolRegistry Catalog = new(TimeProvider.System);
 
         public IReadOnlyList<AITool> GetLocalChatTools()
         {

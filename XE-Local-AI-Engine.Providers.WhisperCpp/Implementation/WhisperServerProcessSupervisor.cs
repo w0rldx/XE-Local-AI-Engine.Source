@@ -60,7 +60,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         IWhisperServerReadinessProbe readinessProbe,
         HttpClient httpClient,
         WhisperRuntimeOptions options,
-        TimeProvider? timeProvider = null,
+        TimeProvider timeProvider,
         ILogger<WhisperServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         IWhisperRuntimeActivityGate? runtimeActivityGate = null)
@@ -71,7 +71,7 @@ internal sealed class WhisperServerProcessSupervisor : IWhisperServerSupervisor,
         _readinessProbe = readinessProbe ?? throw new ArgumentNullException(nameof(readinessProbe));
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<WhisperServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new WhisperRuntimeActivityGate();
 

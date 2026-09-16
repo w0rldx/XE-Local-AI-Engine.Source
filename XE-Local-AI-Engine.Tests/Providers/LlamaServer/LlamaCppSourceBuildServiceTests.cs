@@ -24,7 +24,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var activity = new LlamaCppSourceBuildActivity();
         using var service = new LlamaCppSourceBuildService(probe, new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), activity, new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() =>
             service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
@@ -54,7 +54,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var probe = new GatedReadyProbe();
         using var service = new LlamaCppSourceBuildService(probe, new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
         var request = new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official);
 
         var winner = service.StartAsync(request, CancellationToken.None);
@@ -87,7 +87,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var signal = new CudaManagedBuildSignal();
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
         var startup = new CudaBuildStartupService(service, store, signal, NullLogger<CudaBuildStartupService>.Instance);
 
         AssertEx.Equal(LlamaCppSourceBuildStartOutcome.Started,
@@ -110,7 +110,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var signal = new CudaManagedBuildSignal();
         var publisher = new RecordingPublisher();
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
-            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), publisher, NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), publisher, NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         await Task.WhenAll(Enumerable.Range(0, 100).Select(index => Task.Run(() => service.AppendLog($"line-{index}"))));
         await service.FlushPublisherAsync();
@@ -128,7 +128,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var signal = new CudaManagedBuildSignal();
         var publisher = new RecordingPublisher();
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
-            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), publisher, NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), publisher, NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         for (var index = 0; index < 450; index++)
         {
@@ -156,7 +156,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var probe = new CountingReadyProbe();
         using var service = new LlamaCppSourceBuildService(probe, new CapturingBinaryManager(store, signal), store, signal,
             new BusySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
@@ -185,6 +185,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         var result = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
@@ -213,6 +214,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         var result = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
@@ -236,7 +238,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         AssertEx.True(activity.TryReserve(owner));
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), activity, new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official),
             CancellationToken.None);
@@ -262,7 +264,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         signal.SetActive(GpuVariant.Cpu);
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         var start = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Custom,
             "https://github.com/example/fork", AcknowledgeCustomSourceRisk: true), CancellationToken.None);
@@ -305,6 +307,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         await service.RecoverAsync(CancellationToken.None);
@@ -331,7 +334,7 @@ public sealed class LlamaCppSourceBuildServiceTests
         var signal = new CudaManagedBuildSignal();
         using var service = new LlamaCppSourceBuildService(new AlwaysReadyProbe(), new CapturingBinaryManager(store, signal), store, signal,
             new LeaseOnlySupervisor(), new LlamaCppSourceBuildActivity(), new NullLlamaCppSourceBuildEventPublisher(),
-            NullLogger<LlamaCppSourceBuildService>.Instance, temp.Path);
+            NullLogger<LlamaCppSourceBuildService>.Instance, TimeProvider.System, temp.Path);
 
         await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
         await AssertEx.EventuallyAsync(() => service.GetStatus().Terminal, TimeSpan.FromSeconds(10));
@@ -365,6 +368,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             publisher,
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
@@ -408,6 +412,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
@@ -452,6 +457,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             new LlamaCppSourceBuildActivity(),
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         _ = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
@@ -493,6 +499,7 @@ public sealed class LlamaCppSourceBuildServiceTests
                 activity,
                 new NullLlamaCppSourceBuildEventPublisher(),
                 NullLogger<LlamaCppSourceBuildService>.Instance,
+                TimeProvider.System,
                 temp.Path);
 
             var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official), CancellationToken.None);
@@ -559,6 +566,7 @@ public sealed class LlamaCppSourceBuildServiceTests
             activity,
             new NullLlamaCppSourceBuildEventPublisher(),
             NullLogger<LlamaCppSourceBuildService>.Instance,
+            TimeProvider.System,
             temp.Path);
 
         var outcome = await service.StartAsync(new LlamaCppSourceBuildRequest(LlamaCppSourceBackend.Cpu, LlamaCppSourceSelection.Official, Commit: commit.ToUpperInvariant()),

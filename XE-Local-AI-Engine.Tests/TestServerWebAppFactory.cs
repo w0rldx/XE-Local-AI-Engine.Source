@@ -440,9 +440,10 @@ public sealed class TestServerWebAppFactory : IAsyncInitializer, IAsyncDisposabl
         services.RemoveAll<IInstalledRuntimeStore>();
         services.AddSingleton<IInstalledRuntimeStore>(_ => new InstalledRuntimeStore(_nodeDataDirectory));
         services.RemoveAll<ILlamaCppReleaseCatalog>();
-        services.AddSingleton<ILlamaCppReleaseCatalog>(_ => new GitHubLlamaCppReleaseCatalog(_offlineRuntimeHttpClient));
+        services.AddSingleton<ILlamaCppReleaseCatalog>(_ => new GitHubLlamaCppReleaseCatalog(_offlineRuntimeHttpClient, TimeProvider.System));
         services.RemoveAll<ILlamaCppBinaryManager>();
         services.AddSingleton<ILlamaCppBinaryManager>(sp => new LlamaCppBinaryManager(_offlineRuntimeHttpClient,
+            TimeProvider.System,
             _nodeDataDirectory,
             activeTag: null,
             sp.GetRequiredService<ILlamaCppReleaseCatalog>(),

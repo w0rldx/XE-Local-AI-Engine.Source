@@ -22,6 +22,7 @@ public sealed class DesktopLifecycleReadyTests
             using (var lifecycle = new DesktopLifecycle(lifetime,
                        server,
                        NullLogger<DesktopLifecycle>.Instance,
+                       TimeProvider.System,
                        dataDirectory,
                        static () => "http://127.0.0.1:41234/",
                        suppressBrowser: true,

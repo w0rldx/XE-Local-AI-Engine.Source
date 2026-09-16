@@ -10,6 +10,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
     private readonly IVelopackUpdateManagerFactory _updateManagerFactory;
     private readonly AppUpdateChannelOptions _channelOptions;
     private readonly AppUpdateHostContext _hostContext;
+    private readonly TimeProvider _timeProvider;
     private readonly ILogger<AppUpdateService> _logger;
     private IVelopackUpdateManager? _primedUpdateManager;
 
@@ -17,7 +18,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         IAppUpdateState state,
         IOptions<AppUpdateChannelOptions> channelOptions,
         AppUpdateHostContext hostContext,
-        ILogger<AppUpdateService> logger)
+        ILogger<AppUpdateService> logger,
+        TimeProvider timeProvider)
     {
         _updateManagerFactory = updateManagerFactory ?? throw new ArgumentNullException(nameof(updateManagerFactory));
         _state = state ?? throw new ArgumentNullException(nameof(state));
@@ -25,6 +27,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         _channelOptions = channelOptions.Value;
         _hostContext = hostContext ?? throw new ArgumentNullException(nameof(hostContext));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         PrimeInitialSnapshot();
     }
@@ -49,7 +52,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         try
         {
             var current = _state.Current;
-            if (minInterval is { } interval && !IsStale(current.LastCheckedUtc, interval))
+            if (minInterval is { } interval && !IsStale(current.LastCheckedUtc, interval, _timeProvider.GetUtcNow()))
             {
                 return current;
             }
@@ -113,8 +116,8 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
         return StoreSnapshot(snapshot);
     }
 
-    private static bool IsStale(DateTimeOffset? checkedAtUtc, TimeSpan minInterval) =>
-        checkedAtUtc is not { } checkedAt || DateTimeOffset.UtcNow - checkedAt >= minInterval;
+    private static bool IsStale(DateTimeOffset? checkedAtUtc, TimeSpan minInterval, DateTimeOffset now) =>
+        checkedAtUtc is not { } checkedAt || now - checkedAt >= minInterval;
 
     public async Task<bool> ApplyAsync(CancellationToken ct)
     {
@@ -215,7 +218,7 @@ public sealed class AppUpdateService : IAppUpdateService, IDisposable
             isConfigured,
             _hostContext.IsLocalMode,
             checkStatus,
-            DateTimeOffset.UtcNow);
+            _timeProvider.GetUtcNow());
 
     private AppUpdateSnapshot FailedSnapshot(string currentVersion, AppUpdateFailureReason reason)
     {

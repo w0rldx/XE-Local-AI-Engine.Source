@@ -146,7 +146,7 @@ public sealed class OllamaLocalModelProviderTests
 #pragma warning restore CA2000
         using var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
         using var baseClient = factory.CreateClient(selectedModel: null);
-        using var provider = new OllamaLocalModelProvider(baseClient, factory);
+        using var provider = new OllamaLocalModelProvider(baseClient, factory, TimeProvider.System);
 
         var chatClient = provider.CreateChatClient(new LocalModelSelection
         {
@@ -177,7 +177,7 @@ public sealed class OllamaLocalModelProviderTests
 #pragma warning restore CA2000
         var factory = new OllamaApiClientFactory(httpClient, ownsHttpClient: true);
         var ollamaClient = factory.CreateClient(selectedModel: null);
-        var provider = new OllamaLocalModelProvider(ollamaClient, factory);
+        var provider = new OllamaLocalModelProvider(ollamaClient, factory, TimeProvider.System);
         return new ProviderTestContext(server, ollamaClient, factory, provider);
     }
 

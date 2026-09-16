@@ -17,14 +17,17 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
     private readonly SemaphoreSlim _gate = new(initialCount: 1, maxCount: 1);
     private readonly ILogger<FileDeadLetterStore> _logger;
     private readonly string _queueDirectoryPath;
+    private readonly TimeProvider _timeProvider;
 
     public FileDeadLetterStore(IOptions<WorkerNodeOptions> workerNodeOptions,
         INodeDataDirectory nodeDataDirectory,
-        ILogger<FileDeadLetterStore> logger)
+        ILogger<FileDeadLetterStore> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(workerNodeOptions);
         ArgumentNullException.ThrowIfNull(nodeDataDirectory);
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         var configuredPath = workerNodeOptions.Value.DeadLetterQueuePath;
         if (string.IsNullOrWhiteSpace(configuredPath))
@@ -187,9 +190,9 @@ public sealed class FileDeadLetterStore : IDeadLetterStore, IDisposable
         }
     }
 
-    private static string BuildFileName(Guid invocationId)
+    private string BuildFileName(Guid invocationId)
     {
-        return $"{DateTimeOffset.UtcNow:yyyyMMddHHmmssfff}-{invocationId:N}.json";
+        return $"{_timeProvider.GetUtcNow():yyyyMMddHHmmssfff}-{invocationId:N}.json";
     }
 
     private static string ResolveQueueDirectoryPath(string configuredPath, string dataRoot)

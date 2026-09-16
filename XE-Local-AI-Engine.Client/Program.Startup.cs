@@ -139,6 +139,7 @@ public sealed partial class Program
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
         var server = app.Services.GetRequiredService<IServer>();
         var logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger<DesktopLifecycle>();
+        var timeProvider = app.Services.GetRequiredService<TimeProvider>();
 
         // The per-user data dir the desktop branch set (see Program top); the lifecycle persists the bound loopback port
         // there post-start so the next launch can re-bind it for a stable browser origin.
@@ -151,6 +152,7 @@ public sealed partial class Program
         var desktopLifecycle = new DesktopLifecycle(lifetime,
             server,
             logger,
+            timeProvider,
             desktopDataDirectory,
             suppressBrowser: DesktopLaunch.ShouldSuppressBrowser(launchMode, noBrowserRequested),
             version: AddNodeMcpServerExtensions.ServerVersion);

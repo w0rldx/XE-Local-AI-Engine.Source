@@ -6,7 +6,7 @@ using XE_Local_AI_Engine.Client.Services.Chat.Implementation;
 
 public sealed partial class WorkerEventDispatcher
 {
-    private static InvocationState CreateInvocationState(RuntimePackage runtimePackage)
+    private InvocationState CreateInvocationState(RuntimePackage runtimePackage)
     {
         ArgumentNullException.ThrowIfNull(runtimePackage);
 
@@ -20,8 +20,8 @@ public sealed partial class WorkerEventDispatcher
             // (all-zero) id is treated as absent.
             TraceId = Activity.Current is { } activity && activity.TraceId != default ? activity.TraceId.ToString() : null,
             Status = InvocationStatus.Assigned,
-            StartedAt = DateTimeOffset.UtcNow,
-            LastUpdatedAt = DateTimeOffset.UtcNow,
+            StartedAt = _timeProvider.GetUtcNow(),
+            LastUpdatedAt = _timeProvider.GetUtcNow(),
             ModelUsed = runtimePackage.ModelProfile,
             StreamedThinkingContent = string.Empty,
             StreamedThinkingChunkCount = 0
@@ -55,7 +55,7 @@ public sealed partial class WorkerEventDispatcher
             }
 
             update(CurrentInvocation);
-            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
+            CurrentInvocation.LastUpdatedAt = _timeProvider.GetUtcNow();
             snapshot = CurrentInvocation.Clone();
         }
 
@@ -97,7 +97,7 @@ public sealed partial class WorkerEventDispatcher
             }
 
             CurrentInvocation = update(CurrentInvocation);
-            CurrentInvocation.LastUpdatedAt = DateTimeOffset.UtcNow;
+            CurrentInvocation.LastUpdatedAt = _timeProvider.GetUtcNow();
             snapshot = CurrentInvocation.Clone();
         }
 

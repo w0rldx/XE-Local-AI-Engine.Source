@@ -291,7 +291,7 @@ public sealed class ExternalModelPolicyGateTests
 
     private static ILocalToolOfferProvider CreateOfferProvider(FakeModelTrustResolver? trust = null)
     {
-        return new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        return new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(LocalExternalModel, CloudExternalModel, DeletedExternalModel).Build(),
             NullCustomToolScopeFactory.Instance,

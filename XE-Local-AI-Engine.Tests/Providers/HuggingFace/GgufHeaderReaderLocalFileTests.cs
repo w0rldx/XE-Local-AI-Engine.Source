@@ -267,6 +267,6 @@ public sealed class GgufHeaderReaderLocalFileTests
         var http = new HttpClient(new GgufStoreTestInfrastructure.ScriptedHandler(static (_, _) =>
             throw new InvalidOperationException("A local header read must never touch the HTTP client.")));
 #pragma warning restore CA2000
-        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance);
+        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
     }
 }

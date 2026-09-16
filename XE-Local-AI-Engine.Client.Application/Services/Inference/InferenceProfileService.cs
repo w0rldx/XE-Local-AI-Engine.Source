@@ -37,6 +37,7 @@ public sealed class InferenceProfileService : IInferenceProfileService
     private readonly IModelFitSnapshotStore _snapshotStore;
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly IProcessVramBudgetProbe _processVramBudgetProbe;
+    private readonly TimeProvider _timeProvider;
     private readonly IGpuVariantSelector _variantSelector;
 
     public InferenceProfileService(ILlamaServerProcessSupervisor supervisor,
@@ -55,7 +56,8 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ILaunchPolicyFingerprintProvider launchPolicyFingerprintProvider,
         IInferenceInvalidationEvaluator invalidationEvaluator,
         IOptions<InferenceBenchmarkVramAdmissionOptions> benchmarkVramAdmission,
-        ILogger<InferenceProfileService> logger)
+        ILogger<InferenceProfileService> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(supervisor);
         ArgumentNullException.ThrowIfNull(profileStore);
@@ -74,7 +76,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
         ArgumentNullException.ThrowIfNull(invalidationEvaluator);
         ArgumentNullException.ThrowIfNull(benchmarkVramAdmission);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
+        _timeProvider = timeProvider;
         _supervisor = supervisor;
         _profileStore = profileStore;
         _snapshotStore = snapshotStore;
@@ -593,9 +597,9 @@ public sealed class InferenceProfileService : IInferenceProfileService
         };
     }
 
-    private static long NowUnixMs()
+    private long NowUnixMs()
     {
-        return DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        return _timeProvider.GetUtcNow().ToUnixTimeMilliseconds();
     }
 
     // The profile stores key by (machine, model, role, backend), not id; the node holds a handful of profiles, so an

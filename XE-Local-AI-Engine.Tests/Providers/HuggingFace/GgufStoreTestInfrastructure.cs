@@ -72,7 +72,8 @@ internal static class GgufStoreTestInfrastructure
             registry,
             HeaderReader(options),
             options,
-            NullLogger<HuggingFaceGgufStore>.Instance);
+            NullLogger<HuggingFaceGgufStore>.Instance,
+            TimeProvider.System);
     }
 
     // The store only ever calls the reader's local-file path (ReadHeaderFromFileAsync), which never touches the HTTP
@@ -83,7 +84,7 @@ internal static class GgufStoreTestInfrastructure
         var http = new HttpClient(new ScriptedHandler(static (_, _) =>
             throw new InvalidOperationException("The installed-model list must read headers from disk, never over HTTP.")));
 #pragma warning restore CA2000
-        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance);
+        return new GgufHeaderReader(http, options, NullLogger<GgufHeaderReader>.Instance, TimeProvider.System);
     }
 
     public static IHfTokenStore NoTokenStore()

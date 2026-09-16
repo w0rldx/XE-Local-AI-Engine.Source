@@ -60,7 +60,7 @@ public sealed class LocalModelProviderResolverDefaultTests
             new StubProvider(OllamaLocalModelProvider.OllamaProviderName)
         ];
 
-        return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, maxLoadedProcesses: 3);
+        return new LocalModelProviderResolver(providers, scopeFactory, LlamaServerProviderConstants.ProviderName, maxLoadedProcesses: 3, timeProvider: TimeProvider.System);
     }
 
     /// <summary>A minimal provider used only for its <see cref="ILocalModelProvider.ProviderName" /> key.</summary>

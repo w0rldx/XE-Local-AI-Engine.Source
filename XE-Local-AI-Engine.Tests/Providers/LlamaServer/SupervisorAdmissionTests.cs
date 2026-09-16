@@ -41,7 +41,7 @@ public sealed class SupervisorAdmissionTests
     {
         var launcher = new FakeProcessLauncher();
         var gatedProbe = new GatedHealthProbe();
-        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         await using var supervisor = SupervisorFactory.Create(launcher,
             gatedProbe,
             variantSelector: new FakeVariantSelector(GpuVariant.Vulkan),
@@ -69,7 +69,7 @@ public sealed class SupervisorAdmissionTests
         var launcher = new FakeProcessLauncher();
         var gatedProbe = new GatedHealthProbe();
         // A real gate is injected, but a CPU variant must bypass it entirely — proving the gate never touches CPU loads.
-        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions());
+        using var admission = new GpuModelLoadAdmission(new GpuModelLoadAdmissionOptions(), TimeProvider.System);
         await using var supervisor = SupervisorFactory.Create(launcher,
             gatedProbe,
             variantSelector: new FakeVariantSelector(GpuVariant.Cpu),

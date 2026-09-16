@@ -31,7 +31,8 @@ public sealed class ImageModelStoreFailedDownloadTests
         var store = new HuggingFaceImageModelStore(DownloadClient(http, models.Path),
             registry,
             ImageOptions(models.Path),
-            NullLogger<HuggingFaceImageModelStore>.Instance);
+            NullLogger<HuggingFaceImageModelStore>.Instance,
+            TimeProvider.System);
 
         _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None))
                           .ConfigureAwait(false);
@@ -57,7 +58,8 @@ public sealed class ImageModelStoreFailedDownloadTests
         var store = new HuggingFaceImageModelStore(DownloadClient(http, models.Path),
             registry,
             ImageOptions(models.Path),
-            NullLogger<HuggingFaceImageModelStore>.Instance);
+            NullLogger<HuggingFaceImageModelStore>.Instance,
+            TimeProvider.System);
 
         _ = await AssertEx.ThrowsAsync<HuggingFaceDownloadException>(() => store.EnsureModelAsync(Request(), progress: null, CancellationToken.None))
                           .ConfigureAwait(false);

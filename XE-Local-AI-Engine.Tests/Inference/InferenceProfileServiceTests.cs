@@ -1016,7 +1016,8 @@ public sealed class InferenceProfileServiceTests
                 LaunchPolicyFingerprintProvider,
                 InvalidationEvaluator,
                 Options.Create(new InferenceBenchmarkVramAdmissionOptions()),
-                NullLogger<InferenceProfileService>.Instance);
+                NullLogger<InferenceProfileService>.Instance,
+                TimeProvider.System);
         }
 
         private static InferenceProfileRecord RecordFromInput(InferenceProfileInput input)

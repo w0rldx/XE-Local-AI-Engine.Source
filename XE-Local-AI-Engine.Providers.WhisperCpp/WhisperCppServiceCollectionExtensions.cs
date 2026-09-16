@@ -96,7 +96,7 @@ public static class WhisperCppServiceCollectionExtensions
             sp.GetRequiredService<IWhisperServerReadinessProbe>(),
             sp.GetRequiredService<IHttpClientFactory>().CreateClient(RuntimeHttpClientName),
             sp.GetRequiredService<WhisperRuntimeOptions>(),
-            sp.GetService<TimeProvider>(),
+            sp.GetRequiredService<TimeProvider>(),
             sp.GetRequiredService<ILogger<WhisperServerProcessSupervisor>>(),
             sp.GetRequiredService<IGpuModelLoadAdmission>(),
             sp.GetRequiredService<IWhisperRuntimeActivityGate>()));

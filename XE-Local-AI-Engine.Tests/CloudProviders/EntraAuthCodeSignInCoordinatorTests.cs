@@ -198,7 +198,8 @@ public sealed class EntraAuthCodeSignInCoordinatorTests
             new FakeEntraAuthCodeAccountStore(),
             new EntraLiveCredentialCache(),
             redeemer ?? new RecordingRedeemer(),
-            NullLogger<EntraAuthCodeSignInCoordinator>.Instance);
+            NullLogger<EntraAuthCodeSignInCoordinator>.Instance,
+            TimeProvider.System);
     }
 
     private static StoredCloudProviderConfig CreateConfig(string? clientSecret = "client-secret",

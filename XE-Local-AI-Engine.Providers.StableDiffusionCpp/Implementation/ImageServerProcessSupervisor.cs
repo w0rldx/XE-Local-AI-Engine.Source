@@ -55,7 +55,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         IImageServerProcessLauncher launcher,
         IImageServerReadinessProbe readinessProbe,
         StableDiffusionRuntimeOptions options,
-        TimeProvider? timeProvider = null,
+        TimeProvider timeProvider,
         ILogger<ImageServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         IImageRuntimeActivityGate? runtimeActivityGate = null)
@@ -66,7 +66,7 @@ internal sealed class ImageServerProcessSupervisor : IImageServerSupervisor, IAs
         _launcher = launcher ?? throw new ArgumentNullException(nameof(launcher));
         _readinessProbe = readinessProbe ?? throw new ArgumentNullException(nameof(readinessProbe));
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<ImageServerProcessSupervisor>.Instance;
         _runtimeActivityGate = runtimeActivityGate ?? new ImageRuntimeActivityGate();
 

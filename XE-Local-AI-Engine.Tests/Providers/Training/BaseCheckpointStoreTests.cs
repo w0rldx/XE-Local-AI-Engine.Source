@@ -254,7 +254,7 @@ public sealed class BaseCheckpointStoreTests : IDisposable
         var fileHttp = new HttpClient(fileHandler, disposeHandler: false);
 #pragma warning restore CA2000
 
-        var hubClient = new HfHubClient(hubHttp, options, NullLogger<HfHubClient>.Instance);
+        var hubClient = new HfHubClient(hubHttp, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
         var downloadClient = GgufStoreTestInfrastructure.DownloadClient(fileHttp,
             GgufStoreTestInfrastructure.NoTokenStore(),
             GgufStoreTestInfrastructure.AbundantSpace(),

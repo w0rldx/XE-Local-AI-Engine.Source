@@ -32,11 +32,12 @@ internal sealed class HfHubClient
     private readonly TtlCache<IReadOnlyList<HubModelSummary>> _searchCache;
     private readonly TtlCache<HubModelDetail?> _repoDetailCache;
 
-    public HfHubClient(HttpClient httpClient, HuggingFaceOptions options, ILogger<HfHubClient> logger, TimeProvider? timeProvider = null)
+    public HfHubClient(HttpClient httpClient, HuggingFaceOptions options, ILogger<HfHubClient> logger, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _httpClient = httpClient;
         _options = options;

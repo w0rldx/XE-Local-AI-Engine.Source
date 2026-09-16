@@ -138,7 +138,8 @@ public sealed class FileDeadLetterStoreTests : IDisposable
                     DeadLetterQueuePath = "dead-letter-queue"
                 }),
                 new FakeNodeDataDirectory(dataRoot),
-                NullLogger<FileDeadLetterStore>.Instance);
+                NullLogger<FileDeadLetterStore>.Instance,
+                TimeProvider.System);
 
             // The relative default must land under the writable node data dir — the regression guard for the AppImage
             // read-only-mount crash, where it resolved against AppContext.BaseDirectory instead.
@@ -163,7 +164,8 @@ public sealed class FileDeadLetterStoreTests : IDisposable
                 DeadLetterQueuePath = _queuePath
             }),
             new FakeNodeDataDirectory(Path.GetTempPath()),
-            NullLogger<FileDeadLetterStore>.Instance);
+            NullLogger<FileDeadLetterStore>.Instance,
+            TimeProvider.System);
     }
 
     private static InvocationFailedPayload CreatePayload()

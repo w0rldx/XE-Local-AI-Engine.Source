@@ -353,7 +353,7 @@ public sealed class ToolInvocationServiceTests
         // cannot see it. The DESCRIPTORS stay the real registry's, so the catalog entry this test resolves through is
         // the production one and only the executable behind it is swapped.
         var registry = new StubAgentToolRegistry([AIFunctionFactory.Create(() => ToolArgumentRepairResult.InvalidArguments("timezone must be a string.", default), "GetCurrentTime")],
-            new LocalAgentToolRegistry().GetLocalChatToolDescriptors());
+            new LocalAgentToolRegistry(TimeProvider.System).GetLocalChatToolDescriptors());
         await using var factory = new TestServerWebAppFactory
         {
             ConfigureAdditionalTestServices = services =>

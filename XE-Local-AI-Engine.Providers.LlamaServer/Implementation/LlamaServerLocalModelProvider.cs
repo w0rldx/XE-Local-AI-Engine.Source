@@ -36,6 +36,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     private readonly ILlamaServerProcessSupervisor _supervisor;
     private readonly ITokenEstimatorCalibrationScheduler _calibrationScheduler;
     private readonly ILlamaServerEndpointBinding? _endpointBinding;
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     ///     Creates the provider over the process supervisor and the GGUF model store. The supervisor options supply the
@@ -45,12 +46,14 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
     /// </summary>
     public LlamaServerLocalModelProvider(ILlamaServerProcessSupervisor supervisor,
         IGgufModelStore modelStore,
+        TimeProvider timeProvider,
         LlamaServerSupervisorOptions? options = null,
         ITokenEstimatorCalibrationScheduler? calibrationScheduler = null,
         ILlamaServerEndpointBinding? endpointBinding = null)
     {
         _supervisor = supervisor ?? throw new ArgumentNullException(nameof(supervisor));
         _modelStore = modelStore ?? throw new ArgumentNullException(nameof(modelStore));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         var resolvedOptions = options ?? new LlamaServerSupervisorOptions();
         _chatNetworkTimeout = resolvedOptions.HttpNetworkTimeout;
         _embeddingNetworkTimeout = resolvedOptions.EmbeddingHttpNetworkTimeout;
@@ -84,7 +87,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
             {
                 ProviderName = ProviderName,
                 IsHealthy = true,
-                ObservedAt = DateTimeOffset.UtcNow,
+                ObservedAt = _timeProvider.GetUtcNow(),
                 Diagnostics = diagnostics
             };
         }
@@ -98,7 +101,7 @@ public sealed class LlamaServerLocalModelProvider : ILocalModelProvider
             {
                 ProviderName = ProviderName,
                 IsHealthy = false,
-                ObservedAt = DateTimeOffset.UtcNow,
+                ObservedAt = _timeProvider.GetUtcNow(),
                 Diagnostics = [exception.Message]
             };
         }

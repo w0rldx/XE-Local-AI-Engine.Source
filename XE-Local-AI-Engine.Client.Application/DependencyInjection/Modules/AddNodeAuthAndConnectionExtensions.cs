@@ -106,6 +106,7 @@ internal static class AddNodeAuthAndConnectionExtensions
             serviceProvider.GetRequiredService<IEntraLiveCredentialCache>(),
             serviceProvider.GetRequiredService<IEntraAuthCodeRedeemer>(),
             serviceProvider.GetRequiredService<ILogger<EntraAuthCodeSignInCoordinator>>(),
+            serviceProvider.GetRequiredService<TimeProvider>(),
             () => serviceProvider.GetRequiredService<IActiveCloudChatClientFactory>().InvalidateSelectionCache()));
 
         builder.Services.AddSingleton<INodeKeyRegistry, NodeKeyRegistry>();

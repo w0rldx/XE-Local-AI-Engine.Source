@@ -1426,7 +1426,7 @@ public sealed class AgentDefinitionResolverTests
         var playbookStore = Substitute.For<IPlaybookActionStore>();
         playbookStore.ListEnabledByAgentAsync(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
                      .Returns(Task.FromResult<IReadOnlyList<PlaybookActionRecord>>([]));
-        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(CloudPinnedModel).Build(),
             NullCustomToolScopeFactory.Instance,

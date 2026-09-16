@@ -185,6 +185,6 @@ public sealed class ExternalOpenAiModelProviderTests
 
     private static ExternalOpenAiModelProvider Build(IExternalProviderRegistry registry, OpenAiWireRecorder? recorder = null)
     {
-        return new ExternalOpenAiModelProvider(registry, recorder is null ? null : recorder.CreateHandler);
+        return new ExternalOpenAiModelProvider(registry, TimeProvider.System, recorder is null ? null : recorder.CreateHandler);
     }
 }

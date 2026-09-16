@@ -38,6 +38,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
     private readonly CancellationTokenSource _shutdownCts = new();
 
     private readonly Lock _syncRoot = new();
+    private readonly TimeProvider _timeProvider;
     private bool _isAcceptingRemoteInvocations = true;
 
     public WorkerEventDispatcher(IInvocationRunner invocationRunner,
@@ -46,7 +47,8 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         INodeKeyRegistry nodeKeyRegistry,
         IInvocationHistory invocationHistory,
         INodeChatRemotePersistenceCoordinator remotePersistenceCoordinator,
-        ILogger<WorkerEventDispatcher> logger)
+        ILogger<WorkerEventDispatcher> logger,
+        TimeProvider timeProvider)
     {
         _invocationRunner = invocationRunner ?? throw new ArgumentNullException(nameof(invocationRunner));
         _runtimePackageEnvelopeAssembler = runtimePackageEnvelopeAssembler ?? throw new ArgumentNullException(nameof(runtimePackageEnvelopeAssembler));
@@ -55,6 +57,7 @@ public sealed partial class WorkerEventDispatcher : IWorkerEventDispatcher
         _invocationHistory = invocationHistory ?? throw new ArgumentNullException(nameof(invocationHistory));
         _remotePersistenceCoordinator = remotePersistenceCoordinator ?? throw new ArgumentNullException(nameof(remotePersistenceCoordinator));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public event EventHandler<InvocationStateChangedEventArgs>? InvocationStateChanged;

@@ -22,15 +22,17 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
     private readonly IOllamaApiClient _ollamaClient;
     private readonly OllamaApiClientFactory _clientFactory;
     private readonly SemaphoreSlim _pullSemaphore = new(initialCount: 1, maxCount: 1);
+    private readonly TimeProvider _timeProvider;
 
     /// <summary>
     ///     Creates a provider wrapper around the configured Ollama management client and the client factory that mints
     ///     per-model chat/embedding clients over the same hardened transport.
     /// </summary>
-    public OllamaLocalModelProvider(IOllamaApiClient ollamaClient, OllamaApiClientFactory clientFactory)
+    public OllamaLocalModelProvider(IOllamaApiClient ollamaClient, OllamaApiClientFactory clientFactory, TimeProvider timeProvider)
     {
         _ollamaClient = ollamaClient ?? throw new ArgumentNullException(nameof(ollamaClient));
         _clientFactory = clientFactory ?? throw new ArgumentNullException(nameof(clientFactory));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public void Dispose()
@@ -51,7 +53,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             {
                 ProviderName = ProviderName,
                 IsHealthy = isRunning,
-                ObservedAt = DateTimeOffset.UtcNow,
+                ObservedAt = _timeProvider.GetUtcNow(),
                 Diagnostics = isRunning
                     ? ["Ollama endpoint is running."]
                     : ["Ollama endpoint did not report a running state."]
@@ -67,7 +69,7 @@ public sealed class OllamaLocalModelProvider : ILocalModelProvider, IDisposable
             {
                 ProviderName = ProviderName,
                 IsHealthy = false,
-                ObservedAt = DateTimeOffset.UtcNow,
+                ObservedAt = _timeProvider.GetUtcNow(),
                 Diagnostics = [exception.Message]
             };
         }

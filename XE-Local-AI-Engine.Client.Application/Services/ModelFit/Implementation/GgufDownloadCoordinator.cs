@@ -43,13 +43,15 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
     private readonly ConcurrentDictionary<string, long> _lastProgressPushTicks = new(StringComparer.OrdinalIgnoreCase);
     private readonly ILogger<GgufDownloadCoordinator> _logger;
     private readonly IServiceScopeFactory _scopeFactory;
+    private readonly TimeProvider _timeProvider;
 
     public GgufDownloadCoordinator(IGgufDownloadTransaction downloadTransaction,
         GgufAcquisitionIdentityResolver identityResolver,
         IServiceScopeFactory scopeFactory,
         IGgufAcquisitionOperationRegistry operations,
         IGgufDownloadEventPublisher eventPublisher,
-        ILogger<GgufDownloadCoordinator> logger)
+        ILogger<GgufDownloadCoordinator> logger,
+        TimeProvider timeProvider)
     {
         _downloadTransaction = downloadTransaction ?? throw new ArgumentNullException(nameof(downloadTransaction));
         _identityResolver = identityResolver ?? throw new ArgumentNullException(nameof(identityResolver));
@@ -57,6 +59,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         _operations = operations ?? throw new ArgumentNullException(nameof(operations));
         _eventPublisher = eventPublisher ?? throw new ArgumentNullException(nameof(eventPublisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public async Task<GgufDownloadTicket> StartAsync(GgufModelRequest request, CancellationToken ct)
@@ -276,7 +279,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
             // progress tick still has to wait out the interval.
             if (IsActive(status.Phase))
             {
-                _lastProgressPushTicks[status.ModelName] = DateTimeOffset.UtcNow.UtcTicks;
+                _lastProgressPushTicks[status.ModelName] = _timeProvider.GetUtcNow().UtcTicks;
             }
             else
             {
@@ -288,7 +291,7 @@ public sealed class GgufDownloadCoordinator : IGgufDownloadCoordinator
         }
 
         // Throttled Running progress: push only when at least ProgressPushInterval has elapsed since the last push.
-        var now = DateTimeOffset.UtcNow.UtcTicks;
+        var now = _timeProvider.GetUtcNow().UtcTicks;
         var last = _lastProgressPushTicks.TryGetValue(status.ModelName, out var ticks) ? ticks : 0L;
         if (now - last < ProgressPushInterval.Ticks)
         {

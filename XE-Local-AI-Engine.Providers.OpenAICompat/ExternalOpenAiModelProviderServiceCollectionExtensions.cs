@@ -27,7 +27,8 @@ public static class ExternalOpenAiModelProviderServiceCollectionExtensions
         ArgumentNullException.ThrowIfNull(services);
 
         _ = services.AddSingleton<ILocalModelProvider>(serviceProvider =>
-            new ExternalOpenAiModelProvider(serviceProvider.GetRequiredService<IExternalProviderRegistry>()));
+            new ExternalOpenAiModelProvider(serviceProvider.GetRequiredService<IExternalProviderRegistry>(),
+                serviceProvider.GetRequiredService<TimeProvider>()));
         return services;
     }
 }

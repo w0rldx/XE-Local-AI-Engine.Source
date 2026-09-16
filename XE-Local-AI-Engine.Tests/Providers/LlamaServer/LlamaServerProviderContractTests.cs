@@ -59,7 +59,7 @@ public sealed class LlamaServerProviderContractTests
     public async Task ListModelsAsync_DelegatesToGgufStore()
     {
         var store = new FakeModelStore("/fake/models/m.gguf", [Model, "other"]);
-        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
+        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store, TimeProvider.System);
 
         var models = await provider.ListModelsAsync(CancellationToken.None);
 
@@ -73,7 +73,7 @@ public sealed class LlamaServerProviderContractTests
         var store = Substitute.For<IGgufModelStore>();
         store.EnsureModelAsync(Arg.Any<GgufModelRequest>(), Arg.Any<IProgress<PullProgress>>(), Arg.Any<CancellationToken>())
              .Returns(Task.FromResult(new GgufModelHandle(Model, "/fake/m.gguf", "Q4_K_M", SizeBytes: 1, Sha256: null, "rev", GgufRole.Unknown)));
-        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
+        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store, TimeProvider.System);
 
         await provider.PullModelAsync($"{Model}:Q4_K_M", progress: null, CancellationToken.None);
 
@@ -86,7 +86,7 @@ public sealed class LlamaServerProviderContractTests
     public async Task DeleteModelAsync_DelegatesToStore()
     {
         var store = Substitute.For<IGgufModelStore>();
-        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store);
+        var provider = new LlamaServerLocalModelProvider(Substitute.For<ILlamaServerProcessSupervisor>(), store, TimeProvider.System);
 
         await provider.DeleteModelAsync(Model, CancellationToken.None);
 
@@ -231,6 +231,6 @@ public sealed class LlamaServerProviderContractTests
 
     private static LlamaServerLocalModelProvider CreateProvider(ILlamaServerProcessSupervisor supervisor)
     {
-        return new LlamaServerLocalModelProvider(supervisor, new FakeModelStore("/fake/models/m.gguf", [Model]));
+        return new LlamaServerLocalModelProvider(supervisor, new FakeModelStore("/fake/models/m.gguf", [Model]), TimeProvider.System);
     }
 }

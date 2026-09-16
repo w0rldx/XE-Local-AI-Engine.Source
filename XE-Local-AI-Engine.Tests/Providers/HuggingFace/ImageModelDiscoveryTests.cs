@@ -305,7 +305,7 @@ public sealed class ImageModelDiscoveryTests
             _hubHttp = new HttpClient(Handler, disposeHandler: false);
 
             var options = new HuggingFaceOptions();
-            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance);
+            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, TimeProvider.System);
             Discovery = new HuggingFaceImageModelDiscovery(hubClient, NullLogger<HuggingFaceImageModelDiscovery>.Instance);
         }
 

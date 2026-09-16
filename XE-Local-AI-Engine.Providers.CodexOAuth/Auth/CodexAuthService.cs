@@ -26,22 +26,26 @@ public sealed class CodexAuthService : ICodexAuthService
     private readonly ILogger<CodexAuthService> _logger;
 
     private readonly CodexOptions _options;
+    private readonly TimeProvider _timeProvider;
     private readonly ICodexTokenStore _tokenStore;
 
     public CodexAuthService(IOptions<CodexOptions> options,
         HttpClient httpClient,
         ICodexTokenStore tokenStore,
-        ILogger<CodexAuthService> logger)
+        ILogger<CodexAuthService> logger,
+        TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(tokenStore);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _options = options.Value;
         _httpClient = httpClient;
         _tokenStore = tokenStore;
         _logger = logger;
+        _timeProvider = timeProvider;
     }
 
     public CodexLoginHandle BeginLogin(CancellationToken cancellationToken = default)
@@ -168,7 +172,7 @@ public sealed class CodexAuthService : ICodexAuthService
             ?? throw new CodexAuthException("Codex token response did not include a refresh token.");
 
         var expiresUtc = TryGetExpiresIn(root, out var expiresIn)
-            ? DateTimeOffset.UtcNow.AddSeconds(expiresIn)
+            ? _timeProvider.GetUtcNow().AddSeconds(expiresIn)
             : GetJwtExpiry(access);
 
         var accountId = ExtractAccountId(access);
@@ -295,7 +299,7 @@ public sealed class CodexAuthService : ICodexAuthService
         throw new CodexAuthException("Codex access token did not contain a chatgpt_account_id claim.");
     }
 
-    private static DateTimeOffset GetJwtExpiry(string jwt)
+    private DateTimeOffset GetJwtExpiry(string jwt)
     {
         var payload = DecodeJwtPayload(jwt);
 
@@ -310,7 +314,7 @@ public sealed class CodexAuthService : ICodexAuthService
         }
 
         // Conservative default if the token has no usable exp claim.
-        return DateTimeOffset.UtcNow.AddMinutes(50);
+        return _timeProvider.GetUtcNow().AddMinutes(50);
     }
 
     // SECURITY: the JWT payload is base64url-decoded WITHOUT verifying the token signature. This is

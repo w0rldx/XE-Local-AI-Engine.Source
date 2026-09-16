@@ -10,10 +10,12 @@ internal sealed class InvocationHistory : IInvocationHistory
     private readonly ILogger<InvocationHistory> _logger;
     private readonly HashSet<Guid> _recordedInvocationIds = [];
     private readonly Lock _syncRoot = new();
+    private readonly TimeProvider _timeProvider;
 
-    public InvocationHistory(ILogger<InvocationHistory> logger)
+    public InvocationHistory(ILogger<InvocationHistory> logger, TimeProvider timeProvider)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
     }
 
     public event EventHandler<InvocationHistoryEntryAddedEventArgs>? EntryAdded;
@@ -42,7 +44,7 @@ internal sealed class InvocationHistory : IInvocationHistory
             state.Status,
             state.ModelUsed,
             state.StartedAt,
-            state.CompletedAt ?? DateTimeOffset.UtcNow,
+            state.CompletedAt ?? _timeProvider.GetUtcNow(),
             state.Error,
             state.FailureCategory,
             state.StreamedChunkCount,

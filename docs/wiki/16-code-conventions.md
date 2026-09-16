@@ -127,7 +127,10 @@ Reads use `AsNoTracking`; set operations use `ExecuteUpdate/DeleteAsync`.
 Constructor injection via **primary constructors**, with each dependency null-guarded
 (`?? throw new ArgumentNullException(...)`) into a `readonly` field — this is the house style throughout
 `Client.Application`, heavier than a plain primary ctor. Classes are `sealed` by default. Options bind from config via
-the `*Options` pattern.
+the `*Options` pattern. Never read ambient time (`DateTimeOffset.UtcNow`/`.Now`, `DateTime.*`) directly; inject
+`TimeProvider` (registered once in `Client/ConfigureServices.cs`, no `?? TimeProvider.System` defaults) and call
+`GetUtcNow()`/`GetLocalNow()` — enforced by `BannedSymbols.txt` (RS0030), documented in
+[Security & Privacy](12-security-and-privacy.md) §8.
 
 ### Custom Tools keep authoring, offering, and execution gates aligned
 

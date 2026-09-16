@@ -543,7 +543,7 @@ public sealed class LocalToolOfferProviderTests
         // REAL catalog the non-capable offer collapses to the two ungated LocalAgentToolRegistry builtins (the clock and
         // arithmetic tools docs/agent-knowledge.md §3 records as the partial-failure residue) — every gated tool,
         // ask_user included, is withheld.
-        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,
@@ -600,7 +600,7 @@ public sealed class LocalToolOfferProviderTests
         // accidental Unknown would make the node approval policy treat that tool as fail-closed (approval-requiring), so
         // catch a missing category here rather than in production. Uses the real LocalAgentToolRegistry (builtin clock /
         // arithmetic) plus the merged coder + knowledge tools and the profile-only spawn_subagent.
-        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        var provider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels("qwen3:8b").Build(),
             NullCustomToolScopeFactory.Instance,

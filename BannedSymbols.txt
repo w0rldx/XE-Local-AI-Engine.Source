@@ -6,13 +6,14 @@
 // Format: {Documentation Comment ID};{message shown on violation}
 // Scope = the "safe set": APIs with zero current production usage, so the build stays green while the
 // wall blocks NEW occurrences. Ambient time, blocking sleeps, and forced GC are the targets here.
-// NOTE: DateTimeOffset.UtcNow and sync-over-async (.Result/.Wait/.GetAwaiter().GetResult) are NOT yet
-// banned — they still have legitimate production usage and need a dedicated refactor first.
+// NOTE: sync-over-async (.Result/.Wait/.GetAwaiter().GetResult) is NOT yet banned — it still has legitimate
+// production usage and needs a dedicated refactor first.
 
 // --- Ambient time: inject TimeProvider and use GetUtcNow()/GetLocalNow() instead ---
 P:System.DateTime.Now;Do not read ambient time. Inject TimeProvider and call GetLocalNow() (or GetUtcNow()).
 P:System.DateTime.UtcNow;Do not read ambient time. Inject TimeProvider and call GetUtcNow().
 P:System.DateTimeOffset.Now;Do not read ambient time. Inject TimeProvider and call GetLocalNow().
+P:System.DateTimeOffset.UtcNow;Do not read ambient time. Inject TimeProvider and call GetUtcNow().
 
 // --- Blocking sleeps: await Task.Delay(..., cancellationToken) instead ---
 M:System.Threading.Thread.Sleep(System.Int32);Do not block the thread with Thread.Sleep. Await Task.Delay with a CancellationToken.

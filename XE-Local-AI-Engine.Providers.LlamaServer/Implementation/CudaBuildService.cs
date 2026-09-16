@@ -44,6 +44,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
     private readonly ICudaBuildPrerequisiteProbe _prerequisiteProbe;
     private readonly ICudaBuildEventPublisher _publisher;
     private readonly Lock _stateLock = new();
+    private readonly TimeProvider _timeProvider;
 
     private CancellationTokenSource? _buildCts;
     private DateTimeOffset? _completedAtUtc;
@@ -58,8 +59,9 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
     public CudaBuildService(ICudaBuildPrerequisiteProbe prerequisiteProbe,
         ILlamaCppBinaryManager binaryManager,
         ICudaBuildEventPublisher publisher,
-        ILogger<CudaBuildService> logger)
-        : this(prerequisiteProbe, binaryManager, publisher, logger, DefaultCacheRoot())
+        ILogger<CudaBuildService> logger,
+        TimeProvider timeProvider)
+        : this(prerequisiteProbe, binaryManager, publisher, logger, timeProvider, DefaultCacheRoot())
     {
     }
 
@@ -68,12 +70,14 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
         ILlamaCppBinaryManager binaryManager,
         ICudaBuildEventPublisher publisher,
         ILogger<CudaBuildService> logger,
+        TimeProvider timeProvider,
         string cacheRoot)
     {
         _prerequisiteProbe = prerequisiteProbe ?? throw new ArgumentNullException(nameof(prerequisiteProbe));
         _binaryManager = binaryManager ?? throw new ArgumentNullException(nameof(binaryManager));
         _publisher = publisher ?? throw new ArgumentNullException(nameof(publisher));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         ArgumentException.ThrowIfNullOrWhiteSpace(cacheRoot);
         _cacheRoot = cacheRoot;
         _homeDirectory = Environment.GetEnvironmentVariable("HOME") ?? string.Empty;
@@ -133,7 +137,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             _logLines = [];
             _sanitizedError = null;
             _currentTag = LlamaCppReleasePins.PinnedTag;
-            _startedAtUtc = DateTimeOffset.UtcNow;
+            _startedAtUtc = _timeProvider.GetUtcNow();
             _completedAtUtc = null;
             _buildCts?.Dispose();
             _buildCts = buildCts;
@@ -232,7 +236,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             TryDeleteDirectory(backupTagDir);
             CreateOwnerOnlyDirectory(sourceCudaRoot);
             CreateOwnerOnlyDirectory(workDir);
-            await File.WriteAllTextAsync(MarkerPath, DateTimeOffset.UtcNow.ToString("O"), ct).ConfigureAwait(false);
+            await File.WriteAllTextAsync(MarkerPath, _timeProvider.GetUtcNow().ToString("O"), ct).ConfigureAwait(false);
 
             var environment = BuildScrubbedEnvironment();
 
@@ -461,7 +465,7 @@ public sealed partial class CudaBuildService : ICudaBuildService, IDisposable
             _phase = phase;
             _isRunning = false;
             _sanitizedError = sanitizedError;
-            _completedAtUtc = DateTimeOffset.UtcNow;
+            _completedAtUtc = _timeProvider.GetUtcNow();
         }
 
         PublishSafe(new CudaBuildStatusHubEvent(phase.ToString(), [], Terminal: true, sanitizedError));

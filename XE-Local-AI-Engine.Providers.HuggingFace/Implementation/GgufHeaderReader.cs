@@ -29,11 +29,12 @@ internal sealed class GgufHeaderReader
     private readonly HuggingFaceOptions _options;
     private readonly TtlCache<GgufHeaderMetadata> _headerCache;
 
-    public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger, TimeProvider? timeProvider = null)
+    public GgufHeaderReader(HttpClient httpClient, HuggingFaceOptions options, ILogger<GgufHeaderReader> logger, TimeProvider timeProvider)
     {
         ArgumentNullException.ThrowIfNull(httpClient);
         ArgumentNullException.ThrowIfNull(options);
         ArgumentNullException.ThrowIfNull(logger);
+        ArgumentNullException.ThrowIfNull(timeProvider);
 
         _httpClient = httpClient;
         _options = options;

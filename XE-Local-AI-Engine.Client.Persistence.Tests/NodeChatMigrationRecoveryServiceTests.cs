@@ -132,6 +132,7 @@ public sealed class NodeChatMigrationRecoveryServiceTests : IDisposable
                     options.StartupLockTimeout = startupLockTimeout ?? TimeSpan.FromSeconds(1);
                     options.StartupLockPollInterval = TimeSpan.FromMilliseconds(5);
                 });
+        services.AddSingleton(TimeProvider.System);
         services.AddSingleton<NodeChatMigrationRecoveryService>();
 
         return services.BuildServiceProvider(true);

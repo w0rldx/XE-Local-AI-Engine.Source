@@ -29,6 +29,7 @@ internal sealed class WhisperCppRuntimeAdoption(
     string cacheRoot,
     IWhisperInstalledRuntimeStore runtimeStore,
     IWhisperManagedSourceBuildSignal managedSignal,
+    TimeProvider timeProvider,
     ILogger logger)
 {
     private string BuildRoot => Path.Combine(cacheRoot, "whisper.cpp", "source-build");
@@ -146,7 +147,7 @@ internal sealed class WhisperCppRuntimeAdoption(
                 descriptor.RequestedCommit,
                 Path.GetDirectoryName(finalServer),
                 digest,
-                DateTimeOffset.UtcNow);
+                timeProvider.GetUtcNow());
             var previousState = await runtimeStore.ReadAsync(ct).ConfigureAwait(false);
             var journal = new WhisperCppAdoptionJournal(descriptor.BuildId,
                 descriptor.Backend,

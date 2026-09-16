@@ -157,8 +157,9 @@ public sealed class GgufDiscoveryPerfTests
                 HubMetadataCacheTtl = TimeSpan.FromHours(6)
             };
 
-            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, timeProvider);
-            var headerReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, timeProvider);
+            var clock = timeProvider ?? TimeProvider.System;
+            var hubClient = new HfHubClient(_hubHttp, options, NullLogger<HfHubClient>.Instance, clock);
+            var headerReader = new GgufHeaderReader(_downloadHttp, options, NullLogger<GgufHeaderReader>.Instance, clock);
             Discovery = new HuggingFaceGgufDiscovery(hubClient, headerReader, options, NullLogger<HuggingFaceGgufDiscovery>.Instance);
         }
 

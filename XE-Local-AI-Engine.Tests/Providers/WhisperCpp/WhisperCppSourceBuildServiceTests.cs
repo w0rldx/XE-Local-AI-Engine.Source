@@ -364,6 +364,7 @@ public sealed class WhisperCppSourceBuildServiceTests
                 NullLogger<WhisperCppSourceBuildService>.Instance,
                 cacheRoot,
                 Runner,
+                TimeProvider.System,
                 isLinux);
         }
 

@@ -142,7 +142,7 @@ public sealed class SeedAssemblyContractTests
             NullLogger<InvocationAgentFactory>.Instance,
             NullLoggerFactory.Instance,
             EmptyServiceProvider.Instance,
-            new LocalAgentToolRegistry(),
+            new LocalAgentToolRegistry(TimeProvider.System),
             new EmptyClientLocalToolRegistry(),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             new EmptyCustomToolCatalog());

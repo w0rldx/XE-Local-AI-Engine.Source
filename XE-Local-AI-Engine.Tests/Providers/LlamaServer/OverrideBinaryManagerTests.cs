@@ -29,7 +29,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -53,7 +53,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -70,7 +70,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         var exception = await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
         AssertEx.False(exception.Message.Contains(dir.Path, StringComparison.Ordinal));
@@ -86,13 +86,13 @@ public sealed class OverrideBinaryManagerTests
 
         // Relative path → rejected (no base dir to resolve it against).
         var relative = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null,
             overrideOptions: ActiveOverride("relative/llama-server", GpuVariant.Cpu));
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => relative.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
 
         // A directory is not a regular file → rejected (File.Exists is false for a directory).
         var asDir = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null,
             overrideOptions: ActiveOverride(dir.Path, GpuVariant.Cpu));
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => asDir.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
     }
@@ -116,7 +116,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
     }
@@ -133,7 +133,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None));
     }
@@ -151,7 +151,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         await AssertEx.ThrowsAsync<LlamaRuntimeException>(() => manager.EnsureBinaryAsync(GpuVariant.Cuda, CancellationToken.None));
     }
@@ -169,7 +169,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, dir.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null, overrideOptions: options);
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null, overrideOptions: options);
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);
 
@@ -191,7 +191,7 @@ public sealed class OverrideBinaryManagerTests
         using var handler = new ThrowingHandler();
         using var http = new HttpClient(handler, disposeHandler: false);
         var manager = new LlamaCppBinaryManager(http, cache.Path, LlamaCppReleasePins.PinnedTag,
-            OSPlatform.Linux, Architecture.X64, catalog: null, installedRuntimeStore: null,
+            OSPlatform.Linux, Architecture.X64, TimeProvider.System, catalog: null, installedRuntimeStore: null,
             overrideOptions: new LlamaServerRuntimeOverrideOptions()); // inactive
 
         var binary = await manager.EnsureBinaryAsync(GpuVariant.Cpu, CancellationToken.None);

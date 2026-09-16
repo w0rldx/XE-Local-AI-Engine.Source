@@ -114,8 +114,8 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         LlamaServerSupervisorOptions options,
         IInferenceProfileResolver profileResolver,
         ILlamaServerLaunchPolicy launchPolicy,
+        TimeProvider timeProvider,
         LlamaServerExternalEndpointOptions? externalEndpoints = null,
-        TimeProvider? timeProvider = null,
         ILogger<LlamaServerProcessSupervisor>? logger = null,
         IGpuModelLoadAdmission? loadAdmission = null,
         ILlamaCppSourceBuildActivity? sourceBuildActivity = null,
@@ -141,7 +141,7 @@ public sealed partial class LlamaServerProcessSupervisor : ILlamaServerProcessSu
         _allocationResolver = allocationResolver ?? new DefaultProcessContextAllocationResolver(new LlamaServerLaunchPolicyOptions());
         _launchAdmissions = launchAdmissions ?? new ProcessLaunchAdmissionRegistry();
         _externalEndpoints = externalEndpoints ?? new LlamaServerExternalEndpointOptions();
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
         _logger = logger ?? NullLogger<LlamaServerProcessSupervisor>.Instance;
         _detachedSpawnScheduler = detachedSpawnScheduler ?? TaskScheduler.Default;
 

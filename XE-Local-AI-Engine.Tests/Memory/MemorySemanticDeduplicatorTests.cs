@@ -196,7 +196,8 @@ public sealed class MemorySemanticDeduplicatorTests
         return new MemorySemanticDeduplicator(resolver,
             new FakeEmbeddingModelResolver(isConfident),
             options,
-            NullLogger<MemorySemanticDeduplicator>.Instance);
+            NullLogger<MemorySemanticDeduplicator>.Instance,
+            TimeProvider.System);
     }
 
     private static MemoryDedupExisting Existing(string behavior, MemoryScope scope)

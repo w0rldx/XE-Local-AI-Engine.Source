@@ -38,21 +38,21 @@ public sealed class LocalModelProviderResolver : ILocalModelProviderResolver
     /// <summary>
     ///     Builds the resolver over every registered <see cref="ILocalModelProvider" /> (llama-server + the optional
     ///     Ollama provider), the scope factory used to read the per-model map, the configured default provider for
-    ///     unmapped models, and the loaded-process cap surfaced to the preview cap check. The optional cache TTL /
-    ///     time provider exist for deterministic tests; a non-positive TTL disables the map cache entirely.
+    ///     unmapped models, and the loaded-process cap surfaced to the preview cap check. The injected time provider
+    ///     and the optional cache TTL exist for deterministic tests; a non-positive TTL disables the map cache entirely.
     /// </summary>
     public LocalModelProviderResolver(IEnumerable<ILocalModelProvider> providers,
         IServiceScopeFactory scopeFactory,
         string defaultProviderName,
         int maxLoadedProcesses,
-        TimeSpan? mapCacheTtl = null,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider,
+        TimeSpan? mapCacheTtl = null)
     {
         ArgumentNullException.ThrowIfNull(providers);
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         ArgumentException.ThrowIfNullOrWhiteSpace(defaultProviderName);
         _mapCacheTtl = mapCacheTtl ?? DefaultMapCacheTtl;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider ?? throw new ArgumentNullException(nameof(timeProvider));
 
         // Last registration wins per key so a host can override a provider; provider keys are case-insensitive to match
         // LocalModelSelection routing across the persisted map and capability payloads.

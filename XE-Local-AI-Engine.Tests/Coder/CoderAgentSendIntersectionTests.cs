@@ -120,7 +120,7 @@ public sealed class CoderAgentSendIntersectionTests
     {
         // The REAL offer provider over the REAL registry + the merge — coder tools reach the offer only via the
         // merge, never via the registry.
-        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(),
+        var offerProvider = new LocalToolOfferProvider(new LocalAgentToolRegistry(TimeProvider.System),
             new McpToolRegistry(NullLogger<McpToolRegistry>.Instance),
             StubNodeRuntimeSettings.Create().WithToolCapableModels(capableModel).Build(),
             NullCustomToolScopeFactory.Instance,

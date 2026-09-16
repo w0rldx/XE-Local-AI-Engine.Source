@@ -183,7 +183,7 @@ public sealed partial class LlamaCppBinaryManager
                 },
                 Sha256: sha256,
                 Variant: variant,
-                InstalledAtUtc: DateTimeOffset.UtcNow,
+                InstalledAtUtc: _timeProvider.GetUtcNow(),
                 SourceBuildPath: fullBinDir,
                 SourceRepository: sourceRepository,
                 SourceCommit: Convert.ToHexStringLower(Convert.FromHexString(sourceCommit)),

@@ -73,6 +73,7 @@ public sealed class LlamaServerLaunchCapabilityInspectorTests
         var services = new ServiceCollection();
         services.AddLogging();
         services.AddSingleton(http);
+        services.AddSingleton(TimeProvider.System);
         services.AddLlamaServerLocalModelProvider();
 
         using var provider = services.BuildServiceProvider();
