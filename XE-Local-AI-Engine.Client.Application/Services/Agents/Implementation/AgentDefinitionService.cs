@@ -56,6 +56,11 @@ internal sealed class AgentDefinitionService(
         return _store.GetByIdAsync(id, cancellationToken);
     }
 
+    public Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default)
+    {
+        return _store.ListSeededSlugsAsync(cancellationToken);
+    }
+
     public async Task<AgentDefinitionRecord?> GetByKeyAsync(string key, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(key))

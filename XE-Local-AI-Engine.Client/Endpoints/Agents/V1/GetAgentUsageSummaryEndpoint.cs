@@ -4,7 +4,7 @@ using FastEndpoints;
 using Microsoft.Extensions.Options;
 using XE_Local_AI_Engine.Client.Endpoints.Agents.V1.Mappers;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
+using XE_Local_AI_Engine.Client.Services.Agents;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Memory;
 using XE_Local_AI_Engine.Client.Services.NodeSettings;
@@ -18,12 +18,12 @@ using XE_Local_AI_Engine.Client.Services.NodeSettings;
 ///     redact. Only covers the retained horizon (the response surfaces the retention window). Operator-gated.
 /// </summary>
 public sealed class GetAgentUsageSummaryEndpoint(
-    IAgentExecutionLogStore executionLogStore,
+    AgentExecutionLogQueryService executionLogs,
     IUsageRateResolver rateResolver,
     IOptions<AgentExecutionLogRetentionOptions> retentionOptions)
     : Endpoint<AgentUsageSummaryRequest, AgentUsageSummaryResponse>
 {
-    private readonly IAgentExecutionLogStore _executionLogStore = executionLogStore ?? throw new ArgumentNullException(nameof(executionLogStore));
+    private readonly AgentExecutionLogQueryService _executionLogs = executionLogs ?? throw new ArgumentNullException(nameof(executionLogs));
     private readonly IUsageRateResolver _rateResolver = rateResolver ?? throw new ArgumentNullException(nameof(rateResolver));
     private readonly IOptions<AgentExecutionLogRetentionOptions> _retentionOptions = retentionOptions ?? throw new ArgumentNullException(nameof(retentionOptions));
 
@@ -35,7 +35,7 @@ public sealed class GetAgentUsageSummaryEndpoint(
 
     public override async Task HandleAsync(AgentUsageSummaryRequest req, CancellationToken ct)
     {
-        var buckets = await _executionLogStore.SummarizeTokenUsageAsync(req.FromEpochMs, req.ToEpochMs, ct).ConfigureAwait(false);
+        var buckets = await _executionLogs.SummarizeTokenUsageAsync(req.FromEpochMs, req.ToEpochMs, ct).ConfigureAwait(false);
 
         await Send.OkAsync(new AgentUsageSummaryResponse
             {

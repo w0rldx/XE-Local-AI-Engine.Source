@@ -34,6 +34,9 @@ public interface IAgentDefinitionService
 
     /// <summary>Returns every registered definition, oldest first.</summary>
     Task<IReadOnlyList<AgentDefinitionRecord>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>Returns the seed slugs already imported, so a template catalog can mark them as imported.</summary>
+    Task<IReadOnlySet<string>> ListSeededSlugsAsync(CancellationToken cancellationToken = default);
 }
 
 /// <summary>Thrown when an agent-definition create/update fails validation. The message is safe to surface to callers.</summary>

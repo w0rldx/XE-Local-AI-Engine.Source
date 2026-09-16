@@ -459,6 +459,18 @@ Do not wrap the whole project validator in one outer lock: its internally locked
 
 A build that fails in project B leaves B's output directory untouched, including B's copies of dependencies that did compile, so a `--no-build` test run loads a pre-change copy of a product assembly that itself built fresh. Prevents grading old code as new (2026-09-04: three real passes read as failures in a shared worktree after another agent's compile error). Authority: reproduced from scratch with a two-project solution; `scripts/assembly-guard.sh` cannot see it (it compares output before/after a run, not output already stale at start).
 
+### PROPOSED (awaiting operator approval): `--list-tests` prints METHOD names only, so a union filter is confirmed one class at a time
+
+**Rule:** `--list-tests` proves a `--treenode-filter` exists, but its output is a flat list of test-method names with no
+class, namespace or per-class subtotal — grepping it for the class names in a `(ClassA|ClassB|…)` alternation returns
+zero matches even when every class is present. Confirm a union filter by running `--list-tests` once per class
+(`/*/*/<Class>/*`) and reading each `Discovered N tests` line; only the empty listing tells you a name is wrong.
+**Prevents:** shipping a gate filter with a misspelled or renamed class silently contributing nothing — the run still
+reports `Passed!` with a plausible total, so the class you believed you verified was never executed, and the
+alternation never exits 8 as long as one name matches. **Authority:**
+`dotnet test XE-Local-AI-Engine.Tests/XE-Local-AI-Engine.Tests.csproj -c Release --no-build --list-tests` output
+shape; `docs/agent-knowledge.md` §1's "`--list-tests` is authoritative" line, which this sharpens.
+
 ### PROPOSED (awaiting operator approval): a batched-module red keeps only 3 grep'd lines, so capture the failure detail on the FIRST red
 
 **Rule:** when `scripts/run-backend-tests.sh` reds inside `XE-Local-AI-Engine.Tests`, the three

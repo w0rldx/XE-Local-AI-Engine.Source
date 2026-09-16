@@ -79,6 +79,8 @@ internal static class AddNodeWorkspaceAndAgentsExtensions
         // Append-only agent execution telemetry (adaptive memory diagnostics). Metadata only — no message content — so
         // rows are unencrypted; the run path writes latency/token/success rows linked to the chat message by id.
         builder.Services.AddScoped<IAgentExecutionLogStore, AgentExecutionLogStore>();
+        // The Agents diagnostics/usage endpoints' only path to that store. Scoped, matching the store it wraps.
+        builder.Services.AddScoped<AgentExecutionLogQueryService>();
         // Node-local MCP registrations. Secret-bearing args/env/description columns are encrypted at rest; the
         // connection manager reads enabled rows and the CRUD service owns registration changes.
         builder.Services.AddScoped<IMcpServerStore, McpServerStore>();
