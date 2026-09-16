@@ -484,6 +484,37 @@ invisible from the test source, which reads as if each class had its own file. *
 `TUnit.Playwright` 1.65.68 `BrowserTest.BrowserSetup`; `XE-Local-AI-Engine.Tests.E2ETests/Common/XEFakeAudioE2ETestBase.cs`
 (`LaunchFakeAudioBrowserAsync`); local S4 progress notes §C5b (untracked).
 
+### PROPOSED (awaiting operator approval): a bulk `.editorconfig` severity silences an analyzer without stopping it running
+
+**Rule:** measure analyzer cost after a Sonar/Meziantou bump, or after any `.editorconfig` generated-code change,
+with `-p:ReportAnalyzer=true -v:d` on the single project under suspicion (`--no-dependencies`), diffed against the
+committed `spike/analyzer-*.txt` baseline — never a guess from release notes, never a wall-clock stopwatch on the
+whole solution. What that measurement exposes: a section's bulk `dotnet_analyzer_diagnostic.severity = none`
+suppresses the *reporting* of a rule inside that section but does not stop the analyzer *executing* over those
+files, while an explicit `dotnet_diagnostic.<ID>.severity = none` in the same section does stop it — Roslyn's
+per-tree skip reads the per-ID key, and a rule whose findings are all suppressed for a tree is skipped for that
+tree unless it registers a symbol-start or compilation-end action.
+**Failure prevented:** reading the existing `[**/Migrations/*.cs]` section as proof that generated code is already
+off the analyzer bill, and then buying the time back by disabling a security rule across the whole solution when
+scoping the same rule to the generated section would have bought it for free.
+**Authority:** the S7 analyzer-upgrade slice measured `XE-Local-AI-Engine.Client.Persistence` three ways on Sonar
+10.34 — as the repository ships it, with per-ID `none` lines added under the existing Migrations glob, and with
+`Migrations/**` removed from `<Compile>` — and proved the reporting half directly: the same `FromSqlRaw`
+string-concatenation violation is an `S2077` build error in ordinary Persistence source and compiles clean inside
+`Migrations/`. Figures per rule are in the slice's progress report, not here.
+
+Measured per rule, each currently unset in `.editorconfig` except `S2068`. For every one of them, excluding the
+migration files from compilation collapsed the rule's cost to near nothing, and adding a per-ID `none` under the
+existing Migrations glob reached almost the same floor — so the cost is the generated migrations, not the
+hand-written Persistence code:
+`S5344` (PasswordsShouldBeStoredCorrectly), `S2077` (ExecutingSqlQueries), `S4790` (CreatingHashAlgorithms),
+`S2068` (DoNotHardcodeCredentials), `S4036` (CommandPath), `S5542` (EncryptionAlgorithmsShouldBeSecure),
+`S7039` (InsecureContentSecurityPolicy), `S2971` (CollectionQuerySimplification), `S5122` (PermissiveCors),
+`S3011` (BypassingAccessibility). Configuration finding, decompiled from the shipped analyzer: every Sonar rule
+derives from `SonarDiagnosticAnalyzer`, which calls `ConfigureGeneratedCodeAnalysis` with the `Analyze` flag, so
+Roslyn's built-in generated-code filter never applies to any of them; each of the ten registers only node actions
+inside a compilation-start action, so none is exempt from the per-tree skip.
+
 ### A full test-suite run can poison its own worktree's generated NuGet props
 
 A fixture that restores under an isolated `HOME` rewrites `obj/*.nuget.g.props` with a since-deleted package root; the next Release build fails `CS0006` on every analyzer assembly. It looks exactly like the MSBuild node-reuse trap, but the cure is `dotnet restore` with `NUGET_PACKAGES` pinned to the real store, not a build-server shutdown. Authority: reproduced in the S5 worktree 2026-09-04.
