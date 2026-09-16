@@ -8,10 +8,10 @@ using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public sealed class ListTrainingDatasetsEndpoint(ITrainingDatasetStore store)
+public sealed class ListTrainingDatasetsEndpoint(TrainingDatasetService datasets)
     : EndpointWithoutRequest<ListTrainingDatasetsResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
 
     public override void Configure()
     {
@@ -21,7 +21,7 @@ public sealed class ListTrainingDatasetsEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _store.ListDatasetsAsync(ct).ConfigureAwait(false);
+        var records = await _datasets.ListAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListTrainingDatasetsResponse
         {
             Items = records.Select(record => record.ToResponse()).ToArray()
@@ -29,10 +29,10 @@ public sealed class ListTrainingDatasetsEndpoint(ITrainingDatasetStore store)
     }
 }
 
-public sealed class GetTrainingDatasetEndpoint(ITrainingDatasetStore store)
+public sealed class GetTrainingDatasetEndpoint(TrainingDatasetService datasets)
     : Endpoint<GetTrainingDatasetRequest, TrainingDatasetResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
 
     public override void Configure()
     {
@@ -42,7 +42,7 @@ public sealed class GetTrainingDatasetEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(GetTrainingDatasetRequest req, CancellationToken ct)
     {
-        var record = await _store.GetDatasetAsync(req.DatasetId, ct).ConfigureAwait(false);
+        var record = await _datasets.GetAsync(req.DatasetId, ct).ConfigureAwait(false);
         if (record is null)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
@@ -53,10 +53,10 @@ public sealed class GetTrainingDatasetEndpoint(ITrainingDatasetStore store)
     }
 }
 
-public sealed class DeleteTrainingDatasetEndpoint(ITrainingDatasetStore store)
+public sealed class DeleteTrainingDatasetEndpoint(TrainingDatasetService datasets)
     : Endpoint<DeleteTrainingDatasetRequest>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
 
     public override void Configure()
     {
@@ -66,7 +66,7 @@ public sealed class DeleteTrainingDatasetEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(DeleteTrainingDatasetRequest req, CancellationToken ct)
     {
-        await _store.DeleteDatasetAsync(req.DatasetId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await _datasets.DeleteAsync(req.DatasetId, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }
@@ -101,10 +101,10 @@ public sealed class CancelTrainingDatasetEndpoint(IDatasetGenerationService gene
     }
 }
 
-public sealed class ListTrainingSamplesEndpoint(ITrainingDatasetStore store)
+public sealed class ListTrainingSamplesEndpoint(TrainingDatasetService datasets)
     : Endpoint<ListTrainingSamplesRequest, ListTrainingSamplesResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
 
     public override void Configure()
     {
@@ -121,8 +121,8 @@ public sealed class ListTrainingSamplesEndpoint(ITrainingDatasetStore store)
             return;
         }
 
-        var page = await _store.ListSamplesAsync(new TrainingSampleQuery(req.DatasetId, req.Page, req.PageSize, req.Label, req.ReviewState, req.Kind), ct)
-                               .ConfigureAwait(false);
+        var page = await _datasets.ListSamplesAsync(new TrainingSampleQuery(req.DatasetId, req.Page, req.PageSize, req.Label, req.ReviewState, req.Kind), ct)
+                                  .ConfigureAwait(false);
         await Send.OkAsync(new ListTrainingSamplesResponse
         {
             Items = page.Items.Select(item => item.ToResponse()).ToArray(),
@@ -134,10 +134,10 @@ public sealed class ListTrainingSamplesEndpoint(ITrainingDatasetStore store)
 }
 
 /// <summary>Sample review verbs. Any accepted mutation bumps the dataset revision and recomputes its fingerprint.</summary>
-public sealed class ReviewTrainingSampleEndpoint(ITrainingDatasetStore store)
+public sealed class ReviewTrainingSampleEndpoint(TrainingDatasetService datasets)
     : Endpoint<ReviewTrainingSampleRequest, TrainingSampleResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly TrainingDatasetService _datasets = datasets ?? throw new ArgumentNullException(nameof(datasets));
 
     public override void Configure()
     {
@@ -147,7 +147,7 @@ public sealed class ReviewTrainingSampleEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(ReviewTrainingSampleRequest req, CancellationToken ct)
     {
-        var record = await _store.ReviewSampleAsync(new TrainingSampleReviewCommand(req.SampleId, req.Verb, req.Label), ct).ConfigureAwait(false);
+        var record = await _datasets.ReviewSampleAsync(new TrainingSampleReviewCommand(req.SampleId, req.Verb, req.Label), ct).ConfigureAwait(false);
         await Send.OkAsync(record.ToResponse(), ct).ConfigureAwait(false);
     }
 }

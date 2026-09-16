@@ -4,14 +4,13 @@ using FastEndpoints;
 using XE_Local_AI_Engine.Client.Endpoints.Common;
 using XE_Local_AI_Engine.Client.Endpoints.Training.V1;
 using XE_Local_AI_Engine.Client.Endpoints.Training.V1.Mappers;
-using XE_Local_AI_Engine.Client.Persistence.Stores;
 using XE_Local_AI_Engine.Client.Services.Auth;
 using XE_Local_AI_Engine.Client.Services.Training.Datasets;
 
-public sealed class ListToolMocksEndpoint(ITrainingDatasetStore store)
+public sealed class ListToolMocksEndpoint(IToolMockService mocks)
     : EndpointWithoutRequest<ListToolMocksResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
 
     public override void Configure()
     {
@@ -21,7 +20,7 @@ public sealed class ListToolMocksEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(CancellationToken ct)
     {
-        var records = await _store.ListMocksAsync(ct).ConfigureAwait(false);
+        var records = await _mocks.ListAsync(ct).ConfigureAwait(false);
         await Send.OkAsync(new ListToolMocksResponse
         {
             Items = records.Select(record => record.ToResponse()).ToArray()
@@ -29,10 +28,10 @@ public sealed class ListToolMocksEndpoint(ITrainingDatasetStore store)
     }
 }
 
-public sealed class GetToolMockEndpoint(ITrainingDatasetStore store)
+public sealed class GetToolMockEndpoint(IToolMockService mocks)
     : Endpoint<GetToolMockRequest, ToolMockResponse>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
 
     public override void Configure()
     {
@@ -42,7 +41,7 @@ public sealed class GetToolMockEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(GetToolMockRequest req, CancellationToken ct)
     {
-        var record = await _store.GetMockAsync(req.MockId, ct).ConfigureAwait(false);
+        var record = await _mocks.GetAsync(req.MockId, ct).ConfigureAwait(false);
         if (record is null)
         {
             await Send.NotFoundAsync(ct).ConfigureAwait(false);
@@ -94,10 +93,10 @@ public sealed class UpdateToolMockEndpoint(IToolMockService mocks)
     }
 }
 
-public sealed class DeleteToolMockEndpoint(ITrainingDatasetStore store)
+public sealed class DeleteToolMockEndpoint(IToolMockService mocks)
     : Endpoint<DeleteToolMockRequest>
 {
-    private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
+    private readonly IToolMockService _mocks = mocks ?? throw new ArgumentNullException(nameof(mocks));
 
     public override void Configure()
     {
@@ -107,7 +106,7 @@ public sealed class DeleteToolMockEndpoint(ITrainingDatasetStore store)
 
     public override async Task HandleAsync(DeleteToolMockRequest req, CancellationToken ct)
     {
-        await _store.DeleteMockAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
+        await _mocks.DeleteAsync(req.MockId, req.ExpectedVersion, ct).ConfigureAwait(false);
         await Send.NoContentAsync(ct).ConfigureAwait(false);
     }
 }

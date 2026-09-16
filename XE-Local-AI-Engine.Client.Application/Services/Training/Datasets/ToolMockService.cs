@@ -7,6 +7,15 @@ using XE_Local_AI_Engine.Client.Services.Chat;
 
 public interface IToolMockService
 {
+    /// <summary>Every tool mock the node holds.</summary>
+    Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>The tool mock, or <c>null</c> when no mock carries that id.</summary>
+    Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default);
+
+    /// <summary>Deletes the tool mock.</summary>
+    Task DeleteAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default);
+
     Task<ToolMockRecord> CreateAsync(ToolMockDraft draft, CancellationToken cancellationToken = default);
 
     Task<ToolMockRecord> UpdateAsync(Guid mockId, long expectedVersion, ToolMockDraft draft, CancellationToken cancellationToken = default);
@@ -24,6 +33,15 @@ public sealed class ToolMockService(
     private readonly ILocalToolOfferProvider _offerProvider = offerProvider ?? throw new ArgumentNullException(nameof(offerProvider));
     private readonly ITrainingDatasetStore _store = store ?? throw new ArgumentNullException(nameof(store));
     private readonly IToolMockStaticVerifier _verifier = verifier ?? throw new ArgumentNullException(nameof(verifier));
+
+    public Task<IReadOnlyList<ToolMockRecord>> ListAsync(CancellationToken cancellationToken = default) =>
+        _store.ListMocksAsync(cancellationToken);
+
+    public Task<ToolMockRecord?> GetAsync(Guid mockId, CancellationToken cancellationToken = default) =>
+        _store.GetMockAsync(mockId, cancellationToken);
+
+    public Task DeleteAsync(Guid mockId, long expectedVersion, CancellationToken cancellationToken = default) =>
+        _store.DeleteMockAsync(mockId, expectedVersion, cancellationToken);
 
     public Task<ToolMockRecord> CreateAsync(ToolMockDraft draft, CancellationToken cancellationToken = default) =>
         _store.CreateMockAsync(ToInput(draft), cancellationToken);

@@ -167,6 +167,36 @@ public sealed class TrainingEndpointTests
     }
 
     [Test]
+    public async Task GetDataset_RoutesThroughTheDatasetService_AndReturnsTheRecord()
+    {
+        await using var context = new Context();
+        _ = context.Store.GetDatasetAsync(DatasetId, Arg.Any<CancellationToken>()).Returns(Dataset());
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/datasets/{DatasetId}");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "\"status\":\"Generating\"", StringComparison.Ordinal);
+    }
+
+    [Test]
+    public async Task GetMock_RoutesThroughTheMockService_AndReturnsTheRecord()
+    {
+        await using var context = new Context();
+        _ = context.Mocks.GetAsync(MockId, Arg.Any<CancellationToken>()).Returns(Mock(ToolMockVerificationState.Verified));
+        using var client = context.Factory.CreateClient();
+        using var request = Authorized(context.Factory, HttpMethod.Get, $"{Api}/mocks/{MockId}");
+
+        using var response = await client.SendAsync(request).ConfigureAwait(false);
+        var body = await response.Content.ReadAsStringAsync().ConfigureAwait(false);
+
+        AssertEx.Equal(HttpStatusCode.OK, response.StatusCode);
+        AssertEx.Contains(body, "read_file", StringComparison.Ordinal);
+    }
+
+    [Test]
     public async Task VerifyMock_ReturnsTheRecordedVerdict()
     {
         await using var context = new Context();
