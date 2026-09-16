@@ -165,6 +165,11 @@ published.
   contributor happens to have installed.
 - Documentation, scripts and test fixtures describe the maintainer's environment generically — what was measured,
   never the machine it was measured on.
+- Authorization is deny-by-default. A FastEndpoints global configurator applies the operator policy to every
+  endpoint whether or not the endpoint asked for it, and an ASP.NET Core fallback policy covers every other routed
+  surface: the hand-mapped APIs, the hubs, the health probes and the SPA shell, which now opt out explicitly where
+  they have to stay reachable without a token. A request to a path the node does not serve is answered **401** for an
+  unauthenticated caller instead of 404 or 405, so probing can no longer map the surface.
 - A UI unification and responsive pass across the app, followed by a React cleanup: dead dependencies dropped, the
   largest pages decomposed behind unchanged export and prop contracts, and shared primitives — an inline error
   alert, a label/value row, shared form fields — adopted across the tree.
@@ -233,6 +238,10 @@ published.
   erased code after a `//` inside a string literal, and every scan-shaped guard now asserts a minimum scanned count
   before its rule runs, so an empty scan can no longer report green. `LayerDependencyTests` additionally pins the
   test and support projects' `ProjectReference` sets, cross-checked against the solution's own `/Tests` membership.
+- `EndpointAuthorizationPolicyTests` locks the deny-by-default wiring in from each route's effective metadata: every
+  endpoint, every hub route and every hand-mapped route is checked against the policy it is meant to carry. A
+  permanent canary endpoint whose only protection is the global configurator makes deleting that one line fail the
+  test by name; it is excluded from the OpenAPI document, so it never reaches the generated client.
 - `CA2254` (varying log message template) and `CA2200` (rethrow that destroys the stack trace) are stated explicitly
   in `.editorconfig`. Both are already error-equivalent under `TreatWarningsAsErrors`; the lines exist so an SDK
   default this repository does not control cannot quietly relax either one.

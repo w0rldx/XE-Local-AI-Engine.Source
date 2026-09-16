@@ -8,6 +8,7 @@ public static class LocalApiRoutes
     {
         public const string ValidationProblemProbe = "diagnostics/validation-probe";
         public const string UnhandledExceptionProbe = "diagnostics/exception-probe";
+        public const string ConfiguratorCanaryProbe = "diagnostics/configurator-canary-probe";
     }
 
     public static class Auth

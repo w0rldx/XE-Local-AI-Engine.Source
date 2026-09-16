@@ -91,7 +91,9 @@ public sealed class RouteCoexistenceTests
 
         using var response = await client.GetAsync("/assets/missing-route-coexistence-file.js").ConfigureAwait(false);
 
-        AssertEx.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        // 401, not 404: the SPA fallback's {*path:nonfile} constraint excludes a dotted path, so routing matches no
+        // endpoint at all — and the FallbackPolicy answers exactly that case, so an unmatched path fails closed.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
         AssertEx.False(string.Equals(response.Content.Headers.ContentType?.MediaType,
                 "text/html",
                 StringComparison.OrdinalIgnoreCase),

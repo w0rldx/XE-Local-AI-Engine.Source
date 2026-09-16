@@ -155,6 +155,30 @@ impersonate another: an operator JWT does not open the MCP endpoint or the proxy
 neither key opens the key-management endpoints (or anything else). Both directions are asserted for
 MCP in `XE-Local-AI-Engine.Tests/Mcp/McpServerInboundAuthTests.cs`.
 
+Authorization is **deny-by-default, in two layers**. At the FastEndpoints layer a global configurator applies
+the `NodeOperator` policy to every discovered endpoint whether or not that endpoint's own `Configure()` asked
+for it, so a forgotten `Policies()` call cannot ship an anonymous route; an endpoint that deliberately opted
+out with `AllowAnonymous()` still wins, and the four pre-authentication endpoints in `NodeAuthEndpoints`
+(`auth/status`, `auth/setup`, `auth/login`, `auth/refresh`) are the entire anonymous set. Behind it,
+`AuthorizationOptions.FallbackPolicy` requires JWT bearer and an authenticated user for every routed surface
+carrying no authorization metadata of its own, and it is evaluated even when routing matches no endpoint at
+all, so a path this node does not serve answers an anonymous caller **401** rather than disclosing a 404 or
+a 405. The surfaces that must stay reachable without a token say so explicitly: both health probes and the SPA
+fallback that serves the login page. The dev-only OpenAPI document cannot, because it is raw middleware with no
+endpoint to attach `AllowAnonymous` to, and is instead served ahead of `UseAuthentication()`.
+
+`EndpointAuthorizationPolicyTests` locks both layers in, reading the effective route metadata rather than
+FastEndpoints' own bookkeeping: every endpoint resolves to `NodeOperator` or appears in the pre-authentication
+allowlist, every SignalR hub route requires `NodeOperator`, and the hand-mapped minimal APIs and the inbound
+MCP route carry their named policies. Its teeth are a permanent canary endpoint,
+`GET diagnostics/configurator-canary-probe`, which calls neither `Policies()` nor `AllowAnonymous()` and is
+therefore protected by the global configurator alone. Deleting that one line fails the test by name, while
+every endpoint carrying its own redundant `Policies()` call would notice nothing. The canary answers 204 to an
+operator and 401 to anyone else, and is excluded from the OpenAPI document. The residual is that
+`FallbackPolicy` asks only for a valid JWT, not the `Admin` role `NodeOperator` requires: it is defense in
+depth behind the first layer, not an equal substitute, which is why the canary rather than the fallback is
+what the guard watches.
+
 The MCP credential is a single 256-bit `xemcp_`-prefixed secret stored as a **one-way SHA-256 digest**
 in the node database. The plaintext is returned exactly once — in the response to the generate call —
 and is unrecoverable afterwards: `GET` returns only the prefix and timestamps, and the response type

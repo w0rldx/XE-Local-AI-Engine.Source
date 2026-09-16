@@ -139,6 +139,14 @@ picks the endpoints over the addresses whenever `KestrelServerOptions.ListenOpti
   configure — leaving the bridge as the node's only listener, with the SPA and `/api/local/v1` gone.
 - **Authority:** C1 commit 1; the plan specified `Listen` and it had to be deviated from.
 
+### `FallbackPolicy` challenges every routed endpoint without auth metadata, and every request that matches no endpoint
+
+**Rule:** setting `AuthorizationOptions.FallbackPolicy` makes authorization deny-by-default for far more than the endpoints you were thinking of. It applies to any **routed endpoint** carrying no `IAuthorizeData`/`IAllowAnonymous` metadata, and it is evaluated again when routing selects **no endpoint at all**, which is how an unmatched path stops answering 404/405 and starts answering 401. Where the `Map*` call sits in `Program.cs` is irrelevant. Only the attached metadata counts. A surface served by raw middleware (`app.UseSwaggerGen(...)`, `app.Use(...)`) registers no endpoint, so there is nothing for `.AllowAnonymous()` to attach to: the only fixes are moving it before `UseAuthentication()`, branching it out with `MapWhen` ahead of that point, or replacing it with a real `Map*` call that can carry `.AllowAnonymous()`. **Failure prevented:** a silent 401 on Aspire's `WithHttpHealthCheck` poll, on the login page the SPA fallback serves, and on the dev-only OpenAPI document. None of the three was named by any test beforehand, and each reads as an unrelated outage. **Authority:** S2 deny-by-default slice, 2026-09-16; two `Microsoft.AspNetCore.TestHost` spikes against FastEndpoints 8.3.0, then two gate reds (`RouteCoexistenceTests`, `ValidateExecutableEndpointTests`) that had asserted the old 404 and 405.
+
+### Development Mode is ON by default in the test host, so a Development-gated surface IS mapped there
+
+**Rule:** `Development:Enabled` defaults to **`true`** (both `Program.cs` and `ConfigureServices.cs` read it with `defaultValue: true`), so the default `TestServerWebAppFactory` maps `DevelopmentAttemptHub` and registers the Development services. A test that wants to prove such a surface is *absent* must build a factory with `EnableDevelopmentMode = false`; asserting absence against the shared factory just reds with your own message. **Failure prevented:** a structural test written to the inverted assumption fails on the very configuration it exists to protect, and the obvious "fix" is to delete the assertion. **Authority:** S2 deny-by-default slice, 2026-09-16; the slice plan carried the assumption backwards and the shipped test had to invert it.
+
 ### `ExternalAppEntityConfigurationTests` pins the external-app instance column list
 
 `InstanceTable_MapsEveryColumnToItsSnakeCaseName` holds every column of `external_app_instances` as a literal array

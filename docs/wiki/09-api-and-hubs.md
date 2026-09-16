@@ -62,7 +62,7 @@ One row per nested class in `LocalApiRoutes.cs`, in file order. The "Owner page"
 
 | Group (route base) | Routes | Owner page |
 |---|---|---|
-| **ApiFoundation** | `diagnostics/validation-probe`, `diagnostics/exception-probe` | (transport diagnostics) |
+| **ApiFoundation** | `diagnostics/validation-probe`, `diagnostics/exception-probe`, `diagnostics/configurator-canary-probe` (excluded from the OpenAPI document, so it has no generated client function; see §4) | (transport diagnostics) |
 | **Auth** (`auth/*`) | `auth/status`, `auth/setup`, `auth/login`, `auth/refresh`, `auth/logout`, `auth/change-password`, `auth/me` | [Security & Privacy](12-security-and-privacy.md) |
 | **LocalChat** (`chat/*`) | `chat/conversations` (+ `{id}` rename/pin/archive/compact/branch/memory-excluded/selected-path), `chat/.../messages/{id}/revisions\|feedback`, `chat/conversations/{id}/uploads(/{fileId})` (file attachments — POST multipart upload / GET list / DELETE), `chat/cancel`, `chat/approvals/resolve`, `chat/questions/resolve` | [Chat](05-chat.md) |
 | **NodeBinding** (`binding/*`) | `binding/start`, `binding/poll`, `binding/cancel` | [Hosting & Deployment](11-hosting-and-deployment.md) |
@@ -272,7 +272,7 @@ This mirrors the central platform's handler-chain pattern: specific handlers fir
 
 ### Health checks
 
-Two endpoints, mapped **before** auth so an orchestrator/probe can reach them unauthenticated (see `MapHealthChecks` in `Program.cs`):
+Two endpoints, each mapped with an explicit `.AllowAnonymous()` so an orchestrator or probe can reach them without a token (see `MapHealthChecks` in `Program.cs`). That call is load-bearing rather than decorative, and it is the *only* thing making these anonymous: what decides whether a request is challenged is the authorization metadata attached to the selected endpoint, never where the `Map*` call sits in the file. Until the deny-by-default pass these two were reachable purely by omission, because no `FallbackPolicy` existed; under the fallback policy an endpoint with no auth metadata is challenged, and Aspire's `WithHttpHealthCheck` poll carries no token. See "Security middleware & auth ordering" below.
 
 | Endpoint | Behavior |
 |---|---|
@@ -284,6 +284,8 @@ Two endpoints, mapped **before** auth so an orchestrator/probe can reach them un
 - `LocalApiSecurityMiddleware` (`Endpoints/Common/LocalApiSecurityMiddleware.cs`) runs before routing/auth. For any path under `/api/local/v1` it returns **403** unless the transport **peer** is loopback (`context.Connection.RemoteIpAddress` — the socket peer, so a routable caller is rejected even if it forges a loopback `Host`/`Origin`; a null peer, e.g. the in-process test host or an in-process health probe, is treated as loopback-equivalent) *and* the `Host` is in `{localhost, 127.0.0.1, ::1}` *and* the `Origin` (when present) is same-scheme/same-host/same-port and loopback. This enforces loopback-only access at the edge. See [Security & Privacy](12-security-and-privacy.md) §3.1.
 - **Startup bind guard.** `LoopbackBindGuard` (`Hosting/LoopbackBindGuard.cs`, wired via `LoopbackBindGuard.Guard(app)`) is defense-in-depth behind the request-time middleware: after `ApplicationStarted` — so an OS-assigned port and wildcard expansion are already resolved — it inspects the addresses Kestrel *actually* bound and, if any is non-loopback (wildcards `*`/`+`/`0.0.0.0`/`::` count), logs a **critical** line naming the offending address and shuts the app down with exit code 1. The opt-out `Security:AllowNonLoopbackBind=true` defaults to `false` and no supported launch sets it. See [Security & Privacy](12-security-and-privacy.md) §3.4.
 - Then `UseRouting → UseRateLimiter → UseAuthentication → UseAuthorization` in `Program.cs`. Authn is JWT bearer; the `Operator` authorization policy gates both endpoints and hubs. Tests in `XE-Local-AI-Engine.Tests/ApiFoundation/LocalApiSecurityTests.cs` assert: missing/invalid token → 401, unsafe host → 400, unsafe origin → 403, valid token + same-origin → allowed.
+- **Deny by default, in two layers.** The FastEndpoints global configurator (`config.Endpoints.Configurator` in `Program.cs`) forces `Policies(NodeAuthorizationPolicies.Operator)` onto every discovered endpoint, so an endpoint whose own `Configure()` forgets the call still ships protected. An endpoint that deliberately opted out with `AllowAnonymous()` still wins, because FastEndpoints emits no conflicting authorize metadata for a verb its anonymous verbs cover; the four pre-authentication endpoints in `NodeAuthEndpoints` are the whole anonymous set. Behind that, `AuthorizationOptions.FallbackPolicy` (`ConfigureServices.cs`) requires JWT bearer plus an authenticated user for every routed surface carrying no auth metadata of its own: the hand-mapped minimal APIs, the hubs, the health probes, the SPA shell. It is deliberately weaker than `Operator`, asking for a valid token rather than the Admin role, so it is the second layer and not a replacement for the first. `EndpointAuthorizationPolicyTests` is what proves the first layer stays wired; see [Testing & Validation](13-testing-and-validation.md).
+- **A path the node does not serve now answers 401, not 404.** The fallback policy is also evaluated when routing selects no endpoint at all, so an anonymous request to a missing file-like asset, or to a route registered only in desktop mode, fails closed instead of reporting 404 or 405. That is intended: an unauthenticated caller learns nothing about which paths and verbs exist. A caller holding an operator token still gets the ordinary 404 or 405.
 - Request logging redacts the access-token query param via `AccessTokenQueryRedactor` before anything is written (the `UseSerilogRequestLogging` request-path projection in `Program.cs`).
 
 Full rationale: [Security & Privacy](12-security-and-privacy.md).
@@ -292,9 +294,15 @@ Full rationale: [Security & Privacy](12-security-and-privacy.md).
 
 Not mapped in Production: OpenAPI JSON at `/openapi/local/v1/{documentName}.json` and the Scalar API reference at `/scalar`.
 
+`UseSwaggerGen`, which serves the OpenAPI JSON, runs **before** `app.UseAuthentication()`. It is raw middleware rather than an endpoint-convention builder, so it registers no endpoint for `.AllowAnonymous()` to attach to, and the fallback policy would otherwise challenge it. Scalar stays where it is: `MapScalarApiReference` is a `Map*` call already chained with `.AllowAnonymous()`, and a `Map*` call's position in the file never decides which middleware wraps it.
+
+The diagnostics canary probe (`diagnostics/configurator-canary-probe`) is registered like any other endpoint but excluded from the OpenAPI description, so it never reaches the generated client. It exists only so the global configurator's deletion fails a named test; it answers 204 to an operator and 401 to anyone else.
+
 ### Static SPA fallback
 
 `UseStaticFiles()` + `MapFallbackToFile("index.html")` serve the built React app from the same origin as the API (the "C0re static-files pattern"). See [Hosting & Deployment](11-hosting-and-deployment.md).
+
+`MapFallbackToFile` carries an explicit `.AllowAnonymous()`: the login page has to load before anyone can hold a token, and the fallback policy would otherwise challenge the SPA shell. Static assets are served by the `UseStaticFiles` middleware ahead of routing and are unaffected either way. A file-like path that no asset matches is a different story. The fallback route's `{*path:nonfile}` constraint keeps dotted paths out of the SPA shell, so such a request matches nothing and an anonymous caller now sees 401 rather than 404.
 
 ---
 

@@ -533,10 +533,12 @@ namespace XE_Local_AI_Engine.Client
             app.UseAntiforgery();
 
             app.UseStaticFiles();
+            // AllowAnonymous is load-bearing, not decorative: under the FallbackPolicy an endpoint with no auth
+            // metadata is challenged, and Aspire's WithHttpHealthCheck poll carries no token.
             app.MapHealthChecks("/health/live", new HealthCheckOptions
             {
                 Predicate = _ => false // don't run any checks; just return 200 if the app can serve requests
-            });
+            }).AllowAnonymous();
 
             app.MapHealthChecks("/health/ready", new HealthCheckOptions
             {
@@ -553,7 +555,7 @@ namespace XE_Local_AI_Engine.Client
                     [HealthStatus.Unhealthy] = StatusCodes.Status503ServiceUnavailable
                 },
                 ResponseWriter = ReadinessHealthResponse.WriteAsync
-            });
+            }).AllowAnonymous();
 
             if (!isDevelopmentModeEnabled)
             {
@@ -689,12 +691,38 @@ namespace XE_Local_AI_Engine.Client
                 app.UseRateLimiter();
             }
 
+            // Ahead of authentication on purpose. UseSwaggerGen is raw middleware, not an endpoint-convention
+            // builder, so it registers no endpoint for .AllowAnonymous() to attach to — and the FallbackPolicy is
+            // evaluated even when routing selects no endpoint, which would 401 the dev-only OpenAPI document if it
+            // ran after UseAuthorization(). Moving it is the only fix available to a middleware-served surface.
+            // MapScalarApiReference below stays where it is: it is an endpoint-convention call already chained with
+            // .AllowAnonymous(), and a Map* call's textual position never decides which middleware wraps it.
+            // Outside Production the OpenAPI document is deliberately served unauthenticated — the early position is
+            // how that is achieved, not an accident of ordering; in Production it is not served at all.
+            if (!app.Environment.IsProduction())
+            {
+                app.UseSwaggerGen(static options =>
+                {
+                    options.Path = "/openapi/local/v1/{documentName}.json";
+                });
+            }
+
             app.UseAuthentication();
             app.UseAuthorization();
 
             app.UseFastEndpoints(config =>
             {
                 config.Endpoints.RoutePrefix = LocalApiRoutes.Prefix;
+
+                // Deny by default: every discovered endpoint gets the Operator policy whether or not its own
+                // Configure() asked for it, so a forgotten Policies() call can never ship an anonymous route.
+                // Applied unconditionally rather than "only when AnonymousVerbs is empty" on purpose: the order
+                // between this Configurator and an endpoint's own Configure() is unspecified, and the unconditional
+                // call needs no such guarantee — FastEndpoints suppresses AuthorizeAttribute metadata entirely for
+                // an endpoint whose AnonymousVerbs cover the verb, so the four AllowAnonymous() endpoints in
+                // NodeAuthEndpoints stay anonymous regardless. ConfiguratorCanaryProbeEndpoint exists solely to
+                // make the deletion of this line fail EndpointAuthorizationPolicyTests.
+                config.Endpoints.Configurator = ep => ep.Policies(NodeAuthorizationPolicies.Operator);
 
                 // Desktop-only app self-update surface: off the desktop flag these endpoints are excluded from
                 // registration entirely, so the routes are absent (a request 404s) rather than throwing a 500 for a missing
@@ -854,11 +882,6 @@ namespace XE_Local_AI_Engine.Client
 
             if (!app.Environment.IsProduction())
             {
-                app.UseSwaggerGen(static options =>
-                {
-                    options.Path = "/openapi/local/v1/{documentName}.json";
-                });
-
                 app.MapScalarApiReference("/scalar", static settings =>
                 {
                     settings.OpenApiRoutePattern = "/openapi/local/{documentName}/{documentName}.json";
@@ -869,7 +892,10 @@ namespace XE_Local_AI_Engine.Client
                 }).AllowAnonymous();
             }
 
-            app.MapFallbackToFile("index.html");
+            // The login page has to load before anyone can hold a token, so the SPA shell opts out of the
+            // FallbackPolicy explicitly. Static assets are served by UseStaticFiles middleware ahead of routing and
+            // are unaffected either way.
+            app.MapFallbackToFile("index.html").AllowAnonymous();
 
             // Desktop mode only: install console-close → graceful-stop triggers and the on-started browser launch. Off-flag this
             // is never reached, so no signal handler / P/Invoke is installed. The lifecycle is rooted for the

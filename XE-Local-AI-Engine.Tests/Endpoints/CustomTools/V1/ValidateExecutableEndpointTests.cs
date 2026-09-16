@@ -13,6 +13,11 @@ using XE_Local_AI_Engine.Tests.Testing;
 ///         still matches the <c>custom-tools/{customToolId}</c> template, which serves GET/PUT/DELETE only. Asserting
 ///         405 pins the real routing outcome; a 200 (or any success) would mean the desktop gate had come undone.
 ///     </para>
+///     <para>
+///         That 405 is what an authenticated operator sees. An anonymous caller sees 401 instead: selecting no
+///         endpoint for the verb is precisely the case the authorization <c>FallbackPolicy</c> answers, and it runs
+///         before routing produces its 405. Either status proves the same thing here — the POST is not registered.
+///     </para>
 /// </summary>
 public sealed class ValidateExecutableEndpointTests
 {
@@ -51,8 +56,10 @@ public sealed class ValidateExecutableEndpointTests
                 path = "/usr/bin/list-things"
             }).ConfigureAwait(false);
 
-        // The desktop filter runs at registration, so routing rejects the unregistered POST before authentication
-        // could ever answer 401.
-        AssertEx.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        // The desktop filter still leaves the POST unregistered, but 405 is no longer what an ANONYMOUS caller
+        // sees: routing selects no endpoint for this verb, and the FallbackPolicy answers that case with a
+        // challenge before routing's 405 is ever produced. The operator-token sibling above still gets the 405,
+        // which is what keeps this pair proving the desktop gate rather than only the authorization one.
+        AssertEx.Equal(HttpStatusCode.Unauthorized, response.StatusCode);
     }
 }

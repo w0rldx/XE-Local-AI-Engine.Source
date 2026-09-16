@@ -8,6 +8,7 @@ using FastEndpoints;
 using FastEndpoints.Swagger;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.DataProtection.KeyManagement;
 using Microsoft.AspNetCore.Identity;
@@ -414,6 +415,18 @@ public static class ConfigureServices
                });
         builder.Services.AddAuthorization(options =>
         {
+            // Deny by default at the framework layer, behind the FastEndpoints Configurator: this catches every
+            // routed surface the Configurator cannot reach — the hand-mapped minimal APIs, the hubs, the SPA
+            // fallback, the health probes — and it also answers a request that routing matched to NO endpoint at
+            // all, so an unrecognised path fails closed instead of leaking a 404 body. It is deliberately weaker
+            // than Operator (a valid JWT, no Admin role): it is the second layer, not a replacement for the first.
+            // Anything that must stay reachable without a token needs an explicit .AllowAnonymous() on its Map*
+            // call; a surface served by raw middleware has no endpoint to attach that to and must instead run
+            // before UseAuthentication() (see the UseSwaggerGen placement in Program.cs).
+            options.FallbackPolicy = new AuthorizationPolicyBuilder(JwtBearerDefaults.AuthenticationScheme)
+                                     .RequireAuthenticatedUser()
+                                     .Build();
+
             options.AddPolicy(NodeAuthorizationPolicies.Operator,
                 policy => policy.AddAuthenticationSchemes(JwtBearerDefaults.AuthenticationScheme)
                                 .RequireAuthenticatedUser()
