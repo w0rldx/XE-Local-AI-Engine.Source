@@ -41,7 +41,7 @@
     <PackageVersion Include="FastEndpoints" Version="8.3.0" />
     <PackageVersion Include="FastEndpoints.Swagger" Version="8.3.0" />
     <PackageVersion Include="BouncyCastle.Cryptography" Version="2.7.0" />
-    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.257" />
+    <PackageVersion Include="Meziantou.Analyzer" Version="3.0.259" />
     <!-- Architecture conformance tests (layer-dependency direction). Test-project only. -->
     <PackageVersion Include="NetArchTest.Rules" Version="1.3.2" />
     <!-- Architecture conformance tests (intra-project file/namespace placement). Test-project only, Apache-2.0.
@@ -51,18 +51,18 @@
     <PackageVersion Include="TngTech.ArchUnitNET" Version="0.13.4" />
     <!-- Newest intended prerelease; banned-API hard wall (RS0030) over BannedSymbols.txt. -->
     <PackageVersion Include="Microsoft.CodeAnalysis.BannedApiAnalyzers" Version="5.6.0" />
-    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="10.0.12" />
     <PackageVersion Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.Mvc.Testing" Version="10.0.11" />
     <PackageVersion Include="Microsoft.AspNetCore.SignalR.Client" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.AspNetCore.TestHost" Version="10.0.12" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Sqlite" Version="10.0.11" />
     <PackageVersion Include="Microsoft.EntityFrameworkCore.Tools" Version="10.0.11" />
     <PackageVersion Include="Microsoft.IdentityModel.JsonWebTokens" Version="8.22.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.10.0" />
-    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.3" />
-    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.3.3" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.CodeCoverage" Version="18.11.2" />
+    <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.4.1" />
+    <PackageVersion Include="Microsoft.Testing.Platform" Version="2.4.1" />
     <PackageVersion Include="Microsoft.Playwright" Version="1.62.0" />
     <PackageVersion Include="OllamaSharp" Version="5.4.30" />
     <!-- Coupled to the Microsoft.Playwright pin above: TUnit.Playwright's nuspec sets the Microsoft.Playwright
@@ -83,18 +83,18 @@
          which requires Configuration.Abstractions >= 10.0.10, and central transitive pinning turns the mismatch into
          an NU1109 downgrade error across five projects. Same servicing band as the DependencyInjection.Abstractions
          and Logging.Abstractions pins directly below. -->
-    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.11" />
+    <PackageVersion Include="Microsoft.Extensions.Configuration.Abstractions" Version="10.0.12" />
     <PackageVersion Include="Microsoft.Extensions.DependencyInjection" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.11" />
-    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.DependencyInjection.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Logging.Abstractions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Options.DataAnnotations" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Options.ConfigurationExtensions" Version="10.0.12" />
+    <PackageVersion Include="Microsoft.Extensions.Http.Resilience" Version="10.10.0" />
     <!-- Compatibility cohort: upgrade the stable MAF trio together after verifying their matching release set. -->
     <PackageVersion Include="Microsoft.Agents.AI" Version="1.20.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Abstractions" Version="1.20.0" />
     <PackageVersion Include="Microsoft.Agents.AI.Workflows" Version="1.20.0" />
-    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.9.0" />
+    <PackageVersion Include="Microsoft.Extensions.ServiceDiscovery" Version="10.10.0" />
     <!-- ModelContextProtocol.AspNetCore takes an exact dependency on the matching ModelContextProtocol
          build, so these two only ever move together; a split bump fails restore with NU1107/NU1608. -->
     <PackageVersion Include="ModelContextProtocol" Version="2.2.0" />
@@ -147,7 +147,7 @@
     <PackageVersion Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.50.3" />
     <PackageVersion Include="System.Numerics.Tensors" Version="10.0.11" />
     <PackageVersion Include="System.Security.Cryptography.ProtectedData" Version="10.0.11" />
-    <PackageVersion Include="TUnit" Version="1.65.68" />
+    <PackageVersion Include="TUnit" Version="1.68.4" />
     <PackageVersion Include="Velopack" Version="1.2.0" />
     <PackageVersion Include="YamlDotNet" Version="18.0.0" />
   </ItemGroup>
