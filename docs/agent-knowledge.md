@@ -2249,6 +2249,27 @@ An uninitialised i18next answers `undefined`, which is exactly the argument mean
 
 Fixing it at a call site with a z-index number leaves the next stacked dialog to rediscover the trap, and two call sites free to pick different numbers.
 
+### A Mantine scroll-area default has to be declared per component key, and a `Modal` only has one if it was given one
+
+**Rule:** `ScrollArea` and `ScrollArea.Autosize` read SEPARATE theme keys — `ScrollArea` and `ScrollAreaAutosize` — so
+a `components` default written for one leaves the other on Mantine's own defaults. `Table.ScrollContainer` is a third
+key again (`TableScrollContainer`, what the component passes to `useProps`, not the dotted call-site name). A `Modal`
+scrolls its body with a plain overflow box unless the call site passes `scrollAreaComponent`, which is what
+`DialogShell` does — only then does a ScrollArea default reach a dialog at all. **Prevents:** a theme-level scrollbar
+fix that reads as app-wide and silently skips every autosize call site and every dialog body, which is exactly the
+surface where an invisible bar hides content. **Authority:** the `components` block in `ThemeProvider.tsx` and the
+per-key cases in `ThemeProvider.test.tsx`; `DialogShell`'s `scrollAreaComponent`.
+
+### Never put `role="button"` on a container that holds other interactive controls
+
+**Rule:** a `<button>`, or anything carrying `role="button"`, makes its descendants **presentational**: a nested menu
+trigger, delete action or link inside it can drop out of the accessibility tree, so a screen reader announces one
+button and never offers the controls inside it (axe reports it as `nested-interactive`). A list row that has its own controls therefore keeps its `onClick` as a pointer convenience and promotes
+the row's TITLE to the real button (`ConversationListItem.tsx`, `TranscriptionSessionList.tsx`); a row with nothing
+interactive inside is free to become `component="button"` outright (`GraphWorkflowRunList.tsx`). **Prevents:** a
+clickable card that reads as one nameless button and swallows the actions printed on it — the row looks complete to a
+sighted mouse user and is a dead end to everyone else. **Authority:** those three components and their tests.
+
 ### A workflow hub's `kind` is LOWERCASE on the wire and is asserted literally on both sides
 
 **Rule:** `graphWorkflowChanged` carries `kind` as one of the literals `run`, `node`, `gate`, written out by hand in `GraphWorkflowEventPublisher.ToWireKind` rather than derived from the enum name, and matched against the same literals in `useGraphWorkflowRunHub`. **Prevents:** a casing slip that silently stops every query invalidation — the client's `switch` matches no arm, nothing refetches, and there is no error anywhere. **Authority:** `GraphWorkflowEventPublisher.ToWireKind`, the `[Arguments(GraphWorkflowChangeKind.Run, "run")]` cases in `GraphWorkflowEventPublisherTests`, and the literal array in `useGraphWorkflowRunHub.test.tsx`. Same trap as `DevWorkflowEventPublisher`.

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act, cleanup, fireEvent, screen, within } from "@testing-library/react";
+import { act, cleanup, fireEvent, screen } from "@testing-library/react";
 import { createRef } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -264,10 +264,16 @@ describe("CustomToolForm narrow-width row layout", () => {
 
 	// One case for the whole folder of row editors: their placeholders are example values ("city", "api.example.com",
 	// "--city={city}"), so every box in a repeated row reached a screen reader as an unnamed text field.
-	it("names every box in the parameter, host and header row editors", () => {
+	// Every row of a list renders the same boxes, so a name shared across rows leaves a screen-reader user hearing
+	// "Value, edit text" twice with nothing telling the rows apart. Each list therefore carries two rows here: the
+	// assertion is worthless unless row 1 and row 2 answer to different names.
+	it("numbers every box in the parameter, host and header row editors", () => {
 		renderForm({
 			mode: "Parameterized",
-			parameters: [{ name: "city", type: "string", description: "", required: true }],
+			parameters: [
+				{ name: "city", type: "string", description: "", required: true },
+				{ name: "days", type: "number", description: "", required: false },
+			],
 			http: {
 				method: "GET",
 				urlTemplate: "https://{host}/forecast",
@@ -276,43 +282,56 @@ describe("CustomToolForm narrow-width row layout", () => {
 					{ name: "X-Api-Key", value: "", isSecret: true },
 				],
 				bodyTemplate: "",
-				allowedHosts: ["api.example.com"],
+				allowedHosts: ["api.example.com", "backup.example.com"],
 			},
 		});
 
-		const parameterRow = within(screen.getByTestId("custom-tool-form-parameter-row-0"));
-		expect(parameterRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
-		expect(parameterRow.getByRole("textbox", { name: "description" })).toBeTruthy();
-		expect(parameterRow.getByLabelText("Parameter type")).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Parameter 1 name" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Parameter 2 name" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Parameter 1 description" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Parameter 2 description" })).toBeTruthy();
+		// By role, not by label: Mantine mirrors a Select's aria-label onto its options listbox as well as its input.
+		expect(screen.getByRole("combobox", { name: "Parameter 1 type" })).toBeTruthy();
+		expect(screen.getByRole("combobox", { name: "Parameter 2 type" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Remove parameter 1" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Remove parameter 2" })).toBeTruthy();
 
-		expect(
-			within(screen.getByTestId("custom-tool-form-http-hosts")).getByRole("textbox", { name: "Allowed hosts" }),
-		).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Allowed host 1" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Allowed host 2" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Remove allowed host 2" })).toBeTruthy();
 
-		const headerRow = within(screen.getByTestId("custom-tool-form-http-headers-row-0"));
-		expect(headerRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
-		expect(headerRow.getByRole("textbox", { name: "Value" })).toBeTruthy();
-		// A secret row swaps in the shared stored-secret box, which has to carry the same name.
-		expect(within(screen.getByTestId("custom-tool-form-http-headers-row-1")).getByLabelText("Value")).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Row 1 name" })).toBe(screen.getByTestId("custom-tool-form-http-headers-name-0"));
+		expect(screen.getByRole("textbox", { name: "Row 1 value" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Row 2 name" })).toBeTruthy();
+		// A secret row swaps in the shared stored-secret box, which has to carry the same numbered name.
+		expect(screen.getByLabelText("Row 2 value")).toBe(screen.getByTestId("custom-tool-form-http-headers-value-1"));
+		expect(screen.getByRole("button", { name: "Remove row 2" })).toBeTruthy();
 	});
 
-	it("names every box in the command argument and environment row editors", () => {
+	it("numbers every box in the command argument and environment row editors", () => {
 		renderForm({
 			kind: "Command",
 			command: {
 				executable: "/opt/tool",
-				argsTemplate: ["--city={city}"],
+				argsTemplate: ["--city={city}", "--days={days}"],
 				workingDirectory: "",
 				timeoutSeconds: 0,
-				env: [{ name: "TOKEN", value: "", isSecret: false }],
+				env: [
+					{ name: "TOKEN", value: "", isSecret: false },
+					{ name: "REGION", value: "", isSecret: false },
+				],
 			},
 		});
 
-		expect(within(screen.getByTestId("custom-tool-form-command")).getByRole("textbox", { name: "Arguments" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Argument 1" })).toBe(screen.getByTestId("custom-tool-form-command-arg-0"));
+		expect(screen.getByRole("textbox", { name: "Argument 2" })).toBe(screen.getByTestId("custom-tool-form-command-arg-1"));
+		expect(screen.getByRole("button", { name: "Remove argument 2" })).toBeTruthy();
 
-		const envRow = within(screen.getByTestId("custom-tool-form-command-env-row-0"));
-		expect(envRow.getByRole("textbox", { name: "Name" })).toBeTruthy();
-		expect(envRow.getByRole("textbox", { name: "Value" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Row 1 name" })).toBe(screen.getByTestId("custom-tool-form-command-env-name-0"));
+		expect(screen.getByRole("textbox", { name: "Row 2 name" })).toBe(screen.getByTestId("custom-tool-form-command-env-name-1"));
+		expect(screen.getByRole("textbox", { name: "Row 1 value" })).toBeTruthy();
+		expect(screen.getByRole("textbox", { name: "Row 2 value" })).toBeTruthy();
+		expect(screen.getByRole("button", { name: "Remove row 1" })).toBeTruthy();
 	});
 
 	it("lets the executable path and its Validate button wrap", () => {

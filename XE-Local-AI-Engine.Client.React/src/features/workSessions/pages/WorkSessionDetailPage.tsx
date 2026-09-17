@@ -1,4 +1,4 @@
-import { Anchor, Loader, Stack } from "@mantine/core";
+import { Anchor, Loader, Stack, VisuallyHidden } from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useCallback, useMemo, useState } from "react";
@@ -159,9 +159,15 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 		[conversationId, agentDefinitionId, live.resumeNonce, handleSendFollowUp, handlePause, status],
 	);
 
+	// Every state of this page carries exactly one `<h1>`. Once the session is loaded that is its title, rendered by
+	// `WorkSessionDetailLayout`; until then there is no name to show, so the navigation label stands in, visually
+	// hidden and first in the container so the full-height flex column is unaffected.
+	const fallbackHeading = <VisuallyHidden component="h1">{t("navigation.workSessions", "Work Sessions")}</VisuallyHidden>;
+
 	if (sessionQuery.isPending) {
 		return (
 			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
+				{fallbackHeading}
 				<Loader data-testid="work-session-detail-loading" />
 			</FullHeightPage>
 		);
@@ -170,6 +176,7 @@ export function WorkSessionDetailPage({ sessionId }: { sessionId: string }) {
 	if (sessionQuery.isError || !sessionQuery.data) {
 		return (
 			<FullHeightPage ref={paneContainerRef} data-testid="work-session-detail-page">
+				{fallbackHeading}
 				<InlineErrorAlert
 					message={apiErrorMessage(
 						sessionQuery.error,

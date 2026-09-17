@@ -57,7 +57,7 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 					menuItem: {
 						icon: <link.icon size={24} />,
 						label: t(link.translationKey),
-						onClick: link.to ? () => navigate({ to: link.to }) : undefined,
+						to: link.to,
 						// A group is highlighted when the active route lives under one of its children.
 						active: link.links.some((nestedLink) => matchesNavRoute(pathname, nestedLink.to)),
 					},
@@ -76,7 +76,10 @@ export function MobileNavigationBar({ drawerOpen, setDrawerOpen }: IMobileNaviga
 						icon: <link.icon size={24} />,
 						label: t(link.translationKey),
 						active: matchesNavRoute(pathname, link.to),
-						onClick: link.onClick ?? (link.to ? () => navigate({ to: link.to }) : undefined),
+						// `to` rather than a navigate() closure: the item renders as an anchor, so middle-click and
+						// "open in new tab" work. An `onClick` still wins, as it did when it ran instead of navigating.
+						to: link.to,
+						onClick: link.onClick,
 					},
 				});
 			}

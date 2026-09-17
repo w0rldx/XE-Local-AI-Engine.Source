@@ -179,6 +179,23 @@ describe("Chat scope seam", () => {
 		expect(screen.getByTestId("conversation-list")).toBeDefined();
 	});
 
+	// A screen-reader user navigates by heading; /chat showed none at all. It is visually hidden because the page has no
+	// title of its own, and it belongs to the unembedded frame only — an owner page already has its own h1.
+	it("gives /chat exactly one h1, and an embedded Chat none", async () => {
+		renderChat();
+		await screen.findByTestId("conversation-item-chat-1");
+
+		const headings = screen.getAllByRole("heading", { level: 1 });
+		expect(headings).toHaveLength(1);
+		expect(headings[0]?.textContent).toBe("Chat");
+
+		cleanup();
+		renderChat({ conversationId: "session-conversation", embedded: true });
+		await waitFor(() => expect(screen.getByTestId("chat-window-title").textContent).toBe("Session thread"));
+
+		expect(screen.queryAllByRole("heading", { level: 1 })).toHaveLength(0);
+	});
+
 	it("pins the scoped conversation even when the list never contains it, and hides the list", async () => {
 		renderChat({ conversationId: "session-conversation", embedded: true });
 

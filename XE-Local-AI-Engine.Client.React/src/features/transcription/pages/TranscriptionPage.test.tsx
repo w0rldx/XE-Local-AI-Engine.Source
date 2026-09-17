@@ -112,7 +112,7 @@ describe("TranscriptionPage", () => {
 		server.use(jsonRoute("get", "transcription/sessions", { items: [], totalCount: 0 }), ...runtimeRoutes());
 		renderPage();
 
-		expect(await screen.findByRole("heading", { level: 2, name: "Transcription" })).toBeDefined();
+		expect(await screen.findByRole("heading", { level: 1, name: "Transcription" })).toBeDefined();
 	});
 
 	it("offers a create call to action when there are no sessions", async () => {

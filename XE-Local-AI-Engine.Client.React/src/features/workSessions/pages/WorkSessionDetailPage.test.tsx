@@ -360,6 +360,26 @@ describe("WorkSessionDetailPage", () => {
 		expect(navigateSpy).not.toHaveBeenCalled();
 	});
 
+	// Heading navigation has to land somewhere on every state of this page: the session's own title once it is loaded,
+	// and the navigation label while there is no name to show. One h1 either way, never two.
+	it("carries exactly one h1 while the session loads and once it has", async () => {
+		routes();
+		// No router: neither state under test renders a `Link`, and a RouterProvider paints nothing on the first pass,
+		// which would hide the pending tree this case is about.
+		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />);
+
+		// Read synchronously, before the session query can settle: this is the pending tree, no waiting involved.
+		const pending = screen.getAllByRole("heading", { level: 1 });
+		expect(pending).toHaveLength(1);
+		expect(pending[0]?.textContent).toBe("Work Sessions");
+
+		// Waited for by test id, not by role: the pending h1 above would satisfy a role query straight away.
+		await screen.findByTestId("work-session-title");
+		const loaded = screen.getAllByRole("heading", { level: 1 });
+		expect(loaded).toHaveLength(1);
+		expect(loaded[0]?.textContent).toBe("Survey the vector-store options");
+	});
+
 	it("offers a way back when the session cannot be loaded", async () => {
 		server.use(problemDetailsRoute("get", `work-sessions/${sessionId}`, 404, { detail: "no such session" }));
 		renderDetail(<WorkSessionDetailPage sessionId={sessionId} />, { withRouter: true });

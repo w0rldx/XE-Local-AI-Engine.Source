@@ -61,11 +61,14 @@ export function CustomToolSecretRows({
 				</Text>
 			) : null}
 			{rows.map((row, index) => {
+				// Every row carries the same three boxes, so each accessible name numbers its row. The list itself is not
+				// named: a tool is either HttpFetch or Command, so headers and env never render at once.
+				const rowNumber = index + 1;
 				return (
 					<Group key={rowKeys[index]} gap="xs" align="flex-start" data-testid={`${testid}-row-${index}`}>
 						<TextInput
 							placeholder={t("pages.customTools.form.secretRows.namePlaceholder", "Name")}
-							aria-label={t("pages.customTools.form.secretRows.namePlaceholder", "Name")}
+							aria-label={t("pages.customTools.form.secretRows.nameAria", "Row {{index}} name", { index: rowNumber })}
 							value={row.name}
 							onChange={(event) => onPatch(index, { name: event.currentTarget.value })}
 							style={{ flex: "2 1 140px" }}
@@ -79,14 +82,14 @@ export function CustomToolSecretRows({
 								onChange={(value) => onPatch(index, { value })}
 								storedPlaceholder={t("pages.customTools.form.secretRows.storedPlaceholder", "•••• stored — leave to keep")}
 								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
-								aria-label={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								aria-label={t("pages.customTools.form.secretRows.valueAria", "Row {{index}} value", { index: rowNumber })}
 								style={{ flex: "3 1 200px" }}
 								data-testid={`${testid}-value-${index}`}
 							/>
 						) : (
 							<TextInput
 								placeholder={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
-								aria-label={t("pages.customTools.form.secretRows.valuePlaceholder", "Value")}
+								aria-label={t("pages.customTools.form.secretRows.valueAria", "Row {{index}} value", { index: rowNumber })}
 								value={row.value}
 								onChange={(event) => onPatch(index, { value: event.currentTarget.value })}
 								style={{ flex: "3 1 200px" }}
@@ -109,7 +112,7 @@ export function CustomToolSecretRows({
 						<ActionIcon
 							variant="subtle"
 							color="red"
-							aria-label={t("pages.customTools.form.secretRows.remove", "Remove")}
+							aria-label={t("pages.customTools.form.secretRows.remove", "Remove row {{index}}", { index: rowNumber })}
 							onClick={() => removeRow(index)}
 							mt={4}
 							style={{ flexShrink: 0 }}

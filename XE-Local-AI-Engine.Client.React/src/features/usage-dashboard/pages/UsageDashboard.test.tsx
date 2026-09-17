@@ -83,7 +83,7 @@ describe("UsageDashboard (generated hey-api data layer)", () => {
 		renderWithProviders(<UsageDashboard />);
 
 		expect(generatedMock.getAgentUsageSummaryOptions).toHaveBeenCalled();
-		expect(await screen.findByRole("heading", { name: "Usage dashboard", level: 2 })).toBeTruthy();
+		expect(await screen.findByRole("heading", { name: "Usage dashboard", level: 1 })).toBeTruthy();
 
 		// Grand totals: compact total-tokens headline + exact run count.
 		expect((await screen.findByTestId("usage-total-tokens-value")).textContent).toMatch(/1\.2M/);

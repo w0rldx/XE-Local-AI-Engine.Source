@@ -5,6 +5,7 @@ import type { MenuItemStyles } from "@/core/layout/models/Sidebar";
 interface IMobileNavigationMenuItem {
 	icon: ReactNode;
 	label: string;
+	to?: string;
 	onClick?: () => void;
 	active?: boolean;
 }

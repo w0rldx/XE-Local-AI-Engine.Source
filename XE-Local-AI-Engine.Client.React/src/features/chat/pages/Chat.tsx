@@ -1,4 +1,4 @@
-import { Alert, Anchor, Button, Center, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Anchor, Button, Center, Loader, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { type ReactNode, useCallback, useMemo, useState } from "react";
@@ -723,9 +723,20 @@ export function Chat({ scope }: { scope?: ChatScope } = {}) {
 
 // The chat page normally claims the Layout scroll container's full height; an embedded scope's parent already owns
 // that frame (and its own padding), so `Chat` renders bare inside it.
+//
+// The frame is also where the page's `<h1>` lives. Chat shows no title of its own — the conversation list is the
+// subject — so the heading is visually hidden and carries the navigation label, first inside the container so the
+// flex column is untouched. It belongs to the FRAME, not to `Chat`: an embedded scope renders inside a page that
+// already has its own h1, and a second one would be worse than none.
 function ChatFrame({ embedded, children }: { embedded: boolean; children: ReactNode }) {
+	const { t } = useTranslation();
 	if (embedded) {
 		return <>{children}</>;
 	}
-	return <FullHeightPage data-tour="chat-overview">{children}</FullHeightPage>;
+	return (
+		<FullHeightPage data-tour="chat-overview">
+			<VisuallyHidden component="h1">{t("navigation.chat", "Chat")}</VisuallyHidden>
+			{children}
+		</FullHeightPage>
+	);
 }

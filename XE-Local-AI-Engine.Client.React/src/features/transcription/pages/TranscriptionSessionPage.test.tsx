@@ -149,7 +149,7 @@ describe("TranscriptionSessionPage", () => {
 		server.use(jsonRoute("get", `transcription/sessions/${sessionId}`, detail()));
 		renderWithProviders(<TranscriptionSessionPage sessionId={sessionId} />);
 
-		expect(await screen.findByRole("heading", { level: 2, name: "Standup recording" })).toBeDefined();
+		expect(await screen.findByRole("heading", { level: 1, name: "Standup recording" })).toBeDefined();
 		expect(screen.getByTestId("transcription-session-status").textContent).toBe("Completed");
 		expect(screen.getByTestId("transcription-session-language").textContent).toContain("en");
 	});

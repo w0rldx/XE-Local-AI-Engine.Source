@@ -1,15 +1,14 @@
 // @vitest-environment jsdom
 
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { McpServerForm } from "@/features/mcp/components/McpServerForm";
 import { type McpServerFormValues, maskedEnvValue } from "@/features/mcp/models/McpServerModels";
 
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({ t: (_key: string, defaultValue?: string) => defaultValue ?? _key }),
-}));
+// react-i18next is deliberately NOT mocked: the suite initialises `src/i18n.ts`, so `t()` resolves against the shipped
+// `en` bundle and interpolates. A stub returning the in-code default verbatim would assert "{{index}}" at a user.
 
 afterEach(cleanup);
 
@@ -51,7 +50,11 @@ function renderForm(onSubmit: (values: McpServerFormValues) => void) {
 		command: "/usr/bin/fs-mcp",
 		arguments: [],
 		workingDirectory: "",
-		env: [{ key: "TOKEN", value: maskedEnvValue }],
+		// Two rows: identically-shaped rows are exactly what the numbered accessible names have to tell apart.
+		env: [
+			{ key: "TOKEN", value: maskedEnvValue },
+			{ key: "REGION", value: "eu" },
+		],
 		url: "",
 		trustTier: "Sandboxed",
 	};
@@ -82,7 +85,10 @@ describe("McpServerForm masked env values", () => {
 		fireEvent.click(screen.getByTestId("mcp-form-submit"));
 
 		expect(onSubmit).toHaveBeenCalledTimes(1);
-		expect(onSubmit.mock.lastCall?.[0].env).toEqual([{ key: "TOKEN", value: maskedEnvValue }]);
+		expect(onSubmit.mock.lastCall?.[0].env).toEqual([
+			{ key: "TOKEN", value: maskedEnvValue },
+			{ key: "REGION", value: "eu" },
+		]);
 	});
 
 	it("submits a retyped value instead of the sentinel", () => {
@@ -92,7 +98,10 @@ describe("McpServerForm masked env values", () => {
 		fireEvent.change(value, { target: { value: "rotated" } });
 		fireEvent.click(screen.getByTestId("mcp-form-submit"));
 
-		expect(onSubmit.mock.lastCall?.[0].env).toEqual([{ key: "TOKEN", value: "rotated" }]);
+		expect(onSubmit.mock.lastCall?.[0].env).toEqual([
+			{ key: "TOKEN", value: "rotated" },
+			{ key: "REGION", value: "eu" },
+		]);
 	});
 });
 
@@ -118,13 +127,15 @@ describe("McpServerForm env row layout", () => {
 	});
 
 	// Both boxes were named only by their placeholder, and the value box's placeholder is a sentence about the row's
-	// masked state — neither reaches a screen reader as a name.
-	it("names both env boxes, masked row included", () => {
+	// masked state — neither reaches a screen reader as a name. A name shared by every row is no better: the number
+	// is what makes row 2 reachable.
+	it("numbers both env boxes per row, masked row included", () => {
 		renderForm(vi.fn());
 
-		const row = within(screen.getByTestId("mcp-form-env-row-0"));
-
-		expect(row.getByRole("textbox", { name: "KEY" })).toBeTruthy();
-		expect(row.getByRole("textbox", { name: "value" })).toBe(screen.getByTestId("mcp-form-env-value-0"));
+		expect(screen.getByRole("textbox", { name: "Variable 1 key" })).toBe(screen.getByTestId("mcp-form-env-key-0"));
+		expect(screen.getByRole("textbox", { name: "Variable 1 value" })).toBe(screen.getByTestId("mcp-form-env-value-0"));
+		expect(screen.getByRole("textbox", { name: "Variable 2 key" })).toBe(screen.getByTestId("mcp-form-env-key-1"));
+		expect(screen.getByRole("textbox", { name: "Variable 2 value" })).toBe(screen.getByTestId("mcp-form-env-value-1"));
+		expect(screen.getByRole("button", { name: "Remove variable 2" })).toBeTruthy();
 	});
 });

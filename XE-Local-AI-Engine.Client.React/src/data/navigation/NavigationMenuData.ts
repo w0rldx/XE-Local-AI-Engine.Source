@@ -241,6 +241,12 @@ const allNavigationLinks: INavigationLink[] = [
 	},
 ];
 
+// Every navigation <Link> passes this. TanStack's Link stamps `aria-current="page"` on itself whenever ITS OWN match
+// is active, after the caller's props, so it cannot be overridden — and its default match is a prefix match that knows
+// nothing about sibling entries (/training lit up on /training/datasets next to the real current page). Exact matching
+// confines Link's stamp to the one case where it agrees with matchesNavRoute, which stays the single rule.
+export const navLinkActiveOptions = { exact: true } as const;
+
 // A nav target is active when the current path equals it, or is a sub-path of it (so /models/123 still
 // highlights the Models → Installed entry). The home route ("/") only matches exactly. Shared by both nav
 // bars so the active-route rule stays in one place.
@@ -253,8 +259,19 @@ export function matchesNavRoute(pathname: string, to: string | undefined): boole
 		return pathname === "/";
 	}
 
-	return pathname === to || pathname.startsWith(`${to}/`);
+	if (pathname === to) {
+		return true;
+	}
+
+	// A sub-path highlights its parent entry only while no other entry claims it more specifically: /training is a
+	// prefix of /training/datasets, and without this both siblings were marked as the current page at once.
+	return (
+		pathname.startsWith(`${to}/`) &&
+		!navigationTargets.some((other) => other.length > to.length && matchesPrefix(pathname, other))
+	);
 }
+
+const matchesPrefix = (pathname: string, to: string): boolean => pathname === to || pathname.startsWith(`${to}/`);
 
 const isCapabilityEnabled = (capability?: NavigationCapabilityKey): boolean => (capability ? nodeCapabilities[capability] : true);
 
@@ -267,3 +284,9 @@ export const navigationLinks: INavigationLink[] = allNavigationLinks
 		link.links ? { ...link, links: link.links.filter((nestedLink) => isCapabilityEnabled(nestedLink.capability)) } : link,
 	)
 	.filter((link) => !link.links || link.links.length > 0);
+
+// Only what the rail actually renders may claim a sub-path: an entry whose capability is off has no link to be
+// the "more specific" one, and would otherwise silently take the highlight away from its visible parent.
+const navigationTargets: readonly string[] = navigationLinks
+	.flatMap((link) => [link.to, ...(link.links ?? []).map((nestedLink) => nestedLink.to)])
+	.filter((to): to is string => to !== undefined);

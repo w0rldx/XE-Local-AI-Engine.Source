@@ -15,7 +15,7 @@ interface PageHeaderProps {
 	"data-testid"?: string;
 }
 
-// Standard page header: eyebrow, icon + h2 title, dimmed subtitle, and a right-aligned action slot.
+// Standard page header: eyebrow, icon + h1 title, dimmed subtitle, and a right-aligned action slot.
 // All routed pages use this so the header buildup reads the same everywhere.
 export function PageHeader({
 	title,
@@ -42,7 +42,12 @@ export function PageHeader({
 				 */}
 				<Group gap="xs" align="center" wrap="nowrap" data-testid="page-header-title-row">
 					{icon ? <Box style={{ display: "flex", flex: "0 0 auto" }}>{icon}</Box> : null}
-					<Title order={2} style={{ minWidth: 0 }}>
+					{/*
+					 * This IS the page's h1 — it is the only heading every routed page renders, so anything lower left
+					 * the page with no h1 at all and made every section heading below it a level-2 orphan. `size="h2"`
+					 * keeps the type scale the pages were built against; only the outline level changes.
+					 */}
+					<Title order={1} size="h2" style={{ minWidth: 0 }}>
 						{title}
 					</Title>
 				</Group>

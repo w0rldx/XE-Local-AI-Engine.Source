@@ -256,6 +256,8 @@ describe("DevelopmentPage", () => {
 		renderPage();
 
 		expect(screen.getByText("Development Mode is disabled by this node's runtime configuration.")).toBeTruthy();
+		// This branch renders no PageHeader, so it has to carry the page's single h1 itself.
+		expect(screen.getAllByRole("heading", { level: 1 }).map((heading) => heading.textContent)).toEqual(["Development Mode"]);
 		expect(screen.queryByTestId("development-project-form")).toBeNull();
 	});
 

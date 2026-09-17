@@ -1,4 +1,17 @@
-import { ActionIcon, Alert, Anchor, Drawer, Group, Loader, Menu, Stack, Tabs, Text, Tooltip } from "@mantine/core";
+import {
+	ActionIcon,
+	Alert,
+	Anchor,
+	Drawer,
+	Group,
+	Loader,
+	Menu,
+	Stack,
+	Tabs,
+	Title,
+	Tooltip,
+	VisuallyHidden,
+} from "@mantine/core";
 import { useDisclosure } from "@mantine/hooks";
 import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconTrash } from "@tabler/icons-react";
 import { Link, useNavigate } from "@tanstack/react-router";
@@ -105,9 +118,15 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 		navigate({ to: "/development-workflows" });
 	}, [confirm, deleteWorkItem, navigate, t, workItemId]);
 
+	// Every state of this page carries exactly one `<h1>`. Once the work item is loaded that is its title, below; until
+	// then there is no name to show, so the navigation label stands in, visually hidden and first in the container so
+	// the full-height flex column is unaffected.
+	const fallbackHeading = <VisuallyHidden component="h1">{t("navigation.devWorkflows", "Workflow Runs")}</VisuallyHidden>;
+
 	if (workItemQuery.isPending) {
 		return (
 			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
+				{fallbackHeading}
 				<Loader data-testid="dev-workflow-detail-loading" />
 			</FullHeightPage>
 		);
@@ -116,6 +135,7 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 	if (workItemQuery.isError || !workItemQuery.data) {
 		return (
 			<FullHeightPage ref={paneContainerRef} data-testid="dev-workflow-detail-page">
+				{fallbackHeading}
 				<InlineErrorAlert
 					variant="light"
 					message={apiErrorMessage(
@@ -326,9 +346,11 @@ export function DevWorkflowDetailPage({ workItemId, selection, onSelectionChange
 							</ActionIcon>
 						</Tooltip>
 					) : null}
-					<Text fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="dev-workflow-title">
+					{/* The work item's title IS this page's heading. `size="md"` keeps the body-text scale it has always had —
+					    the h1 is about the document outline, not about growing the header. */}
+					<Title order={1} size="md" fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="dev-workflow-title">
 						{workItem.title}
-					</Text>
+					</Title>
 					<DevWorkflowWorkItemStatusBadge
 						status={toDevWorkflowWorkItemStatus(workItem.status)}
 						testId="dev-workflow-work-item-status"

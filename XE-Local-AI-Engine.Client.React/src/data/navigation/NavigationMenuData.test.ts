@@ -355,6 +355,13 @@ describe("matchesNavRoute", () => {
 		expect(matchesNavRoute("/models-extra", "/models")).toBe(false);
 	});
 
+	it("leaves a sub-path to the more specific entry when two entries share a prefix", () => {
+		expect(matchesNavRoute("/training/datasets", "/training/datasets")).toBe(true);
+		expect(matchesNavRoute("/training/datasets", "/training")).toBe(false);
+		// A detail route no entry claims still highlights its parent.
+		expect(matchesNavRoute("/training/run-1", "/training")).toBe(true);
+	});
+
 	it("matches the home route only exactly", () => {
 		expect(matchesNavRoute("/", "/")).toBe(true);
 		expect(matchesNavRoute("/models", "/")).toBe(false);

@@ -43,8 +43,9 @@ export function CustomToolHostList({ value, onChange }: { value: readonly string
 				<Group key={rowKeys[index]} gap="xs" align="center" wrap="nowrap">
 					<TextInput
 						placeholder="api.example.com"
-						// The placeholder is an example host, not a name; the section heading labels the row.
-						aria-label={t("pages.customTools.form.http.allowedHosts", "Allowed hosts")}
+						// The placeholder is an example host, not a name, and the section heading is the same for every row —
+						// the accessible name numbers the row through one interpolated string.
+						aria-label={t("pages.customTools.form.http.hostAria", "Allowed host {{index}}", { index: index + 1 })}
 						value={host}
 						onChange={(event) => onChange(value.map((existing, i) => (i === index ? event.currentTarget.value : existing)))}
 						style={{ flex: 1 }}
@@ -53,7 +54,7 @@ export function CustomToolHostList({ value, onChange }: { value: readonly string
 					<ActionIcon
 						variant="subtle"
 						color="red"
-						aria-label={t("pages.customTools.form.http.removeHost", "Remove host")}
+						aria-label={t("pages.customTools.form.http.removeHost", "Remove allowed host {{index}}", { index: index + 1 })}
 						onClick={() => removeHost(index)}
 						data-testid={`custom-tool-form-http-host-remove-${index}`}
 					>

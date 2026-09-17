@@ -1,4 +1,4 @@
-import { Alert, Grid, Group, Loader, Stack, Text } from "@mantine/core";
+import { Alert, Grid, Group, Loader, Stack, Text, VisuallyHidden } from "@mantine/core";
 import { IconAlertTriangle, IconCode } from "@tabler/icons-react";
 
 import { apiErrorMessage } from "@/core/api/errors/ApiErrorMessage";
@@ -90,9 +90,13 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 		previewMutation,
 		applyMutation,
 	} = useDevelopmentPageController({ initialProjectId, initialTaskId });
+	// The loading and disabled branches render no PageHeader, so they carry the page's h1 themselves.
+	const fallbackHeading = <VisuallyHidden component="h1">{t("pages.development.title", "Development Mode")}</VisuallyHidden>;
+
 	if (capabilityQuery.isLoading) {
 		return (
 			<PageShell>
+				{fallbackHeading}
 				<Group gap="sm">
 					<Loader size="sm" />
 					<Text c="dimmed">{t("pages.development.loading.capability", "Loading Development capability")}</Text>
@@ -104,6 +108,7 @@ export function DevelopmentPage({ initialProjectId, initialTaskId }: Development
 	if (capabilityQuery.error || !developmentEnabled) {
 		return (
 			<PageShell>
+				{fallbackHeading}
 				<Alert color={capabilityQuery.error ? "red" : "yellow"} icon={<IconAlertTriangle size={16} />}>
 					{capabilityQuery.error
 						? apiErrorMessage(capabilityQuery.error, "Could not verify whether Development Mode is available.")

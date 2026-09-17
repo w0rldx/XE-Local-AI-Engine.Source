@@ -21,11 +21,21 @@ describe("PageHeader", () => {
 		cleanup();
 	});
 
-	it("renders the title as the page's h2", () => {
+	// This header is the only heading a routed page is guaranteed to render, so it has to be the h1 — at order={2}
+	// almost every page in the app had no h1 at all and every section heading under it was a level-2 orphan.
+	it("renders the title as the page's h1", () => {
 		renderWithProviders(<PageHeader title="Agents" />);
 
-		const heading = screen.getByRole("heading", { level: 2 });
+		const heading = screen.getByRole("heading", { level: 1 });
 		expect(heading.textContent).toBe("Agents");
+	});
+
+	// The outline level moved; the type scale did not. `size="h2"` is what keeps the pages looking the same.
+	it("keeps the h2 type scale for the h1 title", () => {
+		renderWithProviders(<PageHeader title="Agents" />);
+
+		const heading = screen.getByRole("heading", { level: 1 });
+		expect(heading.style.getPropertyValue("--title-fz")).toBe("var(--mantine-h2-font-size)");
 	});
 
 	it("falls back to the shared Worker Node eyebrow", () => {
@@ -66,7 +76,7 @@ describe("PageHeader", () => {
 		const titleRow = screen.getByTestId("page-header-title-row");
 		expect(titleRow.style.getPropertyValue("--group-wrap")).toBe("nowrap");
 		expect(titleRow.contains(screen.getByTestId("page-icon"))).toBe(true);
-		expect(titleRow.contains(screen.getByRole("heading", { level: 2 }))).toBe(true);
+		expect(titleRow.contains(screen.getByRole("heading", { level: 1 }))).toBe(true);
 	});
 
 	it("forwards data-testid and data-tour to the header root", () => {

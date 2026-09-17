@@ -84,8 +84,9 @@ export function CommandEditor({ values, errors, update, storedSecrets }: CustomT
 					<Group key={argRowKeys[index]} gap="xs" align="center" wrap="nowrap">
 						<TextInput
 							placeholder="--city={city}"
-							// The placeholder is an example argument, not a name; the section heading labels the row.
-							aria-label={t("pages.customTools.form.command.args", "Arguments")}
+							// The placeholder is an example argument, not a name, and the section heading is the same for every row —
+							// the accessible name numbers the row through one interpolated string.
+							aria-label={t("pages.customTools.form.command.argAria", "Argument {{index}}", { index: index + 1 })}
 							value={arg}
 							onChange={(event) => patchArg(index, event.currentTarget.value)}
 							style={{ flex: 1 }}
@@ -94,7 +95,7 @@ export function CommandEditor({ values, errors, update, storedSecrets }: CustomT
 						<ActionIcon
 							variant="subtle"
 							color="red"
-							aria-label={t("pages.customTools.form.command.removeArg", "Remove argument")}
+							aria-label={t("pages.customTools.form.command.removeArg", "Remove argument {{index}}", { index: index + 1 })}
 							onClick={() => removeArg(index)}
 							data-testid={`custom-tool-form-command-arg-remove-${index}`}
 						>

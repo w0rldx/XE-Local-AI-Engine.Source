@@ -74,14 +74,14 @@ describe("WorkSessionsPage", () => {
 		cleanup();
 	});
 
-	// Every routed page introduces itself the same way — eyebrow, icon, h2 — and this one used to hand-roll a bare
+	// Every routed page introduces itself the same way — eyebrow, icon, h1 — and this one used to hand-roll a bare
 	// Title, so it was the only page in the app without the shared buildup.
 	it("introduces itself with the standard page header", async () => {
 		server.use(jsonRoute("get", "work-sessions", { items: [] }), agentsRoute());
 		renderWithProviders(<WorkSessionsPage />);
 
 		expect(await screen.findByText("Worker Node")).toBeDefined();
-		expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Work Sessions");
+		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Work Sessions");
 	});
 
 	it("shows skeletons while the list loads", () => {

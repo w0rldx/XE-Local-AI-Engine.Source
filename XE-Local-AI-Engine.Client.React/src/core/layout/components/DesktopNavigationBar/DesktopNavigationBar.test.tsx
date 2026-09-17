@@ -7,9 +7,9 @@ import { DesktopNavigationBar } from "@/core/layout/components/DesktopNavigation
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import { renderWithProviders } from "@/test/RenderWithProviders";
 
-function renderNavigationBar(collapsed = false) {
+function renderNavigationBar(collapsed = false, route = "/") {
 	return renderWithProviders(<DesktopNavigationBar sideBarCollapsed={collapsed} setSideBarCollapsed={vi.fn()} />, {
-		route: "/",
+		route,
 	});
 }
 
@@ -53,7 +53,7 @@ describe("DesktopNavigationBar", () => {
 		// rather than read straight away: Collapse reveals them across its own height transition.
 		await waitFor(() => {
 			const controlled = document.getElementById(controlledId!);
-			expect(within(controlled!).getByRole("button", { name: "Node Settings" })).toBeTruthy();
+			expect(within(controlled!).getByRole("link", { name: "Node Settings" })).toBeTruthy();
 		});
 
 		fireEvent.click(toggle);
@@ -70,6 +70,58 @@ describe("DesktopNavigationBar", () => {
 		const toggle = await screen.findByRole("button", { name: GROUP_LABEL });
 		expect(toggle.getAttribute("aria-controls")).toBeNull();
 		expect(toggle.getAttribute("aria-expanded")).toBeNull();
+	});
+
+	// Every destination used to be an UnstyledButton calling navigate(), which announces a link as a "button" and
+	// throws away middle-click, ctrl-click and "open in new tab" — the browser only offers those for a real href.
+	it("renders a flat destination as a link carrying its route", async () => {
+		renderNavigationBar();
+
+		const chat = await screen.findByRole("link", { name: "Chat" });
+		expect(chat.getAttribute("href")).toBe("/chat");
+	});
+
+	// Nested children are destinations too, so the same rule applies one level down.
+	it("renders a group's nested destinations as links carrying their routes", async () => {
+		renderNavigationBar();
+
+		const toggle = await screen.findByRole("button", { name: GROUP_LABEL });
+		fireEvent.click(toggle);
+
+		const nodeSettings = await screen.findByRole("link", { name: "Node Settings" });
+		expect(nodeSettings.getAttribute("href")).toBe("/node-settings");
+	});
+
+	// The active item keeps its aria-current from the rail's own matchesNavRoute, not from Link's active props:
+	// one notion of "active" for the highlight and the announcement, seeded by the route the test rendered at.
+	it("marks the link on the current route as the current page", async () => {
+		renderNavigationBar();
+
+		const home = await screen.findByRole("link", { name: "Home" });
+		expect(home.getAttribute("aria-current")).toBe("page");
+		expect((await screen.findByRole("link", { name: "Chat" })).getAttribute("aria-current")).toBeNull();
+	});
+
+	// TanStack's Link stamps aria-current on itself from its own prefix match, which the caller's props cannot
+	// override: on /training/datasets the sibling /training entry was announced as the current page as well.
+	it("marks exactly one entry as the current page when a sibling route is a prefix of it", async () => {
+		renderNavigationBar(false, "/training/datasets");
+
+		const datasets = await screen.findByRole("link", { name: "Datasets" });
+		expect(datasets.getAttribute("aria-current")).toBe("page");
+		const current = screen.getAllByRole("link").filter((link) => link.getAttribute("aria-current") !== null);
+		expect(current.map((link) => link.getAttribute("href"))).toEqual(["/training/datasets"]);
+	});
+
+	// The collapsed rail's flyout is the only way to reach a group's children, so its entries have to be links too.
+	it("renders the collapsed rail's flyout entries as links", async () => {
+		renderNavigationBar(true);
+
+		fireEvent.click(await screen.findByRole("button", { name: GROUP_LABEL }));
+
+		const nodeSettings = await screen.findByRole("menuitem", { name: "Node Settings" });
+		expect(nodeSettings.tagName).toBe("A");
+		expect(nodeSettings.getAttribute("href")).toBe("/node-settings");
 	});
 
 	// The bar used to paint over the group chevrons and the active-item highlight at Mantine's 12px default.

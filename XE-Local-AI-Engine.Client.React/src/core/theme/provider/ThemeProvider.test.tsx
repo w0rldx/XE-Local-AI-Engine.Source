@@ -67,6 +67,48 @@ describe("ThemeProvider table scroll affordance", () => {
 	});
 });
 
+// Reads the CSS-variable block MantineProvider injects for one colour scheme. The provider renders the variables
+// as real <style> text (one rule per scheme selector), so this is the shipped value, not the resolver's input.
+function readColorSchemeVariables(scheme: "light" | "dark"): string {
+	const selector = `:root[data-mantine-color-scheme="${scheme}"]`;
+	const rule = [...document.querySelectorAll("style")]
+		.flatMap((element) => (element.textContent ?? "").split("}"))
+		.find((block) => block.includes(selector));
+
+	return rule ?? "";
+}
+
+describe("ThemeProvider dimmed text contrast", () => {
+	beforeEach(() => {
+		installJsdomEnvironmentMocks();
+	});
+
+	afterEach(() => {
+		cleanup();
+	});
+
+	// Mantine's light-mode dimmed is gray-6 on white — about 3.3:1, under the 4.5:1 WCAG 1.4.3 floor for the
+	// secondary text every page renders with `c="dimmed"`. gray-7 clears it. Asserted on the emitted variable
+	// because that is what the call sites resolve against; a resolver that returns the right object but is never
+	// handed to MantineProvider would still pass a check of the resolver alone.
+	it("raises the light-mode dimmed colour to a scale step that passes contrast", () => {
+		render(<ThemeProvider>content</ThemeProvider>);
+
+		expect(readColorSchemeVariables("light")).toContain("--mantine-color-dimmed: var(--mantine-color-gray-7)");
+	});
+
+	// Dark mode already passes (dark-2 on the dark surfaces) and darkening it there would make the text worse, so
+	// the override is light-only: the dark block must not carry a dimmed declaration of its own.
+	it("leaves the dark-mode dimmed colour to Mantine", () => {
+		render(<ThemeProvider>content</ThemeProvider>);
+
+		const darkVariables = readColorSchemeVariables("dark");
+		// An empty block would make the assertion below vacuous, so prove the dark rule was emitted at all first.
+		expect(darkVariables).toContain("--mantine-color-anchor");
+		expect(darkVariables).not.toContain("--mantine-color-dimmed");
+	});
+});
+
 describe("ThemeProvider alert close button", () => {
 	beforeEach(() => {
 		installJsdomEnvironmentMocks();

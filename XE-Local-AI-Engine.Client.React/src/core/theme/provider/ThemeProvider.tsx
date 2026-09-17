@@ -3,6 +3,7 @@ import {
 	alpha,
 	Card,
 	createTheme,
+	type CSSVariablesResolver,
 	defaultVariantColorsResolver,
 	MantineProvider,
 	parseThemeColor,
@@ -16,6 +17,20 @@ import { useTranslation } from "react-i18next";
 
 import { useThemeStore } from "@/core/theme/stores/ThemeStore";
 import type { ThemeProviderProperties } from "@/core/theme/provider/ThemeProvider.types";
+
+// Mantine's light-mode `--mantine-color-dimmed` is gray-6 (#868e96), which is about 3.3:1 on white — under the
+// 4.5:1 WCAG 1.4.3 floor, and it is the colour of the size="sm"/"xs" secondary text that carries real meaning on
+// every page (subtitles, hints, table captions). gray-7 (#495057) is about 8.2:1 and is already the resting
+// label colour of the navigation rail, so nothing looks new. Dark mode is left alone: its dark-2 on the dark-6/7
+// surfaces already passes, and darkening it there would make the text harder to read, not easier. Fixed once
+// here rather than at the call sites, which are everywhere.
+const cssVariablesResolver: CSSVariablesResolver = () => ({
+	variables: {},
+	light: {
+		"--mantine-color-dimmed": "var(--mantine-color-gray-7)",
+	},
+	dark: {},
+});
 
 export function ThemeProvider({ children }: ThemeProviderProperties) {
 	// The theme object is rebuilt on every render (it always was), so the translated defaults below follow a
@@ -148,7 +163,7 @@ export function ThemeProvider({ children }: ThemeProviderProperties) {
 	});
 
 	return (
-		<MantineProvider theme={theme} forceColorScheme={mode}>
+		<MantineProvider theme={theme} forceColorScheme={mode} cssVariablesResolver={cssVariablesResolver}>
 			<Notifications position="top-right" autoClose={5000} />
 			{children}
 		</MantineProvider>

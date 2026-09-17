@@ -1,4 +1,4 @@
-import { ActionIcon, Badge, Drawer, Group, Menu, Stack, Text, Tooltip } from "@mantine/core";
+import { ActionIcon, Badge, Drawer, Group, Menu, Stack, Title, Tooltip } from "@mantine/core";
 import { IconDotsVertical, IconLayoutSidebar, IconLayoutSidebarRight, IconPencil, IconTrash } from "@tabler/icons-react";
 import type { ReactNode, Ref } from "react";
 import { useTranslation } from "react-i18next";
@@ -46,9 +46,11 @@ export function WorkSessionDetailLayout(props: WorkSessionDetailLayoutProps) {
 							</ActionIcon>
 						</Tooltip>
 					) : null}
-					<Text fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="work-session-title">
+					{/* The session's title IS the loaded page's heading. `size="md"` keeps the body-text scale it has always
+					    had — the h1 is about the document outline, not about growing the header. */}
+					<Title order={1} size="md" fw={700} lineClamp={1} style={{ flex: 1, minWidth: 0 }} data-testid="work-session-title">
 						{props.title}
-					</Text>
+					</Title>
 					<Badge size="sm" variant="light" color="gray">
 						{props.kindLabel}
 					</Badge>

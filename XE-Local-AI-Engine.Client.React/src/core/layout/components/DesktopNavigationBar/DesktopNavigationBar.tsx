@@ -1,6 +1,6 @@
 import { Collapse, Menu, ScrollArea, Text, Tooltip, UnstyledButton } from "@mantine/core";
 import { IconChevronRight, IconLayoutSidebarLeftCollapse, IconLayoutSidebarLeftExpand } from "@tabler/icons-react";
-import { useNavigate, useRouterState } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { m } from "framer-motion";
 import { useId, useMemo } from "react";
 import { useTranslation } from "react-i18next";
@@ -13,7 +13,7 @@ import type {
 } from "@/core/layout/components/DesktopNavigationBar/DesktopNavigationBar.types";
 import { useDesktopNavigationBarStore } from "@/core/layout/stores/DesktopNavigationBarStore";
 import type { INavigationLink } from "@/data/navigation/NavigationMenuData";
-import { matchesNavRoute, navigationLinks } from "@/data/navigation/NavigationMenuData";
+import { matchesNavRoute, navigationLinks, navLinkActiveOptions } from "@/data/navigation/NavigationMenuData";
 
 import classes from "./DesktopNavigationBar.module.css";
 import {
@@ -25,7 +25,6 @@ import {
 
 export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: IDesktopNavigationBarProperties) {
 	const { t } = useTranslation();
-	const navigate = useNavigate();
 	const pathname = useRouterState({ select: (state) => state.location.pathname });
 	// Prefix for the nested-links containers a group toggle points `aria-controls` at. React owns it, so two
 	// mounted navigation bars (app + a test render) cannot collide on the same DOM id.
@@ -75,14 +74,6 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 		return mapViewableNavigationLinks(navigationLinks);
 	}, [t]);
 
-	const handleNavigate = (to: string, onClick?: () => void) => {
-		if (onClick) {
-			onClick();
-		} else {
-			navigate({ to });
-		}
-	};
-
 	const toggleSidebar = () => {
 		setSideBarCollapsed(!sideBarCollapsed);
 	};
@@ -109,50 +100,59 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 				return;
 			}
 
-			if (item.onClick) {
-				item.onClick();
-				return;
-			}
-
-			if (item.to) {
-				handleNavigate(item.to);
-			}
+			item.onClick?.();
 		};
+
+		// A flat item with a route renders as a real anchor so middle-click, ctrl-click and "open in new tab" work
+		// and a screen reader announces a link rather than a button. An `onClick` still wins over `to` (the old
+		// handler ran it INSTEAD of navigating), and a group parent is a pure disclosure toggle, so both stay
+		// <button>s. `aria-current` keeps coming from matchesNavRoute — Link's own active props would be a second,
+		// differently-scoped notion of "active" next to the one the whole rail already agrees on.
+		const navigatesByHref = !hasNestedLinks && !item.onClick && item.to !== undefined;
 
 		const controlClassName = `${classes["control"]}${groupActive || itemActive ? ` ${classes["control-active"]}` : ""}`;
 
-		const itemControl = (
-			<UnstyledButton
-				onClick={handleControlClick}
-				className={controlClassName}
-				aria-current={itemActive ? "page" : undefined}
-				aria-expanded={isDisclosure ? open : undefined}
-				aria-controls={isDisclosure ? nestedLinksId : undefined}
-				data-tour={`nav-item-${item.id}`}
+		const controlProps = {
+			className: controlClassName,
+			"aria-current": itemActive ? ("page" as const) : undefined,
+			"aria-expanded": isDisclosure ? open : undefined,
+			"aria-controls": isDisclosure ? nestedLinksId : undefined,
+			"data-tour": `nav-item-${item.id}`,
+		};
+
+		const controlBody = (
+			<m.div
+				className={classes["control-content"]}
+				layout={true}
+				style={{ gap: sideBarCollapsed ? 0 : 12 }}
+				initial={false}
+				transition={MOTION_SPEC}
 			>
-				<m.div
-					className={classes["control-content"]}
-					layout={true}
-					style={{ gap: sideBarCollapsed ? 0 : 12 }}
-					initial={false}
-					transition={MOTION_SPEC}
-				>
-					<span className={classes["icon-slot"]}>
-						<item.icon size={20} />
-					</span>
-					<m.div variants={labelVariants} initial={false} className={classes["control-label-motion"]}>
-						<Text size="sm" fw={500}>
-							{item.label}
-						</Text>
-					</m.div>
-					{/* Chevron is only meaningful for an expandable group in the expanded rail; the collapsed rail
-					    swaps in a flyout menu (below) so children stay reachable without the chevron. */}
-					{hasNestedLinks && !sideBarCollapsed && (
-						<m.div variants={labelVariants} initial={false} className={classes["chevron-slot"]}>
-							<IconChevronRight size={16} className={`${classes["chevron"]}${open ? ` ${classes["chevron-open"]}` : ""}`} />
-						</m.div>
-					)}
+				<span className={classes["icon-slot"]}>
+					<item.icon size={20} />
+				</span>
+				<m.div variants={labelVariants} initial={false} className={classes["control-label-motion"]}>
+					<Text size="sm" fw={500}>
+						{item.label}
+					</Text>
 				</m.div>
+				{/* Chevron is only meaningful for an expandable group in the expanded rail; the collapsed rail
+				    swaps in a flyout menu (below) so children stay reachable without the chevron. */}
+				{hasNestedLinks && !sideBarCollapsed && (
+					<m.div variants={labelVariants} initial={false} className={classes["chevron-slot"]}>
+						<IconChevronRight size={16} className={`${classes["chevron"]}${open ? ` ${classes["chevron-open"]}` : ""}`} />
+					</m.div>
+				)}
+			</m.div>
+		);
+
+		const itemControl = navigatesByHref ? (
+			<UnstyledButton component={Link} to={item.to} activeOptions={navLinkActiveOptions} {...controlProps}>
+				{controlBody}
+			</UnstyledButton>
+		) : (
+			<UnstyledButton onClick={handleControlClick} {...controlProps}>
+				{controlBody}
 			</UnstyledButton>
 		);
 
@@ -169,7 +169,13 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 						{item.nestedLinks!.map((nestedLink) => {
 							const nestedActive = matchesNavRoute(pathname, nestedLink.to);
 							return (
-								<Menu.Item key={nestedLink.to} onClick={() => handleNavigate(nestedLink.to)}>
+								<Menu.Item
+									key={nestedLink.to}
+									component={Link}
+									to={nestedLink.to}
+									activeOptions={navLinkActiveOptions}
+									aria-current={nestedActive ? "page" : undefined}
+								>
 									<Text
 										size="sm"
 										fw={nestedActive ? 600 : 400}
@@ -209,7 +215,9 @@ export function DesktopNavigationBar({ sideBarCollapsed, setSideBarCollapsed }: 
 								return (
 									<UnstyledButton
 										key={nestedLink.to}
-										onClick={() => handleNavigate(nestedLink.to)}
+										component={Link}
+										to={nestedLink.to}
+										activeOptions={navLinkActiveOptions}
 										className={`${classes["link"]}${nestedActive ? ` ${classes["link-active"]}` : ""}`}
 										aria-current={nestedActive ? "page" : undefined}
 									>

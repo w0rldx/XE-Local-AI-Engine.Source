@@ -3141,9 +3141,11 @@
 					"add": "Variable hinzufügen",
 					"empty": "Keine Umgebungsvariablen.",
 					"keyPlaceholder": "KEY",
+					"keyAria": "Schlüssel von Variable {{index}}",
 					"valuePlaceholder": "Wert",
+					"valueAria": "Wert von Variable {{index}}",
 					"maskedPlaceholder": "unverändert — neuen Wert eingeben, um ihn zu ersetzen",
-					"remove": "Variable entfernen"
+					"remove": "Variable {{index}} entfernen"
 				},
 				"url": {
 					"label": "URL",
@@ -4933,10 +4935,12 @@
 					"empty": "Noch keine Parameter deklariert.",
 					"namePlaceholder": "stadt",
 					"nameInvalid": "Nur Bezeichner",
-					"typeAria": "Parametertyp",
+					"nameAria": "Name von Parameter {{index}}",
+					"typeAria": "Typ von Parameter {{index}}",
 					"descriptionPlaceholder": "Beschreibung",
+					"descriptionAria": "Beschreibung von Parameter {{index}}",
 					"required": "Erforderlich",
-					"remove": "Parameter entfernen"
+					"remove": "Parameter {{index}} entfernen"
 				},
 				"http": {
 					"method": "Methode",
@@ -4951,7 +4955,8 @@
 					"allowedHosts": "Erlaubte Hosts",
 					"addHost": "Host hinzufügen",
 					"allowedHostsHint": "Erforderlich, wenn der URL-Host selbst eine Vorlage ist: Die Anfrage darf nur einen Host aus dieser Liste erreichen.",
-					"removeHost": "Host entfernen"
+					"hostAria": "Erlaubter Host {{index}}",
+					"removeHost": "Erlaubten Host {{index}} entfernen"
 				},
 				"command": {
 					"executable": "Programmdatei",
@@ -4966,7 +4971,8 @@
 					"addArg": "Argument hinzufügen",
 					"argsHint": "Ein Argument pro Zeile. Ein {param}-Platzhalter füllt genau ein Argument — ein Wert kann niemals zusätzliche Argumente einschleusen.",
 					"noArgs": "Keine Argumente.",
-					"removeArg": "Argument entfernen",
+					"argAria": "Argument {{index}}",
+					"removeArg": "Argument {{index}} entfernen",
 					"workingDirectory": "Arbeitsverzeichnis",
 					"timeout": "Zeitlimit (Sekunden)",
 					"timeoutHint": "0 verwendet den Standardwert.",
@@ -4976,10 +4982,12 @@
 				},
 				"secretRows": {
 					"namePlaceholder": "Name",
+					"nameAria": "Name von Zeile {{index}}",
 					"storedPlaceholder": "•••• gespeichert — leer lassen zum Beibehalten",
 					"valuePlaceholder": "Wert",
+					"valueAria": "Wert von Zeile {{index}}",
 					"secret": "Geheim",
-					"remove": "Entfernen"
+					"remove": "Zeile {{index}} entfernen"
 				}
 			},
 			"list": {

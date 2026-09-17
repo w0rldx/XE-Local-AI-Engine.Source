@@ -1,3 +1,4 @@
+import { Link } from "@tanstack/react-router";
 import type { CSSProperties } from "react";
 
 import type { MenuItemProperties } from "@/core/layout/models/Sidebar";
@@ -6,6 +7,11 @@ import { useSidebarStore } from "@/core/layout/stores/SidebarStore";
 import "./SidebarMenuItem.css";
 
 const EMPTY_ROOT_STYLES: CSSProperties = {};
+
+// Link stamps its own `aria-current` from a prefix match the caller cannot override; exact matching keeps it from
+// marking a sibling entry (/training on /training/datasets). Same rule, and same reason, as `navLinkActiveOptions` in
+// NavigationMenuData — restated here because core may not import from the navigation data module.
+const EXACT_ACTIVE_OPTIONS = { exact: true } as const;
 
 export function SidebarMenuItem({
 	children,
@@ -17,6 +23,7 @@ export function SidebarMenuItem({
 	suffix,
 	component,
 	rootStyles = EMPTY_ROOT_STYLES,
+	to,
 	onClick,
 	className = "",
 	isMobile = false,
@@ -45,6 +52,22 @@ export function SidebarMenuItem({
 		);
 	}
 
+	const itemBody = (
+		<>
+			{prefix && !isCollapsed && <div className="sidebar-menu-item-prefix">{prefix}</div>}
+
+			{icon && (
+				<div className="sidebar-menu-item-icon" data-centered={shouldCenter || undefined}>
+					{icon}
+				</div>
+			)}
+
+			{!isCollapsed && <span className="sidebar-menu-item-label">{children}</span>}
+
+			{suffix && !isCollapsed && <div className="sidebar-menu-item-suffix">{suffix}</div>}
+		</>
+	);
+
 	return (
 		<div
 			ref={reference}
@@ -54,28 +77,35 @@ export function SidebarMenuItem({
 				...rootStyles,
 			}}
 		>
-			<button
-				className="sidebar-menu-item-button"
-				onClick={activateMenuItem}
-				onKeyDown={handleKeyDown}
-				disabled={disabled}
-				aria-disabled={disabled}
-				data-centered={shouldCenter || undefined}
-				type="button"
-				data-active={active || undefined}
-			>
-				{prefix && !isCollapsed && <div className="sidebar-menu-item-prefix">{prefix}</div>}
-
-				{icon && (
-					<div className="sidebar-menu-item-icon" data-centered={shouldCenter || undefined}>
-						{icon}
-					</div>
-				)}
-
-				{!isCollapsed && <span className="sidebar-menu-item-label">{children}</span>}
-
-				{suffix && !isCollapsed && <div className="sidebar-menu-item-suffix">{suffix}</div>}
-			</button>
+			{/* An item that leads somewhere is an anchor, so middle-click, ctrl-click and "open in new tab" work and a
+			    screen reader announces a link. `onClick` still runs (it closes the drawer) and the router's own handler
+			    takes the navigation. A disabled item has no href to offer, so it falls back to the button. */}
+			{to !== undefined && !disabled ? (
+				<Link
+					to={to}
+					activeOptions={EXACT_ACTIVE_OPTIONS}
+					className="sidebar-menu-item-button"
+					onClick={activateMenuItem}
+					data-centered={shouldCenter || undefined}
+					data-active={active || undefined}
+					aria-current={active ? "page" : undefined}
+				>
+					{itemBody}
+				</Link>
+			) : (
+				<button
+					className="sidebar-menu-item-button"
+					onClick={activateMenuItem}
+					onKeyDown={handleKeyDown}
+					disabled={disabled}
+					aria-disabled={disabled}
+					data-centered={shouldCenter || undefined}
+					type="button"
+					data-active={active || undefined}
+				>
+					{itemBody}
+				</button>
+			)}
 		</div>
 	);
 }

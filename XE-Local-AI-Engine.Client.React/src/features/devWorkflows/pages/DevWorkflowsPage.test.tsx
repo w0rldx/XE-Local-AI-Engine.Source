@@ -66,7 +66,7 @@ describe("DevWorkflowsPage", () => {
 		renderWithProviders(<DevWorkflowsPage />);
 
 		expect(await screen.findByText("Worker Node")).toBeDefined();
-		expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Workflow Runs");
+		expect(screen.getByRole("heading", { level: 1 }).textContent).toBe("Workflow Runs");
 	});
 
 	it("offers a create call to action when there are no work items", async () => {

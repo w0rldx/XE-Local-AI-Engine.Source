@@ -73,7 +73,7 @@ describe("Invocations (generated hey-api data layer)", () => {
 		renderWithProviders(<Invocations />);
 
 		expect(generatedMock.getInvocationMonitorOptions).toHaveBeenCalled();
-		expect(await screen.findByRole("heading", { name: "Invocation monitor", level: 2 })).toBeTruthy();
+		expect(await screen.findByRole("heading", { name: "Invocation monitor", level: 1 })).toBeTruthy();
 		expect(await screen.findByText(/Model: qwen3:8b/)).toBeTruthy();
 		expect(screen.getByText("Active")).toBeTruthy();
 		expect(screen.getByText("Pending approval: Yes")).toBeTruthy();
@@ -106,7 +106,7 @@ describe("Invocations (generated hey-api data layer)", () => {
 
 	it("refreshes monitor data through the generated query function", async () => {
 		renderWithProviders(<Invocations />);
-		await screen.findByRole("heading", { name: "Invocation monitor", level: 2 });
+		await screen.findByRole("heading", { name: "Invocation monitor", level: 1 });
 
 		const refreshButton = screen.getByRole("button", { name: "Refresh" }) as HTMLButtonElement;
 		await waitFor(() => expect(refreshButton.disabled).toBe(false));

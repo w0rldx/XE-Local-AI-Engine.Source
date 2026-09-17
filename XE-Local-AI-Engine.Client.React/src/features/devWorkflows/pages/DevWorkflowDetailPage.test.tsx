@@ -121,6 +121,24 @@ describe("DevWorkflowDetailPage", () => {
 	// just above it the unfloored centre track was squeezed under its own tab header and clipped it. The floor is the
 	// fix; the horizontal scroller is what keeps the overflow it can now produce visible, because FullHeightPage
 	// deliberately clips the X axis.
+	// Heading navigation has to land somewhere on every state of this page: the work item's own title once it is
+	// loaded, and the navigation label while there is no name to show. One h1 either way, never two.
+	it("carries exactly one h1 while the work item loads and once it has", async () => {
+		server.use(...baseRoutes());
+		renderPage();
+
+		// Read synchronously, before the work-item query can settle: this is the pending tree, no waiting involved.
+		const pending = screen.getAllByRole("heading", { level: 1 });
+		expect(pending).toHaveLength(1);
+		expect(pending[0]?.textContent).toBe("Workflow Runs");
+
+		// Waited for by test id, not by role: the pending h1 above would satisfy a role query straight away.
+		await screen.findByTestId("dev-workflow-title");
+		const loaded = screen.getAllByRole("heading", { level: 1 });
+		expect(loaded).toHaveLength(1);
+		expect(loaded[0]?.textContent).toBe("Survey the vector-store options");
+	});
+
 	it("floors the centre column and scrolls sideways rather than clipping it", async () => {
 		server.use(...baseRoutes());
 		renderPage();

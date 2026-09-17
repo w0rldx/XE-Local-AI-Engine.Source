@@ -23,6 +23,9 @@
 	border-radius: 4px;
 	color: var(--mantine-color-text);
 	background-color: transparent;
+
+	/* The item renders as an <a> when it carries a route; without this it would pick up the UA underline. */
+	text-decoration: none;
 	cursor: pointer;
 	transition:
 		background-color 200ms ease,

@@ -60,8 +60,9 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 				<Group key={rowKeys[index]} gap="xs" align="flex-start" data-testid={`custom-tool-form-parameter-row-${index}`}>
 					<TextInput
 						placeholder={t("pages.customTools.form.parameters.namePlaceholder", "city")}
-						// The placeholder is an example value ("city"), not a name, so the label comes from the field's own heading.
-						aria-label={t("pages.customTools.form.name.label", "Name")}
+						// The placeholder is an example value ("city"), not a name. Every row carries the same boxes, so the
+						// accessible name has to name the row too — one interpolated string, never assembled from fragments.
+						aria-label={t("pages.customTools.form.parameters.nameAria", "Parameter {{index}} name", { index: index + 1 })}
 						value={parameter.name}
 						error={
 							fieldError(errors, `parameters.${index}.name`)
@@ -73,7 +74,7 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 						data-testid={`custom-tool-form-parameter-name-${index}`}
 					/>
 					<Select
-						aria-label={t("pages.customTools.form.parameters.typeAria", "Parameter type")}
+						aria-label={t("pages.customTools.form.parameters.typeAria", "Parameter {{index}} type", { index: index + 1 })}
 						value={parameter.type}
 						data={CUSTOM_TOOL_PARAMETER_TYPES.map((type) => ({ label: type, value: type }))}
 						onChange={(value) => patchRow(index, { type: (value ?? "string") as CustomToolParameterType })}
@@ -83,7 +84,9 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 					/>
 					<TextInput
 						placeholder={t("pages.customTools.form.parameters.descriptionPlaceholder", "description")}
-						aria-label={t("pages.customTools.form.parameters.descriptionPlaceholder", "description")}
+						aria-label={t("pages.customTools.form.parameters.descriptionAria", "Parameter {{index}} description", {
+							index: index + 1,
+						})}
 						value={parameter.description}
 						onChange={(event) => patchRow(index, { description: event.currentTarget.value })}
 						style={{ flex: "3 1 200px" }}
@@ -100,7 +103,7 @@ export function ParameterBuilder({ values, errors, update }: CustomToolEditorSec
 					<ActionIcon
 						variant="subtle"
 						color="red"
-						aria-label={t("pages.customTools.form.parameters.remove", "Remove parameter")}
+						aria-label={t("pages.customTools.form.parameters.remove", "Remove parameter {{index}}", { index: index + 1 })}
 						onClick={() => removeRow(index)}
 						mt={4}
 						style={{ flexShrink: 0 }}

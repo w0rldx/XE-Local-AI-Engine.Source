@@ -3141,9 +3141,11 @@
 					"add": "Add variable",
 					"empty": "No environment variables.",
 					"keyPlaceholder": "KEY",
+					"keyAria": "Variable {{index}} key",
 					"valuePlaceholder": "value",
+					"valueAria": "Variable {{index}} value",
 					"maskedPlaceholder": "unchanged — enter a new value to replace",
-					"remove": "Remove variable"
+					"remove": "Remove variable {{index}}"
 				},
 				"url": {
 					"label": "URL",
@@ -4933,10 +4935,12 @@
 					"empty": "No parameters declared yet.",
 					"namePlaceholder": "city",
 					"nameInvalid": "Identifier only",
-					"typeAria": "Parameter type",
+					"nameAria": "Parameter {{index}} name",
+					"typeAria": "Parameter {{index}} type",
 					"descriptionPlaceholder": "description",
+					"descriptionAria": "Parameter {{index}} description",
 					"required": "Required",
-					"remove": "Remove parameter"
+					"remove": "Remove parameter {{index}}"
 				},
 				"http": {
 					"method": "Method",
@@ -4951,7 +4955,8 @@
 					"allowedHosts": "Allowed hosts",
 					"addHost": "Add host",
 					"allowedHostsHint": "Required when the URL host is itself templated: the request may only reach a host on this list.",
-					"removeHost": "Remove host"
+					"hostAria": "Allowed host {{index}}",
+					"removeHost": "Remove allowed host {{index}}"
 				},
 				"command": {
 					"executable": "Executable",
@@ -4966,7 +4971,8 @@
 					"addArg": "Add argument",
 					"argsHint": "One argument per row. A {param} placeholder fills a single argument — a value can never inject extra arguments.",
 					"noArgs": "No arguments.",
-					"removeArg": "Remove argument",
+					"argAria": "Argument {{index}}",
+					"removeArg": "Remove argument {{index}}",
 					"workingDirectory": "Working directory",
 					"timeout": "Timeout (seconds)",
 					"timeoutHint": "0 uses the default.",
@@ -4976,10 +4982,12 @@
 				},
 				"secretRows": {
 					"namePlaceholder": "Name",
+					"nameAria": "Row {{index}} name",
 					"storedPlaceholder": "•••• stored — leave to keep",
 					"valuePlaceholder": "Value",
+					"valueAria": "Row {{index}} value",
 					"secret": "Secret",
-					"remove": "Remove"
+					"remove": "Remove row {{index}}"
 				}
 			},
 			"list": {

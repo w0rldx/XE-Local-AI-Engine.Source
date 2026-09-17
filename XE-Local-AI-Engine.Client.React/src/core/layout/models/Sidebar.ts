@@ -50,6 +50,8 @@ export interface MenuItemProperties {
 	suffix?: ReactNode;
 	component?: string | React.ReactElement;
 	rootStyles?: CSSProperties;
+	/** Route this item navigates to. Present = the item renders as an anchor instead of a button. */
+	to?: string;
 	onClick?: () => void;
 	className?: string;
 	isMobile?: boolean;

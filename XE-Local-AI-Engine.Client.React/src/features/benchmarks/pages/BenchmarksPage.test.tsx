@@ -85,6 +85,19 @@ describe("BenchmarksPage", () => {
 		expect(screen.getByRole("button", { name: "Edit" })).toBeTruthy();
 	});
 
+	// The page's own heading comes from the PageHeader the workspace renders; the selected project's name below it is a
+	// section, not the page. Pinned because a second h1 is as bad for heading navigation as none.
+	it("exposes exactly one h1, the page's own title", async () => {
+		baseRoutes([projectRow]);
+
+		renderWithProviders(<BenchmarksPage />);
+
+		expect(await screen.findByText("Summarise the attached text.")).toBeTruthy();
+		const headings = screen.getAllByRole("heading", { level: 1 });
+		expect(headings).toHaveLength(1);
+		expect(headings[0]?.textContent).toBe("Local model benchmarks");
+	});
+
 	// A query load-error belongs in an inline Alert, not a toast (agent-knowledge §5 "Error surfacing").
 	it("shows a projects load failure inline", async () => {
 		server.use(
