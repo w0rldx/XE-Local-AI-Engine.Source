@@ -134,7 +134,7 @@ export function AgentTemplateGallery({ opened, onClose }: AgentTemplateGalleryPr
 
 				{grouped.map(([division, divisionTemplates]) => (
 					<Stack key={division} gap="xs" data-testid={`agent-template-division-${division}`}>
-						<Title order={5} tt="capitalize">
+						<Title order={2} size="h5" tt="capitalize">
 							{division}
 						</Title>
 						{divisionTemplates.map((template) => {

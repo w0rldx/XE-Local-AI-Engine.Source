@@ -54,7 +54,9 @@ export function RecommendationSnapshot({ latest, onDownload, downloadingModelNam
 				<Stack gap="lg">
 					{recommendedRows.length > 0 ? (
 						<Stack gap="xs" data-testid="model-fit-section-recommended">
-							<Title order={4}>{t("pages.modelFit.recommendations.sections.recommended", "Recommended for your hardware")}</Title>
+							<Title order={2} size="h4">
+								{t("pages.modelFit.recommendations.sections.recommended", "Recommended for your hardware")}
+							</Title>
 							<RecommendationTable
 								recommendations={recommendedRows}
 								onDownload={onDownload}
@@ -90,7 +92,9 @@ export function RecommendationSnapshot({ latest, onDownload, downloadingModelNam
 
 					{exploreRows.length > 0 ? (
 						<Stack gap="xs" data-testid="model-fit-section-explore">
-							<Title order={4}>{t("pages.modelFit.recommendations.sections.explore", "Explore trending on Hugging Face")}</Title>
+							<Title order={2} size="h4">
+								{t("pages.modelFit.recommendations.sections.explore", "Explore trending on Hugging Face")}
+							</Title>
 							<RecommendationTable
 								recommendations={exploreRows}
 								onDownload={onDownload}

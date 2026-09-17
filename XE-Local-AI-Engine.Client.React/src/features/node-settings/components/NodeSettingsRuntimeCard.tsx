@@ -82,7 +82,9 @@ export function NodeSettingsRuntimeCard({
 		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-runtime-card">
 			<Stack gap="md">
 				<Group justify="space-between" align="center">
-					<Title order={4}>{t("pages.nodeSettings.fields.runtime.title", "Local model runtime")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.fields.runtime.title", "Local model runtime")}
+					</Title>
 					<IconCpu size={20} />
 				</Group>
 				<NumberInput

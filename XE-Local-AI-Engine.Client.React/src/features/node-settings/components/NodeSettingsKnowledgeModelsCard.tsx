@@ -37,7 +37,9 @@ export function NodeSettingsKnowledgeModelsCard({
 		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-knowledge-models-card">
 			<Stack gap="md">
 				<Group justify="space-between" align="center">
-					<Title order={4}>{t("pages.nodeSettings.fields.knowledgeModels.title", "Knowledge models")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.fields.knowledgeModels.title", "Knowledge models")}
+					</Title>
 					<IconDatabase size={20} />
 				</Group>
 				<Group justify="space-between" align="center" wrap="nowrap" gap="md">

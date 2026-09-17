@@ -57,7 +57,9 @@ export function HardwareProfileCard({ profile, isLoading, isFetching, error, onR
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconCpu size={20} />
-						<Title order={4}>{t("pages.modelFit.hardware.title", "Hardware profile")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.modelFit.hardware.title", "Hardware profile")}
+						</Title>
 						{profile && !profile.gpuAccelAvailable ? (
 							<Badge color="orange" variant="light" data-testid="model-fit-hardware-cpu-mode-badge">
 								{t("pages.modelFit.hardware.cpuMode", "CPU mode")}

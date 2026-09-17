@@ -38,7 +38,9 @@ export function LocalModelProxyKeyPanel() {
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconPlugConnected size={20} />
-						<Title order={4}>{t("pages.nodeSettings.localModelProxyKey.title", "Local model proxy")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.localModelProxyKey.title", "Local model proxy")}
+						</Title>
 					</Group>
 					{!isLoading ? (
 						<Badge color={isConfigured ? "green" : "gray"} variant="light" data-testid="local-model-proxy-key-status">

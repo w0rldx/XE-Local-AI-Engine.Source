@@ -35,7 +35,9 @@ export function RunningModelsPanel({ runningModels, isLoading, error, onEject, e
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconServer2 size={20} />
-					<Title order={4}>{t("pages.loadedModels.llamaCpp.title", "llama.cpp runtime")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.loadedModels.llamaCpp.title", "llama.cpp runtime")}
+					</Title>
 				</Group>
 
 				{isLoading ? (

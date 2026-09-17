@@ -65,7 +65,9 @@ export function BenchmarkJudgePanel({
 				<Group justify="space-between">
 					<Group gap="xs">
 						<IconScale size={18} />
-						<Title order={5}>{t("pages.benchmarks.judge.title", "Automated judge")}</Title>
+						<Title order={4} size="h5">
+							{t("pages.benchmarks.judge.title", "Automated judge")}
+						</Title>
 					</Group>
 					<BenchmarkJudgeStateBadge state={judge.state} />
 				</Group>

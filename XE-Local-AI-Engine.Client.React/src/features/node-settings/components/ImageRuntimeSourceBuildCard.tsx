@@ -143,7 +143,9 @@ export function ImageRuntimeSourceBuildCard() {
 		<Card withBorder={true} radius="md" p="lg" data-testid="image-runtime-source-build-card">
 			<Stack gap="md">
 				<Group gap="xs">
-					<Title order={4}>{t("pages.nodeSettings.imageRuntime.sourceBuild.title")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.imageRuntime.sourceBuild.title")}
+					</Title>
 					<Badge color={recoveryOnly ? "red" : "grape"}>
 						{t(
 							recoveryOnly

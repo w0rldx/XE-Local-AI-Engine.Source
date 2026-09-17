@@ -20,7 +20,9 @@ export function NodeSettingsUsageRatesCard({ usageRates, error: usageRatesError,
 		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-usage-rates-card">
 			<Stack gap="md">
 				<Group justify="space-between" align="center">
-					<Title order={4}>{t("pages.nodeSettings.fields.usageRates.title", "Usage cost rates")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.fields.usageRates.title", "Usage cost rates")}
+					</Title>
 					<IconCoin size={20} />
 				</Group>
 				<Text size="sm" c="dimmed">

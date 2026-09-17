@@ -104,7 +104,9 @@ function CurrentInvocation({ current }: { readonly current: InvocationCurrentDto
 		<SectionCard>
 			<Group justify="space-between" align="flex-start">
 				<Stack gap={4}>
-					<Title order={3}>{t("pages.invocations.monitor.current.title", "Current invocation")}</Title>
+					<Title order={2} size="h3">
+						{t("pages.invocations.monitor.current.title", "Current invocation")}
+					</Title>
 					<Text size="sm" c="dimmed" style={{ wordBreak: "break-all" }}>
 						{current.invocationId}
 					</Text>

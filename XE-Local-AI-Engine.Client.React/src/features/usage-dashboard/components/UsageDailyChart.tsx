@@ -19,7 +19,9 @@ export function UsageDailyChart({ daily }: { readonly daily: readonly UsageDaily
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="usage-daily-chart">
 			<Stack gap="md">
-				<Title order={3}>{t("pages.usage.daily.title", "Daily token usage")}</Title>
+				<Title order={2} size="h3">
+					{t("pages.usage.daily.title", "Daily token usage")}
+				</Title>
 				{chartData.length > 0 ? (
 					<AreaChart
 						h={280}

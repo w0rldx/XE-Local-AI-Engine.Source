@@ -25,7 +25,9 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
 	return (
 		<Card withBorder={true} radius="md" padding="md">
 			<Stack gap="sm">
-				<Title order={5}>{title}</Title>
+				<Title order={2} size="h5">
+					{title}
+				</Title>
 				{children}
 			</Stack>
 		</Card>
@@ -45,7 +47,9 @@ export function SnapshotDetail({ snapshot, onBack }: SnapshotDetailProps) {
 					<Button variant="subtle" leftSection={<IconArrowLeft size={16} />} onClick={onBack}>
 						{t("diagnostics.actions.back")}
 					</Button>
-					<Title order={4}>{t("diagnostics.detail.title")}</Title>
+					<Title order={1} size="h4">
+						{t("diagnostics.detail.title")}
+					</Title>
 					<Badge color={snapshot.kind === "error" ? "red" : "blue"} variant="light">
 						{t(`diagnostics.kind.${snapshot.kind}`)}
 					</Badge>

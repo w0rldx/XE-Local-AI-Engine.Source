@@ -87,7 +87,9 @@ export function NodeSettingsFieldsCard({
 			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-local-chat-card">
 				<Stack gap="md">
 					<Group justify="space-between" align="center">
-						<Title order={4}>{t("pages.nodeSettings.fields.localChat.title", "Local chat")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.fields.localChat.title", "Local chat")}
+						</Title>
 						<IconRobot size={20} />
 					</Group>
 					<TextInput
@@ -183,7 +185,9 @@ export function NodeSettingsFieldsCard({
 			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-hf-card">
 				<Stack gap="md">
 					<Group justify="space-between" align="center">
-						<Title order={4}>{t("pages.nodeSettings.fields.huggingFace.title", "Hugging Face")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.fields.huggingFace.title", "Hugging Face")}
+						</Title>
 						<IconServer size={20} />
 					</Group>
 					<TextInput
@@ -207,7 +211,9 @@ export function NodeSettingsFieldsCard({
 			<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-worker-card">
 				<Stack gap="md">
 					<Group justify="space-between" align="center">
-						<Title order={4}>{t("pages.nodeSettings.fields.worker.title", "Worker limits")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.fields.worker.title", "Worker limits")}
+						</Title>
 						<IconTool size={20} />
 					</Group>
 					<NumberInput

@@ -15,15 +15,31 @@ describe("SectionCard", () => {
 		cleanup();
 	});
 
-	it("renders the section title as an h3 below the page's h2", () => {
+	// A section sits directly under PageHeader's h1, so h2 is the level that makes the page outline descend without a
+	// skip. Nothing else pins it — `size="h3"` fixes the type scale and would look identical at any order — so the
+	// level is asserted here rather than left to whichever page happens to be under test.
+	it("renders the section title as an h2 below the page's h1", () => {
 		renderWithProviders(
 			<SectionCard title="Registered servers">
 				<p>Body</p>
 			</SectionCard>,
 		);
 
-		const heading = screen.getByRole("heading", { level: 3 });
+		const heading = screen.getByRole("heading", { level: 2 });
 		expect(heading.textContent).toBe("Registered servers");
+	});
+
+	it("drops the section title to an h3 when it is nested inside another section", () => {
+		renderWithProviders(
+			<SectionCard title="Runs">
+				<SectionCard titleOrder={3} title="Charts">
+					<p>Body</p>
+				</SectionCard>
+			</SectionCard>,
+		);
+
+		expect(screen.getByRole("heading", { level: 2 }).textContent).toBe("Runs");
+		expect(screen.getByRole("heading", { level: 3 }).textContent).toBe("Charts");
 	});
 
 	it("renders no heading row at all for a chrome-less content card", () => {

@@ -126,7 +126,9 @@ export function InferenceProfilePanel() {
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconSettings size={20} />
-					<Title order={4}>{t("pages.modelFit.inferenceProfiles.title", "Inference profiles")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.modelFit.inferenceProfiles.title", "Inference profiles")}
+					</Title>
 				</Group>
 				<Text c="dimmed" size="sm">
 					{t(

@@ -65,7 +65,9 @@ export function ExternalAccessSetup() {
 
 					<Card withBorder={true} radius="lg" p="xl" data-testid="external-access-recommended-card">
 						<Stack gap="md">
-							<Title order={3}>{t("pages.externalAccess.recommended.title", "Recommended")}</Title>
+							<Title order={2} size="h3">
+								{t("pages.externalAccess.recommended.title", "Recommended")}
+							</Title>
 							<Text>
 								{t(
 									"pages.externalAccess.recommended.body",
@@ -86,7 +88,9 @@ export function ExternalAccessSetup() {
 
 					<Card withBorder={true} radius="lg" p="xl" data-testid="external-access-offline-card">
 						<Stack gap="md">
-							<Title order={3}>{t("pages.externalAccess.offline.title", "Offline / Manual")}</Title>
+							<Title order={2} size="h3">
+								{t("pages.externalAccess.offline.title", "Offline / Manual")}
+							</Title>
 							<Text>
 								{t(
 									"pages.externalAccess.offline.disables",

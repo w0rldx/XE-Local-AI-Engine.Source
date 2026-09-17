@@ -148,7 +148,9 @@ export function BenchmarkProjectWorkspace({ controller }: { readonly controller:
 							<Stack gap="md">
 								<Group justify="space-between" align="flex-start">
 									<Stack gap={2}>
-										<Title order={3}>{detail.name}</Title>
+										<Title order={2} size="h3">
+											{detail.name}
+										</Title>
 										<Text c="dimmed">{detail.coreTask}</Text>
 									</Stack>
 									<Group gap="xs">

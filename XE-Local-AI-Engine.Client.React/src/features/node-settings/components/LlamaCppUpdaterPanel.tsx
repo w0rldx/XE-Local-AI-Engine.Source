@@ -178,7 +178,9 @@ export function LlamaCppUpdaterPanel() {
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconRocket size={20} />
-						<Title order={4}>{t("pages.nodeSettings.llamaCpp.title", "llama.cpp runtime")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.llamaCpp.title", "llama.cpp runtime")}
+						</Title>
 					</Group>
 					<Button
 						variant="default"

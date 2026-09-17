@@ -43,7 +43,9 @@ export function GgufBrowsePanel({
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconSearch size={20} />
-					<Title order={4}>{t("pages.models.gguf.browse.title", "Browse Hugging Face GGUF")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.models.gguf.browse.title", "Browse Hugging Face GGUF")}
+					</Title>
 				</Group>
 
 				<form onSubmit={handleSubmit}>

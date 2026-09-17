@@ -38,7 +38,9 @@ export function McpServerKeyPanel() {
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconPlugConnected size={20} />
-						<Title order={4}>{t("pages.nodeSettings.mcpServerKey.title", "MCP server")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.mcpServerKey.title", "MCP server")}
+						</Title>
 					</Group>
 					{!isLoading ? (
 						<Badge color={isConfigured ? "green" : "gray"} variant="light" data-testid="mcp-server-key-status">

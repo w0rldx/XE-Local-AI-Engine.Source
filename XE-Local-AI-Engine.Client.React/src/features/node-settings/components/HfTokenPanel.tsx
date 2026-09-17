@@ -40,7 +40,9 @@ export function HfTokenPanel({
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconKey size={20} />
-						<Title order={4}>{t("pages.nodeSettings.hfToken.title", "Hugging Face token")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.hfToken.title", "Hugging Face token")}
+						</Title>
 					</Group>
 					{!isLoading ? (
 						hasToken ? (

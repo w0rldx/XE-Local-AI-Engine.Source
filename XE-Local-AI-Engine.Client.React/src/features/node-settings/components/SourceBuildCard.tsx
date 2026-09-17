@@ -136,7 +136,9 @@ export function SourceBuildCard() {
 		<Card withBorder={true} radius="md" p="lg" data-testid="source-build-card">
 			<Stack gap="md">
 				<Group gap="xs">
-					<Title order={4}>{t("pages.nodeSettings.llamaCpp.sourceBuild.title")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.llamaCpp.sourceBuild.title")}
+					</Title>
 					<Badge color="grape">{t("pages.nodeSettings.llamaCpp.sourceBuild.devBadge")}</Badge>
 				</Group>
 				<Text size="sm" c="dimmed">

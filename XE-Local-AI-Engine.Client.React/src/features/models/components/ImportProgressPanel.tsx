@@ -24,7 +24,9 @@ export function ImportProgressPanel({ operations, onCancel, cancellingOperationI
 			<Stack gap="md" aria-live="polite" aria-label={t("pages.models.gguf.import.progressRegion", "Model import status")}>
 				<Group gap="xs">
 					<IconFileImport size={20} />
-					<Title order={4}>{t("pages.models.gguf.import.progressTitle", "Model imports")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.models.gguf.import.progressTitle", "Model imports")}
+					</Title>
 				</Group>
 				{operations.map((status) => (
 					<Stack key={status.operationId} gap="xs" data-testid={`model-import-operation-${status.operationId}`}>

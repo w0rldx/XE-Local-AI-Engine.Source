@@ -19,7 +19,9 @@ export function AppErrorFallback({ error, onRetry }: AppErrorFallbackProps) {
 						message="The application hit an unexpected error while rendering this page."
 					/>
 					<Stack gap={4}>
-						<Title order={3}>Unable to load this view</Title>
+						<Title order={1} size="h3">
+							Unable to load this view
+						</Title>
 						<Text c="dimmed">Try again to re-render the current route.</Text>
 					</Stack>
 					<Text ff="monospace" size="sm">

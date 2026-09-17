@@ -131,7 +131,9 @@ export function BenchmarkRunPane({
 			<Stack gap="md">
 				<Group justify="space-between" align="flex-start">
 					<Stack gap={2}>
-						<Title order={4}>{run.primaryModelName}</Title>
+						<Title order={3} size="h4">
+							{run.primaryModelName}
+						</Title>
 						<Text size="xs" c="dimmed">
 							{t(`pages.benchmarks.origin.${run.primaryModelOrigin ?? "legacy"}`, run.primaryModelOrigin ?? "Legacy / Unknown")}
 						</Text>

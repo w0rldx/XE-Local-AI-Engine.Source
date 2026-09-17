@@ -213,7 +213,9 @@ export function ProfileMetricsCard({ metrics, testIdSuffix }: ProfileMetricsCard
 			data-testid={`inference-profile-metrics-${testIdSuffix}`}
 		>
 			<Stack gap="sm">
-				<Title order={6}>{t("pages.modelFit.inferenceProfiles.metrics.title", "Benchmark metrics")}</Title>
+				<Title order={3} size="h6">
+					{t("pages.modelFit.inferenceProfiles.metrics.title", "Benchmark metrics")}
+				</Title>
 				{metrics.externalPressureDetected ? (
 					<Text size="sm" c="red" fw={500} data-testid={`inference-profile-external-pressure-${testIdSuffix}`}>
 						{t(

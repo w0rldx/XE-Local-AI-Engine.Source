@@ -102,7 +102,9 @@ export function NodeSettingsAdvancedFieldsCard({ form, bounds, errors, onChange 
 		<Card withBorder={true} radius="md" p="lg" data-testid="node-settings-advanced-card">
 			<Stack gap="md">
 				<Group justify="space-between" align="center">
-					<Title order={4}>{t("pages.nodeSettings.fields.advanced.title", "Advanced (developer)")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.nodeSettings.fields.advanced.title", "Advanced (developer)")}
+					</Title>
 					<IconTool size={20} />
 				</Group>
 				<Text c="dimmed" size="sm">

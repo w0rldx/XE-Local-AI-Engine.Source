@@ -82,7 +82,9 @@ export function McpWorkspaceAllowlistPanel() {
 				<Group justify="space-between" align="center">
 					<Group gap="xs" align="center">
 						<IconFolder size={20} />
-						<Title order={4}>{t("pages.nodeSettings.mcpWorkspaces.title", "MCP workspace access")}</Title>
+						<Title order={2} size="h4">
+							{t("pages.nodeSettings.mcpWorkspaces.title", "MCP workspace access")}
+						</Title>
 					</Group>
 					<Badge variant="light" color="blue">
 						{t("pages.nodeSettings.mcpWorkspaces.readOnly", "Read only")}

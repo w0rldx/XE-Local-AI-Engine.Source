@@ -183,7 +183,9 @@ export function ChatSamplingOptionsDialog({
 				{samplingFieldGroups.map((group, groupIdx) => (
 					<Stack key={group.groupKey} gap="md">
 						{groupIdx > 0 ? <Divider /> : null}
-						<Title order={5}>{t(group.groupKey)}</Title>
+						<Title order={2} size="h5">
+							{t(group.groupKey)}
+						</Title>
 
 						{group.fields.map((meta) => {
 							const rawValue = options[meta.key];

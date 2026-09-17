@@ -112,6 +112,33 @@ describe("MobileNavigationMenu", () => {
 		expect(setDrawerOpen).toHaveBeenCalledWith(false);
 	});
 
+	// The router suppresses its own navigation for a modified click so the current tab stays where it is — which is
+	// the whole point of the href. Closing the drawer anyway would undo half of that, so the close path must not run.
+	it("leaves the drawer alone when a link entry is opened in a new tab", async () => {
+		const { setDrawerOpen } = renderMenu({
+			menuItem: { icon: null, label: "Settings" },
+			drawerTitle: "Settings",
+			links: [{ label: "Node Settings", to: "/node-settings" }],
+		});
+
+		fireEvent.click(await screen.findByRole("button", { name: "Settings" }));
+
+		// A modified click is exactly the one the router lets through to the browser, and jsdom answers a real
+		// anchor activation with a "Not implemented: navigation" error. Taking the default on the document — after
+		// React's own listeners on the root container have already run — keeps the run quiet without touching the
+		// handlers under test.
+		const swallowNavigation = (event: MouseEvent) => event.preventDefault();
+		document.addEventListener("click", swallowNavigation);
+
+		const entry = await screen.findByRole("link", { name: "Node Settings" });
+		fireEvent.click(entry, { ctrlKey: true });
+		fireEvent.click(entry, { metaKey: true });
+
+		document.removeEventListener("click", swallowNavigation);
+
+		expect(setDrawerOpen).not.toHaveBeenCalled();
+	});
+
 	// Tapping a flat root item never opens a sub-panel, so the same close path has to run from there too.
 	it("closes the drawer once when a flat root link is tapped", async () => {
 		const { setDrawerOpen } = renderMenu({ menuItem: { icon: null, label: "Chat", to: "/chat" } });

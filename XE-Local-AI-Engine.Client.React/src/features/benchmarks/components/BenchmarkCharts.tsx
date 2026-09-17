@@ -263,18 +263,20 @@ export default function BenchmarkCharts({
 	selectedRuns: readonly BenchmarkRunDetail[];
 }) {
 	const { t } = useTranslation();
+	// `titleOrder={3}` on both branches: this card is mounted INSIDE the "Runs" SectionCard, so its heading is a
+	// subsection of that section rather than another top-level one. It is the only nested SectionCard in the app.
 	// Every panel draws from the same plottable set, so one check answers "is this section empty" rather than four
 	// series being recomputed to find out.
 	if (!hasChartableRuns(runs)) {
 		return (
-			<SectionCard title={t("pages.benchmarks.charts.title", "Charts")} data-testid="benchmark-charts">
+			<SectionCard title={t("pages.benchmarks.charts.title", "Charts")} titleOrder={3} data-testid="benchmark-charts">
 				<EmptyState message={t("pages.benchmarks.charts.empty", "No measured runs to chart yet.")} size="sm" />
 			</SectionCard>
 		);
 	}
 
 	return (
-		<SectionCard title={t("pages.benchmarks.charts.title", "Charts")} data-testid="benchmark-charts">
+		<SectionCard title={t("pages.benchmarks.charts.title", "Charts")} titleOrder={3} data-testid="benchmark-charts">
 			<Stack gap="lg">
 				<ThroughputScatter runs={runs} />
 				<SpeedBars runs={runs} />

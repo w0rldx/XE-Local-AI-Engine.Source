@@ -37,7 +37,9 @@ export function UsageProviderBreakdown({
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="usage-provider-breakdown">
 			<Stack gap="md">
-				<Title order={3}>{t("pages.usage.providers.title", "Usage by provider")}</Title>
+				<Title order={2} size="h3">
+					{t("pages.usage.providers.title", "Usage by provider")}
+				</Title>
 				<Group align="flex-start" gap="xl" wrap="wrap">
 					{donutData.length > 0 ? (
 						<DonutChart

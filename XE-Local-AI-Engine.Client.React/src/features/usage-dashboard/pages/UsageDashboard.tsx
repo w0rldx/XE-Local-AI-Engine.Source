@@ -57,7 +57,9 @@ function UsageEmptyState() {
 		<Card withBorder={true} radius="md" p="xl" data-testid="usage-empty">
 			<Stack gap="xs" align="center">
 				<IconChartHistogram size={40} opacity={0.6} />
-				<Title order={3}>{t("pages.usage.empty.title", "No usage recorded yet")}</Title>
+				<Title order={2} size="h3">
+					{t("pages.usage.empty.title", "No usage recorded yet")}
+				</Title>
 				<Text c="dimmed" ta="center" maw={520}>
 					{t(
 						"pages.usage.empty.body",

@@ -103,7 +103,9 @@ export function VoiceSettingsCard() {
 		<Card withBorder={true} radius="md" p="lg" data-testid="voice-settings-card">
 			<Stack gap="md">
 				<Group justify="space-between" align="center">
-					<Title order={3}>{t("voice.settings.title")}</Title>
+					<Title order={2} size="h3">
+						{t("voice.settings.title")}
+					</Title>
 					<IconVolume size={22} />
 				</Group>
 				<Group gap="xs">

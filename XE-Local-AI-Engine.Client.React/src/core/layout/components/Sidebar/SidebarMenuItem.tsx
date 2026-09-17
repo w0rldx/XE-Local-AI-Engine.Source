@@ -37,6 +37,17 @@ export function SidebarMenuItem({
 		}
 	};
 
+	// Link only suppresses ITS OWN navigation for a modified click ("open in new tab/window"); a caller's onClick
+	// still runs, which would close the drawer in the tab the user deliberately stayed in. Same predicate the
+	// router uses, applied where every mobile link click passes.
+	const handleLinkClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+		if (event.metaKey || event.altKey || event.ctrlKey || event.shiftKey || event.button !== 0) {
+			return;
+		}
+
+		activateMenuItem();
+	};
+
 	const handleKeyDown = (event: React.KeyboardEvent) => {
 		if ((event.key === "Enter" || event.key === " ") && !disabled && onClick) {
 			event.preventDefault();
@@ -78,14 +89,15 @@ export function SidebarMenuItem({
 			}}
 		>
 			{/* An item that leads somewhere is an anchor, so middle-click, ctrl-click and "open in new tab" work and a
-			    screen reader announces a link. `onClick` still runs (it closes the drawer) and the router's own handler
-			    takes the navigation. A disabled item has no href to offer, so it falls back to the button. */}
+			    screen reader announces a link. `onClick` still runs on a plain click (it closes the drawer) and the
+			    router's own handler takes the navigation. A disabled item has no href to offer, so it falls back to
+			    the button. */}
 			{to !== undefined && !disabled ? (
 				<Link
 					to={to}
 					activeOptions={EXACT_ACTIVE_OPTIONS}
 					className="sidebar-menu-item-button"
-					onClick={activateMenuItem}
+					onClick={handleLinkClick}
 					data-centered={shouldCenter || undefined}
 					data-active={active || undefined}
 					aria-current={active ? "page" : undefined}

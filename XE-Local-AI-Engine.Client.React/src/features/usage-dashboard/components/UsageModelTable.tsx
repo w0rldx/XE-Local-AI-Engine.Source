@@ -27,7 +27,9 @@ export function UsageModelTable({
 	return (
 		<Card withBorder={true} radius="md" p="lg" data-testid="usage-model-table">
 			<Stack gap="md">
-				<Title order={3}>{t("pages.usage.models.title", "Usage by model")}</Title>
+				<Title order={2} size="h3">
+					{t("pages.usage.models.title", "Usage by model")}
+				</Title>
 				<Table.ScrollContainer minWidth={720}>
 					<Table striped={true} highlightOnHover={true} verticalSpacing="sm">
 						<Table.Thead>

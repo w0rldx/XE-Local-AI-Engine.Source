@@ -35,7 +35,9 @@ export function DownloadProgressPanel({ inFlight, downloadStatuses, onCancel, ca
 			<Stack gap="md">
 				<Group gap="xs" align="center">
 					<IconCloudDownload size={20} />
-					<Title order={4}>{t("pages.models.gguf.download.title", "Downloads in progress")}</Title>
+					<Title order={2} size="h4">
+						{t("pages.models.gguf.download.title", "Downloads in progress")}
+					</Title>
 				</Group>
 
 				<Stack gap="sm">
